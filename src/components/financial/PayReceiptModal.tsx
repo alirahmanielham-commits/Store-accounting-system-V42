@@ -236,14 +236,7 @@ const isReceive = false;
                   <DollarSign className="w-4 h-4" />
                   نقدی / فیش بانکی / حواله
                 </button>
-                <button
-                  type="button"
-                  onClick={() => setReceiptMethod("check")}
-                  className={`flex-1 flex gap-2 justify-center items-center py-2.5 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${receiptMethod === "check" ? (isReceive ? "bg-white text-emerald-700 shadow-[0_2px_4px_rgba(16,185,129,0.1)] border-emerald-200" : "bg-white text-rose-700 shadow-[0_2px_4px_rgba(244,63,94,0.1)] border-rose-200") : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 block border border-transparent"}`}
-                >
-                  <CreditCard className="w-4 h-4" />
-                  {isReceive ? "ثبت چک دریافتی" : "صدور چک"}
-                </button>
+                
               </div>
 
               <form

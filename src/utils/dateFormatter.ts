@@ -91,8 +91,17 @@ export class DateFormatterService {
          if (!isNaN(parsed.getTime())) jsDate = parsed;
       }
       
+      let finalDateStr = jsDate as string;
+      if (typeof jsDate === 'string') {
+        if (jsDate.includes('T')) {
+          finalDateStr = jsDate.split('T')[0] + 'T12:00:00';
+        } else if (jsDate.match(/^\d{4}-\d{2}-\d{2}$/)) {
+          finalDateStr = jsDate + 'T12:00:00';
+        }
+      }
+      
       const { calendar, locale } = this.getCalendarInfo();
-      const dateObj = new DateObject({ date: new Date(jsDate as any), calendar, locale });
+      const dateObj = new DateObject({ date: new Date(finalDateStr as any), calendar, locale });
       
       const originalShowTime = this.config.showTime;
       if (overrideShowTime !== undefined) {

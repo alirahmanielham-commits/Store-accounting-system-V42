@@ -254,6 +254,14 @@ export const getCheckAuditLogs = async (checkId?: string | number, checkType?: '
   return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 };
 
+
+export const addCheckHistoryLog = async (record: { checkId: string | number, checkType: 'issued' | 'received', oldStatus?: string, newStatus?: string, description?: string, userId?: string }) => {
+  const now = new Date().toISOString();
+  const newItem = { ...record, id: Math.random().toString(36).substring(2, 15), createdAt: now };
+  await appendLocalData('check_history', newItem);
+  return newItem;
+};
+
 export const addCheckAuditLog = async (record: { checkId: string | number, checkType: 'issued' | 'received', action: string, oldValues?: any, newValues?: any, userId?: string }) => {
   const now = new Date().toISOString();
   const newItem = { ...record, id: (Math.random() + 1).toString(36).substring(7), createdAt: now };
@@ -305,6 +313,9 @@ export const updateIssuedCheck = async (id: string, record: any) => {
      const previous = oldChecks.find((c: any) => String(c.id) === String(id));
      const saved = await updateLocalData('issued_checks', id, updatedData);
      await addCheckAuditLog({ checkId: saved.id, checkType: 'issued', action: 'update', oldValues: previous, newValues: saved, userId: 'system' });
+     if (previous && previous.status !== saved.status) {
+       await addCheckHistoryLog({ checkId: saved.id, checkType: 'issued', oldStatus: previous.status, newStatus: saved.status, userId: 'system' });
+     }
      if (typeof addSystemLog !== 'undefined') {
        await addSystemLog('UPDATE_' + 'IssuedCheck'.toUpperCase(), 'ویرایش رکورد در issued_checks', 'IssuedCheck', saved.id);
      }
@@ -391,6 +402,9 @@ export const updateReceivedCheck = async (id: string, record: any) => {
      const previous = oldChecks.find((c: any) => String(c.id) === String(id));
      const saved = await updateLocalData('received_checks', id, updatedData);
      await addCheckAuditLog({ checkId: saved.id, checkType: 'received', action: 'update', oldValues: previous, newValues: saved, userId: 'system' });
+     if (previous && previous.status !== saved.status) {
+       await addCheckHistoryLog({ checkId: saved.id, checkType: 'received', oldStatus: previous.status, newStatus: saved.status, userId: 'system' });
+     }
      if (typeof addSystemLog !== 'undefined') {
        await addSystemLog('UPDATE_' + 'ReceivedCheck'.toUpperCase(), 'ویرایش رکورد در received_checks', 'ReceivedCheck', saved.id);
      }

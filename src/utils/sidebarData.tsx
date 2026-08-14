@@ -137,6 +137,7 @@ export const allSidebarGroups: SidebarGroup[] = [
     icon: <BookOpen className="w-5 h-5" />,
     items: [
       { id: "check_panel", label: "پنل جامع مدیریت چک", roles: ["admin", "accountant", "manager", "viewer"] },
+      { id: "issue_check_form", label: "صدور چک", roles: ["admin", "accountant", "manager"] },
     ],
   },
     {

@@ -920,6 +920,15 @@ export default function App() {
                           fetchAccounts();
                           fetchCashboxes();
                         }} />} />
+
+<Route path="/issue_check_form" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="h-full overflow-y-auto"
+                      >
+                        <IssueCheckStandalone />
+                      </motion.div>} />
+
 <Route path="/check_panel" element={<motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
