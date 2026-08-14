@@ -877,7 +877,11 @@ const [reportDateRange, setReportDateRange] = useState<Date[]>([]);
 
 const [viewingInvoice, setViewingInvoice] = useState<any>(null);
 
-const [viewingCheck, setViewingCheck] = useState<any>(null);
+const [viewingCheck, setViewingCheckState] = useState<any>(null);
+   const setViewingCheck = (val: any) => {
+     setViewingCheckState(val);
+     if (val) setActiveTab('check_card');
+   };
 
 const [viewingAccountingDoc, setViewingAccountingDoc] = useState<any>(null);
 

@@ -138,6 +138,7 @@ export const allSidebarGroups: SidebarGroup[] = [
     items: [
       { id: "check_panel", label: "پنل جامع مدیریت چک", roles: ["admin", "accountant", "manager", "viewer"] },
       { id: "issue_check_form", label: "صدور چک", roles: ["admin", "accountant", "manager"] },
+      { id: "check_card", label: "کارت/برگه چک", roles: ["admin", "accountant", "manager", "viewer"] },
     ],
   },
     {

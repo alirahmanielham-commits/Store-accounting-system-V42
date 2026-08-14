@@ -303,6 +303,9 @@ const ProductCardModal = React.lazy(() => import('./components/modals/ProductCar
 const ProductLastPricesView = React.lazy(() => import('./components/reports/ProductLastPricesView'));
 const QuickPriceInquiry = React.lazy(() => import('./components/inventory/QuickPriceInquiry'));
 const CheckManagement = React.lazy(() => import('./components/financial/CheckManagement'));
+const IssueCheckStandalone = React.lazy(() => import('./components/financial/IssueCheckStandalone'));
+const CheckCardPage = React.lazy(() => import('./components/financial/checks/CheckCardPage'));
+
 const PersonNotesAndAttachments = React.lazy(() => import('./components/financial/PersonNotesAndAttachments'));
 const InvoiceAllocation = React.lazy(() => import('./components/financial/InvoiceAllocation'));
 
@@ -716,7 +719,11 @@ export default function App() {
 
   const appRoutes = (
     <Routes>
-<Route path="/bulk_barcode_generator" element={<BulkBarcodeGenerator showNotification={showNotification} products={products} categories={productCategories} toPersianDigits={toPersianDigits} updateProduct={updateProduct} fetchProducts={fetchProducts} storeSettings={storeSettings} />} />
+<Route path="/bulk_barcode_generator" element={<BulkBarcodeGenerator showNotification={showNotification} products={products} categories={productCategories} toPersianDigits={toPersianDigits} updateProduct={updateProduct} fetchProducts={fetchProducts} storeSettings={storeSettings}
+                             onViewAccountingDoc={(doc) => {
+                               setViewingAccountingDoc(doc);
+                               setIsAccountingDocModalOpen(true);
+                             }} />} />
 <Route path="/products" element={<ProductsTab
                         {...appState}
                         
@@ -927,6 +934,30 @@ export default function App() {
                         className="h-full overflow-y-auto"
                       >
                         <IssueCheckStandalone />
+                      </motion.div>} />
+
+
+<Route path="/check_card" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="h-full overflow-y-auto bg-gray-50/50"
+                      >
+                        {viewingCheck ? (
+                           <CheckCardPage 
+                             checkId={viewingCheck.id} checkType={viewingCheck._type}
+                             onClose={() => {
+                               setViewingCheck(null);
+                               setActiveTab('check_panel');
+                             }}
+                             showNotification={showNotification}
+                             currentUser={user?.name || 'سیستم'}
+                             storeSettings={storeSettings}
+                           />
+                        ) : (
+                           <div className="h-full flex flex-col items-center justify-center text-gray-500">
+                              هیچ چکی انتخاب نشده است. لطفا از لیست چک‌ها اقدام کنید.
+                           </div>
+                        )}
                       </motion.div>} />
 
 <Route path="/check_panel" element={<motion.div
