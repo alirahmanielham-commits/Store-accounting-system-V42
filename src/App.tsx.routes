@@ -1,0 +1,428 @@
+<Route path="/bulk_barcode_generator" element={<BulkBarcodeGenerator showNotification={showNotification} products={products} categories={productCategories} toPersianDigits={toPersianDigits} updateProduct={updateProduct} fetchProducts={fetchProducts} storeSettings={storeSettings } />} />
+
+<Route path="/products" element={<ProductsTab
+                        {...appState}
+                        formatCurrency={formatCurrency}
+                        toPersianDigits={toPersianDigits}
+                        numToPersianWords={numToPersianWords}
+                        DatePicker={DatePicker}
+                        persian={persian}
+                        persian_fa={persian_fa}
+                        AIProductSearchModal={AIProductSearchModal />} />
+
+<Route path="/person_opening_balances" element={<PersonOpeningBalances 
+                        setActiveTab={setActiveTab}
+                        setLedgerPersonId={setLedgerPersonId}
+                        formatDateDisplay={formatDateDisplay}
+                        persons={persons}
+                        setPersons={setPersons}
+                        fetchPersons={fetchPersons}
+                        confirmAction={confirmAction}
+                    
+                        customAlert={customAlert}
+                        showNotification={showNotification}
+                        formatCurrency={formatCurrency}
+                        toPersianDigits={toPersianDigits}
+                        numToPersianWords={numToPersianWords}
+                        DatePicker={DatePicker}
+                        persian={persian}
+                        persian_fa={persian_fa}
+                        storeSettings={storeSettings}
+                        user={user}
+                         setIsOpeningBalanceModalOpen={setIsOpeningBalanceModalOpen} isOpeningBalanceModalOpen={isOpeningBalanceModalOpen} editingOpeningBalanceId={editingOpeningBalanceId} addPersonOpeningBalance={addPersonOpeningBalance} fetchPersonOpeningBalances={fetchPersonOpeningBalances} setSubmittingOpeningBalance={setSubmittingOpeningBalance} Select={Select} selectedOpeningBalancePersonId={selectedOpeningBalancePersonId} personOpeningBalances={personOpeningBalances} setSelectedOpeningBalancePersonId={setSelectedOpeningBalancePersonId} setOpeningBalanceAmount={setOpeningBalanceAmount} setOpeningBalanceType={setOpeningBalanceType} Info={Info} openingBalanceType={openingBalanceType} CurrencyInput={CurrencyInput} openingBalanceAmount={openingBalanceAmount} openingBalanceDate={openingBalanceDate} setOpeningBalanceDate={setOpeningBalanceDate} activeFinancialYear={activeFinancialYear} openingBalanceDescription={openingBalanceDescription} setOpeningBalanceDescription={setOpeningBalanceDescription} submittingOpeningBalance={submittingOpeningBalance} RefreshCw={RefreshCw}
+                      FileSpreadsheet={FileSpreadsheet}
+                        setEditingOpeningBalanceId={setEditingOpeningBalanceId}
+                        DateObject={DateObject}
+                        openingBalanceSearch={openingBalanceSearch}
+                        setOpeningBalanceSearch={setOpeningBalanceSearch}
+                        addCommas={addCommas}
+                        Edit2={Edit2}
+                        deletePersonOpeningBalance={deletePersonOpeningBalance}
+                        updatePersonOpeningBalance={updatePersonOpeningBalance />} />
+
+<Route path="/persons" element={<PersonsManager
+                        filteredPersons={filteredPersons} personPageSize={personPageSize} personCurrentPage={personCurrentPage} calculatePersonBalance={calculatePersonBalance} formatNumber={formatNumber} personSearchTerm={personSearchTerm} setPersonSearchTerm={setPersonSearchTerm} selectedPersonGroup={selectedPersonGroup} setSelectedPersonGroup={setSelectedPersonGroup} personGroups={personGroups} selectedPersonRole={selectedPersonRole} setSelectedPersonRole={setSelectedPersonRole} personRoles={personRoles}
+  personCategories={appState.personCategories} personsViewMode={personsViewMode} setPersonsViewMode={setPersonsViewMode} setIsPersonModalOpen={setIsPersonModalOpen} setPersonCurrentPage={setPersonCurrentPage} getRoleBadgeClasses={getRoleBadgeClasses} getRoleName={getRoleName} handleEditPerson={handleEditPerson} setProfilePersonId={setProfilePersonId} setLedgerPersonId={setLedgerPersonId} setRawActiveTab={setRawActiveTab} handleDeletePerson={handleDeletePerson} setPrintingPersonLedger={setPrintingPersonLedger} fetchPersons={fetchPersons} activePersonsOnly={activePersonsOnly} clearDraft={clearDraft} handleGenerateMissingAccountingCodes={handleGenerateMissingAccountingCodes} isGeneratingCodes={isGeneratingCodes} setPersonIOAction={setPersonIOAction} setIsPersonIOModalOpen={setIsPersonIOModalOpen} setEditingPersonId={setEditingPersonId} setNewPersonType={setNewPersonType} setNewPersonTitle={setNewPersonTitle} setNewPersonAlias={setNewPersonAlias} setNewPersonFirstName={setNewPersonFirstName} setNewPersonLastName={setNewPersonLastName} setNewPersonCompanyName={setNewPersonCompanyName} setNewPersonFatherName={setNewPersonFatherName} setNewPersonNationalId={setNewPersonNationalId} setNewPersonAccountingCode={setNewPersonAccountingCode} setNewPersonAddress={setNewPersonAddress} setNewPersonImage={setNewPersonImage} setNewPersonPhone={setNewPersonPhone} setNewPersonContacts={setNewPersonContacts} setNewPersonRole={setNewPersonRole} newPersonTaxNumber={appState.newPersonTaxNumber} setNewPersonTaxNumber={appState.setNewPersonTaxNumber} newPersonRegistrationNumber={appState.newPersonRegistrationNumber} setNewPersonRegistrationNumber={appState.setNewPersonRegistrationNumber} newPersonRoles={appState.newPersonRoles} setNewPersonRoles={appState.setNewPersonRoles} newPersonCategories={appState.newPersonCategories} setNewPersonCategories={appState.setNewPersonCategories} duplicatePersonsWarning={appState.duplicatePersonsWarning} setDuplicatePersonsWarning={appState.setDuplicatePersonsWarning} setNewPersonInitialBalance={setNewPersonInitialBalance} setNewPersonInitialBalanceType={setNewPersonInitialBalanceType} setNewPersonCreditLimit={setNewPersonCreditLimit} successMsg={successMsg} getPersonDisplayName={getPersonDisplayName} toPersianDigits={toPersianDigits} storeSettings={storeSettings}  setCustomerId={setCustomerId} setReceiptPersonId={setReceiptPersonId} setPersonExtraId={setPersonExtraId} setPersonBankName={setPersonBankName} setPersonBankAcc={setPersonBankAcc} setPersonCard={setPersonCard} setPersonSheba={setPersonSheba} setPersonBankAccounts={setPersonBankAccounts} setPersonNotes={setPersonNotes} setIsPersonExtraModalOpen={setIsPersonExtraModalOpen} confirmAction={confirmAction} setPersonPageSize={setPersonPageSize} setActiveTab={setActiveTab />} />
+
+<Route path="/person_groups" element={<PersonGroupsManager showNotification={showNotification } />} />
+
+<Route path="/person_categories" element={<PersonCategoriesManager showNotification={showNotification } />} />
+
+<Route path="/person_roles" element={<PersonRolesManager showNotification={showNotification } />} />
+
+<Route path="/accounts" element={<AccountsManager
+                        setEditingAccountId={setEditingAccountId}
+                        setIsAccountModalOpen={setIsAccountModalOpen}
+                        successMsg={successMsg}
+                        accounts={accounts}
+                        formatNumber={formatNumber}
+                        handleEditAccount={handleEditAccount}
+                        confirmAction={confirmAction}
+                        handleDeleteAccount={handleDeleteAccount}
+                        toPersianDigits={toPersianDigits}
+                        storeSettings={storeSettings />} />
+
+<Route path="/cashboxes" element={<CashboxesManager
+                        setEditingCashboxId={setEditingCashboxId}
+                        setNewCashboxBalance={setNewCashboxBalance}
+                        setIsCashboxModalOpen={setIsCashboxModalOpen}
+                        successMsg={successMsg}
+                        cashboxes={cashboxes}
+                        formatNumber={formatNumber}
+                        handleEditCashbox={handleEditCashbox}
+                        confirmAction={confirmAction}
+                    
+                        handleDeleteCashbox={handleDeleteCashbox}
+                        toPersianDigits={toPersianDigits}
+                        storeSettings={storeSettings />} />
+
+<Route path="/warehouses" element={<WarehouseManager 
+                        showNotification={showNotification}
+                        warehouseSubTab={warehouseSubTab}
+                        setWarehouseSubTab={setWarehouseSubTab}
+                        warehouses={warehouses}
+                        products={products}
+                        setEditingWarehouseId={setEditingWarehouseId}
+                        setIsWarehouseModalOpen={setIsWarehouseModalOpen}
+                        setNewWarehouseName={setNewWarehouseName}
+                        setNewWarehouseManager={setNewWarehouseManager}
+                        setNewWarehouseLocation={setNewWarehouseLocation}
+                        setNewWarehouseIsActive={setNewWarehouseIsActive}
+                        recalculating={recalculating}
+                        handleRecalculateStocks={handleRecalculateStocks}
+                        handleEditWarehouse={handleEditWarehouse}
+                        confirmAction={confirmAction}
+                        handleDeleteWarehouse={handleDeleteWarehouse}
+                        whStockSearch={whStockSearch}
+                        setWhStockSearch={setWhStockSearch}
+                        warehouseStocks={warehouseStocks}
+                        formatNumber={formatNumber />} />
+
+<Route path="/account_ledger" element={<AccountLedgerReport
+                        showNotification={showNotification}
+                        onNavigateToDoc={(docId: any) => {
+                          const doc = accountingDocuments.find(d => d.id.toString() === docId.toString());
+                          if (doc) {
+                             setViewingAccountingDoc(doc);
+                             setIsAccountingDocModalOpen(true);
+                          }
+                        } />} />
+
+<Route path="/financial_report" element={<FinancialDashboard
+                        invoices={invoices}
+                        persons={persons}
+                        storeSettings={storeSettings}
+                        reportDateRange={reportDateRange}
+                        setReportDateRange={setReportDateRange}
+                        issuedChecks={issuedChecks}
+                        receivedChecks={receivedChecks}
+                        accounts={accounts}
+                        cashboxes={cashboxes}
+                        transactions={transactions}
+                        calculatePersonBalance={calculatePersonBalance}
+                        getPersonDisplayName={getPersonDisplayName}
+                        formatNumber={formatNumber}
+                        setActiveTab={setActiveTab}
+                        fetchData={fetchData}
+                        getDefaultExchangeRate={getDefaultExchangeRate}
+                        currentUser={user />} />
+
+<Route path="/person_profile" element={<PersonProfileView 
+
+                        personId={profilePersonId}
+                        persons={persons}
+                        invoices={invoices}
+                        transactions={transactions}
+                        issuedChecks={issuedChecks}
+                        receivedChecks={receivedChecks}
+                        accountingDocuments={accountingDocuments}
+                        storeSettings={storeSettings}
+                        calculatePersonBalance={calculatePersonBalance}
+                        onBack={() => setActiveTab("persons")}
+                        onEdit={handleEditPerson}
+                        onViewExtraInfo={(p: any) => {
+                          setPersonExtraId(p.id);
+                          setPersonBankAccounts(p.bankAccounts || []);
+                          setPersonNotes(p.additionalNotes || "");
+                          setIsPersonExtraModalOpen(true);
+                        }}
+                        onViewLedger={(id) => {
+                          setLedgerPersonId(id);
+                          setActiveTab("person_ledger");
+                        }}
+                        onCreateSale={(id) => {
+                          setCustomerId(id);
+                          setActiveTab("sale_invoice_create");
+                        }}
+                        onCreatePurchase={(id) => {
+                          setCustomerId(id);
+                          setActiveTab("purchase_invoice_create");
+                        }}
+                        onCreateReceive={(id) => {
+                          setReceiptPersonId(id);
+                          setActiveTab("receipt_create");
+                        }}
+                        onCreatePay={(id) => {
+                          setReceiptPersonId(id);
+                          setActiveTab("payment_create");
+                        }}
+                        getPersonDisplayName={getPersonDisplayName}
+                        getRoleName={getRoleName}
+                        getRoleBadgeClasses={getRoleBadgeClasses}
+                        formatCurrency={formatCurrency}
+                        toPersianDigits={toPersianDigits}
+                        formatDateDisplay={formatDateDisplay />} />
+
+<Route path="/person_ledger" element={<PersonLedger 
+                        persons={persons}
+                        setPersons={setPersons}
+                        fetchPersons={fetchPersons}
+                        confirmAction={confirmAction}
+                    
+                        customAlert={customAlert}
+                        showNotification={showNotification}
+                        formatCurrency={formatCurrency}
+                        toPersianDigits={toPersianDigits}
+                        numToPersianWords={numToPersianWords}
+                        DatePicker={DatePicker}
+                        persian={persian}
+                        persian_fa={persian_fa}
+                        storeSettings={storeSettings}
+                        user={user}
+                        PersonLedgerActionsDropdown={PersonLedgerActionsDropdown} ledgerPersonId={ledgerPersonId} setActiveTab={setActiveTab} setCustomerId={setCustomerId} setReceiptPersonId={setReceiptPersonId} handleEditPerson={handleEditPerson} setIsPersonModalOpen={setIsPersonModalOpen} sendNotification={sendNotification} setPrintingPersonLedger={setPrintingPersonLedger} fetchInvoices={fetchInvoices} fetchTransactions={fetchTransactions} fetchAccountingDocuments={fetchAccountingDocuments} User={User} Select={Select} mapPersonToOption={mapPersonToOption} setLedgerPersonId={setLedgerPersonId} customPersonFilter={customPersonFilter} accountingDocuments={accountingDocuments} payslips={payslips} invoices={invoices} convertToGregorian={convertToGregorian} printingPersonLedger={printingPersonLedger} getPersonDisplayName={getPersonDisplayName} formatNumber={formatNumber} formatDateDisplay={formatDateDisplay} getRoleBadgeClasses={getRoleBadgeClasses} getRoleName={getRoleName} setLedgerTab={setLedgerTab} ledgerTab={ledgerTab} PersonNotesAndAttachments={PersonNotesAndAttachments} List={List} setViewingInvoice={setViewingInvoice} transactions={transactions} setViewingPayslip={setViewingPayslip} setPreviewReceiptData={setPreviewReceiptData} setPrintingTransaction={setPrintingTransaction} issuedChecks={issuedChecks} setViewingCheck={setViewingCheck} receivedChecks={receivedChecks} Calendar={Calendar} Tag={Tag />} />
+
+<Route path="/debts_credits" element={<DebtsCreditsReport showNotification={showNotification } />} />
+
+<Route path="/transfer" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <FinancialTransfer showNotification={showNotification
+                      </motion.div> />} />
+
+<Route path="/invoice_allocation" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <InvoiceAllocation
+                          customAlert={customAlert}
+                          formatCurrency={formatCurrency}
+                          getDefaultExchangeRate={getDefaultExchangeRate
+                      </motion.div> />} />
+
+<Route path="/quick_refund" element={<QuickRefund
+                        showNotification={showNotification}
+                        onComplete={() => {
+                          fetchDataSilent();
+                          fetchPersons();
+                          fetchAccounts();
+                          fetchCashboxes();
+                        } />} />
+
+<Route path="/check_panel" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="h-full"
+                      >
+                        <CheckManagement
+                          onEditReceiptByCheck={handleEditReceiptByCheck}
+                          showNotification={showNotification}
+                          currentUser={user?.name || "کاربر سیستم"}
+                          sendNotification={sendNotification}
+                          storeSettings={storeSettings}
+                          setViewingCheck={setViewingCheck
+                      </motion.div> />} />
+
+<Route path="/loans" element={<LoansManager showNotification={showNotification} persons={persons} accounts={accounts
+                        loans={loans}
+                        setLoans={setLoans}
+                        installments={installments}
+                        setInstallments={setInstallments}
+                       
+                       
+                        setAccounts={setAccounts}
+                        transactions={transactions}
+                        setTransactions={setTransactions />} />
+
+<Route path="/system_info" element={<SystemInfo />} />
+
+<Route path="/system_diagnostics" element={<SystemDiagnostics persons={persons} products={products
+                       
+                        invoices={invoices}
+                       
+                        transactions={transactions}
+                        warehouseStocks={warehouseStocks}
+                        issuedChecks={issuedChecks}
+                        receivedChecks={receivedChecks />} />
+
+<Route path="/users_manager" element={<UserManager />} />
+
+<Route path="/settings" element={<SettingsTab storeSettings={storeSettings} 
+                        
+                        user={user}
+                      settingsForm={settingsForm}
+                        setSettingsForm={setSettingsForm}
+                        CurrencyInput={CurrencyInput}
+                        AlertTriangle={AlertTriangle}
+                        AlertCircle={AlertCircle}
+                      confirmAction={confirmAction}
+                        handleSaveSettings={handleSaveSettings}
+                        submittingSettings={submittingSettings}
+                        Box={Box}
+                        settingsTab={settingsTab}
+                        setSettingsTab={setSettingsTab}
+                        successMsg={successMsg}
+                        Trash2={Trash2}
+                        Image={Image}
+                        handleLogoUpload={handleLogoUpload}
+                        Globe={Globe}
+                        CheckSquare={CheckSquare}
+                        productCategories={productCategories}
+                        ChevronDown={ChevronDown}
+                        ChevronUp={ChevronUp}
+                        Check={Check}
+                        X={X />} />
+
+<Route path="/inventory_report" element={<InventoryReport showNotification={showNotification} categories={productCategories } />} />
+
+<Route path="/order_list" element={<OrderList 
+                        products={products}
+                        categories={productCategories}
+                        formatCurrency={formatCurrency}
+                        toPersianDigits={toPersianDigits />} />
+
+<Route path="/kardex" element={<KardexReport />} />
+
+<Route path="/crm_dashboard" element={<CRMDashboard persons={persons} showNotification={showNotification} confirmAction={confirmAction } />} />
+
+<Route path="/analytical_dashboard" element={<AnalyticalDashboard showNotification={showNotification } />} />
+
+<Route path="/send_message" element={<SendMessageView showNotification={showNotification } />} />
+
+<Route path="/messaging_channels" element={<MessagingChannelsView showNotification={showNotification } />} />
+
+<Route path="/messaging_logs" element={<MessagingLogsView showNotification={showNotification } />} />
+
+<Route path="/sync_manager" element={<SyncManager confirmAction={confirmAction } />} />
+
+<Route path="/system_logs" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <SystemLogs 
+                      </motion.div> />} />
+
+<Route path="/database_logs" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                      >
+                        <DatabaseLogs 
+                      </motion.div> />} />
+
+<Route path="/data_reconciliation" element={<DatabaseReconciliation />} />
+
+<Route path="/database" element={<DatabaseDashboard showNotification={showNotification } />} />
+
+<Route path="/personal_notes" element={<PersonalNotesManager storeSettings={storeSettings } />} />
+
+<Route path="/update" element={<SystemUpdatePage storeSettings={storeSettings} setActiveTab={setActiveTab } />} />
+
+<Route path="/quick_price_inquiry" element={<QuickPriceInquiry products={products
+                       
+                        settings={storeSettings />} />
+
+<Route path="/product_view" element={<div className="flex flex-col h-full gap-4">
+                        <motion.div
+                          initial={{ opacity: 0, y: 10 }}
+                          animate={{ opacity: 1, y: 0 }}
+                          className={`bg-white rounded-2xl shadow-sm border border-gray-100 shrink-0 ${viewingProduct ? 'p-4 mx-4 mt-4' : 'p-8 max-w-3xl mx-auto mt-10 w-full'}`}
+                        >
+                          <h2 className={`${viewingProduct ? 'text-lg mb-4' : 'text-2xl mb-6'} font-bold text-gray-800 flex items-center gap-2`}>
+                            <Package className={`${viewingProduct ? 'w-5 h-5' : 'w-8 h-8'} text-indigo-600`
+                            جستجوی پیشرفته کارت کالا
+                          </h2>
+                          <div className="relative">
+                            <SearchableSelect
+                              options={(products || []).map((p) => ({
+                                value: p.id,
+                                label: p.name,
+                                subLabel: formatProductStockDetails(p),
+                                badge: p.type === "service" ? "خدمات" : "کالا",
+                                searchStr: `${p.code || ""} ${p.barcode || ""}`,
+                              }))}
+                              value={viewingProduct ? viewingProduct.id.toString() : ""}
+                              onChange={(val) => {
+                                const p = products.find(
+                                  (prod) => prod.id.toString() === val,
+                                );
+                                if (p) setViewingProduct(p);
+                                else setViewingProduct(null);
+                              }}
+                              placeholder="جستجو کالا (نام، کد، بارکد)..."
+                              searchPlaceholder="نام، کد یا بارکد کالا را وارد کنید..."
+                            
+                          </div>
+                          {!viewingProduct && (
+                            <div className="mt-8 text-center text-gray-500 text-sm">
+                              جهت مشاهده تاریخچه و گردش کالا، جستجو و انتخاب کنید
+                            </div>
+                          )}
+                        </motion.div>
+                        
+                        {viewingProduct && (
+                          <div className="flex-1 min-h-[500px]">
+                            <ProductCardModal
+                              product={viewingProduct}
+                              warehouses={warehouses}
+                              currency={storeSettings?.currency || "تومان"}
+                              isModal={false}
+                              persons={persons}
+                              storeSettings={storeSettings}
+                              onClose={() => {
+                                setViewingProduct(null);
+                              }
+                          </div>
+                        )}
+                      </div> />} />
+
+<Route path="/checklist" element={<SystemChecklist />} />
+
+<Route path="/stocktaking" element={<StocktakingManager
+                        showNotification={showNotification}
+                        currentUser={user?.name}
+                        onNavigateToDocs={() =>
+                          setActiveTab("create_warehouse_doc") />} />
+
+<Route path="/financial_years" element={<FinancialYearManager showNotification={showNotification } />} />
+
+<Route path="/chart_of_accounts" element={<ChartOfAccounts
+                        showNotification={showNotification}
+                        currentUser={user?.name />} />
+
+<Route path="/accounting_docs_list" element={<AccountingDocsList
+                        showNotification={showNotification}
+                        onNavigateToCreate={() => {
+                          setEditingAccountingDoc(null);
+                          setActiveTab("accounting_doc_create");
+                        }}
+                        onNavigateToView={(doc: any) => {
+                          setViewingAccountingDoc(doc);
+                          setIsAccountingDocModalOpen(true);
+                        }}
+                        onNavigateToEdit={(doc: any) => {
+                          setEditingAccountingDoc(doc);
+                          setActiveTab("accounting_doc_create");
+                        } />} />
+
+<Route path="/accounting_doc_create" element={<AccountingDocCreate
+                        showNotification={showNotification}
+                        initialDoc={editingAccountingDoc}
+                        onBack={() => {
+                          setEditingAccountingDoc(null);
+                          setActiveTab("accounting_docs_list");
+                        } />} />
+
+<Route path="/" element={<Navigate to="/welcome_page" replace />} />
+
+<Route path="*" element={<AnimatePresence mode="wait"><motion.div key={location.pathname} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence> />} />
+

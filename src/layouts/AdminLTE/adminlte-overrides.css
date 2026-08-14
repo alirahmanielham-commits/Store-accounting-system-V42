@@ -1,0 +1,24 @@
+.adminlte-theme {
+  font-family: 'IRANYekanXFaNum', 'Tahoma', sans-serif !important;
+}
+
+/* Base resets for the adminlte wrapper */
+.adminlte-theme main {
+  background-color: #f4f6f9;
+}
+
+/* Ensure the scrollbar looks good */
+.adminlte-theme ::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+.adminlte-theme ::-webkit-scrollbar-track {
+  background: transparent; 
+}
+.adminlte-theme ::-webkit-scrollbar-thumb {
+  background: rgba(0,0,0,0.2); 
+  border-radius: 10px;
+}
+.adminlte-theme ::-webkit-scrollbar-thumb:hover {
+  background: rgba(0,0,0,0.3); 
+}
