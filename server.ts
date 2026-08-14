@@ -75,7 +75,7 @@ async function loadPgPoolForStore(storeId: string) {
                 activePgPools['default'] = pool;
                 usePgMap['default'] = true;
                 return;
-            } else if (process.env.DATABASE_URL) {
+            } else if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
                 const pool = await connectPgDb(process.env.DATABASE_URL);
                 activePgPools['default'] = pool;
                 usePgMap['default'] = true;
