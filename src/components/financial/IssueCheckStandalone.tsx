@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { updateIssuedCheck, getIssuedChecks, getCheckbooks, getPersons } from "../../services/dataService";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp } from "lucide-react";
+import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp, Edit3 } from "lucide-react";
 import Select from "react-select";
 import CurrencyInput from "../common/CurrencyInput";
 import CustomDatePicker from "../ui/CustomDatePicker";
@@ -12,14 +12,18 @@ export default function IssueCheckStandalone() {
   const [checkbooks, setCheckbooks] = useState<any[]>([]);
   const [allChecks, setAllChecks] = useState<any[]>([]);
   
+  // Step 1: Selection
   const [payeeId, setPayeeId] = useState("");
-  const [amount, setAmount] = useState("");
   const [checkbookId, setCheckbookId] = useState("");
   const [checkLeafId, setCheckLeafId] = useState("");
   const [checkNumber, setCheckNumber] = useState("");
+  
+  // Step 2: Data Entry
+  const [amount, setAmount] = useState("");
   const [sayadId, setSayadId] = useState("");
-  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]); // Default today
+  const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState("");
+  const [payeeName, setPayeeName] = useState(""); // Free text for "در وجه" printed on check
   const [reason, setReason] = useState("");
   const [description, setDescription] = useState("");
   
@@ -70,21 +74,20 @@ export default function IssueCheckStandalone() {
   // Real-time validation
   useEffect(() => {
     const newErrors: Record<string, string> = {};
-    if (dueDate && issueDate) {
-      if (dueDate < issueDate) {
-        newErrors.dueDate = "تاریخ سررسید نمی‌تواند قبل از تاریخ صدور باشد.";
-      }
+    if (dueDate && issueDate && dueDate < issueDate) {
+      newErrors.dueDate = "تاریخ سررسید نمی‌تواند قبل از تاریخ صدور باشد.";
     }
     setErrors(newErrors);
   }, [dueDate, issueDate]);
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    if (!payeeId) newErrors.payeeId = "گیرنده چک را انتخاب کنید.";
-    if (!checkbookId) newErrors.checkbookId = "دسته‌چک مبدأ را انتخاب کنید.";
+    if (!payeeId) newErrors.payeeId = "شخص مرتبط را انتخاب کنید.";
+    if (!checkbookId) newErrors.checkbookId = "دسته‌چک را انتخاب کنید.";
     if (!checkLeafId) newErrors.checkLeafId = "شماره برگ چک را انتخاب کنید.";
     if (!amount || Number(amount) <= 0) newErrors.amount = "مبلغ چک نامعتبر است.";
     if (!dueDate) newErrors.dueDate = "تاریخ سررسید را مشخص کنید.";
+    if (!payeeName.trim()) newErrors.payeeName = "متن در وجه را وارد کنید.";
     if (dueDate && issueDate && dueDate < issueDate) newErrors.dueDate = "تاریخ سررسید نمی‌تواند قبل از صدور باشد.";
     
     setErrors(newErrors);
@@ -104,6 +107,7 @@ export default function IssueCheckStandalone() {
     try {
       await updateIssuedCheck(checkLeafId, {
         payeeId,
+        payeeName, // Store the custom payee text
         amount: Number(amount),
         checkbookId,
         checkNumber,
@@ -123,12 +127,13 @@ export default function IssueCheckStandalone() {
       // Reset form on success
       setTimeout(() => {
         setPayeeId("");
-        setAmount("");
         setCheckbookId("");
         setCheckLeafId("");
         setCheckNumber("");
+        setAmount("");
         setSayadId("");
         setDueDate("");
+        setPayeeName("");
         setReason("");
         setDescription("");
         setSuccess(false);
@@ -143,6 +148,25 @@ export default function IssueCheckStandalone() {
   const selectedCheckbook = useMemo(() => checkbooks.find(cb => cb.id === checkbookId), [checkbooks, checkbookId]);
   const selectedPerson = useMemo(() => persons.find(p => p.id === payeeId), [persons, payeeId]);
 
+  // When person changes, auto-fill the payeeName text
+  const handlePersonChange = (val: any) => {
+    const newPersonId = val?.value || '';
+    setPayeeId(newPersonId);
+    
+    // Reset subsequent fields if person is cleared
+    if (!newPersonId) {
+       setCheckbookId('');
+       setCheckLeafId('');
+       setCheckNumber('');
+       setPayeeName('');
+    } else {
+       const person = persons.find(p => p.id === newPersonId);
+       if (person) setPayeeName(person.name);
+    }
+    
+    if (errors.payeeId) setErrors(prev => ({...prev, payeeId: ''}));
+  };
+
   return (
     <div className="p-4 md:p-8 max-w-7xl mx-auto font-sans" dir="rtl">
       <div className="flex flex-col xl:flex-row gap-8">
@@ -156,7 +180,7 @@ export default function IssueCheckStandalone() {
               </div>
               <div>
                 <h1 className="text-2xl font-black text-slate-800">صدور چک پرداختنی</h1>
-                <p className="text-slate-500 text-sm mt-1">فرم ثبت و صدور چک جدید با پیش‌نمایش زنده</p>
+                <p className="text-slate-500 text-sm mt-1">انتخاب شخص، دسته‌چک و ثبت اطلاعات روی چک</p>
               </div>
             </div>
           </div>
@@ -177,17 +201,18 @@ export default function IssueCheckStandalone() {
             )}
           </AnimatePresence>
 
-          {/* Section 1: Payee & Reason */}
+          {/* Section 1: Selection (Person -> Checkbook -> Leaf) */}
           <section className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-              <User className="w-5 h-5 text-emerald-500" />
-              <h2 className="font-bold text-slate-700">۱. گیرنده و توضیحات</h2>
+              <User className="w-5 h-5 text-indigo-500" />
+              <h2 className="font-bold text-slate-700">۱. انتخاب شخص و برگ چک</h2>
             </div>
-            <div className="p-6 grid grid-cols-1 gap-6">
-               <div className="space-y-2">
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+               
+               <div className="space-y-2 md:col-span-2">
                 <div className="flex justify-between items-center">
                    <label className="text-sm font-bold text-slate-700 flex items-center gap-1">
-                     در وجه (شخص / شرکت) <span className="text-rose-500">*</span>
+                     شخص مرتبط (گیرنده در سیستم) <span className="text-rose-500">*</span>
                    </label>
                    <button type="button" className="text-xs text-indigo-600 font-bold hover:bg-indigo-50 px-2 py-1 rounded flex items-center gap-1 transition-colors">
                      <Plus className="w-3 h-3" /> شخص جدید
@@ -196,11 +221,8 @@ export default function IssueCheckStandalone() {
                 <Select
                   options={persons.map(p => ({ value: p.id, label: p.name }))}
                   value={payeeId ? { value: payeeId, label: selectedPerson?.name } : null}
-                  onChange={(val: any) => {
-                     setPayeeId(val?.value || '');
-                     if (errors.payeeId) setErrors(prev => ({...prev, payeeId: ''}));
-                  }}
-                  placeholder="جستجو و انتخاب ذینفع..."
+                  onChange={handlePersonChange}
+                  placeholder="جستجو و انتخاب شخص..."
                   className="font-sans"
                   styles={{
                     control: (base) => ({
@@ -218,45 +240,8 @@ export default function IssueCheckStandalone() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">بابت (شرح مختصر)</label>
-                <input
-                  type="text"
-                  value={reason}
-                  onChange={e => setReason(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans transition-colors disabled:bg-slate-50 disabled:text-slate-400"
-                  placeholder="مثال: تسویه فاکتور خرید مواد اولیه"
-                  disabled={!payeeId}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">توضیحات تکمیلی و یادداشت داخلی</label>
-                <textarea
-                  value={description}
-                  onChange={e => setDescription(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans min-h-[100px] transition-colors resize-y disabled:bg-slate-50 disabled:text-slate-400"
-                  placeholder="این یادداشت در برگ چک چاپ نمی‌شود و فقط برای سوابق داخلی است..."
-                  disabled={!payeeId}
-                />
-              </div>
-            </div>
-          </section>
-
-          {/* Section 2: Check Info */}
-          <section className={`bg-white rounded-3xl shadow-sm border overflow-hidden transition-colors ${!payeeId ? 'border-slate-100 opacity-50' : 'border-slate-100'}`}>
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-              <Building2 className={`w-5 h-5 ${!payeeId ? 'text-slate-400' : 'text-indigo-500'}`} />
-              <h2 className="font-bold text-slate-700">۲. اطلاعات پایه چک</h2>
-            </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 relative">
-              
-              {!payeeId && (
-                <div className="absolute inset-0 z-10 bg-white/40 cursor-not-allowed backdrop-blur-[1px]"></div>
-              )}
-
-              <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-bold text-slate-700 flex items-center gap-1">
-                  دسته‌چک و حساب بانکی <span className="text-rose-500">*</span>
+                  دسته‌چک <span className="text-rose-500">*</span>
                 </label>
                 <Select
                   isDisabled={!payeeId}
@@ -264,11 +249,11 @@ export default function IssueCheckStandalone() {
                   value={checkbookId ? { value: checkbookId, label: `${selectedCheckbook?.bankName} - حساب ${selectedCheckbook?.accountNumber}` } : null}
                   onChange={(val: any) => {
                      setCheckbookId(val?.value || '');
-                     setCheckLeafId(''); // Reset leaf when checkbook changes
+                     setCheckLeafId(''); // Reset leaf
                      setCheckNumber('');
                      if (errors.checkbookId) setErrors(prev => ({...prev, checkbookId: ''}));
                   }}
-                  placeholder="ابتدا گیرنده را انتخاب کنید، سپس دسته‌چک..."
+                  placeholder="ابتدا شخص را انتخاب کنید..."
                   className="font-sans"
                   styles={{
                     control: (base) => ({
@@ -286,11 +271,11 @@ export default function IssueCheckStandalone() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">شماره برگ چک (سریال) <span className="text-rose-500">*</span></label>
+                <label className="text-sm font-bold text-slate-700">برگ چک (سفید) <span className="text-rose-500">*</span></label>
                 <Select
                   isDisabled={!checkbookId}
-                  options={availableLeaves.map(l => ({ value: l.id, label: `چک شماره ${l.checkNumber}` }))}
-                  value={checkLeafId ? { value: checkLeafId, label: `چک شماره ${checkNumber}` } : null}
+                  options={availableLeaves.map(l => ({ value: l.id, label: `سریال ${l.checkNumber}` }))}
+                  value={checkLeafId ? { value: checkLeafId, label: `سریال ${checkNumber}` } : null}
                   onChange={(val: any) => {
                      setCheckLeafId(val?.value || '');
                      const leaf = availableLeaves.find(l => l.id === val?.value);
@@ -313,22 +298,23 @@ export default function IssueCheckStandalone() {
                 />
                 {errors.checkLeafId && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.checkLeafId}</p>}
                 {checkbookId && availableLeaves.length === 0 && (
-                    <p className="text-xs text-amber-500 flex items-center gap-1 mt-1"><Info className="w-3 h-3"/> برگ سفیدی در این دسته‌چک موجود نیست.</p>
+                    <p className="text-xs text-amber-500 flex items-center gap-1 mt-1"><Info className="w-3 h-3"/> برگ سفیدی موجود نیست.</p>
                 )}
               </div>
+            </div>
+          </section>
 
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">شناسه صیادی (۱۶ رقمی)</label>
-                <input
-                  type="text"
-                  value={sayadId}
-                  onChange={e => setSayadId(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                  className="w-full border-2 border-slate-200 rounded-2xl p-4 text-left font-mono focus:border-indigo-500 outline-none transition-colors tracking-widest disabled:bg-slate-50 disabled:text-slate-400"
-                  dir="ltr"
-                  placeholder="0000 0000 0000 0000"
-                  disabled={!checkLeafId}
-                />
-              </div>
+          {/* Section 2: Check Data Entry */}
+          <section className={`bg-white rounded-3xl shadow-sm border transition-colors overflow-hidden ${!checkLeafId ? 'border-slate-100 opacity-50' : 'border-slate-100'}`}>
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <Edit3 className={`w-5 h-5 ${!checkLeafId ? 'text-slate-400' : 'text-emerald-500'}`} />
+              <h2 className="font-bold text-slate-700">۲. مشخصات روی چک</h2>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+              
+              {!checkLeafId && (
+                <div className="absolute inset-0 z-10 bg-white/40 cursor-not-allowed backdrop-blur-[1px]"></div>
+              )}
 
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700">مبلغ چک (تومان) <span className="text-rose-500">*</span></label>
@@ -348,7 +334,8 @@ export default function IssueCheckStandalone() {
                        {num2persian(amount)} تومان
                      </p>
                    ) : errors.amount ? (
-                     <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.amount}</p>                   ) : null}
+                     <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.amount}</p>
+                   ) : null}
                 </div>
               </div>
 
@@ -358,6 +345,58 @@ export default function IssueCheckStandalone() {
                    <CustomDatePicker value={dueDate} onChange={setDueDate} />
                 </div>
                 {errors.dueDate && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.dueDate}</p>}
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-bold text-slate-700">در وجه (متن روی چک) <span className="text-rose-500">*</span></label>
+                <input
+                  type="text"
+                  value={payeeName}
+                  onChange={e => {
+                    setPayeeName(e.target.value);
+                    if (errors.payeeName) setErrors(prev => ({...prev, payeeName: ''}));
+                  }}
+                  className={`w-full border-2 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans transition-colors disabled:bg-slate-50 disabled:text-slate-400 ${errors.payeeName ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200'}`}
+                  placeholder="مثال: شرکت بازرگانی..."
+                  disabled={!checkLeafId}
+                />
+                {errors.payeeName && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.payeeName}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">شناسه صیادی (۱۶ رقمی)</label>
+                <input
+                  type="text"
+                  value={sayadId}
+                  onChange={e => setSayadId(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                  className="w-full border-2 border-slate-200 rounded-2xl p-4 text-left font-mono focus:border-indigo-500 outline-none transition-colors tracking-widest disabled:bg-slate-50 disabled:text-slate-400"
+                  dir="ltr"
+                  placeholder="0000 0000 0000 0000"
+                  disabled={!checkLeafId}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">بابت (شرح مختصر)</label>
+                <input
+                  type="text"
+                  value={reason}
+                  onChange={e => setReason(e.target.value)}
+                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+                  placeholder="مثال: تسویه فاکتور"
+                  disabled={!checkLeafId}
+                />
+              </div>
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-bold text-slate-700">توضیحات تکمیلی (فقط در سیستم)</label>
+                <textarea
+                  value={description}
+                  onChange={e => setDescription(e.target.value)}
+                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans min-h-[80px] transition-colors resize-y disabled:bg-slate-50 disabled:text-slate-400"
+                  placeholder="یادداشت‌های داخلی..."
+                  disabled={!checkLeafId}
+                />
               </div>
             </div>
           </section>
@@ -456,7 +495,7 @@ export default function IssueCheckStandalone() {
                      <div className="flex items-end gap-2 text-sm">
                        <span className="font-bold text-slate-700 whitespace-nowrap">در وجه:</span>
                        <div className="flex-1 border-b border-dashed border-slate-400 pb-1 text-slate-800 font-bold px-2 overflow-hidden text-ellipsis whitespace-nowrap">
-                         {selectedPerson?.name || ''}
+                         {payeeName || ''}
                        </div>
                      </div>
                      <div className="flex items-end gap-2 text-sm">
