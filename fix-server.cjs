@@ -1,4 +1,6 @@
-import os from "os";
+const fs = require('fs');
+
+const serverCode = `import os from "os";
 import 'dotenv/config';
 import * as Sentry from "@sentry/node";
 import { nodeProfilingIntegration } from "@sentry/profiling-node";
@@ -81,9 +83,11 @@ async function startServer() {
   }
 
   app.listen(PORT, "0.0.0.0", () => {
-    console.log(`Server running on port ${PORT}`);
+    console.log(\`Server running on port \${PORT}\`);
   });
 }
 
 startServer();
 startSyncWorker();
+`;
+fs.writeFileSync('server.ts', serverCode);
