@@ -3,7 +3,7 @@ import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb,
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
-// import { loginSchema } from '../schemas/validation';
+
 import { DatabaseSync } from 'node:sqlite';
 import { Client, Pool } from 'pg';
 import os from 'os';
