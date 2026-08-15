@@ -1,8 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { updateIssuedCheck, getIssuedChecks, getCheckbooks, getPersons } from "../../services/dataService";
+import { getStoreSettings } from "../../services/settingsService";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp, Edit3 } from "lucide-react";
 import Select from "react-select";
+import CreatableSelect from "react-select/creatable";
 import CurrencyInput from "../common/CurrencyInput";
 import CustomDatePicker from "../ui/CustomDatePicker";
 import num2persian from "num2persian";
@@ -11,6 +13,7 @@ export default function IssueCheckStandalone() {
   const [persons, setPersons] = useState<any[]>([]);
   const [checkbooks, setCheckbooks] = useState<any[]>([]);
   const [allChecks, setAllChecks] = useState<any[]>([]);
+  const [currency, setCurrency] = useState("تومان");
   
   // Step 1: Selection
   const [payeeId, setPayeeId] = useState("");
@@ -23,7 +26,7 @@ export default function IssueCheckStandalone() {
   const [sayadId, setSayadId] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]);
   const [dueDate, setDueDate] = useState("");
-  const [payeeName, setPayeeName] = useState(""); // Free text for "در وجه" printed on check
+  const [payeeName, setPayeeName] = useState(""); // Free text or selected for "در وجه"
   const [reason, setReason] = useState("");
   const [description, setDescription] = useState("");
   
@@ -38,6 +41,10 @@ export default function IssueCheckStandalone() {
     setPersons(await getPersons());
     setCheckbooks(await getCheckbooks());
     setAllChecks(await getIssuedChecks());
+    const settings = await getStoreSettings();
+    if (settings?.currency) {
+      setCurrency(settings.currency);
+    }
   };
 
   useEffect(() => {
@@ -50,6 +57,12 @@ export default function IssueCheckStandalone() {
       .filter(c => c.checkbookId === checkbookId && c.status === 'blank')
       .sort((a, b) => Number(a.checkNumber) - Number(b.checkNumber));
   }, [allChecks, checkbookId]);
+
+  // Options arrays to guarantee correct labels
+  const personOptions = useMemo(() => persons.map(p => ({ value: p.id, label: p.name })), [persons]);
+  const payeeNameOptions = useMemo(() => persons.map(p => ({ value: p.name, label: p.name })), [persons]);
+  const checkbookOptions = useMemo(() => checkbooks.map(cb => ({ value: cb.id, label: `${cb.bankName} - شعبه ${cb.branch || 'مرکزی'} - حساب ${cb.accountNumber}` })), [checkbooks]);
+  const leafOptions = useMemo(() => availableLeaves.map(l => ({ value: l.id, label: `سریال ${l.checkNumber}` })), [availableLeaves]);
 
   // Set dirty state
   useEffect(() => {
@@ -86,6 +99,7 @@ export default function IssueCheckStandalone() {
     if (!checkbookId) newErrors.checkbookId = "دسته‌چک را انتخاب کنید.";
     if (!checkLeafId) newErrors.checkLeafId = "شماره برگ چک را انتخاب کنید.";
     if (!amount || Number(amount) <= 0) newErrors.amount = "مبلغ چک نامعتبر است.";
+    if (!issueDate) newErrors.issueDate = "تاریخ صدور را مشخص کنید.";
     if (!dueDate) newErrors.dueDate = "تاریخ سررسید را مشخص کنید.";
     if (!payeeName.trim()) newErrors.payeeName = "متن در وجه را وارد کنید.";
     if (dueDate && issueDate && dueDate < issueDate) newErrors.dueDate = "تاریخ سررسید نمی‌تواند قبل از صدور باشد.";
@@ -107,7 +121,7 @@ export default function IssueCheckStandalone() {
     try {
       await updateIssuedCheck(checkLeafId, {
         payeeId,
-        payeeName, // Store the custom payee text
+        payeeName, 
         amount: Number(amount),
         checkbookId,
         checkNumber,
@@ -121,10 +135,8 @@ export default function IssueCheckStandalone() {
       setSuccess(true);
       setIsDirty(false);
       
-      // Reload checks to get updated available leaves
       await load();
       
-      // Reset form on success
       setTimeout(() => {
         setPayeeId("");
         setCheckbookId("");
@@ -146,14 +158,11 @@ export default function IssueCheckStandalone() {
   };
 
   const selectedCheckbook = useMemo(() => checkbooks.find(cb => cb.id === checkbookId), [checkbooks, checkbookId]);
-  const selectedPerson = useMemo(() => persons.find(p => p.id === payeeId), [persons, payeeId]);
 
-  // When person changes, auto-fill the payeeName text
   const handlePersonChange = (val: any) => {
     const newPersonId = val?.value || '';
     setPayeeId(newPersonId);
     
-    // Reset subsequent fields if person is cleared
     if (!newPersonId) {
        setCheckbookId('');
        setCheckLeafId('');
@@ -168,7 +177,7 @@ export default function IssueCheckStandalone() {
   };
 
   return (
-    <div className="p-4 md:p-8 max-w-7xl mx-auto font-sans" dir="rtl">
+    <div className="p-4 md:p-8 w-full font-sans" dir="rtl">
       <div className="flex flex-col xl:flex-row gap-8">
         
         {/* Right Column: Form */}
@@ -219,12 +228,14 @@ export default function IssueCheckStandalone() {
                    </button>
                 </div>
                 <Select
-                  options={persons.map(p => ({ value: p.id, label: p.name }))}
-                  value={payeeId ? { value: payeeId, label: selectedPerson?.name } : null}
+                  options={personOptions}
+                  value={personOptions.find(opt => opt.value === payeeId) || null}
                   onChange={handlePersonChange}
                   placeholder="جستجو و انتخاب شخص..."
                   className="font-sans"
+                  menuPortalTarget={document.body}
                   styles={{
+                    menuPortal: base => ({ ...base, zIndex: 9999 }),
                     control: (base) => ({
                       ...base,
                       borderRadius: '1rem',
@@ -245,17 +256,19 @@ export default function IssueCheckStandalone() {
                 </label>
                 <Select
                   isDisabled={!payeeId}
-                  options={checkbooks.map(cb => ({ value: cb.id, label: `${cb.bankName} - شعبه ${cb.branch || ''} - حساب ${cb.accountNumber}` }))}
-                  value={checkbookId ? { value: checkbookId, label: `${selectedCheckbook?.bankName} - حساب ${selectedCheckbook?.accountNumber}` } : null}
+                  options={checkbookOptions}
+                  value={checkbookOptions.find(opt => opt.value === checkbookId) || null}
                   onChange={(val: any) => {
                      setCheckbookId(val?.value || '');
-                     setCheckLeafId(''); // Reset leaf
+                     setCheckLeafId(''); 
                      setCheckNumber('');
                      if (errors.checkbookId) setErrors(prev => ({...prev, checkbookId: ''}));
                   }}
                   placeholder="ابتدا شخص را انتخاب کنید..."
                   className="font-sans"
+                  menuPortalTarget={document.body}
                   styles={{
+                    menuPortal: base => ({ ...base, zIndex: 9999 }),
                     control: (base) => ({
                       ...base,
                       borderRadius: '1rem',
@@ -274,8 +287,8 @@ export default function IssueCheckStandalone() {
                 <label className="text-sm font-bold text-slate-700">برگ چک (سفید) <span className="text-rose-500">*</span></label>
                 <Select
                   isDisabled={!checkbookId}
-                  options={availableLeaves.map(l => ({ value: l.id, label: `سریال ${l.checkNumber}` }))}
-                  value={checkLeafId ? { value: checkLeafId, label: `سریال ${checkNumber}` } : null}
+                  options={leafOptions}
+                  value={leafOptions.find(opt => opt.value === checkLeafId) || null}
                   onChange={(val: any) => {
                      setCheckLeafId(val?.value || '');
                      const leaf = availableLeaves.find(l => l.id === val?.value);
@@ -284,7 +297,9 @@ export default function IssueCheckStandalone() {
                   }}
                   placeholder={!checkbookId ? "ابتدا دسته‌چک را انتخاب کنید..." : "انتخاب از برگ‌های سفید..."}
                   className="font-sans"
+                  menuPortalTarget={document.body}
                   styles={{
+                    menuPortal: base => ({ ...base, zIndex: 9999 }),
                     control: (base) => ({
                       ...base,
                       borderRadius: '1rem',
@@ -316,49 +331,83 @@ export default function IssueCheckStandalone() {
                 <div className="absolute inset-0 z-10 bg-white/40 cursor-not-allowed backdrop-blur-[1px]"></div>
               )}
 
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">مبلغ چک (تومان) <span className="text-rose-500">*</span></label>
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-bold text-slate-700">مبلغ چک ({currency}) <span className="text-rose-500">*</span></label>
                 <CurrencyInput 
                   value={amount} 
                   onChange={(v) => {
                     setAmount(v);
                     if (errors.amount) setErrors(prev => ({...prev, amount: ''}));
                   }} 
-                  className={`w-full border-2 rounded-2xl p-4 text-left font-sans outline-none transition-colors font-bold text-lg ${errors.amount ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500'} disabled:bg-slate-50 disabled:text-slate-400`}
+                  currencyLabel={currency}
+                  className={`w-full border-2 rounded-2xl p-4 text-left font-sans outline-none transition-colors font-bold text-2xl ${errors.amount ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500'} disabled:bg-slate-50 disabled:text-slate-400`}
                   disabled={!checkLeafId}
                 />
-                <div className="h-5">
+                <div className="h-6">
                    {amount && Number(amount) > 0 ? (
-                     <p className="text-xs text-indigo-600 font-bold flex items-center gap-1">
+                     <p className="text-sm text-indigo-600 font-bold flex items-center gap-1">
                        <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block"></span>
-                       {num2persian(amount)} تومان
+                       {num2persian(amount)} {currency}
                      </p>
                    ) : errors.amount ? (
-                     <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.amount}</p>
+                     <p className="text-sm text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-4 h-4"/> {errors.amount}</p>
                    ) : null}
                 </div>
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">تاریخ سررسید <span className="text-rose-500">*</span></label>
-                <div className={`${errors.dueDate ? "ring-2 ring-rose-300 rounded-2xl" : ""} ${!checkLeafId ? 'opacity-50 pointer-events-none' : ''}`}>
-                   <CustomDatePicker value={dueDate} onChange={setDueDate} />
+                <label className="text-sm font-bold text-slate-700 flex items-center gap-1">تاریخ صدور <span className="text-rose-500">*</span></label>
+                <div className={`p-1 border-2 rounded-2xl transition-colors ${errors.issueDate ? "border-rose-300" : "border-slate-200 hover:border-slate-300 focus-within:border-indigo-500"} ${!checkLeafId ? 'opacity-50 pointer-events-none bg-slate-50' : 'bg-white'}`}>
+                   <div className="flex items-center">
+                     <Calendar className="w-5 h-5 text-slate-400 mx-3" />
+                     <div className="flex-1 text-lg font-bold">
+                       <CustomDatePicker value={issueDate} onChange={setIssueDate} />
+                     </div>
+                   </div>
+                </div>
+                {errors.issueDate && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.issueDate}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700 flex items-center gap-1">تاریخ سررسید <span className="text-rose-500">*</span></label>
+                <div className={`p-1 border-2 rounded-2xl transition-colors ${errors.dueDate ? "border-rose-300" : "border-slate-200 hover:border-slate-300 focus-within:border-indigo-500"} ${!checkLeafId ? 'opacity-50 pointer-events-none bg-slate-50' : 'bg-white'}`}>
+                   <div className="flex items-center">
+                     <Calendar className="w-5 h-5 text-indigo-500 mx-3" />
+                     <div className="flex-1 text-lg font-black text-indigo-700">
+                       <CustomDatePicker value={dueDate} onChange={setDueDate} />
+                     </div>
+                   </div>
                 </div>
                 {errors.dueDate && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.dueDate}</p>}
               </div>
 
               <div className="space-y-2 md:col-span-2">
                 <label className="text-sm font-bold text-slate-700">در وجه (متن روی چک) <span className="text-rose-500">*</span></label>
-                <input
-                  type="text"
-                  value={payeeName}
-                  onChange={e => {
-                    setPayeeName(e.target.value);
-                    if (errors.payeeName) setErrors(prev => ({...prev, payeeName: ''}));
+                <CreatableSelect
+                  isDisabled={!checkLeafId}
+                  options={payeeNameOptions}
+                  value={payeeName ? { value: payeeName, label: payeeName } : null}
+                  onChange={(val: any) => {
+                     setPayeeName(val?.value || '');
+                     if (errors.payeeName) setErrors(prev => ({...prev, payeeName: ''}));
                   }}
-                  className={`w-full border-2 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans transition-colors disabled:bg-slate-50 disabled:text-slate-400 ${errors.payeeName ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200'}`}
-                  placeholder="مثال: شرکت بازرگانی..."
-                  disabled={!checkLeafId}
+                  placeholder="تایپ کنید یا از لیست اشخاص انتخاب کنید..."
+                  className="font-sans text-lg"
+                  menuPortalTarget={document.body}
+                  formatCreateLabel={(inputValue) => `ثبت عبارت: "${inputValue}"`}
+                  styles={{
+                    menuPortal: base => ({ ...base, zIndex: 9999 }),
+                    control: (base) => ({
+                      ...base,
+                      borderRadius: '1rem',
+                      padding: '8px',
+                      borderColor: errors.payeeName ? '#f43f5e' : '#e2e8f0',
+                      boxShadow: 'none',
+                      borderWidth: '2px',
+                      '&:hover': { borderColor: '#cbd5e1' }
+                    })
+                  }}
+                  isClearable
                 />
                 {errors.payeeName && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.payeeName}</p>}
               </div>
@@ -369,7 +418,7 @@ export default function IssueCheckStandalone() {
                   type="text"
                   value={sayadId}
                   onChange={e => setSayadId(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                  className="w-full border-2 border-slate-200 rounded-2xl p-4 text-left font-mono focus:border-indigo-500 outline-none transition-colors tracking-widest disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full border-2 border-slate-200 rounded-2xl p-4 text-left font-mono text-lg focus:border-indigo-500 outline-none transition-colors tracking-widest disabled:bg-slate-50 disabled:text-slate-400"
                   dir="ltr"
                   placeholder="0000 0000 0000 0000"
                   disabled={!checkLeafId}
@@ -382,7 +431,7 @@ export default function IssueCheckStandalone() {
                   type="text"
                   value={reason}
                   onChange={e => setReason(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans transition-colors disabled:bg-slate-50 disabled:text-slate-400"
+                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 text-lg outline-none font-sans transition-colors disabled:bg-slate-50 disabled:text-slate-400"
                   placeholder="مثال: تسویه فاکتور"
                   disabled={!checkLeafId}
                 />
@@ -478,8 +527,9 @@ export default function IssueCheckStandalone() {
                      </div>
                      <div className="text-left w-[120px]">
                         <p className="text-[10px] text-slate-500 font-bold mb-1 text-right">مبلغ به عدد</p>
-                        <div className="border border-slate-300 rounded px-2 py-1 font-mono text-sm bg-white text-left tracking-wider">
-                           {amount ? Number(amount).toLocaleString() : '۰'}
+                        <div className="border border-slate-300 rounded px-2 py-1 font-mono text-sm bg-white text-left tracking-wider flex items-center justify-between">
+                           <span>{amount ? Number(amount).toLocaleString() : '۰'}</span>
+                           <span className="text-[8px] text-slate-400 mr-1">{currency}</span>
                         </div>
                      </div>
                   </div>
@@ -489,7 +539,7 @@ export default function IssueCheckStandalone() {
                      <div className="flex items-end gap-2 text-sm">
                        <span className="font-bold text-slate-700 whitespace-nowrap">مبلغ به حروف:</span>
                        <div className="flex-1 border-b border-dashed border-slate-400 pb-1 text-slate-800 font-bold px-2 overflow-hidden text-ellipsis whitespace-nowrap">
-                         {amount && Number(amount) > 0 ? num2persian(amount) + ' تومان' : ''}
+                         {amount && Number(amount) > 0 ? `${num2persian(amount)} ${currency}` : ''}
                        </div>
                      </div>
                      <div className="flex items-end gap-2 text-sm">
@@ -520,6 +570,10 @@ export default function IssueCheckStandalone() {
                         <div className="flex items-center gap-2">
                            <span className="text-[10px] font-bold text-slate-500 w-16">شماره حساب:</span>
                            <span className="font-mono text-xs text-slate-800 tracking-widest">{selectedCheckbook?.accountNumber || '------------'}</span>
+                        </div>
+                        <div className="flex items-center gap-2 pt-1 mt-1 border-t border-slate-200/50">
+                           <span className="text-[10px] font-bold text-slate-400 w-16">تاریخ صدور:</span>
+                           <span className="font-mono text-xs text-slate-500 tracking-widest">{issueDate ? issueDate.replace(/-/g, '/') : '----/--/--'}</span>
                         </div>
                      </div>
                      
