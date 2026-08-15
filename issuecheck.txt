@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { updateIssuedCheck, getIssuedChecks, getCheckbooks, getPersons, getAccounts } from "../../services/dataService";
+import { updateIssuedCheck, getIssuedChecks, getCheckbooks, getPersons } from "../../services/dataService";
 import { getStoreSettings } from "../../services/settingsService";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp, Edit3 } from "lucide-react";
@@ -13,7 +13,6 @@ export default function IssueCheckStandalone() {
   const [persons, setPersons] = useState<any[]>([]);
   const [checkbooks, setCheckbooks] = useState<any[]>([]);
   const [allChecks, setAllChecks] = useState<any[]>([]);
-  const [accounts, setAccounts] = useState<any[]>([]);
   const [currency, setCurrency] = useState("تومان");
   
   // Step 1: Selection
@@ -42,7 +41,6 @@ export default function IssueCheckStandalone() {
     setPersons(await getPersons());
     setCheckbooks(await getCheckbooks());
     setAllChecks(await getIssuedChecks());
-    setAccounts(await getAccounts());
     const settings = await getStoreSettings();
     if (settings?.currency) {
       setCurrency(settings.currency);
@@ -63,15 +61,7 @@ export default function IssueCheckStandalone() {
   // Options arrays to guarantee correct labels
   const personOptions = useMemo(() => persons.map(p => ({ value: p.id, label: p.name })), [persons]);
   const payeeNameOptions = useMemo(() => persons.map(p => ({ value: p.name, label: p.name })), [persons]);
-  const checkbookOptions = useMemo(() => {
-    return checkbooks.map(cb => {
-      const acc = accounts.find(a => String(a.id) === String(cb.accountId));
-      return { 
-        value: cb.id, 
-        label: acc ? `${acc.bankName} - شعبه ${acc.branchName || 'مرکزی'} - حساب ${acc.accountNumber}` : `دسته‌چک ${cb.id}`
-      };
-    });
-  }, [checkbooks, accounts]);
+  const checkbookOptions = useMemo(() => checkbooks.map(cb => ({ value: cb.id, label: `${cb.bankName} - شعبه ${cb.branch || 'مرکزی'} - حساب ${cb.accountNumber}` })), [checkbooks]);
   const leafOptions = useMemo(() => availableLeaves.map(l => ({ value: l.id, label: `سریال ${l.checkNumber}` })), [availableLeaves]);
 
   // Set dirty state
@@ -167,12 +157,7 @@ export default function IssueCheckStandalone() {
     }
   };
 
-  const selectedCheckbook = useMemo(() => {
-    const cb = checkbooks.find(c => c.id === checkbookId);
-    if (!cb) return null;
-    const acc = accounts.find(a => String(a.id) === String(cb.accountId));
-    return { ...cb, ...acc };
-  }, [checkbooks, checkbookId, accounts]);
+  const selectedCheckbook = useMemo(() => checkbooks.find(cb => cb.id === checkbookId), [checkbooks, checkbookId]);
 
   const handlePersonChange = (val: any) => {
     const newPersonId = val?.value || '';
@@ -350,24 +335,8 @@ export default function IssueCheckStandalone() {
                 <label className="text-sm font-bold text-slate-700">مبلغ چک ({currency}) <span className="text-rose-500">*</span></label>
                 <CurrencyInput 
                   value={amount} 
-                  onChange={(e: any) => {
-                    let val = e;
-                    if (e && e.target && e.target.value !== undefined) {
-                      val = e.target.value;
-                    } else if (e && typeof e === 'string') {
-                      val = e;
-                    } else if (e && e.value !== undefined) {
-                      val = e.value;
-                    } else if (typeof e === 'object' && Object.keys(e).length === 0) {
-                      val = ''; // Sometimes empty object is passed
-                    } else if (typeof e === 'number') {
-                      val = e.toString();
-                    }
-                    if (typeof val === 'object') {
-                      console.error("CurrencyInput onChange returned an object that we didn't handle:", e);
-                      val = '';
-                    }
-                    setAmount(val);
+                  onChange={(v) => {
+                    setAmount(v);
                     if (errors.amount) setErrors(prev => ({...prev, amount: ''}));
                   }} 
                   currencyLabel={currency}
@@ -388,16 +357,11 @@ export default function IssueCheckStandalone() {
 
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 flex items-center gap-1">تاریخ صدور <span className="text-rose-500">*</span></label>
-                <div className={`flex flex-col p-2 border-2 rounded-2xl transition-all duration-200 ${errors.issueDate ? "border-rose-300 bg-rose-50/50" : "border-slate-200 hover:border-slate-300 focus-within:border-indigo-500 focus-within:shadow-[0_0_0_4px_rgba(79,70,229,0.1)] bg-slate-50/30"} ${!checkLeafId ? 'opacity-50 pointer-events-none' : 'bg-white'}`}>
-                   <div className="flex items-center gap-3 px-1">
-                     <div className="w-12 h-12 rounded-xl bg-white flex items-center justify-center shadow-sm border border-slate-100 shrink-0 text-slate-500 group-focus-within:text-indigo-600 transition-colors">
-                       <Calendar className="w-6 h-6" />
-                     </div>
-                     <div className="flex-1 w-full date-picker-lg">
-                       <CustomDatePicker 
-                         value={issueDate} 
-                         onChange={setIssueDate} 
-                       />
+                <div className={`p-1 border-2 rounded-2xl transition-colors ${errors.issueDate ? "border-rose-300" : "border-slate-200 hover:border-slate-300 focus-within:border-indigo-500"} ${!checkLeafId ? 'opacity-50 pointer-events-none bg-slate-50' : 'bg-white'}`}>
+                   <div className="flex items-center">
+                     <Calendar className="w-5 h-5 text-slate-400 mx-3" />
+                     <div className="flex-1 text-lg font-bold">
+                       <CustomDatePicker value={issueDate} onChange={setIssueDate} />
                      </div>
                    </div>
                 </div>
@@ -406,16 +370,11 @@ export default function IssueCheckStandalone() {
 
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 flex items-center gap-1">تاریخ سررسید <span className="text-rose-500">*</span></label>
-                <div className={`flex flex-col p-2 border-2 rounded-2xl transition-all duration-200 ${errors.dueDate ? "border-rose-300 bg-rose-50/50" : "border-indigo-200 hover:border-indigo-300 focus-within:border-indigo-500 focus-within:shadow-[0_0_0_4px_rgba(79,70,229,0.15)] bg-indigo-50/10"} ${!checkLeafId ? 'opacity-50 pointer-events-none' : 'bg-white'}`}>
-                   <div className="flex items-center gap-3 px-1">
-                     <div className="w-12 h-12 rounded-xl bg-indigo-600 flex items-center justify-center shadow-md border border-indigo-500 shrink-0 text-white">
-                       <Calendar className="w-6 h-6" />
-                     </div>
-                     <div className="flex-1 w-full date-picker-lg dueDate">
-                       <CustomDatePicker 
-                         value={dueDate} 
-                         onChange={setDueDate} 
-                       />
+                <div className={`p-1 border-2 rounded-2xl transition-colors ${errors.dueDate ? "border-rose-300" : "border-slate-200 hover:border-slate-300 focus-within:border-indigo-500"} ${!checkLeafId ? 'opacity-50 pointer-events-none bg-slate-50' : 'bg-white'}`}>
+                   <div className="flex items-center">
+                     <Calendar className="w-5 h-5 text-indigo-500 mx-3" />
+                     <div className="flex-1 text-lg font-black text-indigo-700">
+                       <CustomDatePicker value={dueDate} onChange={setDueDate} />
                      </div>
                    </div>
                 </div>
@@ -564,7 +523,7 @@ export default function IssueCheckStandalone() {
                      </div>
                      <div className="text-center flex-1 px-4">
                         <p className="text-lg font-black text-slate-800 mb-1">{selectedCheckbook?.bankName || 'نام بانک'}</p>
-                        <p className="text-xs text-slate-500">شعبه {selectedCheckbook?.branchName || '---'}</p>
+                        <p className="text-xs text-slate-500">شعبه {selectedCheckbook?.branch || '---'}</p>
                      </div>
                      <div className="text-left w-[120px]">
                         <p className="text-[10px] text-slate-500 font-bold mb-1 text-right">مبلغ به عدد</p>

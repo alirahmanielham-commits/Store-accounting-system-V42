@@ -285,3 +285,28 @@ body {
   animation: loading-bar-slide 2.5s infinite ease-in-out;
 }
 
+
+/* Date Picker Overrides */
+.date-picker-lg .rmdp-input {
+  width: 100% !important;
+  border: none !important;
+  background: transparent !important;
+  font-size: 1.25rem !important;
+  font-weight: 900 !important;
+  color: #1e293b !important;
+  outline: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  font-family: inherit !important;
+  letter-spacing: 0.05em !important;
+}
+
+.date-picker-lg.dueDate .rmdp-input {
+  color: #4f46e5 !important;
+}
+
+.date-picker-lg .rmdp-input::placeholder {
+  color: #cbd5e1 !important;
+  font-weight: 500 !important;
+}
