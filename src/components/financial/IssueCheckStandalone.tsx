@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { addIssuedCheck, getCheckbooks, getPersons } from "../../services/dataService";
+import { updateIssuedCheck, getIssuedChecks, getCheckbooks, getPersons } from "../../services/dataService";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp } from "lucide-react";
 import Select from "react-select";
@@ -10,10 +10,12 @@ import num2persian from "num2persian";
 export default function IssueCheckStandalone() {
   const [persons, setPersons] = useState<any[]>([]);
   const [checkbooks, setCheckbooks] = useState<any[]>([]);
+  const [allChecks, setAllChecks] = useState<any[]>([]);
   
   const [payeeId, setPayeeId] = useState("");
   const [amount, setAmount] = useState("");
   const [checkbookId, setCheckbookId] = useState("");
+  const [checkLeafId, setCheckLeafId] = useState("");
   const [checkNumber, setCheckNumber] = useState("");
   const [sayadId, setSayadId] = useState("");
   const [issueDate, setIssueDate] = useState(new Date().toISOString().split('T')[0]); // Default today
@@ -28,13 +30,22 @@ export default function IssueCheckStandalone() {
   const [submitError, setSubmitError] = useState("");
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
 
+  const load = async () => {
+    setPersons(await getPersons());
+    setCheckbooks(await getCheckbooks());
+    setAllChecks(await getIssuedChecks());
+  };
+
   useEffect(() => {
-    const load = async () => {
-      setPersons(await getPersons());
-      setCheckbooks(await getCheckbooks());
-    };
     load();
   }, []);
+
+  const availableLeaves = useMemo(() => {
+    if (!checkbookId) return [];
+    return allChecks
+      .filter(c => c.checkbookId === checkbookId && c.status === 'blank')
+      .sort((a, b) => Number(a.checkNumber) - Number(b.checkNumber));
+  }, [allChecks, checkbookId]);
 
   // Set dirty state
   useEffect(() => {
@@ -69,12 +80,12 @@ export default function IssueCheckStandalone() {
 
   const validateForm = () => {
     const newErrors: Record<string, string> = {};
-    if (!checkbookId) newErrors.checkbookId = "دسته‌چک را انتخاب کنید.";
-    if (!checkNumber) newErrors.checkNumber = "شماره چک را وارد کنید.";
+    if (!payeeId) newErrors.payeeId = "گیرنده چک را انتخاب کنید.";
+    if (!checkbookId) newErrors.checkbookId = "دسته‌چک مبدأ را انتخاب کنید.";
+    if (!checkLeafId) newErrors.checkLeafId = "شماره برگ چک را انتخاب کنید.";
     if (!amount || Number(amount) <= 0) newErrors.amount = "مبلغ چک نامعتبر است.";
     if (!dueDate) newErrors.dueDate = "تاریخ سررسید را مشخص کنید.";
     if (dueDate && issueDate && dueDate < issueDate) newErrors.dueDate = "تاریخ سررسید نمی‌تواند قبل از صدور باشد.";
-    if (!payeeId) newErrors.payeeId = "گیرنده چک را انتخاب کنید.";
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
@@ -91,7 +102,7 @@ export default function IssueCheckStandalone() {
 
     setLoading(true);
     try {
-      await addIssuedCheck({
+      await updateIssuedCheck(checkLeafId, {
         payeeId,
         amount: Number(amount),
         checkbookId,
@@ -105,11 +116,16 @@ export default function IssueCheckStandalone() {
       });
       setSuccess(true);
       setIsDirty(false);
+      
+      // Reload checks to get updated available leaves
+      await load();
+      
       // Reset form on success
       setTimeout(() => {
         setPayeeId("");
         setAmount("");
         setCheckbookId("");
+        setCheckLeafId("");
         setCheckNumber("");
         setSayadId("");
         setDueDate("");
@@ -149,7 +165,7 @@ export default function IssueCheckStandalone() {
             {success && (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center gap-3">
                 <CheckCircle className="w-6 h-6 text-emerald-500" />
-                <span className="font-bold">چک با موفقیت ثبت شد.</span>
+                <span className="font-bold">چک با موفقیت صادر و ثبت شد.</span>
               </motion.div>
             )}
             
@@ -161,108 +177,11 @@ export default function IssueCheckStandalone() {
             )}
           </AnimatePresence>
 
-          {/* Section 1: Check Info */}
-          <section className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-              <Building2 className="w-5 h-5 text-indigo-500" />
-              <h2 className="font-bold text-slate-700">۱. اطلاعات پایه چک</h2>
-            </div>
-            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6">
-              <div className="space-y-2 md:col-span-2">
-                <label className="text-sm font-bold text-slate-700 flex items-center gap-1">
-                  دسته‌چک و حساب بانکی <span className="text-rose-500">*</span>
-                </label>
-                <Select
-                  options={checkbooks.map(cb => ({ value: cb.id, label: `${cb.bankName} - شعبه ${cb.branch || ''} - حساب ${cb.accountNumber}` }))}
-                  value={checkbookId ? { value: checkbookId, label: `${selectedCheckbook?.bankName} - حساب ${selectedCheckbook?.accountNumber}` } : null}
-                  onChange={(val: any) => {
-                     setCheckbookId(val?.value || '');
-                     if (val?.value) {
-                         // Optional: Auto-suggest check number based on last used logic if available
-                     }
-                  }}
-                  placeholder="جستجو و انتخاب دسته‌چک..."
-                  className="font-sans"
-                  styles={{
-                    control: (base) => ({
-                      ...base,
-                      borderRadius: '1rem',
-                      padding: '4px',
-                      borderColor: errors.checkbookId ? '#f43f5e' : '#e2e8f0',
-                      boxShadow: 'none',
-                      '&:hover': { borderColor: '#cbd5e1' }
-                    })
-                  }}
-                  isClearable
-                />
-                {errors.checkbookId && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.checkbookId}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">شماره چک (سریال) <span className="text-rose-500">*</span></label>
-                <input
-                  type="text"
-                  value={checkNumber}
-                  onChange={e => {
-                    setCheckNumber(e.target.value);
-                    if (errors.checkNumber) setErrors(prev => ({...prev, checkNumber: ''}));
-                  }}
-                  className={`w-full border-2 rounded-2xl p-4 text-left font-mono outline-none transition-colors ${errors.checkNumber ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500'}`}
-                  dir="ltr"
-                  placeholder="مثال: 12345678"
-                />
-                {errors.checkNumber && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.checkNumber}</p>}
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">شناسه صیادی (۱۶ رقمی)</label>
-                <input
-                  type="text"
-                  value={sayadId}
-                  onChange={e => setSayadId(e.target.value.replace(/\D/g, '').slice(0, 16))}
-                  className="w-full border-2 border-slate-200 rounded-2xl p-4 text-left font-mono focus:border-indigo-500 outline-none transition-colors tracking-widest"
-                  dir="ltr"
-                  placeholder="0000 0000 0000 0000"
-                />
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">مبلغ چک (تومان) <span className="text-rose-500">*</span></label>
-                <CurrencyInput 
-                  value={amount} 
-                  onChange={(v) => {
-                    setAmount(v);
-                    if (errors.amount) setErrors(prev => ({...prev, amount: ''}));
-                  }} 
-                  className={`w-full border-2 rounded-2xl p-4 text-left font-sans outline-none transition-colors font-bold text-lg ${errors.amount ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500'}`}
-                />
-                <div className="h-5">
-                   {amount && Number(amount) > 0 ? (
-                     <p className="text-xs text-indigo-600 font-bold flex items-center gap-1">
-                       <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block"></span>
-                       {num2persian(amount)} تومان
-                     </p>
-                   ) : errors.amount ? (
-                     <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.amount}</p>
-                   ) : null}
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">تاریخ سررسید <span className="text-rose-500">*</span></label>
-                <div className={errors.dueDate ? "ring-2 ring-rose-300 rounded-2xl" : ""}>
-                   <CustomDatePicker value={dueDate} onChange={setDueDate} />
-                </div>
-                {errors.dueDate && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.dueDate}</p>}
-              </div>
-            </div>
-          </section>
-
-          {/* Section 2: Payee & Reason */}
+          {/* Section 1: Payee & Reason */}
           <section className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
              <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
               <User className="w-5 h-5 text-emerald-500" />
-              <h2 className="font-bold text-slate-700">۲. گیرنده و توضیحات</h2>
+              <h2 className="font-bold text-slate-700">۱. گیرنده و توضیحات</h2>
             </div>
             <div className="p-6 grid grid-cols-1 gap-6">
                <div className="space-y-2">
@@ -304,8 +223,9 @@ export default function IssueCheckStandalone() {
                   type="text"
                   value={reason}
                   onChange={e => setReason(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans transition-colors"
+                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans transition-colors disabled:bg-slate-50 disabled:text-slate-400"
                   placeholder="مثال: تسویه فاکتور خرید مواد اولیه"
+                  disabled={!payeeId}
                 />
               </div>
 
@@ -314,20 +234,144 @@ export default function IssueCheckStandalone() {
                 <textarea
                   value={description}
                   onChange={e => setDescription(e.target.value)}
-                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans min-h-[100px] transition-colors resize-y"
+                  className="w-full border-2 border-slate-200 rounded-2xl p-4 focus:border-indigo-500 outline-none font-sans min-h-[100px] transition-colors resize-y disabled:bg-slate-50 disabled:text-slate-400"
                   placeholder="این یادداشت در برگ چک چاپ نمی‌شود و فقط برای سوابق داخلی است..."
+                  disabled={!payeeId}
                 />
               </div>
             </div>
           </section>
 
-          {/* Section 3: Attachments */}
-          <section className="bg-white rounded-3xl shadow-sm border border-slate-100 overflow-hidden">
+          {/* Section 2: Check Info */}
+          <section className={`bg-white rounded-3xl shadow-sm border overflow-hidden transition-colors ${!payeeId ? 'border-slate-100 opacity-50' : 'border-slate-100'}`}>
             <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
-              <Paperclip className="w-5 h-5 text-amber-500" />
+              <Building2 className={`w-5 h-5 ${!payeeId ? 'text-slate-400' : 'text-indigo-500'}`} />
+              <h2 className="font-bold text-slate-700">۲. اطلاعات پایه چک</h2>
+            </div>
+            <div className="p-6 grid grid-cols-1 md:grid-cols-2 gap-6 relative">
+              
+              {!payeeId && (
+                <div className="absolute inset-0 z-10 bg-white/40 cursor-not-allowed backdrop-blur-[1px]"></div>
+              )}
+
+              <div className="space-y-2 md:col-span-2">
+                <label className="text-sm font-bold text-slate-700 flex items-center gap-1">
+                  دسته‌چک و حساب بانکی <span className="text-rose-500">*</span>
+                </label>
+                <Select
+                  isDisabled={!payeeId}
+                  options={checkbooks.map(cb => ({ value: cb.id, label: `${cb.bankName} - شعبه ${cb.branch || ''} - حساب ${cb.accountNumber}` }))}
+                  value={checkbookId ? { value: checkbookId, label: `${selectedCheckbook?.bankName} - حساب ${selectedCheckbook?.accountNumber}` } : null}
+                  onChange={(val: any) => {
+                     setCheckbookId(val?.value || '');
+                     setCheckLeafId(''); // Reset leaf when checkbook changes
+                     setCheckNumber('');
+                     if (errors.checkbookId) setErrors(prev => ({...prev, checkbookId: ''}));
+                  }}
+                  placeholder="ابتدا گیرنده را انتخاب کنید، سپس دسته‌چک..."
+                  className="font-sans"
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      borderRadius: '1rem',
+                      padding: '4px',
+                      borderColor: errors.checkbookId ? '#f43f5e' : '#e2e8f0',
+                      boxShadow: 'none',
+                      '&:hover': { borderColor: '#cbd5e1' }
+                    })
+                  }}
+                  isClearable
+                />
+                {errors.checkbookId && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.checkbookId}</p>}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">شماره برگ چک (سریال) <span className="text-rose-500">*</span></label>
+                <Select
+                  isDisabled={!checkbookId}
+                  options={availableLeaves.map(l => ({ value: l.id, label: `چک شماره ${l.checkNumber}` }))}
+                  value={checkLeafId ? { value: checkLeafId, label: `چک شماره ${checkNumber}` } : null}
+                  onChange={(val: any) => {
+                     setCheckLeafId(val?.value || '');
+                     const leaf = availableLeaves.find(l => l.id === val?.value);
+                     setCheckNumber(leaf ? leaf.checkNumber : '');
+                     if (errors.checkLeafId) setErrors(prev => ({...prev, checkLeafId: ''}));
+                  }}
+                  placeholder={!checkbookId ? "ابتدا دسته‌چک را انتخاب کنید..." : "انتخاب از برگ‌های سفید..."}
+                  className="font-sans"
+                  styles={{
+                    control: (base) => ({
+                      ...base,
+                      borderRadius: '1rem',
+                      padding: '4px',
+                      borderColor: errors.checkLeafId ? '#f43f5e' : '#e2e8f0',
+                      boxShadow: 'none',
+                      '&:hover': { borderColor: '#cbd5e1' }
+                    })
+                  }}
+                  isClearable
+                />
+                {errors.checkLeafId && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.checkLeafId}</p>}
+                {checkbookId && availableLeaves.length === 0 && (
+                    <p className="text-xs text-amber-500 flex items-center gap-1 mt-1"><Info className="w-3 h-3"/> برگ سفیدی در این دسته‌چک موجود نیست.</p>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">شناسه صیادی (۱۶ رقمی)</label>
+                <input
+                  type="text"
+                  value={sayadId}
+                  onChange={e => setSayadId(e.target.value.replace(/\D/g, '').slice(0, 16))}
+                  className="w-full border-2 border-slate-200 rounded-2xl p-4 text-left font-mono focus:border-indigo-500 outline-none transition-colors tracking-widest disabled:bg-slate-50 disabled:text-slate-400"
+                  dir="ltr"
+                  placeholder="0000 0000 0000 0000"
+                  disabled={!checkLeafId}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">مبلغ چک (تومان) <span className="text-rose-500">*</span></label>
+                <CurrencyInput 
+                  value={amount} 
+                  onChange={(v) => {
+                    setAmount(v);
+                    if (errors.amount) setErrors(prev => ({...prev, amount: ''}));
+                  }} 
+                  className={`w-full border-2 rounded-2xl p-4 text-left font-sans outline-none transition-colors font-bold text-lg ${errors.amount ? 'border-rose-300 focus:border-rose-500' : 'border-slate-200 focus:border-indigo-500'} disabled:bg-slate-50 disabled:text-slate-400`}
+                  disabled={!checkLeafId}
+                />
+                <div className="h-5">
+                   {amount && Number(amount) > 0 ? (
+                     <p className="text-xs text-indigo-600 font-bold flex items-center gap-1">
+                       <span className="w-2 h-2 rounded-full bg-indigo-400 inline-block"></span>
+                       {num2persian(amount)} تومان
+                     </p>
+                   ) : errors.amount ? (
+                     <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.amount}</p>                   ) : null}
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <label className="text-sm font-bold text-slate-700">تاریخ سررسید <span className="text-rose-500">*</span></label>
+                <div className={`${errors.dueDate ? "ring-2 ring-rose-300 rounded-2xl" : ""} ${!checkLeafId ? 'opacity-50 pointer-events-none' : ''}`}>
+                   <CustomDatePicker value={dueDate} onChange={setDueDate} />
+                </div>
+                {errors.dueDate && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.dueDate}</p>}
+              </div>
+            </div>
+          </section>
+
+          {/* Section 3: Attachments */}
+          <section className={`bg-white rounded-3xl shadow-sm border transition-colors overflow-hidden ${!checkLeafId ? 'border-slate-100 opacity-50' : 'border-slate-100'}`}>
+            <div className="px-6 py-4 border-b border-slate-100 bg-slate-50/50 flex items-center gap-2">
+              <Paperclip className={`w-5 h-5 ${!checkLeafId ? 'text-slate-400' : 'text-amber-500'}`} />
               <h2 className="font-bold text-slate-700">۳. پیوست‌ها (اختیاری)</h2>
             </div>
-            <div className="p-6">
+            <div className="p-6 relative">
+              {!checkLeafId && (
+                <div className="absolute inset-0 z-10 bg-white/40 cursor-not-allowed backdrop-blur-[1px]"></div>
+              )}
               <div className="border-2 border-dashed border-slate-200 rounded-3xl p-8 flex flex-col items-center justify-center text-center hover:bg-slate-50 hover:border-indigo-300 transition-colors cursor-pointer group">
                  <div className="w-16 h-16 bg-slate-100 rounded-full flex items-center justify-center mb-4 group-hover:bg-indigo-100 group-hover:text-indigo-600 transition-colors">
                     <UploadCloud className="w-8 h-8 text-slate-400 group-hover:text-indigo-600 transition-colors" />
@@ -343,7 +387,7 @@ export default function IssueCheckStandalone() {
              <button
                type="button"
                onClick={() => handleSave("draft")}
-               disabled={loading}
+               disabled={loading || !checkLeafId}
                className="w-full sm:w-auto px-8 py-4 rounded-2xl font-bold text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
              >
                <Save className="w-5 h-5" />
@@ -352,7 +396,7 @@ export default function IssueCheckStandalone() {
              <button
                type="button"
                onClick={() => handleSave("issued")}
-               disabled={loading}
+               disabled={loading || !checkLeafId}
                className="w-full sm:w-auto px-10 py-4 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_8px_20px_rgb(79,70,229,0.3)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
              >
                <CheckCircle className="w-5 h-5" />
