@@ -11,6 +11,7 @@ import Num2persian from "num2persian";
 
 export default function CheckCardPage({
   checkId,
+  checkType,
   onClose,
   showNotification,
   currentUser,

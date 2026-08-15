@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useMemo } from "react";
 import { updateIssuedCheck, getIssuedChecks, getCheckbooks, getPersons, getAccounts } from "../../services/dataService";
 import { getStoreSettings } from "../../services/settingsService";
+import { addTransaction } from "../../services/invoiceService";
+import { convertToGregorian, formatDateDisplay } from "../../utils/format";
 import { motion, AnimatePresence } from "framer-motion";
 import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp, Edit3 } from "lucide-react";
 import Select from "react-select";
@@ -129,6 +131,9 @@ export default function IssueCheckStandalone() {
 
     setLoading(true);
     try {
+      const finalIssueDate = convertToGregorian(issueDate || new Date().toISOString());
+      const finalDueDate = convertToGregorian(dueDate);
+
       await updateIssuedCheck(checkLeafId, {
         payeeId,
         payeeName, 
@@ -136,12 +141,33 @@ export default function IssueCheckStandalone() {
         checkbookId,
         checkNumber,
         sayadId,
-        issueDate: issueDate || new Date().toISOString(),
-        dueDate,
+        issueDate: finalIssueDate,
+        dueDate: finalDueDate,
         reason,
         description,
         status: status
       });
+
+      if (status === "issued") {
+        const person = persons.find(p => String(p.id) === String(payeeId)) || { name: payeeName };
+        const savedTx = await addTransaction({
+          type: "pay",
+          method: "check",
+          personId: payeeId,
+          amount: Number(amount),
+          date: finalIssueDate,
+          description: description || `پرداخت چک به شماره ${checkNumber} در وجه ${person.name || 'نامشخص'}`,
+          checkNumber: checkNumber,
+          checkDueDate: finalDueDate,
+          checkbookId: checkbookId,
+          sourceType: "check_issued",
+          sourceId: checkLeafId
+        });
+        
+        if (savedTx && savedTx.receiptNumber) {
+           await updateIssuedCheck(checkLeafId, { receiptNumber: savedTx.receiptNumber });
+        }
+      }
       setSuccess(true);
       setIsDirty(false);
       
@@ -559,7 +585,7 @@ export default function IssueCheckStandalone() {
                      <div className="text-right">
                        <p className="text-[10px] text-slate-500 font-bold mb-1">تاریخ سررسید</p>
                        <div className="font-mono text-sm tracking-widest border-b border-dashed border-slate-400 pb-1 min-w-[100px] text-center text-slate-800">
-                         {dueDate ? dueDate.replace(/-/g, ' / ') : '---- / -- / --'}
+                         {dueDate ? formatDateDisplay(dueDate) : '---- / -- / --'}
                        </div>
                      </div>
                      <div className="text-center flex-1 px-4">
