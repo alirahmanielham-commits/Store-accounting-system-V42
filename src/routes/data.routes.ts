@@ -197,7 +197,7 @@ router.post('/api/data/:key/append', async (req, res) => {
          await setDbData('system_logs', sysLogs);
       }
 
-      res.json({ success: true, data: mergedItem });
+      res.json({ success: true, data: newItem });
     } catch(err: any) {
       console.error('Error in append:', err);
       tableSchemas.delete(req.params.key);
