@@ -734,6 +734,11 @@ export const syncCheckAccountingDocument = async (checkType: 'issued' | 'receive
       const cb = checkbooks.find(c => String(c.id) === String(check.checkbookId));
       if (cb && cb.accountId) {
         bankAccountId = cb.accountId;
+        const accs = await getLocalData<any[]>('accounts', []);
+        const acc = accs.find(a => String(a.id) === String(cb.accountId));
+        if (acc) {
+           bankName = acc.bankName;
+        }
       }
     }
 

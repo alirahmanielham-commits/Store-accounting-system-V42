@@ -952,6 +952,10 @@ export default function App() {
                              showNotification={showNotification}
                              currentUser={user?.name || 'سیستم'}
                              storeSettings={storeSettings}
+                             onViewAccountingDoc={(doc) => {
+                               setViewingAccountingDoc(doc);
+                               setIsAccountingDocModalOpen(true);
+                             }}
                            />
                         ) : (
                            <div className="h-full flex flex-col items-center justify-center text-gray-500">

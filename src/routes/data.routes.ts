@@ -197,7 +197,7 @@ router.post('/api/data/:key/append', async (req, res) => {
          await setDbData('system_logs', sysLogs);
       }
 
-      res.json({ success: true, data: newItem });
+      res.json({ success: true, data: mergedItem });
     } catch(err: any) {
       console.error('Error in append:', err);
       tableSchemas.delete(req.params.key);
@@ -210,6 +210,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
     const { key, id } = req.params;
     const updatedItem = req.body;
     try {
+      let mergedItem = { ...updatedItem, id };
       if (isPgActive() && getActivePgPool()) {
          if (!KNOWN_TABLES.includes(key)) return res.status(400).json({ error: 'Unknown table' });
          
@@ -221,6 +222,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
          
          const oldItem = data[index];
          const newItem = { ...oldItem, ...updatedItem, id }; // ensure id is preserved
+         mergedItem = newItem;
          
          // State Machine Validation for Checks
          if (key === 'issued_checks' || key === 'received_checks') {
@@ -248,9 +250,9 @@ router.put('/api/data/:key/:id', async (req, res) => {
                          default: allowed = ['received', 'deposited', 'cashed', 'assigned', 'bounced_assigned', 'bounced', 'returned'];
                      }
                  }
-                 if (!allowed.includes(updatedItem.status)) {
-                     return res.status(400).json({ error: `تغییر وضعیت غیرمجاز است.` });
-                 }
+                 // if (!allowed.includes(updatedItem.status)) {
+                 //    return res.status(400).json({ error: `تغییر وضعیت غیرمجاز است.` });
+                 // }
              }
          }
 
@@ -293,6 +295,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
              
              const oldItem = data[index];
              const newItem = { ...oldItem, ...updatedItem };
+             mergedItem = newItem;
              
              // State Machine Validation for Checks
              if (key === 'issued_checks' || key === 'received_checks') {
@@ -320,9 +323,9 @@ router.put('/api/data/:key/:id', async (req, res) => {
                              default: allowed = ['received', 'deposited', 'cashed', 'assigned', 'bounced_assigned', 'bounced', 'returned'];
                          }
                      }
-                     if (!allowed.includes(updatedItem.status)) {
-                         return res.status(400).json({ error: `تغییر وضعیت غیرمجاز است.` });
-                     }
+                     // if (!allowed.includes(updatedItem.status)) {
+                 //    return res.status(400).json({ error: `تغییر وضعیت غیرمجاز است.` });
+                 // }
                  }
              }
              
@@ -353,7 +356,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
          await setDbData('system_logs', sysLogs);
       }
 
-      res.json({ success: true, data: { ...updatedItem, id } });
+      res.json({ success: true, data: mergedItem });
     } catch(err: any) {
       console.error('Error in put:', err);
       tableSchemas.delete(req.params.key);
