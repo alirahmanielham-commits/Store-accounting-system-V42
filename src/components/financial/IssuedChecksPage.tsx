@@ -1,3 +1,4 @@
+import { formatDateDisplay } from '../../utils/format';
 import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { getIssuedChecks, getPersons, getCheckbooks, getAccounts, getStoreSettings } from "../../services/dataService";
@@ -125,7 +126,7 @@ export default function IssuedChecksPage({ showNotification, currentUser, setVie
         setHistoryCheck={() => {}}
         setHistoryData={() => {}}
         handleDeleteIssuedCheck={() => {}}
-        formatDateDisplay={(date) => date} // Simple fallback
+        formatDateDisplay={formatDateDisplay}
         sendNotification={() => {}}
         getCheckAuditLogs={async () => []}
         issuedPage={issuedPage}
