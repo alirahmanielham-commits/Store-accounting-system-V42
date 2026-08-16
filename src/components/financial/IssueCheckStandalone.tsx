@@ -669,6 +669,64 @@ export default function IssueCheckStandalone() {
         </div>
         
       </div>
+
+      {showConfirmModal && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-lg w-full" dir="rtl">
+            <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+              <CheckCircle className="w-6 h-6 text-indigo-500" />
+              تایید نهایی صدور چک
+            </h3>
+            
+            <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-6 space-y-4">
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="text-slate-500">شماره چک:</span>
+                <span className="font-bold text-slate-800">{checkNumber}</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="text-slate-500">مبلغ چک:</span>
+                <span className="font-bold text-slate-800">{Number(amount).toLocaleString('fa-IR')} ریال</span>
+              </div>
+              <div className="flex justify-between border-b border-slate-200 pb-2">
+                <span className="text-slate-500">در وجه:</span>
+                <span className="font-bold text-slate-800">{payeeName || persons.find(p => String(p.id) === String(payeeId))?.name || payeeId}</span>
+              </div>
+              <div className="flex justify-between pb-2">
+                <span className="text-slate-500">تاریخ سررسید:</span>
+                <span className="font-bold text-slate-800">{dueDate}</span>
+              </div>
+            </div>
+            
+            <p className="text-slate-600 mb-8 text-sm">
+              آیا از صحت اطلاعات فوق اطمینان دارید؟ با تایید نهایی، سند مالی متصل (در صورت لزوم) ایجاد خواهد شد.
+            </p>
+            
+            <div className="flex justify-end gap-3">
+              <button 
+                type="button"
+                onClick={() => setShowConfirmModal(false)}
+                className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors"
+                disabled={loading}
+              >
+                انصراف
+              </button>
+              <button 
+                type="button"
+                onClick={() => {
+                  setShowConfirmModal(false);
+                  handleSave("issued");
+                }}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2"
+                disabled={loading}
+              >
+                {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                تایید و صدور
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }
