@@ -135,7 +135,7 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
 
   const getCheckHistoryLogs = async (id: string | number, type: 'issued' | 'received') => {
     const { getCheckHistoryLogs: apiGetCheckHistoryLogs } = await import('../../services/dataService');
-    const hist = await apiGetCheckHistory(id, type);
+    const hist = await apiGetCheckHistoryLogs(id, type);
     setHistoryData(hist);
     setHistoryCheck(type === 'issued' ? issuedChecks.find(c => c.id === id) : receivedChecks.find(c => c.id === id));
     setIsHistoryModalOpen(true);

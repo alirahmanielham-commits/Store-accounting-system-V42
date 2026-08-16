@@ -944,9 +944,8 @@ export default function App() {
                         animate={{ opacity: 1, y: 0 }}
                         className="h-full overflow-y-auto bg-gray-50/50"
                       >
-                        {viewingCheck ? (
-                           <CheckCardPage 
-                             checkId={viewingCheck.id} checkType={viewingCheck._type}
+                        <CheckCardPage 
+                             checkId={viewingCheck?.id || null} checkType={viewingCheck?._type || 'issued'}
                              onClose={() => {
                                setViewingCheck(null);
                                setActiveTab('check_panel');
@@ -959,11 +958,6 @@ export default function App() {
                                setIsAccountingDocModalOpen(true);
                              }}
                            />
-                        ) : (
-                           <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                              هیچ چکی انتخاب نشده است. لطفا از لیست چک‌ها اقدام کنید.
-                           </div>
-                        )}
                       </motion.div>} />
 
 <Route path="/check_panel" element={<motion.div
