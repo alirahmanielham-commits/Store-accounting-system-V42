@@ -21,6 +21,7 @@ export default function IssueCheckStandalone() {
   // Step 1: Selection
   const [payeeId, setPayeeId] = useState("");
   const [checkbookId, setCheckbookId] = useState("");
+  const [showConfirmModal, setShowConfirmModal] = useState(false);
   const [checkLeafId, setCheckLeafId] = useState("");
   const [checkNumber, setCheckNumber] = useState("");
   
@@ -118,6 +119,14 @@ export default function IssueCheckStandalone() {
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const confirmSave = () => {
+    if (!validateForm()) {
+      setSubmitError("لطفاً خطاهای فرم را برطرف کنید.");
+      return;
+    }
+    setShowConfirmModal(true);
   };
 
   const handleSave = async (status: "issued" | "draft") => {
@@ -550,7 +559,7 @@ export default function IssueCheckStandalone() {
              </button>
              <button
                type="button"
-               onClick={() => handleSave("issued")}
+               onClick={confirmSave}
                disabled={loading || !checkLeafId}
                className="w-full sm:w-auto px-10 py-4 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_8px_20px_rgb(79,70,229,0.3)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
              >

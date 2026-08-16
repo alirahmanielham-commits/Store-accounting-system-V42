@@ -198,7 +198,7 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
           {[
             { id: 'check_charts', label: 'داشبورد', icon: <BarChartIcon className="w-4 h-4" /> },
             { id: 'checkbooks', label: 'دسته‌چک‌ها', icon: <BookOpen className="w-4 h-4" /> },
-            { id: 'issued_checks', label: 'چک‌های پرداختی', icon: <Send className="w-4 h-4" /> },
+            
             { id: 'received_checks', label: 'چک‌های دریافتی', icon: <ArrowDownLeft className="w-4 h-4" /> },
             { id: 'check_calendar', label: 'تقویم سررسید', icon: <Calendar className="w-4 h-4" /> },
             { id: 'pending_approvals', label: 'در انتظار تأیید', icon: <ShieldCheck className="w-4 h-4" /> }

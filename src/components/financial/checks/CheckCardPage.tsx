@@ -4,14 +4,15 @@ import { motion } from "framer-motion";
 import {
   CreditCard, ArrowRight, User, Building2, Calendar, FileText,
   History as HistoryIcon, Clock, CheckCircle, XCircle, RefreshCw,
-  AlertTriangle, Save, Printer, ExternalLink, Search, Check, List
+  AlertTriangle, Save, Printer, ExternalLink, Search, Check, List, Edit3
 } from "lucide-react";
 import { 
   getIssuedChecks, getReceivedChecks, updateReceivedCheck, getPersons, 
   getCheckAuditLogs, updateIssuedCheck, addCheckHistoryLog, 
-  syncCheckAccountingDocument, getTransactions, getCheckbooks, getAccounts 
+  getTransactions, getCheckbooks, getAccounts 
 } from "../../../services/dataService";
 import { formatDateDisplay } from "../../../utils/format";
+import { syncCheckAccountingDocument } from "../../../services/accountingService";
 import Num2persian from "num2persian";
 
 export default function CheckCardPage({
@@ -45,6 +46,8 @@ export default function CheckCardPage({
   const [saving, setSaving] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [editFormData, setEditFormData] = useState<any>({});
 
   useEffect(() => {
     setCurrentCheckId(checkId);
@@ -155,6 +158,50 @@ export default function CheckCardPage({
     );
   }, [allChecks, searchQuery]);
 
+
+  const openEditModal = () => {
+    setEditFormData({
+      checkNumber: check.checkNumber || '',
+      sayadId: check.sayadId || '',
+      amount: check.amount || '',
+      issueDate: check.issueDate || '',
+      dueDate: check.dueDate || '',
+      payeeName: check.payeeName || '',
+      payeeId: check.payeeId || '',
+      reason: check.reason || '',
+      description: check.description || ''
+    });
+    setIsEditModalOpen(true);
+  };
+
+  const handleSaveEdit = async () => {
+    setSaving(true);
+    try {
+      const updated = { ...check, ...editFormData };
+      if (checkType === 'issued') {
+        await updateIssuedCheck(check.id, updated);
+      } else {
+        await updateReceivedCheck(check.id, updated);
+      }
+      
+      await addCheckHistoryLog({
+        checkId: check.id,
+        checkType: checkType,
+        
+        description: 'ویرایش اطلاعات چک',
+        userId: currentUser,
+      });
+      
+      showNotification('اطلاعات چک با موفقیت بروزرسانی شد', 'success');
+      setIsEditModalOpen(false);
+      loadData();
+    } catch (e: any) {
+      console.error(e);
+      showNotification(e.message || 'خطا در بروزرسانی چک', 'error');
+    }
+    setSaving(false);
+  };
+
   const handleStateChange = async (newState: string) => {
     if (!check) return;
     if (!confirm(`آیا از تغییر وضعیت این چک به "${stateLabels[newState]}" اطمینان دارید؟`)) return;
@@ -172,15 +219,15 @@ export default function CheckCardPage({
       
       await addCheckHistoryLog({
         checkId: check.id,
-        action: 'status_change',
-        oldValues: { status: oldState },
-        newValues: { status: newState },
+        checkType: checkType,
+        oldStatus: oldState,
+        newStatus: newState,
         userId: currentUser,
-        createdAt: new Date().toISOString()
+        
       });
       
       if (financialEffectStates.includes(newState)) {
-        await syncCheckAccountingDocument(check.id, checkType, newState, check, currentUser);
+        await syncCheckAccountingDocument(checkType, updatedCheck);
         showNotification('سند حسابداری مربوط به این وضعیت به صورت خودکار صادر/بروزرسانی شد', 'success');
       }
       
@@ -217,6 +264,41 @@ export default function CheckCardPage({
   const payee = persons.find(p => p.id === (checkType === "received" ? check.payerId : check.payeeId));
   const isClosed = allowedNext.length === 0;
 
+const lastStatusChangeLog = history.find(l => l.oldStatus && l.newStatus === check.status);
+  const previousStatus = lastStatusChangeLog ? lastStatusChangeLog.oldStatus : null;
+  const handleRevert = async () => {
+    if (!previousStatus) return;
+    if (!confirm('آیا از بازگرداندن چک به وضعیت قبلی اطمینان دارید؟ در صورت وجود سند حسابداری، باید آن را به صورت دستی اصلاح یا لغو کنید.')) return;
+    
+    setSaving(true);
+    try {
+      const oldState = check.status;
+      let updatedCheck = { ...check, status: previousStatus };
+      
+      if (checkType === 'issued') {
+        await updateIssuedCheck(check.id, updatedCheck);
+      } else {
+        await updateReceivedCheck(check.id, updatedCheck);
+      }
+      
+      await addCheckHistoryLog({
+        checkId: check.id,
+        checkType: checkType,
+        oldStatus: oldState,
+        newStatus: previousStatus,
+        description: 'بازگردانی به وضعیت قبل',
+        userId: currentUser,
+        
+      });
+      
+      showNotification('وضعیت چک با موفقیت به حالت قبل بازگردانده شد', 'success');
+      loadData();
+    } catch (e: any) {
+      console.error(e);
+      showNotification(e.message || 'خطا در ثبت وضعیت', 'error');
+    }
+    setSaving(false);
+  };
   return (
     <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="p-4 md:p-8 max-w-[1400px] w-full mx-auto h-full overflow-y-auto" dir="rtl">
       
@@ -412,11 +494,9 @@ export default function CheckCardPage({
                 
                 <div className="relative border-r-2 border-indigo-100 pr-8 ml-4 space-y-8">
                   {history.map((log, idx) => {
-                     const actionLabel = log.action === 'create' ? 'ثبت اولیه چک' :
-                                          log.action === 'status_change' ? 'تغییر وضعیت' :
-                                          log.action === 'update' ? 'ویرایش پرونده چک' : log.action;
-                     const nV = log.newValues?.status;
-                     const oV = log.oldValues?.status;
+                     const actionLabel = log.oldStatus ? 'تغییر وضعیت' : (log.description?.includes('ثبت') ? 'ثبت اولیه چک' : 'تغییر وضعیت/عملیات');
+                     const nV = log.newStatus;
+                     const oV = log.oldStatus;
                      
                      return (
                        <div key={log.id || idx} className="relative">
@@ -501,6 +581,23 @@ export default function CheckCardPage({
                         );
                       })}
                     </div>
+                    {previousStatus && (
+                    <button 
+                      onClick={handleRevert}
+                      disabled={saving}
+                      className="mt-6 w-full text-right px-6 py-4 rounded-2xl border-2 font-bold flex items-center justify-between group transition-all bg-rose-50 text-rose-700 border-rose-200 hover:bg-rose-100 hover:shadow-md hover:-translate-y-1"
+                    >
+                      <div className="flex flex-col gap-2">
+                        <span className="text-lg">بازگردانی به وضعیت قبل ({stateLabels[previousStatus] || previousStatus})</span>
+                        <span className="text-xs opacity-80">
+                          ممکن است به صورت اشتباه یک وضعیت انتخاب شده باشد. (اسناد مالی مربوطه را دستی بررسی کنید)
+                        </span>
+                      </div>
+                      <div className="w-10 h-10 rounded-full bg-white/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-all transform group-hover:translate-x-2">
+                         <HistoryIcon className="w-5 h-5" />
+                      </div>
+                    </button>
+                  )}
                   </div>
                 )}
                 
@@ -527,6 +624,62 @@ export default function CheckCardPage({
 
         </div>
       </div>
+
+      {isEditModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-2xl w-full max-h-[90vh] overflow-y-auto" dir="rtl">
+            <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
+              <Edit3 className="w-6 h-6 text-indigo-500" />
+              ویرایش اطلاعات چک
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">شماره چک</label>
+                <input type="text" value={editFormData.checkNumber} onChange={e => setEditFormData({...editFormData, checkNumber: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">مبلغ (ریال)</label>
+                <input type="number" value={editFormData.amount} onChange={e => setEditFormData({...editFormData, amount: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">شناسه صیاد</label>
+                <input type="text" value={editFormData.sayadId} onChange={e => setEditFormData({...editFormData, sayadId: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">در وجه</label>
+                <input type="text" value={editFormData.payeeName} onChange={e => setEditFormData({...editFormData, payeeName: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">تاریخ صدور</label>
+                <input type="date" value={editFormData.issueDate?.split('T')[0] || ''} onChange={e => setEditFormData({...editFormData, issueDate: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+              </div>
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1">تاریخ سررسید</label>
+                <input type="date" value={editFormData.dueDate?.split('T')[0] || ''} onChange={e => setEditFormData({...editFormData, dueDate: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-slate-700 mb-1">بابت</label>
+                <input type="text" value={editFormData.reason} onChange={e => setEditFormData({...editFormData, reason: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
+              </div>
+              <div className="md:col-span-2">
+                <label className="block text-sm font-bold text-slate-700 mb-1">توضیحات تکمیلی</label>
+                <textarea value={editFormData.description} onChange={e => setEditFormData({...editFormData, description: e.target.value})} className="w-full px-3 py-2 border rounded-xl h-24"></textarea>
+              </div>
+            </div>
+            
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-100">
+              <button onClick={() => setIsEditModalOpen(false)} className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors">
+                انصراف
+              </button>
+              <button onClick={handleSaveEdit} disabled={saving} className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                {saving && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
+                ذخیره تغییرات
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -303,6 +303,7 @@ const ProductCardModal = React.lazy(() => import('./components/modals/ProductCar
 const ProductLastPricesView = React.lazy(() => import('./components/reports/ProductLastPricesView'));
 const QuickPriceInquiry = React.lazy(() => import('./components/inventory/QuickPriceInquiry'));
 const CheckManagement = React.lazy(() => import('./components/financial/CheckManagement'));
+const IssuedChecksPage = React.lazy(() => import('./components/financial/IssuedChecksPage'));
 const IssueCheckStandalone = React.lazy(() => import('./components/financial/IssueCheckStandalone'));
 const CheckCardPage = React.lazy(() => import('./components/financial/checks/CheckCardPage'));
 
@@ -928,6 +929,7 @@ export default function App() {
                           fetchCashboxes();
                         }} />} />
 
+<Route path="/issued_checks_page" element={<IssuedChecksPage showNotification={showNotification} currentUser={user?.name || "کاربر سیستم"} setViewingCheck={setViewingCheck} onEditReceiptByCheck={handleEditReceiptByCheck} />} />
 <Route path="/issue_check_form" element={<motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}
