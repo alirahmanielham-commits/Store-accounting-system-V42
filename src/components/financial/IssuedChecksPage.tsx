@@ -45,6 +45,9 @@ export default function IssuedChecksPage({ showNotification, currentUser, setVie
 
   const filteredIssuedChecks = useMemo(() => {
     let result = [...issuedChecks];
+    // Hide blank checks
+    result = result.filter(c => c.amount && Number(c.amount) > 0);
+
     if (issuedSearchQuery) {
       const q = issuedSearchQuery.toLowerCase();
       result = result.filter(c => 

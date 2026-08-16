@@ -37,7 +37,7 @@ export function useCheckFilters(
 
   const filteredIssuedChecks = useMemo(() => {
     return (issuedChecks || []).filter(c => {
-      if (!c.payeeId && (!c.amount || Number(c.amount) === 0) && !c.description) {
+      if (!c.amount || Number(c.amount) === 0) {
         return false; // Hide blank checks
       }
       const payeeName = String(persons.find(p => p.id?.toString() === c.payeeId?.toString())?.name || c.payeeId || '');

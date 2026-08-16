@@ -228,7 +228,7 @@ export function IssuedChecksList({
                     
                     <td className="px-5 py-4">
                       <div className="flex flex-col gap-1">
-                        <span className="font-mono font-black text-slate-800 text-sm tracking-widest">{toPersianDigits(c.checkNumber)}</span>
+                        <button onClick={() => setViewingCheck && setViewingCheck({ ...c, _type: 'issued' })} className="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-sm tracking-widest text-right">{toPersianDigits(c.checkNumber)}</button>
                         {c.bankName && <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-max">{c.bankName}</span>}
                       </div>
                     </td>

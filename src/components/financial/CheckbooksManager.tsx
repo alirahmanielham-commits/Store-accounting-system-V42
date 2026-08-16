@@ -19,9 +19,12 @@ export default function CheckbooksManager(props: any) {
   const [cbStart, setCbStart] = useState('');
   const [cbEnd, setCbEnd] = useState('');
   const [cbIssued, setCbIssued] = useState('');
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const handleSaveCheckbook = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!window.confirm(editingCheckbookId ? 'آیا از ویرایش این دسته چک اطمینان دارید؟' : 'آیا از ثبت این دسته چک اطمینان دارید؟')) return;
+    setIsSubmitting(true);
     const payload = {
       accountId: cbAccountId,
       startNumber: cbStart,
@@ -41,6 +44,8 @@ export default function CheckbooksManager(props: any) {
       setCheckbooks(await getCheckbooks());
     } catch (error) {
       notify('خطا در ذخیره دسته چک', 'error');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -201,8 +206,13 @@ export default function CheckbooksManager(props: any) {
                     <button type="button" onClick={() => setIsCheckbookModalOpen(false)} className="px-5 py-2.5 bg-gray-100 hover:bg-gray-200 text-gray-700 rounded-xl text-sm font-bold transition-colors">
                       انصراف
                     </button>
-                    <button type="submit" className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-md shadow-indigo-200 transition-all hover:-translate-y-0.5">
-                      <Save className="w-4 h-4" /> {editingCheckbookId ? 'ذخیره تغییرات' : 'ثبت و تعریف'}
+                    <button disabled={isSubmitting} type="submit" className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-md shadow-indigo-200 transition-all">
+                      {isSubmitting ? (
+                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
+                      ) : (
+                         <Save className="w-4 h-4" />
+                      )}
+                      {editingCheckbookId ? 'ذخیره تغییرات' : 'ثبت و تعریف'}
                     </button>
                   </div>
               </form>
