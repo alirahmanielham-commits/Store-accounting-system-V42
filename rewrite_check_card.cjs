@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+let code = `
 import React, { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import {
@@ -157,7 +159,7 @@ export default function CheckCardPage({
 
   const handleStateChange = async (newState: string) => {
     if (!check) return;
-    if (!confirm(`آیا از تغییر وضعیت این چک به "${stateLabels[newState]}" اطمینان دارید؟`)) return;
+    if (!confirm(\`آیا از تغییر وضعیت این چک به "\${stateLabels[newState]}" اطمینان دارید؟\`)) return;
     
     setSaving(true);
     try {
@@ -249,7 +251,7 @@ export default function CheckCardPage({
                   <button
                     key={c.id}
                     onMouseDown={() => setCurrentCheckId(c.id)}
-                    className={`w-full text-right px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors flex flex-col ${c.id === currentCheckId ? 'bg-indigo-50/50' : ''}`}
+                    className={\`w-full text-right px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors flex flex-col \${c.id === currentCheckId ? 'bg-indigo-50/50' : ''}\`}
                   >
                     <span className="font-bold text-slate-700">چک {c.checkNumber}</span>
                     <span className="text-xs text-slate-500">{Number(c.amount).toLocaleString('fa-IR')} ریال - شناسه صیاد: {c.sayadId || 'ندارد'}</span>
@@ -286,7 +288,7 @@ export default function CheckCardPage({
 
           <div className="relative z-10 flex flex-col items-center md:items-end">
             <span className="text-slate-400 text-sm font-medium mb-1">وضعیت فعلی</span>
-            <div className={`px-6 py-3 rounded-2xl border-2 shadow-sm font-black text-lg ${stateColors[check.status]} bg-white/95 backdrop-blur-sm`}>
+            <div className={\`px-6 py-3 rounded-2xl border-2 shadow-sm font-black text-lg \${stateColors[check.status]} bg-white/95 backdrop-blur-sm\`}>
               {stateLabels[check.status]}
             </div>
           </div>
@@ -294,13 +296,13 @@ export default function CheckCardPage({
 
         {/* Tab Navigation */}
         <div className="px-8 pt-6 border-b border-slate-100 flex gap-8 overflow-x-auto print:hidden bg-white">
-          <button onClick={() => setActiveTab('info')} className={`pb-4 flex items-center gap-2 font-bold text-[15px] whitespace-nowrap border-b-2 transition-colors ${activeTab === 'info' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => setActiveTab('info')} className={\`pb-4 flex items-center gap-2 font-bold text-[15px] whitespace-nowrap border-b-2 transition-colors \${activeTab === 'info' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}\`}>
             <FileText className="w-5 h-5" /> اطلاعات اصلی
           </button>
-          <button onClick={() => setActiveTab('history')} className={`pb-4 flex items-center gap-2 font-bold text-[15px] whitespace-nowrap border-b-2 transition-colors ${activeTab === 'history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => setActiveTab('history')} className={\`pb-4 flex items-center gap-2 font-bold text-[15px] whitespace-nowrap border-b-2 transition-colors \${activeTab === 'history' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}\`}>
             <HistoryIcon className="w-5 h-5" /> تاریخچه و سوابق
           </button>
-          <button onClick={() => setActiveTab('actions')} className={`pb-4 flex items-center gap-2 font-bold text-[15px] whitespace-nowrap border-b-2 transition-colors ${activeTab === 'actions' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}`}>
+          <button onClick={() => setActiveTab('actions')} className={\`pb-4 flex items-center gap-2 font-bold text-[15px] whitespace-nowrap border-b-2 transition-colors \${activeTab === 'actions' ? 'border-indigo-600 text-indigo-700' : 'border-transparent text-slate-500 hover:text-slate-800'}\`}>
             <RefreshCw className="w-5 h-5" /> عملیات و فرم وضعیت
           </button>
         </div>
@@ -364,7 +366,7 @@ export default function CheckCardPage({
                               const cb = checkbooks.find(c => String(c.id) === String(check.checkbookId));
                               if (cb) {
                                 const acc = accounts.find(a => String(a.id) === String(cb.accountId));
-                                if (acc) return `بانک ${acc.bankName} - ${acc.accountNumber}`;
+                                if (acc) return \`بانک \${acc.bankName} - \${acc.accountNumber}\`;
                                 return 'حساب متصل یافت نشد';
                               }
                               return 'دسته چک یافت نشد';
@@ -375,7 +377,7 @@ export default function CheckCardPage({
                       <div>
                         <span className="block text-slate-500 text-sm mb-2">بانک و شعبه عهده</span>
                         <span className="text-lg font-black text-slate-800 bg-slate-50 px-4 py-2 rounded-xl inline-block border border-slate-100">
-                          {check.bankName ? `بانک ${check.bankName} ${check.branchName ? 'شعبه ' + check.branchName : ''}` : '---'}
+                          {check.bankName ? \`بانک \${check.bankName} \${check.branchName ? 'شعبه ' + check.branchName : ''}\` : '---'}
                         </span>
                       </div>
                     )}
@@ -433,7 +435,7 @@ export default function CheckCardPage({
                              <div className="flex flex-wrap items-center gap-3 mt-4 bg-white p-4 rounded-xl border border-slate-200 shadow-sm">
                                {oV && <span className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg font-bold border border-slate-200">{stateLabels[oV] || oV}</span>}
                                {oV && nV && <ArrowRight className="w-5 h-5 text-slate-300" />}
-                               {nV && <span className={`px-3 py-1.5 rounded-lg font-black border ${stateColors[nV] || 'bg-slate-100 text-slate-800'}`}>{stateLabels[nV] || nV}</span>}
+                               {nV && <span className={\`px-3 py-1.5 rounded-lg font-black border \${stateColors[nV] || 'bg-slate-100 text-slate-800'}\`}>{stateLabels[nV] || nV}</span>}
                              </div>
                            )}
                            <div className="text-sm text-slate-500 mt-6 flex items-center gap-2 pt-4 border-t border-slate-200 border-dashed">
@@ -481,10 +483,10 @@ export default function CheckCardPage({
                             key={nextState}
                             onClick={() => handleStateChange(nextState)}
                             disabled={saving}
-                            className={`
+                            className={\`
                               text-right px-6 py-5 rounded-2xl border-2 font-bold flex items-center justify-between group transition-all
-                              ${stateColors[nextState]} hover:shadow-md hover:-translate-y-1 active:translate-y-0
-                            `}
+                              \${stateColors[nextState]} hover:shadow-md hover:-translate-y-1 active:translate-y-0
+                            \`}
                           >
                             <div className="flex flex-col gap-2">
                               <span className="text-lg">{stateLabels[nextState]}</span>
@@ -530,3 +532,6 @@ export default function CheckCardPage({
     </motion.div>
   );
 }
+`
+fs.writeFileSync('src/components/financial/checks/CheckCardPage.tsx', code);
+console.log('Successfully wrote new check card page');
