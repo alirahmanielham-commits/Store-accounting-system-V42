@@ -34,11 +34,6 @@ export default function CheckCardPage({
   const [accounts, setAccounts] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState('info');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [currentCheckId, setCurrentCheckId] = useState(checkId);
-  useEffect(() => { setCurrentCheckId(checkId); }, [checkId]);
-  const [allChecks, setAllChecks] = useState<any[]>([]);
   const [saving, setSaving] = useState(false);
   
   // Transitions

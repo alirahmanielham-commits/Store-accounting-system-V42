@@ -1,5 +1,6 @@
 import React from 'react';
 import { toPersianDigits } from '../financial/checks/utils';
+import { formatDateDisplay } from '../../utils/format';
 
 export function CheckReceiptPrintTemplate({ check, persons, storeSettings }: any) {
   if (!check) return null;
@@ -22,7 +23,7 @@ export function CheckReceiptPrintTemplate({ check, persons, storeSettings }: any
         بدینوسیله گواهی می‌شود که یک فقره چک به شماره <span className="font-black border-b border-dashed border-slate-400 px-2">{toPersianDigits(check.checkNumber)}</span> 
         عهده بانک <span className="font-black border-b border-dashed border-slate-400 px-2">{check.bankName || '................'}</span> 
         مبلغ <span className="font-black border-b border-dashed border-slate-400 px-2">{toPersianDigits(Number(check.amount).toLocaleString())} ریال</span> 
-        به تاریخ سررسید <span className="font-black border-b border-dashed border-slate-400 px-2">{check.dueDate}</span> 
+        به تاریخ سررسید <span className="font-black border-b border-dashed border-slate-400 px-2">{formatDateDisplay(check.dueDate, storeSettings?.calendarType)}</span> 
         {check._type === 'issued' ? ' در وجه ' : ' از جناب آقای/شرکت '} 
         <span className="font-black border-b border-dashed border-slate-400 px-2">{person?.name || '................'}</span> 
         {check._type === 'issued' ? ' صادر و تحویل گردید.' : ' دریافت گردید.'}
