@@ -16,9 +16,6 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { exec } from 'child_process';
 import { validateData } from '../schemas/validation';
-import { getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
-import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData } from '../db/kv-store';
-import { KNOWN_TABLES, tableSchemas } from '../db/schema-sync';
 import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
@@ -117,9 +114,9 @@ router.post('/api/auth/login', async (req, res) => {
 router.post('/api/auth/verify-otp', async (req, res) => {
     const { tempToken, otp } = req.body;
     try {
-      const decoded = jwt.verify(tempToken, JWT_SECRET);
+      const decoded = jwt.verify(tempToken || '', process.env.JWT_SECRET || 'default_secret') as any;
       const users = await getUsers();
-      const user = users.find(u => u.username === decoded.username);
+      const user = users.find(u => u.username === (decoded as any).username);
       
       if (!user) return res.status(404).json({ error: 'کاربر یافت نشد' });
       if (!user.currentOTP || user.currentOTP.code !== otp || user.currentOTP.expiresAt < Date.now()) {
@@ -140,10 +137,10 @@ router.post('/api/auth/refresh', async (req, res) => {
      if (!token) return res.status(401).json({ error: 'نیازمند ورود مجدد' });
      
      try {
-       const decoded = jwt.verify(token, JWT_REFRESH_SECRET);
+       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as any;
        const users = await getUsers();
-       const user = users.find(u => u.username === decoded.username);
-       if (!user || user.tokenVersion !== decoded.tokenVersion) {
+       const user = users.find(u => u.username === (decoded as any).username);
+       if (!user || user.tokenVersion !== (decoded as any).tokenVersion) {
          return res.status(401).json({ error: 'توکن نامعتبر است' });
        }
        

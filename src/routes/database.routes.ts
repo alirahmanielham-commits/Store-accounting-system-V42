@@ -16,9 +16,6 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { exec } from 'child_process';
 import { validateData } from '../schemas/validation';
-import { getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
-import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData } from '../db/kv-store';
-import { KNOWN_TABLES, tableSchemas } from '../db/schema-sync';
 import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
@@ -254,7 +251,8 @@ router.delete('/api/databases/:id', async (req, res) => {
 
 router.post('/api/databases', async (req, res) => {
     try {
-      const { name } = req.body;
+      const { name, calendarType } = req.body;
+      const calType = calendarType || 'jalali';
       if (!name) return res.status(400).json({ error: 'Name is required' });
       
       const id = 'store_' + Math.random().toString(36).substring(2, 6) + '_' + Date.now().toString(36);
@@ -311,7 +309,18 @@ router.post('/api/databases', async (req, res) => {
             }
           } catch(e) { }
           
+          
+          try {
+             const newUrl = new URL(config.connectionString);
+             newUrl.pathname = '/' + dbNameForBusiness;
+             const initPool = new Pool({ connectionString: newUrl.toString() });
+             await initPool.query('CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)');
+             const initPayload = JSON.stringify({ storeName: name, calendarType: calType });
+             await initPool.query('INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value', ['company_profile', initPayload]);
+             await initPool.end();
+          } catch(e) { console.error("Failed to init postgres system_settings:", e); }
           return res.json({ success: true, database: { id, name, db_type: 'postgres', db_name: dbNameForBusiness } });
+
         }
       } catch (e) {
          console.log("Error checking config or creating postgres DB, falling back to sqlite:", e);
@@ -354,6 +363,16 @@ router.post('/api/databases', async (req, res) => {
           value TEXT NOT NULL
         )
       `);
+      try {
+         const initPayload = JSON.stringify({ storeName: name, calendarType: calType });
+         const stmt = newDb.prepare("INSERT INTO store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
+         stmt.run('company_profile', initPayload);
+         // Also duplicate in system_settings if required by kv-store
+         newDb.exec("CREATE TABLE IF NOT EXISTS system_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)");
+         const stmt2 = newDb.prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value");
+         stmt2.run('company_profile', initPayload);
+      } catch(e) {}
+
 
       res.json({ success: true, database: { id, name, db_type: 'sqlite' } });
     } catch (e) {

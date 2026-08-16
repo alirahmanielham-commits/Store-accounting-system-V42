@@ -5,7 +5,7 @@ import {
   History as HistoryIcon, Clock, CheckCircle, XCircle, RefreshCw,
   AlertTriangle, Save, Printer, ExternalLink
 } from "lucide-react";
-import { getIssuedChecks, getReceivedChecks, updateReceivedCheck, getPersons, getCheckAuditLogs, updateIssuedCheck, addCheckHistoryLog, syncCheckAccountingDocument, getTransactions } from "../../../services/dataService";
+import { getIssuedChecks, getReceivedChecks, updateReceivedCheck, getPersons, getCheckAuditLogs, updateIssuedCheck, addCheckHistoryLog, syncCheckAccountingDocument, getTransactions, getCheckbooks, getAccounts } from "../../../services/dataService";
 import { formatDateDisplay } from "../../../utils/format";
 import Num2persian from "num2persian";
 
@@ -30,6 +30,8 @@ export default function CheckCardPage({
   const [persons, setPersons] = useState<any[]>([]);
   const [history, setHistory] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
+  const [checkbooks, setCheckbooks] = useState<any[]>([]);
+  const [accounts, setAccounts] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -95,12 +97,13 @@ export default function CheckCardPage({
     try {
       const isReceived = checkType === 'received';
       const idToFind = checkId;
-      const [checks, prs, logs, txs] = await Promise.all([
+      const [checks, prs, logs, txs, cbs, accs] = await Promise.all([
         isReceived ? getReceivedChecks() : getIssuedChecks(),
-        getIssuedChecks(),
         getPersons(),
         getCheckAuditLogs(),
-        getTransactions()
+        getTransactions(),
+        getCheckbooks(),
+        getAccounts()
       ]);
       const found = checks.find(c => String(c.id) === String(idToFind));
       setCheck(found);
@@ -112,6 +115,8 @@ export default function CheckCardPage({
       // For simplicity let's rely on audit logs if `check_history` is missing
       setHistory(checkLogs.sort((a,b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       setTransactions(txs);
+      setCheckbooks(cbs || []);
+      setAccounts(accs || []);
       
     } catch (e) {
       console.error(e);

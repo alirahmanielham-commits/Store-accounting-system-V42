@@ -1,4 +1,5 @@
 import { checkFinancialYear, getActiveFinancialYear, getStoreSettings } from './settingsService';
+import { formatDateDisplay } from '../utils/format';
 
 import { 
   getLocalData, 
@@ -744,7 +745,10 @@ export const syncCheckAccountingDocument = async (checkType: 'issued' | 'receive
 
     const checkBank = check.bankName || check.checkBankName || bankName || 'نامشخص';
     const checkNo = check.checkNumber || check.number || 'نامشخص';
-    const dueDate = check.dueDate || check.checkDueDate || 'نامشخص';
+    
+    const rawDueDate = check.dueDate || check.checkDueDate;
+    const dueDate = rawDueDate ? formatDateDisplay(rawDueDate, sysSettings?.calendarType) : 'نامشخص';
+
     const issueDate = checkType === 'issued' ? (check.issueDate || check.issuedDate || check.date || new Date().toISOString()) : (check.receiveDate || check.date || new Date().toISOString()); 
 
     const initDescription = checkType === 'issued'

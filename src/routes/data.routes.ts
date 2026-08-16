@@ -16,9 +16,6 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { exec } from 'child_process';
 import { validateData } from '../schemas/validation';
-import { getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
-import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData } from '../db/kv-store';
-import { KNOWN_TABLES, tableSchemas } from '../db/schema-sync';
 import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
@@ -127,7 +124,7 @@ router.post('/api/data/:key/append', async (req, res) => {
     // Zod Validation
     const validationResult = validateData(key, newItem);
     if (!validationResult.success) {
-      return res.status(400).json({ error: 'Validation failed', details: validationResult.error.errors });
+      return res.status(400).json({ error: 'Validation failed', details: (validationResult as any).error?.errors });
     }
 
     try {
@@ -373,7 +370,7 @@ router.post('/api/data/:key', async (req, res) => {
     if (key !== 'system_logs') {
       const validationResult = validateData(key, data);
       if (!validationResult.success) {
-        return res.status(400).json({ error: 'Validation failed', details: validationResult.error.errors });
+        return res.status(400).json({ error: 'Validation failed', details: (validationResult as any).error?.errors });
       }
     }
 

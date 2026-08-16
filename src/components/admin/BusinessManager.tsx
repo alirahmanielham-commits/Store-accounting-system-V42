@@ -5,6 +5,7 @@ import ConfirmModal from '../modals/ConfirmModal';
 
 export default function BusinessManager({ availableStores, setAvailableStores, onSelectStore, showNotification }: any) {
   const [newStoreName, setNewStoreName] = useState('');
+  const [newCalendarType, setNewCalendarType] = useState('jalali');
   const [loading, setLoading] = useState<string | false>(false);
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
@@ -51,7 +52,7 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
       const res = await fetch('/api/databases', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newStoreName })
+        body: JSON.stringify({ name: newStoreName, calendarType: newCalendarType })
       });
       const data = await res.json();
       if (data.success) {
