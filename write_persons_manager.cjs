@@ -1,4 +1,6 @@
-import React, { useState, useEffect, useMemo } from "react";
+const fs = require('fs');
+
+const code = `import React, { useState, useEffect, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   User, Search, Filter, Plus, GripHorizontal, List, Users, Edit2, FileText,
@@ -297,35 +299,35 @@ export default function PersonsManager(props: any) {
   };
 
   const activeFilters = [];
-  if (personSearchTerm) activeFilters.push({ id: 'search', label: `جستجو: ${personSearchTerm}`, onRemove: () => setPersonSearchTerm('') });
+  if (personSearchTerm) activeFilters.push({ id: 'search', label: \`جستجو: \${personSearchTerm}\`, onRemove: () => setPersonSearchTerm('') });
   if (selectedPersonRole !== 'all') {
     const roleName = personRoles?.find((r:any) => r.id === selectedPersonRole)?.name || selectedPersonRole;
-    activeFilters.push({ id: 'role', label: `نقش: ${roleName}`, onRemove: () => setSelectedPersonRole('all') });
+    activeFilters.push({ id: 'role', label: \`نقش: \${roleName}\`, onRemove: () => setSelectedPersonRole('all') });
   }
   if (selectedPersonGroup !== 'all') {
     let grpName = selectedPersonGroup === 'none' ? 'بدون گروه' : personGroups?.find((g:any) => g.id === selectedPersonGroup)?.name;
-    activeFilters.push({ id: 'group', label: `گروه: ${grpName}`, onRemove: () => setSelectedPersonGroup('all') });
+    activeFilters.push({ id: 'group', label: \`گروه: \${grpName}\`, onRemove: () => setSelectedPersonGroup('all') });
   }
-  if (filterActiveStatus !== 'all') activeFilters.push({ id: 'active', label: `وضعیت: ${filterActiveStatus === 'active' ? 'فعال' : 'غیرفعال'}`, onRemove: () => setFilterActiveStatus('all') });
+  if (filterActiveStatus !== 'all') activeFilters.push({ id: 'active', label: \`وضعیت: \${filterActiveStatus === 'active' ? 'فعال' : 'غیرفعال'}\`, onRemove: () => setFilterActiveStatus('all') });
   if (filterBalanceStatus !== 'all') {
     const labels:any = { debtor: 'بدهکاران', creditor: 'بستانکاران', settled: 'تسویه', has_balance: 'دارای مانده' };
-    activeFilters.push({ id: 'balance', label: `حساب: ${labels[filterBalanceStatus]}`, onRemove: () => setFilterBalanceStatus('all') });
+    activeFilters.push({ id: 'balance', label: \`حساب: \${labels[filterBalanceStatus]}\`, onRemove: () => setFilterBalanceStatus('all') });
   }
-  if (filterPersonType !== 'all') activeFilters.push({ id: 'type', label: `نوع: ${filterPersonType === 'real' ? 'حقیقی' : 'حقوقی'}`, onRemove: () => setFilterPersonType('all') });
-  if (filterProvince !== 'all') activeFilters.push({ id: 'province', label: `استان: ${filterProvince}`, onRemove: () => { setFilterProvince('all'); setFilterCity('all'); } });
-  if (filterCity !== 'all') activeFilters.push({ id: 'city', label: `شهر: ${filterCity}`, onRemove: () => setFilterCity('all') });
+  if (filterPersonType !== 'all') activeFilters.push({ id: 'type', label: \`نوع: \${filterPersonType === 'real' ? 'حقیقی' : 'حقوقی'}\`, onRemove: () => setFilterPersonType('all') });
+  if (filterProvince !== 'all') activeFilters.push({ id: 'province', label: \`استان: \${filterProvince}\`, onRemove: () => { setFilterProvince('all'); setFilterCity('all'); } });
+  if (filterCity !== 'all') activeFilters.push({ id: 'city', label: \`شهر: \${filterCity}\`, onRemove: () => setFilterCity('all') });
 
 
   // Bulk Actions
   const handleBulkStatusChange = async (isActive: boolean) => {
-      confirmAction(`آیا از ${isActive ? 'فعال' : 'غیرفعال'} کردن ${toPersianDigits(selectedIds.length)} شخص اطمینان دارید؟`, async () => {
+      confirmAction(\`آیا از \${isActive ? 'فعال' : 'غیرفعال'} کردن \${toPersianDigits(selectedIds.length)} شخص اطمینان دارید؟\`, async () => {
           setIsBulkLoading(true);
           try {
               for(const id of selectedIds) {
                   const p = filteredPersons.find((x:any) => x.id === id);
                   if(p) await updatePerson(id, { ...p, isActive });
               }
-              notify(`عملیات با موفقیت انجام شد`, "success");
+              notify(\`عملیات با موفقیت انجام شد\`, "success");
               fetchPersons?.();
               setSelectedIds([]);
           } catch(e) {
@@ -338,7 +340,7 @@ export default function PersonsManager(props: any) {
   };
 
   const handleBulkDelete = () => {
-      confirmAction(`توجه: تنها اشخاصی که فاقد تراکنش مالی باشند قابل حذف هستند. آیا از حذف ${toPersianDigits(selectedIds.length)} شخص اطمینان دارید؟`, async () => {
+      confirmAction(\`توجه: تنها اشخاصی که فاقد تراکنش مالی باشند قابل حذف هستند. آیا از حذف \${toPersianDigits(selectedIds.length)} شخص اطمینان دارید؟\`, async () => {
           setIsBulkLoading(true);
           try {
               for(const id of selectedIds) {
@@ -356,11 +358,11 @@ export default function PersonsManager(props: any) {
   const handleBulkExport = () => {
      const selectedData = sortedPersons.filter((p:any) => selectedIds.includes(p.id));
      const headers = ['کد', 'نام شخص/شرکت', 'تلفن', 'موبایل', 'مانده حساب', 'وضعیت', 'نقش'];
-     const csvContent = "data:text/csv;charset=utf-8,﻿" + 
-        headers.join(",") + "\n" +
+     const csvContent = "data:text/csv;charset=utf-8,\uFEFF" + 
+        headers.join(",") + "\\n" +
         selectedData.map((p:any) => {
-           return `"${p.accountingCode || p.personCode || ''}","${getPersonDisplayName(p)}","${p.phone || ''}","${p.mobile || ''}","${p.calculatedBalance}","${p.isActive === false ? 'غیرفعال' : 'فعال'}","${getRoleName(p.role)}"`;
-        }).join("\n");
+           return \`"\${p.accountingCode || p.personCode || ''}","\${getPersonDisplayName(p)}","\${p.phone || ''}","\${p.mobile || ''}","\${p.calculatedBalance}","\${p.isActive === false ? 'غیرفعال' : 'فعال'}","\${getRoleName(p.role)}"\`;
+        }).join("\\n");
      const encodedUri = encodeURI(csvContent);
      const link = document.createElement("a");
      link.setAttribute("href", encodedUri);
@@ -373,11 +375,11 @@ export default function PersonsManager(props: any) {
 
   const handleToggleActive = async (p: any, e: React.MouseEvent) => {
      e.stopPropagation();
-     confirmAction(`آیا از ${p.isActive === false ? 'فعال' : 'غیرفعال'} کردن ${p.name} اطمینان دارید؟`, async () => {
+     confirmAction(\`آیا از \${p.isActive === false ? 'فعال' : 'غیرفعال'} کردن \${p.name} اطمینان دارید؟\`, async () => {
         setRowLoadingId(p.id);
         try {
             await updatePerson(p.id, { ...p, isActive: p.isActive === false ? true : false });
-            notify(`شخص ${p.name} با موفقیت ${p.isActive === false ? 'فعال' : 'غیرفعال'} شد.`, "success");
+            notify(\`شخص \${p.name} با موفقیت \${p.isActive === false ? 'فعال' : 'غیرفعال'} شد.\`, "success");
             fetchPersons?.();
         } catch(err) {
             notify('خطا در تغییر وضعیت شخص', 'error');
@@ -421,7 +423,7 @@ export default function PersonsManager(props: any) {
               className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 bg-white rounded-lg flex items-center gap-1.5 transition-all text-xs font-bold disabled:opacity-50"
               title="تخصیص کد حسابداری"
             >
-              <Key className={`w-4 h-4 ${isGeneratingCodes ? 'text-indigo-500 animate-spin' : 'text-slate-500'}`} />
+              <Key className={\`w-4 h-4 \${isGeneratingCodes ? 'text-indigo-500 animate-spin' : 'text-slate-500'}\`} />
               کدگذاری
             </button>
             <button
@@ -524,7 +526,7 @@ export default function PersonsManager(props: any) {
           <div className="flex flex-wrap items-center gap-2">
             <button
               onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-colors ${isFilterOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
+              className={\`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-colors \${isFilterOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}\`}
             >
               <Filter className="w-4 h-4" />
               فیلترهای پیشرفته
@@ -533,14 +535,14 @@ export default function PersonsManager(props: any) {
             <div className="hidden md:flex bg-slate-100 p-1 rounded-lg border border-slate-200">
               <button
                 onClick={() => setPersonsViewMode("table")}
-                className={`p-1.5 rounded transition-all ${effectiveViewMode === "table" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                className={\`p-1.5 rounded transition-all \${effectiveViewMode === "table" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}\`}
                 title="نمایش جدولی"
               >
                 <TableIcon className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPersonsViewMode("list")}
-                className={`p-1.5 rounded transition-all ${effectiveViewMode === "list" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                className={\`p-1.5 rounded transition-all \${effectiveViewMode === "list" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}\`}
                 title="نمایش کارتی"
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -727,7 +729,7 @@ export default function PersonsManager(props: any) {
                 <motion.div 
                   initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: index * 0.02 }} 
                   key={p.id} 
-                  className={`relative bg-white border ${p.isActive === false ? 'border-slate-200 opacity-60' : 'border-slate-200 hover:border-indigo-300'} rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col h-full`}
+                  className={\`relative bg-white border \${p.isActive === false ? 'border-slate-200 opacity-60' : 'border-slate-200 hover:border-indigo-300'} rounded-2xl p-4 shadow-sm hover:shadow-md transition-all cursor-pointer flex flex-col h-full\`}
                   onClick={() => { setProfilePersonId(p.id); setActiveTab("person_profile"); }}
                 >
                   {isRowLoading && (
@@ -739,13 +741,13 @@ export default function PersonsManager(props: any) {
                   <div className="flex items-start gap-3">
                     <div className="relative shrink-0">
                       {p.imageUrl ? (
-                        <img src={p.imageUrl} alt={p.name} className={`w-12 h-12 rounded-xl object-cover ring-2 ring-slate-100 ${p.isActive === false ? 'grayscale' : ''}`} />
+                        <img src={p.imageUrl} alt={p.name} className={\`w-12 h-12 rounded-xl object-cover ring-2 ring-slate-100 \${p.isActive === false ? 'grayscale' : ''}\`} />
                       ) : (
                         <div className="w-12 h-12 rounded-xl bg-slate-100 ring-2 ring-slate-50 flex items-center justify-center">
                           <span className="text-lg font-black text-slate-400">{p.name.substring(0, 1)}</span>
                         </div>
                       )}
-                      <div className={`absolute -bottom-1 -right-1 w-5 h-5 rounded-md flex items-center justify-center text-[9px] shadow-sm border border-white ${p.personType === "legal" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                      <div className={\`absolute -bottom-1 -right-1 w-5 h-5 rounded-md flex items-center justify-center text-[9px] shadow-sm border border-white \${p.personType === "legal" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}\`}>
                         {p.personType === "legal" ? <Building className="w-3 h-3" /> : <User className="w-3 h-3" />}
                       </div>
                     </div>
@@ -755,7 +757,7 @@ export default function PersonsManager(props: any) {
                         {p.isActive === false && <span className="text-[8px] font-bold bg-rose-50 text-rose-600 px-1 py-0.5 rounded mr-1">غیرفعال</span>}
                       </div>
                       <div className="flex flex-wrap items-center gap-1 mt-1.5">
-                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${getRoleBadgeClasses(p.role)}`}>{getRoleName(p.role)}</span>
+                        <span className={\`text-[9px] font-black px-1.5 py-0.5 rounded \${getRoleBadgeClasses(p.role)}\`}>{getRoleName(p.role)}</span>
                         {p.group && (() => {
                           const g = personGroups.find((grp: any) => grp.id === p.group);
                           return g ? <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 truncate max-w-[80px]">{g.name}</span> : null;
@@ -770,8 +772,8 @@ export default function PersonsManager(props: any) {
                       <div className="text-xs font-bold text-slate-700 font-sans truncate">{p.phone ? toPersianDigits(p.phone) : "-"}</div>
                     </div>
                     <div className="text-left">
-                      <div className={`text-[9px] font-black mb-0.5 ${isDebtor ? "text-rose-500" : isCreditor ? "text-emerald-500" : "text-slate-400"}`}>وضعیت مانده</div>
-                      <div className={`font-black font-sans text-xs truncate ${isDebtor ? "text-rose-700" : isCreditor ? "text-emerald-700" : "text-slate-600"}`} dir="ltr">
+                      <div className={\`text-[9px] font-black mb-0.5 \${isDebtor ? "text-rose-500" : isCreditor ? "text-emerald-500" : "text-slate-400"}\`}>وضعیت مانده</div>
+                      <div className={\`font-black font-sans text-xs truncate \${isDebtor ? "text-rose-700" : isCreditor ? "text-emerald-700" : "text-slate-600"}\`} dir="ltr">
                         {bal === 0 ? "تسویه (۰)" : toPersianDigits(formatNumber(Math.abs(bal)))}
                       </div>
                     </div>
@@ -813,7 +815,7 @@ export default function PersonsManager(props: any) {
                     const isRowLoading = rowLoadingId === p.id;
 
                     return (
-                      <tr key={p.id} className={`hover:bg-slate-50/80 transition-colors relative ${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50/80' : ''} ${p.isActive === false ? 'opacity-70 bg-slate-50/30' : ''}`}>
+                      <tr key={p.id} className={\`hover:bg-slate-50/80 transition-colors relative \${isSelected ? 'bg-indigo-50/50 hover:bg-indigo-50/80' : ''} \${p.isActive === false ? 'opacity-70 bg-slate-50/30' : ''}\`}>
                         
                         {/* Row Loading Overlay */}
                         {isRowLoading && (
@@ -827,16 +829,16 @@ export default function PersonsManager(props: any) {
                         </td>
                         <td className="px-4 py-3 cursor-pointer" onClick={() => { setProfilePersonId(p.id); setActiveTab("person_profile"); }}>
                           <div className="flex items-center gap-3">
-                            <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-black shadow-sm ${p.personType === 'legal' ? 'bg-amber-500' : 'bg-indigo-500'} ${p.isActive === false ? 'grayscale' : ''}`}>
+                            <div className={\`w-10 h-10 rounded-xl flex items-center justify-center text-white text-sm font-black shadow-sm \${p.personType === 'legal' ? 'bg-amber-500' : 'bg-indigo-500'} \${p.isActive === false ? 'grayscale' : ''}\`}>
                               {p.name.substring(0, 1)}
                             </div>
                             <div>
-                              <div className={`font-black text-sm flex items-center gap-2 ${p.isActive === false ? 'text-slate-500 line-through' : 'text-slate-800'}`}>
+                              <div className={\`font-black text-sm flex items-center gap-2 \${p.isActive === false ? 'text-slate-500 line-through' : 'text-slate-800'}\`}>
                                 {getPersonDisplayName(p)}
                                 {p.isActive === false && <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded no-underline">مسدود</span>}
                               </div>
                               <div className="text-[10px] text-slate-400 font-bold font-mono mt-0.5 flex items-center gap-1">
-                                <span className="bg-slate-100 px-1 rounded">{p.accountingCode ? `ACC: ${toPersianDigits(p.accountingCode)}` : `ID: ${toPersianDigits(p.personCode || p.id)}`}</span>
+                                <span className="bg-slate-100 px-1 rounded">{p.accountingCode ? \`ACC: \${toPersianDigits(p.accountingCode)}\` : \`ID: \${toPersianDigits(p.personCode || p.id)}\`}</span>
                                 {p.personType === 'legal' ? <Building className="w-3 h-3 text-slate-300" /> : <User className="w-3 h-3 text-slate-300" />}
                               </div>
                             </div>
@@ -844,7 +846,7 @@ export default function PersonsManager(props: any) {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1 items-start">
-                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${getRoleBadgeClasses(p.role)}`}>{getRoleName(p.role)}</span>
+                            <span className={\`text-[10px] font-black px-2 py-0.5 rounded-md \${getRoleBadgeClasses(p.role)}\`}>{getRoleName(p.role)}</span>
                             {p.group && (() => {
                               const g = personGroups.find((grp: any) => grp.id === p.group);
                               return g ? <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md truncate max-w-[140px]">{g.name}</span> : null;
@@ -859,10 +861,10 @@ export default function PersonsManager(props: any) {
                           </div>
                         </td>
                         <td className="px-4 py-3" dir="ltr">
-                          <div className={`font-sans font-black text-sm ${isDebtor ? 'text-rose-600' : isCreditor ? 'text-emerald-600' : 'text-slate-500'}`}>
+                          <div className={\`font-sans font-black text-sm \${isDebtor ? 'text-rose-600' : isCreditor ? 'text-emerald-600' : 'text-slate-500'}\`}>
                             {bal === 0 ? "۰" : toPersianDigits(formatNumber(Math.abs(bal)))}
                           </div>
-                          <div className={`text-[10px] font-bold mt-0.5 text-right ${isDebtor ? 'text-rose-400' : isCreditor ? 'text-emerald-400' : 'text-slate-400'}`}>
+                          <div className={\`text-[10px] font-bold mt-0.5 text-right \${isDebtor ? 'text-rose-400' : isCreditor ? 'text-emerald-400' : 'text-slate-400'}\`}>
                             {isDebtor ? "بدهکار" : isCreditor ? "بستانکار" : "تسویه"}
                           </div>
                         </td>
@@ -880,7 +882,7 @@ export default function PersonsManager(props: any) {
                             <div className="relative">
                               <button 
                                 onClick={(e) => { e.stopPropagation(); setOpenPersonActionsId(openPersonActionsId === p.id ? null : p.id); }} 
-                                className={`p-2 rounded-lg transition-all ${openPersonActionsId === p.id ? 'bg-slate-200 text-slate-800' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'}`}
+                                className={\`p-2 rounded-lg transition-all \${openPersonActionsId === p.id ? 'bg-slate-200 text-slate-800' : 'text-slate-400 hover:text-slate-700 hover:bg-slate-100'}\`}
                               >
                                 <MoreHorizontal className="w-4 h-4" />
                               </button>
@@ -963,7 +965,7 @@ export default function PersonsManager(props: any) {
                   if (safeCurrentPage > totalPages - 2) pg = totalPages - 4 + idx;
                   if (pg > 0 && pg <= totalPages) {
                     return (
-                      <button key={pg} onClick={() => setPersonCurrentPage(pg)} className={`w-8 h-8 rounded-lg text-xs font-black transition-all shadow-sm ${pg === safeCurrentPage ? 'bg-indigo-600 text-white border border-indigo-600 ring-2 ring-indigo-600/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600'}`}>
+                      <button key={pg} onClick={() => setPersonCurrentPage(pg)} className={\`w-8 h-8 rounded-lg text-xs font-black transition-all shadow-sm \${pg === safeCurrentPage ? 'bg-indigo-600 text-white border border-indigo-600 ring-2 ring-indigo-600/20' : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50 hover:text-indigo-600'}\`}>
                         {toPersianDigits(pg)}
                       </button>
                     );
@@ -981,3 +983,7 @@ export default function PersonsManager(props: any) {
     </div>
   );
 }
+`;
+
+fs.writeFileSync('src/components/persons/PersonsManager.tsx', code, 'utf8');
+console.log("Patched PersonsManager.tsx");
