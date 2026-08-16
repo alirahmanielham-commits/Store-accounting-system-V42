@@ -646,23 +646,46 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                   ) : (
                     <div className="relative border-r-2 border-slate-100 pr-4 space-y-6 max-h-[40vh] overflow-y-auto print:max-h-none print:overflow-visible my-2">
                        {historyData.map((h: any, i: number) => {
-                          const dateObj = new Date(h.date);
+                          const dateObj = new Date(h.createdAt || h.date || Date.now());
                           const formattedDate = formatDateDisplay(dateObj, storeSettings?.calendarType);
                           const formattedTime = dateObj.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+                          
+                          const getStatusLbl = (st) => {
+                            if(st === 'draft') return 'پیش‌نویس';
+                            if(st === 'issued') return 'صادر شده';
+                            if(st === 'received') return 'دریافت شده';
+                            if(st === 'deposited') return 'واگذار به بانک';
+                            if(st === 'cashed') return 'پاس شده';
+                            if(st === 'bounced') return 'برگشت خورده';
+                            if(st === 're_assigned') return 'خرج شده';
+                            if(st === 'returned') return 'عودت داده شده';
+                            if(st === 'cancelled') return 'باطل شده';
+                            return st;
+                          };
+                          
+                          const oldL = h.oldStatus ? getStatusLbl(h.oldStatus) : null;
+                          const newL = (h.newStatus || h.status) ? getStatusLbl(h.newStatus || h.status) : 'عملیات';
+                          
+                          let userName = h.userId || h.user || 'سیستم';
+                          if (userName !== 'سیستم') {
+                            const u = users.find(x => String(x.id) === String(userName));
+                            if (u) {
+                              if (u.personId) {
+                                const p = persons.find(px => String(px.id) === String(u.personId));
+                                if (p) userName = p.name;
+                                else userName = u.name || u.username || userName;
+                              } else {
+                                userName = u.name || u.username || userName;
+                              }
+                            }
+                          }
+
                           return (
                             <div key={i} className="relative">
                               <span className="absolute -right-[23px] top-1 w-2.5 h-2.5 rounded-full bg-blue-500 border-2 border-white print:border-none shadow-sm"></span>
                               <div className="text-xs text-gray-400 mb-1 border-b border-gray-50 pb-1.5 flex justify-between">
-                                 <span className="font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md">
-                                   {
-                                     h.status === 'issued' ? 'صدور چک' :
-                                     h.status === 'received' ? 'دریافت چک' :
-                                     h.status === 'deposited' ? 'واگذاری به بانک (خوابانده)' :
-                                     h.status === 'cashed' ? 'وصول/پاس شده' :
-                                     h.status === 'bounced' ? 'برگشت خورده' :
-                                     h.status === 'returned' ? 'عودت داده شده' :
-                                     h.status === 'cancelled' ? 'باطل شده' : h.status
-                                   }
+                                 <span className="font-bold text-gray-800 bg-gray-100 px-2 py-0.5 rounded-md flex items-center gap-1">
+                                   {oldL ? <><span className="text-gray-500">{oldL}</span> <span className="mx-1">➜</span> <span className="text-blue-600">{newL}</span></> : newL}
                                  </span>
                                  <div dir="ltr" className="flex gap-2 items-center text-gray-500 font-mono text-[10px]">
                                     <span>{formattedTime}</span>
@@ -670,21 +693,19 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                                  </div>
                               </div>
                               <div className="flex justify-between items-start mt-1.5">
-                                {h.desc ? (
-                                  <p className="text-xs font-medium text-gray-700 bg-gray-50 p-2.5 rounded-lg border border-gray-100 leading-relaxed shadow-sm flex-1 ml-4">{h.desc}</p>
+                                {(h.description || h.desc) ? (
+                                  <p className="text-xs font-medium text-gray-700 bg-gray-50 p-2.5 rounded-lg border border-gray-100 leading-relaxed shadow-sm flex-1 ml-4">{h.description || h.desc}</p>
                                 ) : (
                                   <p className="text-[10px] text-gray-400 italic flex-1 ml-4">بدون توضیحات اضافی</p>
                                 )}
-                                {h.user && (
-                                  <div className="flex flex-col items-center gap-1 bg-slate-50 border border-slate-100 rounded px-2 py-1 shrink-0 mt-1">
-                                    <User className="w-3 h-3 text-slate-400" />
-                                    <span className="text-[9px] font-bold text-slate-600 truncate max-w-[80px]">{h.user}</span>
-                                  </div>
-                                )}
+                                <div className="flex flex-col items-center gap-1 bg-slate-50 border border-slate-100 rounded px-2 py-1 shrink-0 mt-1">
+                                  <User className="w-3 h-3 text-slate-400" />
+                                  <span className="text-[9px] font-bold text-slate-600 truncate max-w-[80px]">{userName}</span>
+                                </div>
                               </div>
                             </div>
                           );
-                       })}
+                      })}
                     </div>
                   )}
                 </div>

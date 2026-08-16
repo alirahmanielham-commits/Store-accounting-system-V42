@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import { 
   getIssuedChecks, getReceivedChecks, updateReceivedCheck, getPersons, 
-  getCheckAuditLogs, updateIssuedCheck, addCheckHistoryLog, 
+  getCheckHistoryLogs, updateIssuedCheck, addCheckHistoryLog, 
   getTransactions, getCheckbooks, getAccounts 
 } from "../../../services/dataService";
 import { formatDateDisplay } from "../../../utils/format";
@@ -130,18 +130,20 @@ export default function CheckCardPage({
       const found = data.find((c: any) => String(c.id) === String(currentCheckId));
       setCheck(found);
       
-      const [ps, hst, trs, cbs, accs] = await Promise.all([
+      const [ps, hst, trs, cbs, accs, usrs] = await Promise.all([
         getPersons(),
-        getCheckAuditLogs(currentCheckId),
+        getCheckHistoryLogs(currentCheckId),
         getTransactions(),
         getCheckbooks(),
-        getAccounts()
+        getAccounts(),
+        getUsers()
       ]);
       setPersons(ps || []);
       setHistory((hst || []).sort((a:any, b:any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
       setTransactions(trs || []);
       setCheckbooks(cbs || []);
       setAccounts(accs || []);
+      setUsers(usrs || []);
     } catch (error) {
       console.error(error);
       showNotification('خطا در دریافت اطلاعات چک', 'error');
@@ -532,7 +534,22 @@ export default function CheckCardPage({
                              </div>
                            )}
                            <div className="text-sm text-slate-500 mt-6 flex items-center gap-2 pt-4 border-t border-slate-200 border-dashed">
-                             <User className="w-4 h-4" /> کاربر ثبت کننده: <span className="font-bold text-slate-700">{log.userId || 'سیستم'}</span>
+                             {(() => {
+                               const logUser = users.find(u => String(u.id) === String(log.userId));
+                               let userName = log.userId || 'سیستم';
+                               if (logUser) {
+                                 if (logUser.personId) {
+                                   const p = persons.find(px => String(px.id) === String(logUser.personId));
+                                   if (p) userName = p.name;
+                                   else userName = logUser.name || logUser.username || log.userId;
+                                 } else {
+                                   userName = logUser.name || logUser.username || log.userId;
+                                 }
+                               } else if (log.userId === 'system') {
+                                 userName = 'سیستم';
+                               }
+                               return <><User className="w-4 h-4" /> کاربر ثبت کننده: <span className="font-bold text-slate-700 mr-1">{userName}</span></>;
+                             })()}
                            </div>
                          </div>
                        </div>

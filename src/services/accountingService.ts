@@ -1156,3 +1156,11 @@ export const saveInstallments = async (installments: any[]) => {
   await saveLocalData('installments', processed);
 };
 
+
+export const getCheckHistoryLogs = async (checkId?: string | number, checkType?: 'issued' | 'received') => {
+  const data = await getLocalData<any[]>('check_history', []);
+  let filtered = data;
+  if (checkId) filtered = filtered.filter(h => String(h.checkId) === String(checkId));
+  if (checkType) filtered = filtered.filter(h => h.checkType === checkType);
+  return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+};

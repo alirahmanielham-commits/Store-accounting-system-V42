@@ -133,8 +133,8 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
     return { start: Math.min(start, end), end: Math.max(start, end) };
   };
 
-  const getCheckAuditLogs = async (id: string | number, type: 'issued' | 'received') => {
-    const { getCheckAuditLogs: apiGetCheckHistory } = await import('../../services/dataService');
+  const getCheckHistoryLogs = async (id: string | number, type: 'issued' | 'received') => {
+    const { getCheckHistoryLogs: apiGetCheckHistoryLogs } = await import('../../services/dataService');
     const hist = await apiGetCheckHistory(id, type);
     setHistoryData(hist);
     setHistoryCheck(type === 'issued' ? issuedChecks.find(c => c.id === id) : receivedChecks.find(c => c.id === id));
@@ -265,7 +265,7 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
               setIsHistoryModalOpen={setIsHistoryModalOpen} setHistoryCheck={setHistoryCheck}
               setHistoryData={setHistoryData} handleDeleteIssuedCheck={deleteIssuedCheckHandler}
               formatDateDisplay={formatDateDisplay}
-              sendNotification={sendNotification} getCheckAuditLogs={getCheckAuditLogs}
+              sendNotification={sendNotification} getCheckHistoryLogs={getCheckHistoryLogs}
             />
           )}
           {activeSubTab === 'issued_checks' && viewMode === 'kanban' && (
@@ -302,7 +302,7 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
               setIsHistoryModalOpen={setIsHistoryModalOpen} setHistoryCheck={setHistoryCheck}
               setHistoryData={setHistoryData} handleDeleteReceivedCheck={deleteReceivedCheckHandler}
               formatDateDisplay={formatDateDisplay}
-              sendNotification={sendNotification} getCheckAuditLogs={getCheckAuditLogs} onEditReceiptByCheck={onEditReceiptByCheck}
+              sendNotification={sendNotification} getCheckHistoryLogs={getCheckHistoryLogs} onEditReceiptByCheck={onEditReceiptByCheck}
             />
           )}
           {activeSubTab === 'received_checks' && viewMode === 'kanban' && (

@@ -10,7 +10,7 @@ import DatePickerModule, { Calendar as RMCalendar } from "react-multi-date-picke
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 
-export function IssuedChecksList({ showNotification, onEditReceiptByCheck, issuedChecks, persons, checkbooks, accounts, issuedSearchQuery, setIssuedSearchQuery, issuedCheckStatusFilter, setIssuedCheckStatusFilter, issuedCheckbookFilter, setIssuedCheckbookFilter, issuedSortBy, setIssuedSortBy, issuedSortDir, setIssuedSortDir, filteredIssuedChecks, totalIssuedAmount, cashedIssuedAmount, pendingIssuedAmount, bouncedIssuedAmount, setViewingCheck, setUpdatingCheckId, setUpdatingCheckType, setStatusVal, setIsStatusModalOpen, setIsHistoryModalOpen, setHistoryCheck, setHistoryData, handleDeleteIssuedCheck, formatDateDisplay, storeSettings, sendNotification, getCheckAuditLogs, issuedPage, setIssuedPage, totalIssuedPages }) {
+export function IssuedChecksList({ showNotification, onEditReceiptByCheck, issuedChecks, persons, checkbooks, accounts, issuedSearchQuery, setIssuedSearchQuery, issuedCheckStatusFilter, setIssuedCheckStatusFilter, issuedCheckbookFilter, setIssuedCheckbookFilter, issuedSortBy, setIssuedSortBy, issuedSortDir, setIssuedSortDir, filteredIssuedChecks, totalIssuedAmount, cashedIssuedAmount, pendingIssuedAmount, bouncedIssuedAmount, setViewingCheck, setUpdatingCheckId, setUpdatingCheckType, setStatusVal, setIsStatusModalOpen, setIsHistoryModalOpen, setHistoryCheck, setHistoryData, handleDeleteIssuedCheck, formatDateDisplay, storeSettings, sendNotification, getCheckHistoryLogs, issuedPage, setIssuedPage, totalIssuedPages }) {
   return (
     <>
 /* SUBTAB 2: ISSUED CHECKS */
@@ -261,7 +261,7 @@ export function IssuedChecksList({ showNotification, onEditReceiptByCheck, issue
                               <button 
                                 onClick={async () => {
                                   setHistoryCheck({ ...c, checkType: 'issued' });
-                                  const h = await getCheckAuditLogs(c.id, 'issued');
+                                  const h = await getCheckHistoryLogs(c.id, 'issued');
                                   const oldHistory = c.history || [];
                                   const combined = [...oldHistory, ...h].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                                   setHistoryData(combined);

@@ -10,7 +10,7 @@ import DatePickerModule, { Calendar as RMCalendar } from "react-multi-date-picke
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 
-export function ReceivedChecksList({ showNotification, receivedChecks, persons, checkbooks, accounts, receivedSearchQuery, setReceivedSearchQuery, receivedCheckStatusFilter, setReceivedCheckStatusFilter, receivedSortBy, setReceivedSortBy, receivedSortDir, setReceivedSortDir, filteredReceivedChecks, totalReceivedAmount, cashedReceivedAmount, inHandReceivedAmount, bouncedReceivedAmount, setViewingCheck, setUpdatingCheckId, setUpdatingCheckType, setStatusVal, setIsStatusModalOpen, setIsHistoryModalOpen, setHistoryCheck, setHistoryData, handleDeleteReceivedCheck, formatDateDisplay, storeSettings, sendNotification, getCheckAuditLogs, onEditReceiptByCheck, receivedPage, setReceivedPage, totalReceivedPages }) {
+export function ReceivedChecksList({ showNotification, receivedChecks, persons, checkbooks, accounts, receivedSearchQuery, setReceivedSearchQuery, receivedCheckStatusFilter, setReceivedCheckStatusFilter, receivedSortBy, setReceivedSortBy, receivedSortDir, setReceivedSortDir, filteredReceivedChecks, totalReceivedAmount, cashedReceivedAmount, inHandReceivedAmount, bouncedReceivedAmount, setViewingCheck, setUpdatingCheckId, setUpdatingCheckType, setStatusVal, setIsStatusModalOpen, setIsHistoryModalOpen, setHistoryCheck, setHistoryData, handleDeleteReceivedCheck, formatDateDisplay, storeSettings, sendNotification, getCheckHistoryLogs, onEditReceiptByCheck, receivedPage, setReceivedPage, totalReceivedPages }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   return (
     <>
@@ -225,7 +225,7 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
                               <button 
                                 onClick={async () => {
                                   setHistoryCheck({ ...c, checkType: 'received' });
-                                  const h = await getCheckAuditLogs(c.id, 'received');
+                                  const h = await getCheckHistoryLogs(c.id, 'received');
                                   const oldHistory = c.history || [];
                                   const combined = [...oldHistory, ...h].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
                                   setHistoryData(combined);
