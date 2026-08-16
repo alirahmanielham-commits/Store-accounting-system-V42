@@ -693,7 +693,7 @@ export default function IssueCheckStandalone() {
               </div>
               <div className="flex justify-between pb-2">
                 <span className="text-slate-500">تاریخ سررسید:</span>
-                <span className="font-bold text-slate-800">{dueDate}</span>
+                <span className="font-bold text-slate-800">{dueDate ? (typeof dueDate === "object" ? String(dueDate) : formatDateDisplay(dueDate)) : ""}</span>
               </div>
             </div>
             
