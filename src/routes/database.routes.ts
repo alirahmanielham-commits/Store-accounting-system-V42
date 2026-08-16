@@ -4,7 +4,6 @@ import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } fro
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
 // import { loginSchema } from '../schemas/validation';
-import { DatabaseSync } from 'node:sqlite';
 import { Client, Pool } from 'pg';
 import os from 'os';
 
@@ -41,26 +40,12 @@ router.get('/api/databases', async (req, res) => {
             `);
             const r = await activePgPools['default'].query("SELECT * FROM businesses");
             dbsFromTable = r.rows;
-        } else {
-            const defaultDb = storeContext.run('default', () => getDb());
-            const stmt = defaultDb.prepare("SELECT * FROM businesses");
-            dbsFromTable = stmt.all();
-        }
+        } else { throw new Error("PostgreSQL not configured for default pool"); }
       } catch (e) {}
 
-      const files = await fsPromises.readdir(process.cwd());
-      const dbsFromFiles = files
-        .filter(f => f.startsWith('database') && f.endsWith('.sqlite'))
-        .map(f => {
-          if (f === 'database.sqlite') return { id: 'default', name: 'فروشگاه اصلی', db_type: 'sqlite' };
-          const match = f.match(/^database_(.+)\.sqlite$/);
-          if (match) return { id: match[1], name: decodeURIComponent(match[1]), db_type: 'sqlite' };
-          return null;
-        })
-        .filter(Boolean);
-
+      
       const mergedMap = new Map();
-      dbsFromFiles.forEach(db => mergedMap.set(db.id, db));
+
       dbsFromTable.forEach(db => mergedMap.set(db.id, {
          id: db.id, 
          name: db.name, 
@@ -230,11 +215,7 @@ router.delete('/api/databases/:id', async (req, res) => {
       try {
         if (usePgMap['default'] && activePgPools['default']) {
             await activePgPools['default'].query("DELETE FROM businesses WHERE id = $1", [id]);
-        } else {
-            const defaultDb = storeContext.run('default', () => getDb());
-            const stmt = defaultDb.prepare("DELETE FROM businesses WHERE id = ?");
-            stmt.run(id);
-        }
+        } else { throw new Error("PostgreSQL not configured for default pool"); }
       } catch(e) { }
 
       const dbFile = path.join(process.cwd(), `database_${id}.sqlite`);
@@ -326,55 +307,9 @@ router.post('/api/databases', async (req, res) => {
          console.log("Error checking config or creating postgres DB, falling back to sqlite:", e);
       }
 
-      // SQLite fallback
-      try {
-        if (usePgMap['default'] && activePgPools['default']) {
-            await activePgPools['default'].query(`
-              CREATE TABLE IF NOT EXISTS businesses (
-                id VARCHAR PRIMARY KEY,
-                name VARCHAR NOT NULL,
-                db_type VARCHAR DEFAULT 'sqlite',
-                db_host VARCHAR,
-                db_port VARCHAR,
-                db_name VARCHAR,
-                db_user VARCHAR,
-                db_password VARCHAR
-              )
-            `);
-            await activePgPools['default'].query(`
-              INSERT INTO businesses (id, name, db_type, db_host, db_port, db_name, db_user, db_password)
-              VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-            `, [id, name, 'sqlite', '', '', '', '', '']);
-        } else {
-            const defaultDb = storeContext.run('default', () => getDb());
-            const stmt = defaultDb.prepare(`
-              INSERT INTO businesses (id, name, db_type, db_host, db_port, db_name, db_user, db_password)
-              VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            `);
-            stmt.run(id, name, 'sqlite', '', '', '', '', '');
-        }
-      } catch(e) { }
+      
+      return res.status(500).json({ error: "PostgreSQL is not properly configured or creation failed." });
 
-      const dbFile = path.join(process.cwd(), `database_${id}.sqlite`);
-      const newDb = new DatabaseSync(dbFile);
-      newDb.exec(`
-        CREATE TABLE IF NOT EXISTS store (
-          key TEXT PRIMARY KEY,
-          value TEXT NOT NULL
-        )
-      `);
-      try {
-         const initPayload = JSON.stringify({ storeName: name, calendarType: calType });
-         const stmt = newDb.prepare("INSERT INTO store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value");
-         stmt.run('company_profile', initPayload);
-         // Also duplicate in system_settings if required by kv-store
-         newDb.exec("CREATE TABLE IF NOT EXISTS system_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)");
-         const stmt2 = newDb.prepare("INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value");
-         stmt2.run('company_profile', initPayload);
-      } catch(e) {}
-
-
-      res.json({ success: true, database: { id, name, db_type: 'sqlite' } });
     } catch (e) {
       res.status(500).json({ error: e.message });
     }

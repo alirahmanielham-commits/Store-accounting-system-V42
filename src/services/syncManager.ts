@@ -1,6 +1,3 @@
-import { DatabaseSync } from 'node:sqlite';
-import path from 'path';
-import fs from 'fs';
 import { Pool } from 'pg';
 
 export interface SyncRecord {
@@ -13,52 +10,45 @@ export interface SyncRecord {
 }
 
 class SyncManager {
-    private db: DatabaseSync;
+    private queue: SyncRecord[] = [];
+    private nextId = 1;
 
     constructor() {
-        const dbPath = path.join(process.cwd(), 'sync_queue.sqlite');
-        this.db = new DatabaseSync(dbPath);
-        this.init();
-    }
-
-    private init() {
-        // SQLite is strictly used as an offline queue/buffer here.
-        this.db.exec(`
-            CREATE TABLE IF NOT EXISTS sync_queue (
-                id INTEGER PRIMARY KEY AUTOINCREMENT,
-                store_id TEXT NOT NULL,
-                action TEXT NOT NULL,
-                key TEXT NOT NULL,
-                value TEXT,
-                created_at INTEGER NOT NULL
-            )
-        `);
     }
 
     public enqueueSet(storeId: string, key: string, value: any) {
-        const stmt = this.db.prepare('INSERT INTO sync_queue (store_id, action, key, value, created_at) VALUES (?, ?, ?, ?, ?)');
-        stmt.run(storeId, 'SET', key, JSON.stringify(value), Date.now());
+        this.queue.push({
+            id: this.nextId++,
+            store_id: storeId,
+            action: 'SET',
+            key,
+            value: JSON.stringify(value),
+            created_at: Date.now()
+        });
         console.log(`[SyncManager] Enqueued SET for key: ${key} in store: ${storeId}`);
     }
 
     public enqueueDelete(storeId: string, key: string) {
-        const stmt = this.db.prepare('INSERT INTO sync_queue (store_id, action, key, created_at) VALUES (?, ?, ?, ?)');
-        stmt.run(storeId, 'DELETE', key, Date.now());
+        this.queue.push({
+            id: this.nextId++,
+            store_id: storeId,
+            action: 'DELETE',
+            key,
+            created_at: Date.now()
+        });
         console.log(`[SyncManager] Enqueued DELETE for key: ${key} in store: ${storeId}`);
     }
 
     public getPendingRecords(): SyncRecord[] {
-        const stmt = this.db.prepare('SELECT * FROM sync_queue ORDER BY created_at ASC');
-        return stmt.all() as unknown as SyncRecord[];
+        return [...this.queue].sort((a, b) => a.created_at - b.created_at);
     }
 
     public markAsSynced(id: number) {
-        const stmt = this.db.prepare('DELETE FROM sync_queue WHERE id = ?');
-        stmt.run(id);
-        console.log(`[SyncManager] Removed synced record ID ${id} from SQLite buffer.`);
+        this.queue = this.queue.filter(r => r.id !== id);
+        console.log(`[SyncManager] Removed synced record ID ${id} from in-memory buffer.`);
     }
 
-    public async processQueue(getActivePgPool: (storeId: string) => Pool | undefined) {
+    public async processQueue(getActivePgPool: (storeId: string) => Pool | undefined | null) {
         const records = this.getPendingRecords();
         if (records.length === 0) return;
 
@@ -79,7 +69,7 @@ class SyncManager {
                     await pool.query('DELETE FROM store WHERE key = $1', [record.key]);
                 }
                 
-                // Successfully written to PG -> delete from SQLite buffer
+                // Successfully written to PG -> delete from buffer
                 this.markAsSynced(record.id);
             } catch (err: any) {
                 console.error(`[SyncManager] Error syncing record ${record.id} to PG:`, err.message);

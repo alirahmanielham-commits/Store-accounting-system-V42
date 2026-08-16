@@ -4,7 +4,6 @@ import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } fro
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
 
-import { DatabaseSync } from 'node:sqlite';
 import { Client, Pool } from 'pg';
 import os from 'os';
 

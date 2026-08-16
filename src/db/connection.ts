@@ -1,6 +1,5 @@
 import 'dotenv/config';
 import { AsyncLocalStorage } from 'node:async_hooks';
-import { DatabaseSync } from 'node:sqlite';
 import path from 'path';
 import fsPromises from 'fs/promises';
 import { Client, Pool } from 'pg';
@@ -21,7 +20,7 @@ export function getDb() {
     const dbFile = storeId === 'default' ? SQLITE_FILE : path.join(process.cwd(), `database_${storeId}.sqlite`);
     // NOTE: This is strictly for one-time migration purposes.
     
-    dbs[storeId] = new DatabaseSync(dbFile);
+    throw new Error('SQLite is permanently disabled. Only PostgreSQL must be used.');
   }
   return dbs[storeId];
 }

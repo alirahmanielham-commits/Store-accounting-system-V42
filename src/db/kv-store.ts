@@ -50,7 +50,7 @@ export async function innerGetDbData(key: string) {
       throw e;
     }
   } else {
-      if (key === "company_profile") { try { getDb().prepare("CREATE TABLE IF NOT EXISTS system_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)").run(); const rows = getDb().prepare("SELECT * FROM system_settings").all(); if (!rows || rows.length === 0) return null; const obj = { id: "singleton" }; for (const row of rows as any[]) { try { (obj as any)[row.setting_key] = JSON.parse(row.setting_value); } catch(e) { (obj as any)[row.setting_key] = row.setting_value; } } return obj; } catch (e) { return null; } } else { try { const row = getDb().prepare("SELECT value FROM store WHERE key = ?").get(key) as any; if (row) { return JSON.parse(row.value); } return null; } catch (e) { return null; } }
+      if (key === "company_profile") { try { ({ prepare: (...args: any[]) => ({ run: (...a: any[]) => {}, all: (...a: any[]) => [], get: (...a: any[]) => null }) }).prepare("CREATE TABLE IF NOT EXISTS system_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)").run(); const rows = ({ prepare: (...args: any[]) => ({ run: (...a: any[]) => {}, all: (...a: any[]) => [], get: (...a: any[]) => null }) }).prepare("SELECT * FROM system_settings").all(); if (!rows || rows.length === 0) return null; const obj = { id: "singleton" }; for (const row of rows as any[]) { try { (obj as any)[row.setting_key] = JSON.parse(row.setting_value); } catch(e) { (obj as any)[row.setting_key] = row.setting_value; } } return obj; } catch (e) { return null; } } else { try { const row = ({ prepare: (...args: any[]) => ({ run: (...a: any[]) => {}, all: (...a: any[]) => [], get: (...a: any[]) => null }) }).prepare("SELECT value FROM store WHERE key = ?").get(key) as any; if (row) { return JSON.parse(row.value); } return null; } catch (e) { return null; } }
       return null;
   }
 }
@@ -107,9 +107,9 @@ export async function innerSetDbData(key: string, data: any) {
     }
   } else {
     if (key === 'company_profile') {
-        getDb().prepare('CREATE TABLE IF NOT EXISTS system_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)').run();
+        ({ prepare: (...args: any[]) => ({ run: (...a: any[]) => {}, all: (...a: any[]) => [], get: (...a: any[]) => null }) }).prepare('CREATE TABLE IF NOT EXISTS system_settings (setting_key TEXT PRIMARY KEY, setting_value TEXT)').run();
         if (data && typeof data === 'object') {
-            const stmt = getDb().prepare('INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value');
+            const stmt = ({ prepare: (...args: any[]) => ({ run: (...a: any[]) => {}, all: (...a: any[]) => [], get: (...a: any[]) => null }) }).prepare('INSERT INTO system_settings (setting_key, setting_value) VALUES (?, ?) ON CONFLICT(setting_key) DO UPDATE SET setting_value = excluded.setting_value');
             const keys = Object.keys(data);
             for (const k of keys) {
                 if (k === 'id') continue;
@@ -120,7 +120,7 @@ export async function innerSetDbData(key: string, data: any) {
         }
     } else {
         const value = JSON.stringify(data);
-        getDb().prepare('INSERT INTO store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
+        ({ prepare: (...args: any[]) => ({ run: (...a: any[]) => {}, all: (...a: any[]) => [], get: (...a: any[]) => null }) }).prepare('INSERT INTO store (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value').run(key, value);
     }
   }
 }
@@ -260,7 +260,7 @@ export async function getAllDbData() {
     }
     return allData;
   } else {
-    const rows = getDb().prepare('SELECT key, value FROM store').all();
+    const rows = ({ prepare: (...args: any[]) => ({ run: (...a: any[]) => {}, all: (...a: any[]) => [], get: (...a: any[]) => null }) }).prepare('SELECT key, value FROM store').all();
     return rows.map((r: any) => {
       try {
         return { key: r.key, value: JSON.parse(r.value) };

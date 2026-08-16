@@ -1,4 +1,6 @@
+const fs = require('fs');
 
+let code = `
 import { loadPgPoolForStore, isPgActive, getActivePgPool } from './connection';
 import { ensurePostgresTables } from './schema-sync';
 
@@ -12,3 +14,6 @@ export async function initDB() {
     await ensurePostgresTables();
   }
 }
+`;
+fs.writeFileSync('src/db/migration.ts', code);
+console.log('Fixed migration');
