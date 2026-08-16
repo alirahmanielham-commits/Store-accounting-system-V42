@@ -264,8 +264,23 @@ export default function CheckCardPage({
   const payee = persons.find(p => p.id === (checkType === "received" ? check.payerId : check.payeeId));
   const isClosed = allowedNext.length === 0;
 
-const lastStatusChangeLog = history.find(l => l.oldStatus && l.newStatus === check.status);
-  const previousStatus = lastStatusChangeLog ? lastStatusChangeLog.oldStatus : null;
+
+  const getStaticPreviousStatus = (status: string, type: 'issued'|'received') => {
+    if (type === 'issued') {
+      if (['cashed', 'bounced', 'returned'].includes(status)) return 'issued';
+      if (status === 'issued') return 'draft';
+    } else {
+      if (['in_clearing', 'deposited', 'assigned'].includes(status)) return 'received';
+      if (status === 'bounced') return 'in_clearing';
+      if (status === 'bounced_assigned') return 'assigned';
+      if (status === 'returned') return 'received'; // typically goes back to received
+      if (status === 'received') return 'draft';
+    }
+    return null;
+  };
+
+  const lastStatusChangeLog = history.find(l => l.oldStatus && l.newStatus === check.status);
+  const previousStatus = lastStatusChangeLog ? lastStatusChangeLog.oldStatus : getStaticPreviousStatus(currentStatus, checkType);
   const handleRevert = async () => {
     if (!previousStatus) return;
     if (!confirm('آیا از بازگرداندن چک به وضعیت قبلی اطمینان دارید؟ در صورت وجود سند حسابداری، باید آن را به صورت دستی اصلاح یا لغو کنید.')) return;
