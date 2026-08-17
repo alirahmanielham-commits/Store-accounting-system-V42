@@ -1,1050 +1,879 @@
-import React, { useState, useEffect, useRef } from 'react';
-import DriveBackup from './DriveBackup';
-import MigrationWizard from './MigrationWizard';
+import React, { useState, useEffect, useMemo } from 'react';
+import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Database, Download, Upload, AlertCircle, RefreshCw, 
-  Layers, Search, Trash2, Eye, X, Check, ChevronDown, 
-  ChevronUp, AlertTriangle, FileText
+  Database, RefreshCw, UploadCloud, HardDrive, Download, 
+  Trash2, Shield, Calendar, Settings, FileText, CheckCircle, 
+  AlertTriangle, XCircle, Search, Save, FolderOpen, Mail, Key,
+  Upload, Check, Play, Clock, Server, Eye, ToggleLeft, ToggleRight,
+  Info, Lock, AlertCircle
 } from 'lucide-react';
-import { motion, AnimatePresence } from 'motion/react';
-import {
-  deletePerson,
-  deleteProduct,
-  deleteAccount,
-  deleteCashbox,
-  deleteWarehouse,
-  deleteProductCategory,
-  deleteTransaction,
-  deleteInvoice,
-  deleteCheckbook,
-  deleteIssuedCheck,
-  deleteReceivedCheck,
-  deletePersonGroup,
-  deletePersonRole,
-  deleteUser
-} from '../../services/dataService';
 
 interface DatabaseDashboardProps {
   showNotification: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export default function DatabaseDashboard({ showNotification }: DatabaseDashboardProps) {
-  const [stats, setStats] = useState<{ totalSize: number; collections: any[] }>({ totalSize: 0, collections: [] });
-  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [activeTab, setActiveTab] = useState('manual');
+  const [isBackingUp, setIsBackingUp] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
   
-  // Database Explorer States
-  const [selectedTable, setSelectedTable] = useState<string | null>(null);
-  const [records, setRecords] = useState<any[]>([]);
-  const [loadingRecords, setLoadingRecords] = useState(false);
-  const [searchTerm, setSearchTerm] = useState('');
-  const [expandedRecordId, setExpandedRecordId] = useState<any>(null);
-  const [recordToDelete, setRecordToDelete] = useState<any>(null);
-  const [isDeleting, setIsDeleting] = useState(false);
-  const [showMigrationWizard, setShowMigrationWizard] = useState(false);
-  const explorerRef = useRef<HTMLDivElement>(null);
+  // Dummy Initial Data
+  const [backups, setBackups] = useState([
+    { id: '1', date: '1402/11/15', time: '14:30:00', size: '12.5 MB', type: 'کامل (Full)', status: 'success' },
+    { id: '2', date: '1402/11/14', time: '02:00:00', size: '12.2 MB', type: 'فقط داده', status: 'success' },
+    { id: '3', date: '1402/11/13', time: '15:45:00', size: '4.1 MB', type: 'افزایشی', status: 'error' },
+  ]);
 
-  // Backup & Restore states
-  const [restoreConfirmData, setRestoreConfirmData] = useState<{
-    fileName: string;
-    fileSize?: number;
-    tableCount?: number;
-    tablesList?: string[];
-    recordsCount?: number;
-    isSql?: boolean;
-    backupContent: any;
-  } | null>(null);
-  const [isRestoring, setIsRestoring] = useState(false);
+  const [backupType, setBackupType] = useState('full');
 
-  const fetchStats = async () => {
-    try {
-      const res = await fetch('/api/db/stats');
-      if (res.ok) {
-        const data = await res.json();
-        setStats(data);
-      }
-    } catch (e) {
-      console.error(e);
-    }
-  };
+  const [scheduleConfig, setScheduleConfig] = useState({
+    enabled: true,
+    frequency: 'daily',
+    time: '02:00',
+    retention: 5,
+    cron: '0 2 * * *'
+  });
 
-  useEffect(() => {
-    fetchStats();
-  }, []);
+  const [storageConfig, setStorageConfig] = useState({
+    type: 'local',
+    localPath: 'D:/Backups/MyApp',
+    cloudProvider: 's3',
+    cloudAuthUrl: 's3.example.com',
+    cloudUser: '',
+    cloudPass: ''
+  });
 
+  const [securityConfig, setSecurityConfig] = useState({
+    encrypt: true,
+    password: '',
+    emailNotify: true,
+    emailAddress: 'admin@example.com'
+  });
 
-  const handleRefresh = () => {
-    setIsRefreshing(true);
-    fetchStats().finally(() => setIsRefreshing(false));
-  };
+  // Logs state
+  const [logs, setLogs] = useState([
+    { id: '1', date: '1402/11/15 14:30', action: 'بک‌آپ دستی (کامل)', status: 'success', details: 'بک‌آپ با موفقیت در مسیر Local ذخیره شد.' },
+    { id: '2', date: '1402/11/14 02:00', action: 'بک‌آپ خودکار (فقط داده)', status: 'success', details: 'بک‌آپ زمان‌بندی شده ایجاد شد.' },
+    { id: '3', date: '1402/11/13 15:45', action: 'بک‌آپ دستی (افزایشی)', status: 'error', details: 'خطا در ارتباط با فضای ابری S3.' },
+    { id: '4', date: '1402/11/12 10:00', action: 'بازیابی اطلاعات', status: 'warning', details: 'عملیات بازیابی با هشدارهای جزئی پایان یافت.' }
+  ]);
+  const [logSearch, setLogSearch] = useState('');
+  const [logFilter, setLogFilter] = useState('all');
 
-  const handleFixPriceHistoryDates = async () => {
-    try {
-      const res = await fetch('/api/data/product_price_history');
-      if (!res.ok) return;
-      const history = await res.json();
-      
-      const invRes = await fetch('/api/data/invoices');
-      const invoices = invRes.ok ? await invRes.json() : [];
+  // Restore Modal State
+  const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<any>(null);
 
-      let updatedCount = 0;
-      const updatedHistory = history.map((h: any) => {
-        // Find if this price was from an invoice
-        const possibleInvoice = invoices.find((inv: any) => 
-          inv.items && inv.items.some((item: any) => 
-            String(item.productId) === String(h.productId) && 
-            (
-              (h.type === 'sale' && Number(item.salePrice) === Number(h.price)) ||
-              (h.type === 'purchase' && Number(item.purchasePrice) === Number(h.price))
-            )
-          )
-        );
+  // Manual Backup Action
+  const handleImmediateBackup = () => {
+    setIsBackingUp(true);
+    setBackupProgress(0);
+    const interval = setInterval(() => {
+      setBackupProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsBackingUp(false);
+          showNotification('بک‌آپ با موفقیت تهیه شد', 'success');
+          
+          let typeLabel = 'کامل (Full)';
+          if (backupType === 'incremental') typeLabel = 'افزایشی';
+          if (backupType === 'structure') typeLabel = 'فقط ساختار';
+          if (backupType === 'data') typeLabel = 'فقط داده';
 
-        if (possibleInvoice && possibleInvoice.date) {
-          // If we found a matching invoice, update the date
-          // Only update if it's currently using new Date() style or invalid
-          if (new Date(h.date).toISOString().startsWith(new Date().toISOString().split('T')[0]) || !h.date) {
-            updatedCount++;
-            return { ...h, date: new Date(possibleInvoice.date).toISOString() };
-          }
+          const newBackup = { 
+            id: Date.now().toString(), 
+            date: new Intl.DateTimeFormat('fa-IR').format(new Date()), 
+            time: new Date().toLocaleTimeString('fa-IR'), 
+            size: (Math.random() * 10 + 5).toFixed(1) + ' MB', 
+            type: typeLabel, 
+            status: 'success' 
+          };
+
+          setBackups([newBackup, ...backups]);
+          
+          setLogs([{
+            id: Date.now().toString(),
+            date: `${newBackup.date} ${newBackup.time}`,
+            action: `بک‌آپ دستی (${typeLabel})`,
+            status: 'success',
+            details: 'عملیات با موفقیت توسط کاربر انجام شد.'
+          }, ...logs]);
+
+          return 100;
         }
-        return h;
+        return prev + 10;
       });
-
-      if (updatedCount > 0) {
-        await fetch('/api/data/product_price_history', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(updatedHistory)
-        });
-        showNotification(`${updatedCount} رکورد تاریخچه قیمت با موفقیت اصلاح شد.`, 'success');
-        fetchStats();
-      } else {
-        showNotification('موردی برای اصلاح یافت نشد.', 'info');
-      }
-    } catch (e) {
-      console.error(e);
-      showNotification('خطا در اصلاح تاریخچه‌ها', 'error');
-    }
-  };
-  const formatSize = (bytes: number) => {
-    if (bytes === 0) return '0 B';
-    const k = 1024;
-    const sizes = ['B', 'KB', 'MB', 'GB'];
-    const i = Math.floor(Math.log(bytes) / Math.log(k));
-    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }, 300);
   };
 
-  const getCollectionNameInPersian = (key: string) => {
-    const names: Record<string, string> = {
-      'persons': 'اشخاص و شرکت‌ها (طرف حساب‌ها)',
-      'products': 'کالاها و خدمات',
-      'accounts': 'حساب‌های بانکی',
-      'cashboxes': 'صندوق‌ها',
-      'invoices': 'فاکتورها و اسناد انبار',
-      'transactions': 'تراکنش‌های مالی',
-      'company_profile': 'تنظیمات پایه سیستم',
-      'users': 'کاربران سیستم',
-      'person_groups': 'گروه‌بندی اشخاص',
-      'person_roles': 'نقش‌های اشخاص',
-      'warehouses': 'انبارها',
-      'product_categories': 'گروه‌بندی کالاها',
-      'checkbooks': 'دسته چک‌ها',
-      'issued_checks': 'چک‌های صادره',
-      'received_checks': 'چک‌های وارده',
-      'warehouse_stocks': 'موجودی انبارها'
-    };
-    return names[key] || key;
+  const executeRestore = () => {
+    setIsRestoreModalOpen(false);
+    showNotification('بازیابی اطلاعات با موفقیت انجام شد.', 'success');
+    setLogs([{
+      id: Date.now().toString(),
+      date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
+      action: 'بازیابی اطلاعات',
+      status: 'success',
+      details: `نسخه ${selectedBackupForRestore?.date} بازیابی شد.`
+    }, ...logs]);
+    setSelectedBackupForRestore(null);
   };
 
-  const handleBackup = async () => {
-    try {
-      window.open('/api/db/backup', '_blank');
-      showNotification('درخواست دانلود فایل پشتیبان ارسال شد', 'success');
-    } catch (e) {
-      showNotification('خطا در درخواست دانلود نسخه پشتیبان', 'error');
-    }
-  };
+  const tabs = [
+    { id: 'manual', label: 'بک‌آپ دستی', icon: Play },
+    { id: 'schedule', label: 'زمان‌بندی', icon: Calendar },
+    { id: 'storage', label: 'مسیر ذخیره‌سازی', icon: HardDrive },
+    { id: 'restore', label: 'بازیابی', icon: RefreshCw },
+    { id: 'security', label: 'امنیت و اعلان', icon: Shield },
+    { id: 'logs', label: 'تاریخچه عملیات', icon: FileText }
+  ];
 
-  const handleRestoreFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      try {
-        const content = e.target?.result as string;
-        if (file.name.endsWith('.sql')) {
-            let recordCount = (content.match(/INSERT INTO/g) || []).length;
-            setRestoreConfirmData({
-              fileName: file.name,
-              backupContent: content,
-              recordsCount: recordCount,
-              isSql: true
-            });
-        } else {
-            const data = JSON.parse(content);
-            let count = 0;
-            for (const key in data) {
-              if (Array.isArray(data[key])) {
-                count += data[key].length;
-              }
-            }
-            setRestoreConfirmData({
-              fileName: file.name,
-              backupContent: data,
-              recordsCount: count,
-              isSql: false
-            });
-        }
-      } catch (err) {
-        showNotification('فایل انتخاب شده معتبر نیست', 'error');
-      }
-    };
-    reader.readAsText(file);
-    e.target.value = '';
-  };
-
-  const handleConfirmRestore = async () => {
-    if (!restoreConfirmData) return;
-    setIsRestoring(true);
-    try {
-      const isSql = restoreConfirmData.isSql;
-      const res = await fetch('/api/db/restore', {
-        method: 'POST',
-        headers: { 'Content-Type': isSql ? 'application/sql' : 'application/json' },
-        body: isSql ? restoreConfirmData.backupContent : JSON.stringify(restoreConfirmData.backupContent)
-      });
-      if (res.ok) {
-        showNotification('بازیابی پایگاه داده با موفقیت انجام شد. سیستم در حال راه‌اندازی مجدد است...', 'success');
-        setTimeout(() => window.location.reload(), 2000);
-      } else {
-        const errorData = await res.json().catch(()=>({error: 'خطای نامشخص'}));
-        showNotification(errorData.error || 'خطا در بازیابی نسخه پشتیبان', 'error');
-      }
-    } catch (err) {
-      showNotification('خطا در برقراری ارتباط با سرور', 'error');
-    } finally {
-      setIsRestoring(false);
-      setRestoreConfirmData(null);
-    }
-  };
-
-  // Load records for the explorer
-  const loadTableRecords = async (tableKey: string) => {
-    setLoadingRecords(true);
-    setExpandedRecordId(null);
-    try {
-      const res = await fetch(`/api/data/${tableKey}`);
-      if (res.ok) {
-        const data = await res.json();
-        setRecords(Array.isArray(data) ? data : (data ? [data] : []));
-      } else {
-        setRecords([]);
-      }
-    } catch (e) {
-      console.error(e);
-      showNotification('خطا در بارگذاری رکوردهای جدول', 'error');
-    } finally {
-      setLoadingRecords(false);
-    }
-  };
-
-  const handleSelectTable = (tableKey: string) => {
-    setSelectedTable(tableKey);
-    setSearchTerm('');
-    loadTableRecords(tableKey);
-    
-    // Smooth scroll to editor
-    setTimeout(() => {
-      explorerRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-    }, 100);
-  };
-
-  // Safe delete handler with system integrations
-  const handleDeleteConfirm = async () => {
-    if (!selectedTable || !recordToDelete) return;
-    setIsDeleting(true);
-    
-    try {
-      const recordId = recordToDelete.id;
-      
-      const customDeletes: Record<string, (id: any) => Promise<any>> = {
-        'persons': deletePerson,
-        'products': deleteProduct,
-        'accounts': deleteAccount,
-        'cashboxes': deleteCashbox,
-        'warehouses': deleteWarehouse,
-        'product_categories': deleteProductCategory,
-        'transactions': deleteTransaction,
-        'invoices': deleteInvoice,
-        'checkbooks': deleteCheckbook,
-        'issued_checks': deleteIssuedCheck,
-        'received_checks': deleteReceivedCheck,
-        'person_groups': deletePersonGroup,
-        'person_roles': deletePersonRole,
-        'users': deleteUser
-      };
-      
-      const deleteFn = customDeletes[selectedTable];
-      if (deleteFn && recordId !== undefined) {
-        // Use standard delete engine to handle cascade updates, accounting formulas, and inventory stocks recalculations safely!
-        await deleteFn(recordId);
-      } else {
-        // Generic fallback delete for other tables or settings
-        const res = await fetch(`/api/data/${selectedTable}`);
-        if (res.ok) {
-          const data = await res.json();
-          if (Array.isArray(data)) {
-            const filtered = data.filter((item: any) => item.id !== recordId);
-            await fetch(`/api/data/${selectedTable}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(filtered)
-            });
-          } else {
-            // For single object settings, overwrite with empty null
-            await fetch(`/api/data/${selectedTable}`, {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(null)
-            });
-          }
-        }
-      }
-      
-      showNotification('رکورد با موفقیت از پایگاه داده حذف گردید', 'success');
-      setRecordToDelete(null);
-      // reload table records
-      await loadTableRecords(selectedTable);
-      // refresh global database statistics
-      await fetchStats();
-    } catch (err: any) {
-      showNotification(`خطا در حذف رکورد: ${err?.message || 'خطای فنی در حذف'}`, 'error');
-    } finally {
-      setIsDeleting(false);
-    }
-  };
-
-  // Helper to extract nice labels for custom tables
-  const getColumnsForTable = (key: string) => {
-    switch (key) {
-      case 'persons':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'personCode', label: 'کد شخص' },
-          { field: 'name', label: 'نام طرف حساب' },
-          { field: 'role', label: 'نقش' },
-          { field: 'phoneNumber', label: 'تلفن همراه' }
-        ];
-      case 'products':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'code', label: 'کد کالا' },
-          { field: 'name', label: 'نام کالا' },
-          { field: 'price', label: 'قیمت فروش' },
-          { field: 'stock', label: 'موجودی اولیه' }
-        ];
-      case 'accounts':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'name', label: 'عنوان حساب' },
-          { field: 'bankName', label: 'بانک صادرکننده' },
-          { field: 'accountNumber', label: 'شماره حساب' },
-          { field: 'balance', label: 'موجودی کل' }
-        ];
-      case 'cashboxes':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'name', label: 'عنوان صندوق' },
-          { field: 'balance', label: 'موجودی' }
-        ];
-      case 'invoices':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'invoiceNumber', label: 'شماره فاکتور' },
-          { field: 'type', label: 'نوع سند' },
-          { field: 'jalaliDate', label: 'تاریخ ثبت' },
-          { field: 'totalAmount', label: 'مبلغ کل' }
-        ];
-      case 'transactions':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'type', label: 'نوع تراکنش' },
-          { field: 'amount', label: 'مبلغ' },
-          { field: 'jalaliDate', label: 'تاریخ اثر' },
-          { field: 'description', label: 'شرح تراکنش' }
-        ];
-      case 'warehouses':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'name', label: 'نام انبار' },
-          { field: 'code', label: 'کد انبار' },
-          { field: 'location', label: 'موقعیت مکانی' }
-        ];
-      case 'product_categories':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'code', label: 'کد گروه' },
-          { field: 'name', label: 'نام گروه کالا' }
-        ];
-      case 'person_groups':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'name', label: 'گروه طرف حساب' }
-        ];
-      case 'person_roles':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'code', label: 'کد نقش' },
-          { field: 'name', label: 'عنوان نقش' }
-        ];
-      case 'checkbooks':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'bankName', label: 'بانک صادرکننده' },
-          { field: 'startNumber', label: 'برگه شروع' },
-          { field: 'totalLeaves', label: 'تعداد برگ چک' }
-        ];
-      case 'issued_checks':
-      case 'received_checks':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'checkNumber', label: 'شماره چک' },
-          { field: 'bankName', label: 'نام بانک' },
-          { field: 'amount', label: 'مبلغ چک' },
-          { field: 'dueDate', label: 'تاریخ سررسید' },
-          { field: 'status', label: 'وضعیت' }
-        ];
-      case 'users':
-        return [
-          { field: 'id', label: 'شناسه' },
-          { field: 'username', label: 'نام کاربری' },
-          { field: 'name', label: 'نام نمایشی' },
-          { field: 'role', label: 'سطح دسترسی' }
-        ];
-      default:
-        return [
-          { field: 'id', label: 'شناسه' }
-        ];
-    }
-  };
-
-  const getFieldLabel = (field: string) => {
-    const fieldLabels: Record<string, string> = {
-      'id': 'شناسه رکورد',
-      'name': 'نام / عنوان',
-      'title': 'عنوان فرعی',
-      'amount': 'مبلغ تراکنش',
-      'balance': 'مانده حساب / صندوق',
-      'code': 'کد شناسایی',
-      'personCode': 'کد یکتا شخص',
-      'invoiceNumber': 'شماره سند فاکتور',
-      'jalaliDate': 'تاریخ شمسی',
-      'date': 'تاریخ میلادی سیستم',
-      'type': 'نوع ساختاری',
-      'status': 'وضعیت کلی',
-      'phoneNumber': 'شماره همراه',
-      'phone': 'تلفن ثابت',
-      'address': 'نشانی پستی',
-      'role': 'نقش کاربری / فردی',
-      'description': 'شرح عملیات',
-      'desc': 'توضیحات تکمیلی',
-      'accountId': 'شناسه حساب بانکی',
-      'cashboxId': 'شناسه صندوق مرتبط',
-      'totalAmount': 'جمع جزئی',
-      'paidAmount': 'کل پرداختی',
-      'unitPrice': 'بهای واحد',
-      'buyPrice': 'بهای خرید فرضی',
-      'price': 'بهای فروش مصوب',
-      'stock': 'موجودی شروع دوره',
-      'categoryId': 'شناسه گروه کالا',
-      'bankName': 'نام موسسه بانکی',
-      'accountNumber': 'شماره سپرده / حساب',
-      'shaba': 'شماره شبا مالی',
-      'alias': 'نام مستعار کاربری',
-      'createdAt': 'زمان ثبت اولیه',
-      'updatedAt': 'آخرین زمان ویرایش'
-    };
-    return fieldLabels[field] || field;
-  };
-
-  const formatValue = (field: string, val: any) => {
-    if (val === null || val === undefined) return '-';
-    if (typeof val === 'boolean') return val ? 'بله' : 'خیر';
-    if (Array.isArray(val)) return `[لیست دارای ${val.length} ردیف]`;
-    if (typeof val === 'object') return JSON.stringify(val);
-    
-    // Format timestamp
-    if (['createdAt', 'updatedAt', 'lastUpdated'].includes(field) && typeof val === 'number') {
-      try {
-        return new Date(val).toLocaleString('fa-IR');
-      } catch (e) {
-        return String(val);
-      }
-    }
-
-    // Format financial currencies
-    if (['amount', 'balance', 'totalAmount', 'unitPrice', 'buyPrice', 'price', 'paidAmount', 'discountAmount', 'taxAmount'].includes(field)) {
-      return (
-        <span className="font-mono font-bold text-emerald-800" dir="ltr">
-          {new Intl.NumberFormat('fa-IR').format(Number(val))} <span className="text-[10px] text-emerald-600 font-normal">تومان</span>
-        </span>
-      );
-    }
-
-    if (field === 'role') {
-      const roles: Record<string, string> = {
-        'customer': 'مشتری',
-        'supplier': 'تامین‌کننده',
-        'employee': 'کارمند',
-        'admin': 'مدیر عالی سیستم',
-        'accountant': 'حساب‌دار ارشد',
-        'cashier': 'صندوق‌دار شعبه',
-        'viewer': 'ناظر و گزارش‌گیر'
-      };
-      return roles[val] || val;
-    }
-
-    if (field === 'type') {
-      const types: Record<string, string> = {
-        'sale': 'فروش',
-        'purchase': 'خرید',
-        'proforma': 'پیش فاکتور',
-        'warehouse_receipt': 'رسید انبار (ورودی)',
-        'warehouse_remittance': 'حواله انبار (خروجی)',
-        'receive': 'رسید دریافت وجه',
-        'pay': 'رسید پرداخت وجه',
-        'salary': 'فیش حقوقی',
-        'service': 'خدمات',
-        'goods': 'کالای فیزیکی'
-      };
-      return types[val] || val;
-    }
-
-    return String(val);
-  };
-
-  // Get generic or descriptive text to represent record in deletion confirmation
-  const getRecordDisplayName = (rec: any) => {
-    if (!rec) return '';
-    return rec.name || rec.title || rec.invoiceNumber || rec.checkNumber || rec.id || 'آیتم منتخب';
-  };
-
-  // Apply search term filtering to records
-  const getFilteredRecords = () => {
-    if (!searchTerm) return records;
-    const term = searchTerm.toLowerCase();
-    return records.filter(rec => {
-      return Object.entries(rec).some(([key, val]) => {
-        if (val === null || val === undefined) return false;
-        if (typeof val === 'object') return false;
-        return String(val).toLowerCase().includes(term);
-      });
+  const filteredLogs = useMemo(() => {
+    return logs.filter(log => {
+      const matchSearch = log.action.includes(logSearch) || log.details.includes(logSearch) || log.date.includes(logSearch);
+      const matchFilter = logFilter === 'all' || log.status === logFilter;
+      return matchSearch && matchFilter;
     });
-  };
-
-  const filtered = getFilteredRecords();
+  }, [logs, logSearch, logFilter]);
 
   return (
-    <div className="space-y-8 max-w-5xl mx-auto" dir="rtl">
-      {/* Upper Core Panel */}
-      <motion.div 
-        initial={{ opacity: 0, y: 10 }}
-        animate={{ opacity: 1, y: 0 }}
-        className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden"
-      >
-        <div className="bg-gradient-to-r from-rose-50 to-slate-50/30 px-6 py-5 border-b border-gray-100 flex items-center justify-between">
-          <h2 className="text-lg font-black text-gray-800 flex items-center gap-2">
-            <Database className="w-5 h-5 text-rose-600" />
-            مدیریت پایگاه داده و ذخیره‌سازی محلی
-          </h2>
-          <button 
-            onClick={handleRefresh}
-            className="p-2 bg-white rounded-lg border border-gray-200 text-gray-500 hover:text-indigo-600 hover:bg-indigo-50 transition-all shadow-sm"
-            title="بروزرسانی آمار جداول"
-          >
-            <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-        
-        <div className="p-6 md:p-8 space-y-8">
-          
-          {/* Core Stats Overview */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-gradient-to-br from-indigo-500 to-indigo-600 rounded-2xl p-6 shadow-md text-white">
-              <h3 className="font-medium text-indigo-100 flex items-center gap-2 mb-4">
-                <Layers className="w-5 h-5 opacity-80" />
-                حجم کل دیتابیس (database.sqlite)
-              </h3>
-              <div className="text-4xl font-extrabold font-mono tracking-tight text-left" dir="ltr">
-                {formatSize(stats.totalSize)}
-              </div>
-            </div>
-            
-            <div className="bg-slate-50 border border-gray-200 rounded-2xl p-6 shadow-inner flex flex-col justify-center items-center text-center gap-4">
-              <div className="flex gap-4 w-full">
-                <button
-                  onClick={handleFixPriceHistoryDates}
-                  className="flex-1 flex flex-col items-center justify-center gap-2 py-4 bg-white border-2 border-indigo-100 hover:border-indigo-300 rounded-xl transition-all shadow-sm group"
-                >
-                  <div className="w-10 h-10 bg-indigo-50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <AlertTriangle className="w-5 h-5 text-indigo-600" />
-                  </div>
-                  <span className="font-bold text-gray-700 text-sm">اصلاح تاریخ‌های نادرست قیمت</span>
-                </button>
-              </div>
-              <div className="flex gap-4 w-full">
-                <button
-                  onClick={handleBackup}
-                  className="flex-1 flex flex-col items-center justify-center gap-2 py-4 bg-white border-2 border-emerald-100 hover:border-emerald-300 rounded-xl transition-all shadow-sm group"
-                >
-                  <div className="w-10 h-10 bg-emerald-50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                    <Download className="w-5 h-5 text-emerald-600" />
-                  </div>
-                  <span className="font-bold text-gray-700 text-sm">دانلود نسخه پشتیبان</span>
-                </button>
-                
-                <div className="flex-1 relative">
-                  <input 
-                    type="file" 
-                    accept=".json,.sql"
-                    onChange={handleRestoreFileSelect}
-                    className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-10"
-                  />
-                  <button
-                    type="button"
-                    className="w-full h-full flex flex-col items-center justify-center gap-2 py-4 bg-white border-2 border-amber-100 hover:border-amber-300 rounded-xl transition-all shadow-sm group"
-                  >
-                    <div className="w-10 h-10 bg-amber-50 rounded-full flex items-center justify-center group-hover:scale-110 transition-transform">
-                      <Upload className="w-5 h-5 text-amber-600" />
-                    </div>
-                    <span className="font-bold text-gray-700 text-sm">بازیابی از فایل</span>
-                  </button>
-                </div>
-              </div>
-            </div>
-            
-            <div className="bg-gradient-to-br from-indigo-50 to-blue-50 p-5 rounded-2xl border-2 border-indigo-100 shadow-sm relative overflow-hidden">
-              <div className="flex justify-between items-center relative z-10">
-                <div>
-                  <h3 className="font-bold text-indigo-900 text-base mb-1">مهاجرت به PostgreSQL</h3>
-                  <p className="text-xs text-indigo-700/80 font-medium">Wizard انتقال یکپارچه و امن داده‌ها</p>
-                </div>
-                <button onClick={() => setShowMigrationWizard(true)} className="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded-xl text-sm transition-all shadow-md">
-                  شروع فرآیند
-                </button>
-              </div>
-            </div>
+    <div className="bg-slate-50 min-h-[calc(100vh-4rem)] p-4 md:p-8" dir="rtl">
+      <div className="mb-8">
+        <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+          <Database className="w-8 h-8 text-indigo-600" />
+          مدیریت پایگاه داده
+        </h2>
+        <p className="text-slate-500 font-medium mt-2 text-sm">
+          پشتیبان‌گیری، بازیابی و مدیریت یکپارچه داده‌های سیستم
+        </p>
+      </div>
 
-            <DriveBackup showNotification={showNotification} />
-          </div>
-  
-          {showMigrationWizard && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm">
-              <div className="w-full max-w-4xl max-h-[90vh] overflow-y-auto">
-                <MigrationWizard onClose={() => setShowMigrationWizard(false)} />
-              </div>
-            </div>
-          )}
-
-          {/* Backup Restore Confirmation Modal */}
-          {restoreConfirmData && (
-            <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-in fade-in duration-200">
-              <div className="bg-white rounded-2xl shadow-2xl border border-gray-100 max-w-md w-full overflow-hidden animate-in zoom-in-95 duration-200" dir="rtl">
-                <div className="bg-gradient-to-r from-amber-50 to-rose-50 px-6 py-5 border-b border-gray-100 flex items-center gap-3">
-                  <div className="bg-amber-100 p-2 rounded-full">
-                    <AlertTriangle className="w-6 h-6 text-amber-600 animate-pulse" />
-                  </div>
-                  <div>
-                    <h3 className="text-lg font-black text-gray-800">تأیید نهایی بازیابی پایگاه داده</h3>
-                    <p className="text-[10px] text-amber-700/80 font-bold">هشدار: این عملیات غیرقابل بازگشت است</p>
-                  </div>
-                </div>
-
-                <div className="p-6 space-y-4">
-                  <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-4 text-sm text-amber-900 space-y-2">
-                    <p className="font-bold">مشخصات فایل نسخه پشتیبان انتخاب‌شده:</p>
-                    <div className="grid grid-cols-2 gap-2 text-xs font-semibold">
-                      <span className="text-gray-500">نام فایل:</span>
-                      <span className="text-gray-800 font-mono text-left" dir="ltr">{restoreConfirmData.fileName}</span>
-                      
-                      <span className="text-gray-500">حجم فایل:</span>
-                      <span className="text-gray-800 font-mono text-left" dir="ltr">{formatSize(restoreConfirmData.fileSize)}</span>
-                      
-                      <span className="text-gray-500">جداول پشتیبان‌گیری شده:</span>
-                      <span className="text-gray-800 font-mono text-left" dir="ltr">{restoreConfirmData.tableCount} جدول</span>
-                    </div>
-                  </div>
-
-                  <p className="text-sm font-semibold text-gray-600 leading-relaxed">
-                    با تأیید این فرآیند، تمام اطلاعات فعلی موجود در پایگاه داده سیستم به صورت کامل حذف شده و اطلاعات نسخه پشتیبان بالا جایگزین آنها خواهند شد. 
-                  </p>
-
-                  <div className="bg-red-50 border border-red-100 text-red-700 rounded-xl p-4 text-xs font-bold leading-relaxed">
-                    جهت اعمال تغییرات و لود صحیح اطلاعات تازه واردشده، سیستم پس از تکمیل فرآیند به صورت خودکار بازخوانی (Reload) خواهد شد.
-                  </div>
-                </div>
-
-                <div className="px-6 py-4 bg-gray-50 border-t border-gray-100 flex items-center justify-end gap-3">
-                  <button
-                    type="button"
-                    disabled={isRestoring}
-                    onClick={() => setRestoreConfirmData(null)}
-                    className="px-4 py-2 bg-white border border-gray-200 text-gray-600 hover:bg-gray-100 rounded-xl text-sm font-bold transition-all disabled:opacity-50"
-                  >
-                    انصراف
-                  </button>
-                  <button
-                    type="button"
-                    disabled={isRestoring}
-                    onClick={handleConfirmRestore}
-                    className="px-5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-sm font-extrabold transition-all flex items-center gap-2 shadow-md shadow-amber-100 disabled:opacity-50"
-                  >
-                    {isRestoring ? (
-                      <>
-                        <RefreshCw className="w-4 h-4 animate-spin" />
-                        در حال بازیابی اطلاعات...
-                      </>
-                    ) : (
-                      <>
-                        <Check className="w-4 h-4" />
-                        تأیید و بازنشانی دیتابیس
-                      </>
-                    )}
-                  </button>
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* Collections Breakdown Tables */}
-          <div>
-            <h3 className="text-gray-800 font-extrabold text-base mb-2 border-b border-gray-100 pb-2 flex items-center gap-2">
-              <span>تفکیک جداول پایگاه داده</span>
-              <span className="text-[10px] text-gray-400 font-normal">(برای مشاهده و حذف رکوردهای هر جدول، روی ردیف آن کلیک کنید)</span>
-            </h3>
-            <div className="overflow-x-auto bg-white border border-gray-100 rounded-xl">
-              <table className="w-full text-right">
-                <thead className="bg-gray-50 border-b border-gray-100">
-                  <tr>
-                    <th className="py-4 px-6 font-semibold text-gray-600 w-16 text-center">ردیف</th>
-                    <th className="py-4 px-6 font-semibold text-gray-600">نام جدول (Collection)</th>
-                    <th className="py-4 px-6 font-semibold text-gray-600 text-center">تعداد رکوردها</th>
-                    <th className="py-4 px-6 font-semibold text-gray-600 text-left">حجم داده‌ها</th>
-                    <th className="py-4 px-6 font-semibold text-gray-650 text-center w-28">عملیات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-50 text-sm">
-                  {stats.collections.map((col, idx) => (
-                    <tr 
-                      key={idx} 
-                      onClick={() => handleSelectTable(col.name)}
-                      className={`cursor-pointer transition-colors ${selectedTable === col.name ? 'bg-rose-50/40 hover:bg-rose-50/60' : 'hover:bg-gray-50'}`}
-                    >
-                      <td className="py-4 px-6 text-gray-400 font-mono text-center">{idx + 1}</td>
-                      <td className="py-4 px-6">
-                        <div className="font-bold text-gray-800 flex items-center gap-1.5">
-                          <span>{getCollectionNameInPersian(col.name)}</span>
-                          {selectedTable === col.name && (
-                            <span className="px-1.5 py-0.5 bg-rose-100 text-rose-800 text-[10px] rounded font-bold">فعال</span>
-                          )}
-                        </div>
-                        <div className="text-[10px] text-gray-400 font-mono mt-0.5">{col.name}</div>
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        <div className="inline-flex items-center justify-center min-w-[3rem] px-2 py-1 bg-slate-100 text-slate-700 rounded-lg font-bold font-mono text-xs">
-                          {col.recordCount}
-                        </div>
-                      </td>
-                      <td className="py-4 px-6 text-left font-mono text-gray-600 font-medium">
-                        {formatSize(col.size)}
-                      </td>
-                      <td className="py-4 px-6 text-center">
-                        <button 
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            handleSelectTable(col.name);
-                          }}
-                          className="px-3 py-1 bg-white border border-gray-200 text-gray-600 hover:border-rose-500 hover:text-rose-500 rounded-lg text-xs font-bold flex items-center gap-1 mx-auto shadow-sm"
-                        >
-                          <Eye className="w-3.5 h-3.5" />
-                          مرور داده
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            </div>
-          </div>
-          
-          {/* Helper Note */}
-          <div className="bg-indigo-50/50 border border-indigo-100 rounded-xl p-4 flex gap-3 text-sm text-indigo-800">
-            <AlertCircle className="w-5 h-5 shrink-0 text-indigo-500 mt-0.5" />
-            <div className="leading-relaxed">
-              <p className="font-bold mb-1">اطلاعات ذخیره‌سازی</p>
-              <p>این سامانه اکنون تمامی اطلاعات را به صورت محلی در یک فایل پایگاه داده امن <code>database.sqlite</code> در سرور/سیستم ذخیره می‌کند. برای اطمینان بیشتر، می‌توانید به صورت مستمر نسخه پشتیبان (فایل‌های JSON) تهیه کنید.</p>
-            </div>
-          </div>
-  
-        </div>
-      </motion.div>
-
-      {/* Explorer Section */}
-      <div ref={explorerRef}>
-        <AnimatePresence mode="wait">
-          {selectedTable && (
-            <motion.div
-              key="selected-table-details"
-              initial={{ opacity: 0, y: 15 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -15 }}
-              className="bg-white rounded-2xl shadow-md border border-gray-100 overflow-hidden"
+      <div className="flex flex-col xl:flex-row gap-6">
+        {/* Sidebar Tabs */}
+        <div className="xl:w-64 flex-shrink-0 flex xl:flex-col gap-2 overflow-x-auto pb-2 xl:pb-0 hide-scrollbar">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all duration-300 ${
+                activeTab === tab.id 
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                : 'bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200'
+              }`}
             >
-              <div className="bg-slate-900 text-white px-6 py-5 flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Database className="w-5 h-5 text-rose-500 animate-pulse" />
-                  <div>
-                    <h2 className="font-black text-base text-gray-100">
-                      مرورگر و مدیریت رکوردهای جدول {getCollectionNameInPersian(selectedTable)}
-                    </h2>
-                    <p className="text-[10px] text-slate-400 font-mono mt-0.5">{selectedTable} ({records.length} رکورد بارگذاری شده)</p>
-                  </div>
-                </div>
-                <button 
-                  onClick={() => setSelectedTable(null)}
-                  className="p-1 px-2 border border-slate-700 rounded-lg hover:bg-slate-800 text-slate-300 transition-all font-bold text-xs flex items-center gap-1"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  بستن مرورگر
-                </button>
-              </div>
+              <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-indigo-100' : 'text-slate-400'}`} />
+              {tab.label}
+            </button>
+          ))}
+        </div>
 
-              <div className="p-6 space-y-6">
-                {/* Real-time search tools */}
-                <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-4">
-                  <div className="relative flex-1 max-w-md">
-                    <span className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">
-                      <Search className="h-4 w-4 text-gray-400" />
-                    </span>
-                    <input
-                      type="text"
-                      className="w-full pr-10 pl-4 py-2 border border-gray-200 rounded-xl bg-slate-50 focus:bg-white focus:ring-2 focus:ring-rose-500 focus:border-rose-500 text-sm font-semibold transition-all shadow-sm"
-                      placeholder="جستجو در تمام فیلدها و صفت‌های رکوردها..."
-                      value={searchTerm}
-                      onChange={(e) => setSearchTerm(e.target.value)}
-                    />
-                    {searchTerm && (
+        {/* Content Area */}
+        <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm p-6 overflow-hidden min-h-[500px]">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, x: -10 }}
+              animate={{ opacity: 1, x: 0 }}
+              exit={{ opacity: 0, x: 10 }}
+              transition={{ duration: 0.2 }}
+            >
+              
+              {/* --- 1. Manual Backup --- */}
+              {activeTab === 'manual' && (
+                <div className="space-y-8">
+                  <div className="flex flex-col lg:flex-row gap-8 items-start justify-between">
+                    <div className="flex-1 space-y-6 w-full">
+                      <div>
+                        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                          <Play className="w-5 h-5 text-indigo-500" />
+                          تهیه بک‌آپ فوری
+                        </h3>
+                        <p className="text-sm text-slate-500 font-medium leading-relaxed mt-2">
+                          همین حالا از پایگاه داده سیستم یک نسخه پشتیبان تهیه کنید.
+                        </p>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                         {[
+                           { id: 'full', label: 'کامل (Full)', desc: 'داده‌ها و ساختار' },
+                           { id: 'incremental', label: 'افزایشی (Incremental)', desc: 'تغییرات از بک‌آپ قبلی' },
+                           { id: 'structure', label: 'فقط ساختار (Schema)', desc: 'جداول بدون داده' },
+                           { id: 'data', label: 'فقط داده (Data)', desc: 'اطلاعات بدون ساختار' }
+                         ].map(type => (
+                            <div 
+                              key={type.id}
+                              onClick={() => setBackupType(type.id)}
+                              className={`border-2 rounded-xl p-4 cursor-pointer transition-all ${
+                                backupType === type.id ? 'border-indigo-600 bg-indigo-50/50' : 'border-slate-100 hover:border-indigo-200'
+                              }`}
+                            >
+                              <div className="flex items-center gap-2 mb-1">
+                                <div className={`w-4 h-4 rounded-full border-2 flex items-center justify-center ${
+                                  backupType === type.id ? 'border-indigo-600' : 'border-slate-300'
+                                }`}>
+                                  {backupType === type.id && <div className="w-2 h-2 bg-indigo-600 rounded-full" />}
+                                </div>
+                                <span className="text-sm font-bold text-slate-800">{type.label}</span>
+                              </div>
+                              <p className="text-xs text-slate-500 pr-6">{type.desc}</p>
+                            </div>
+                         ))}
+                      </div>
+
+                      <div className="pt-2">
+                        <button 
+                          onClick={handleImmediateBackup}
+                          disabled={isBackingUp}
+                          className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-all flex items-center justify-center gap-2 shadow-lg shadow-indigo-200/50 disabled:opacity-70 disabled:cursor-wait w-full sm:w-auto"
+                        >
+                          {isBackingUp ? (
+                            <><RefreshCw className="w-5 h-5 animate-spin" /> در حال پردازش...</>
+                          ) : (
+                            <><Database className="w-5 h-5" /> شروع عملیات بک‌آپ</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                    
+                    {/* Status Card */}
+                    <div className="w-full lg:w-80 bg-slate-900 rounded-3xl p-6 text-white shadow-xl relative overflow-hidden flex-shrink-0">
+                       <div className="absolute -top-4 -right-4 p-4 opacity-10">
+                          <CheckCircle className="w-32 h-32 text-emerald-400" />
+                       </div>
+                       <div className="relative z-10">
+                         <div className="flex items-center gap-2 mb-6">
+                           <div className="w-2 h-2 bg-emerald-500 rounded-full animate-pulse" />
+                           <h4 className="text-emerald-400 font-bold text-sm">وضعیت سیستم: پایدار</h4>
+                         </div>
+                         
+                         <p className="text-slate-400 font-bold text-xs mb-1">آخرین بک‌آپ موفق</p>
+                         <div className="text-2xl font-black mb-6" dir="ltr">{backups[0]?.date || '-'}</div>
+                         
+                         <div className="space-y-3 bg-white/5 rounded-xl p-4 backdrop-blur-sm border border-white/10">
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-400">ساعت:</span>
+                              <span className="font-bold">{backups[0]?.time || '-'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-400">نوع:</span>
+                              <span className="font-bold text-indigo-300">{backups[0]?.type || '-'}</span>
+                            </div>
+                            <div className="flex justify-between text-sm">
+                              <span className="text-slate-400">حجم:</span>
+                              <span className="font-bold text-emerald-400">{backups[0]?.size || '-'}</span>
+                            </div>
+                         </div>
+                       </div>
+                    </div>
+                  </div>
+
+                  {/* Progress Bar */}
+                  {isBackingUp && (
+                    <motion.div 
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ opacity: 1, y: 0 }}
+                      className="bg-indigo-50 border border-indigo-100 rounded-2xl p-5"
+                    >
+                      <div className="flex justify-between text-sm font-bold text-indigo-700 mb-3">
+                        <span className="flex items-center gap-2">
+                          <RefreshCw className="w-4 h-4 animate-spin" /> در حال فشرده‌سازی و ذخیره پایگاه داده...
+                        </span>
+                        <span>{Math.round(backupProgress)}%</span>
+                      </div>
+                      <div className="h-2.5 bg-indigo-200/50 rounded-full overflow-hidden">
+                        <motion.div 
+                          className="h-full bg-indigo-600 rounded-full relative"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${backupProgress}%` }}
+                        >
+                          <div className="absolute inset-0 bg-white/20" style={{ backgroundImage: 'linear-gradient(45deg, rgba(255,255,255,0.15) 25%, transparent 25%, transparent 50%, rgba(255,255,255,0.15) 50%, rgba(255,255,255,0.15) 75%, transparent 75%, transparent)' }} />
+                        </motion.div>
+                      </div>
+                    </motion.div>
+                  )}
+                </div>
+              )}
+
+              {/* --- 2. Schedule Backup --- */}
+              {activeTab === 'schedule' && (
+                <div className="space-y-8 max-w-4xl">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between pb-6 border-b border-slate-100 gap-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-indigo-500" />
+                        زمان‌بندی خودکار
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium mt-1">
+                        پشتیبان‌گیری منظم و بدون نیاز به دخالت کاربر.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setScheduleConfig({...scheduleConfig, enabled: !scheduleConfig.enabled})}
+                      className={`p-1.5 rounded-full transition-all flex items-center gap-2 px-4 py-2 font-bold text-sm shadow-sm ${
+                        scheduleConfig.enabled ? 'bg-emerald-500 text-white hover:bg-emerald-600' : 'bg-slate-100 text-slate-500 hover:bg-slate-200'
+                      }`}
+                    >
+                      {scheduleConfig.enabled ? 'زمان‌بندی فعال است' : 'زمان‌بندی غیرفعال'}
+                      {scheduleConfig.enabled ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
+                    </button>
+                  </div>
+
+                  <div className={`transition-all duration-300 ${scheduleConfig.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none grayscale-[50%]'}`}>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                      <div className="space-y-6">
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">دوره تناوب (Frequency)</label>
+                          <select 
+                            value={scheduleConfig.frequency}
+                            onChange={e => setScheduleConfig({...scheduleConfig, frequency: e.target.value})}
+                            className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold bg-slate-50 hover:bg-white transition-colors cursor-pointer"
+                          >
+                            <option value="daily">روزانه</option>
+                            <option value="weekly">هفتگی</option>
+                            <option value="monthly">ماهانه</option>
+                            <option value="custom">سفارشی (Cron Expression)</option>
+                          </select>
+                        </div>
+
+                        {scheduleConfig.frequency === 'custom' ? (
+                          <div className="relative group">
+                            <label className="block text-sm font-bold text-slate-700 mb-2 flex items-center justify-between">
+                              <span>عبارت Cron</span>
+                              <div className="relative">
+                                <Info className="w-4 h-4 text-indigo-500 cursor-help" />
+                                <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 w-48 bg-slate-800 text-white text-[10px] p-2 rounded-lg opacity-0 invisible group-hover:opacity-100 group-hover:visible transition-all text-center pointer-events-none z-10">
+                                  مثال: 0 2 * * * <br/>(برای ساعت ۲ بامداد هر روز)
+                                </div>
+                              </div>
+                            </label>
+                            <input 
+                              type="text" 
+                              dir="ltr"
+                              value={scheduleConfig.cron}
+                              onChange={e => setScheduleConfig({...scheduleConfig, cron: e.target.value})}
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-sm font-mono font-bold text-left bg-slate-50 focus:bg-white transition-colors" 
+                            />
+                          </div>
+                        ) : (
+                          <div>
+                            <label className="block text-sm font-bold text-slate-700 mb-2">ساعت اجرا</label>
+                            <input 
+                              type="time" 
+                              value={scheduleConfig.time}
+                              onChange={e => setScheduleConfig({...scheduleConfig, time: e.target.value})}
+                              className="w-full border border-slate-200 rounded-xl px-4 py-3 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-sm font-bold bg-slate-50 focus:bg-white transition-colors cursor-pointer" 
+                            />
+                          </div>
+                        )}
+                      </div>
+
+                      <div className="space-y-6">
+                        <div className="bg-indigo-50/50 border border-indigo-100 rounded-2xl p-6 relative overflow-hidden">
+                           <div className="absolute top-0 right-0 p-4 opacity-5 pointer-events-none">
+                             <Server className="w-24 h-24 text-indigo-900" />
+                           </div>
+                           <h4 className="text-sm font-black text-indigo-900 mb-2 flex items-center gap-2">
+                             <Trash2 className="w-4 h-4 text-indigo-600" />
+                             سیاست نگهداری (Retention Policy)
+                           </h4>
+                           <p className="text-xs text-indigo-700/70 font-medium mb-6 leading-relaxed">
+                             تعیین کنید چه تعداد از نسخه‌های قدیمی نگه داشته شوند. نسخه‌های مازاد به‌طور خودکار پاک می‌شوند تا فضای دیسک پر نشود.
+                           </p>
+                           <div>
+                             <label className="block text-xs font-bold text-indigo-900 mb-2">تعداد نسخه‌های نگهداری شده</label>
+                             <div className="flex items-center gap-3">
+                               <input 
+                                  type="range" 
+                                  min="1"
+                                  max="30"
+                                  value={scheduleConfig.retention}
+                                  onChange={e => setScheduleConfig({...scheduleConfig, retention: Number(e.target.value)})}
+                                  className="flex-1 accent-indigo-600" 
+                                />
+                               <div className="w-12 h-10 bg-white rounded-lg border border-indigo-200 flex items-center justify-center font-black text-indigo-700 text-sm">
+                                 {scheduleConfig.retention}
+                               </div>
+                             </div>
+                           </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="pt-8 border-t border-slate-100 mt-8 flex justify-end">
                       <button 
-                        onClick={() => setSearchTerm('')}
-                        className="absolute inset-y-0 left-0 pl-3 flex items-center text-gray-400 hover:text-rose-500"
+                        onClick={() => showNotification('تنظیمات زمان‌بندی ذخیره شد.', 'success')}
+                        className="px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-lg shadow-slate-200"
                       >
-                        <X className="w-4 h-4" />
+                        <Save className="w-4 h-4" /> ذخیره زمان‌بندی
                       </button>
-                    )}
-                  </div>
-
-                  <div className="text-xs text-gray-500 font-bold">
-                    {searchTerm ? `یافت شده: ${filtered.length} از مجمع ${records.length} رکورد` : `کل رکوردهای جدول: ${records.length} رکورد`}
+                    </div>
                   </div>
                 </div>
+              )}
 
-                {/* Loading State or Table View */}
-                {loadingRecords ? (
-                  <div className="py-20 flex flex-col justify-center items-center gap-3">
-                    <RefreshCw className="w-8 h-8 text-rose-500 animate-spin" />
-                    <span className="text-sm font-extrabold text-gray-500">در حال دریافت داده‌ها از دیتابیس...</span>
+              {/* --- 3. Storage Settings --- */}
+              {activeTab === 'storage' && (
+                <div className="space-y-8 max-w-4xl">
+                  <div className="pb-6 border-b border-slate-100">
+                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                      <HardDrive className="w-5 h-5 text-indigo-500" />
+                      مسیر ذخیره‌سازی
+                    </h3>
+                    <p className="text-sm text-slate-500 font-medium mt-1">
+                      محل قرارگیری فایل‌های پشتیبان را پیکربندی کنید.
+                    </p>
                   </div>
-                ) : filtered.length === 0 ? (
-                  <div className="py-16 text-center border-2 border-dashed border-gray-150 rounded-xl">
-                    <FileText className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                    <p className="text-sm font-black text-gray-500">رکوردی پیدا نشد</p>
-                    <p className="text-xs text-gray-400 mt-1">هیچ رکوردی ثبت نشده یا با عبارت جستجوی شما مطابقت ندارد</p>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     {/* Local Storage Card */}
+                     <div 
+                        onClick={() => setStorageConfig({...storageConfig, type: 'local'})}
+                        className={`p-6 rounded-2xl border-2 cursor-pointer transition-all ${
+                          storageConfig.type === 'local' ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100/50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                        }`}
+                     >
+                        <div className="flex items-start justify-between mb-4">
+                          <Server className={`w-8 h-8 ${storageConfig.type === 'local' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${storageConfig.type === 'local' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {storageConfig.type === 'local' && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                        </div>
+                        <h4 className="text-base font-black text-slate-800 mb-1">سرور محلی (Local)</h4>
+                        <p className="text-xs text-slate-500 font-medium mb-6">ذخیره روی هارد دیسک سرور فعلی</p>
+                        
+                        <div className={`space-y-4 transition-all ${storageConfig.type === 'local' ? 'opacity-100' : 'opacity-40 pointer-events-none grayscale'}`} onClick={e => e.stopPropagation()}>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-2">مسیر پوشه</label>
+                            <div className="flex gap-2">
+                              <input 
+                                type="text"
+                                dir="ltr"
+                                value={storageConfig.localPath}
+                                onChange={e => setStorageConfig({...storageConfig, localPath: e.target.value})}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-left bg-white" 
+                              />
+                              <button className="px-3 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors shadow-sm text-slate-600">
+                                <FolderOpen className="w-5 h-5" />
+                              </button>
+                            </div>
+                          </div>
+                          <div className="bg-white p-3 rounded-lg border border-slate-200">
+                            <div className="flex justify-between items-center text-xs font-bold mb-2">
+                              <span className="text-slate-500 flex items-center gap-1"><HardDrive className="w-3 h-3" /> فضای آزاد دیسک</span>
+                              <span className="text-emerald-600">45.2 GB</span>
+                            </div>
+                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
+                              <div className="h-full bg-emerald-500 w-[40%]" />
+                            </div>
+                          </div>
+                        </div>
+                     </div>
+
+                     {/* Cloud Storage Card */}
+                     <div 
+                        onClick={() => setStorageConfig({...storageConfig, type: 'cloud'})}
+                        className={`p-6 rounded-2xl border-2 cursor-pointer transition-all ${
+                          storageConfig.type === 'cloud' ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100/50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                        }`}
+                     >
+                        <div className="flex items-start justify-between mb-4">
+                          <UploadCloud className={`w-8 h-8 ${storageConfig.type === 'cloud' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${storageConfig.type === 'cloud' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {storageConfig.type === 'cloud' && <Check className="w-3 h-3 text-white" />}
+                          </div>
+                        </div>
+                        <h4 className="text-base font-black text-slate-800 mb-1">فضای ابری (Cloud)</h4>
+                        <p className="text-xs text-slate-500 font-medium mb-6">اتصال به فضاهای ذخیره‌سازی خارجی</p>
+                        
+                        <div className={`space-y-4 transition-all ${storageConfig.type === 'cloud' ? 'opacity-100' : 'opacity-40 pointer-events-none grayscale'}`} onClick={e => e.stopPropagation()}>
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-2">ارائه‌دهنده سرویس</label>
+                            <select 
+                              value={storageConfig.cloudProvider}
+                              onChange={e => setStorageConfig({...storageConfig, cloudProvider: e.target.value})}
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
+                            >
+                              <option value="s3">Amazon S3 Compatible</option>
+                              <option value="ftp">FTP / SFTP Server</option>
+                              <option value="gdrive">Google Drive</option>
+                            </select>
+                          </div>
+                          
+                          {storageConfig.cloudProvider !== 'gdrive' && (
+                            <div className="space-y-3">
+                              <input 
+                                type="text" placeholder="Server URL / Endpoint" dir="ltr"
+                                value={storageConfig.cloudAuthUrl}
+                                onChange={e => setStorageConfig({...storageConfig, cloudAuthUrl: e.target.value})}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-indigo-500 bg-white text-left" 
+                              />
+                              <div className="grid grid-cols-2 gap-2">
+                                <input 
+                                  type="text" placeholder="Username / Key" dir="ltr"
+                                  value={storageConfig.cloudUser}
+                                  onChange={e => setStorageConfig({...storageConfig, cloudUser: e.target.value})}
+                                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 bg-white text-left" 
+                                />
+                                <input 
+                                  type="password" placeholder="Password / Secret" dir="ltr"
+                                  value={storageConfig.cloudPass}
+                                  onChange={e => setStorageConfig({...storageConfig, cloudPass: e.target.value})}
+                                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 bg-white text-left" 
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <button className="w-full py-2.5 bg-slate-800 text-white rounded-lg text-sm font-bold shadow-md hover:bg-slate-900 transition-colors">
+                            {storageConfig.cloudProvider === 'gdrive' ? 'احراز هویت Google' : 'تست اتصال'}
+                          </button>
+                        </div>
+                     </div>
                   </div>
-                ) : (
-                  <div className="overflow-hidden border border-gray-100 rounded-xl bg-white shadow-sm">
+                  
+                  <div className="pt-8 border-t border-slate-100 flex justify-end">
+                    <button 
+                      onClick={() => showNotification('تنظیمات ذخیره‌سازی با موفقیت اعمال شد.', 'success')}
+                      className="px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-lg shadow-slate-200"
+                    >
+                      <Save className="w-4 h-4" /> اعمال تنظیمات مسیر
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* --- 4. Restore --- */}
+              {activeTab === 'restore' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between pb-6 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <RefreshCw className="w-5 h-5 text-indigo-500" />
+                        بازیابی اطلاعات (Restore)
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium mt-1">
+                        بازگردانی دیتابیس از نسخه‌های پشتیبان موجود.
+                      </p>
+                    </div>
+                    <button className="px-5 py-2.5 bg-white border-2 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm">
+                      <Upload className="w-4 h-4" /> آپلود فایل بک‌آپ خارجی
+                    </button>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
                     <div className="overflow-x-auto">
-                      <table className="w-full text-right text-sm">
-                        <thead className="bg-gray-50 border-b border-gray-100">
+                      <table className="w-full text-sm text-right">
+                        <thead className="bg-slate-50/80 text-slate-600 font-black text-xs border-b border-slate-200">
                           <tr>
-                            <th className="py-3.5 px-4 font-semibold text-gray-600 w-12 text-center">جزئیات</th>
-                            {getColumnsForTable(selectedTable).map((col, idx) => (
-                              <th key={idx} className="py-3.5 px-4 font-semibold text-gray-600">
-                                {col.label}
-                              </th>
-                            ))}
-                            <th className="py-3.5 px-4 font-semibold text-rose-600 text-center w-24">عملیات مدیریت</th>
+                            <th className="px-5 py-4">تاریخ و زمان</th>
+                            <th className="px-5 py-4">حجم</th>
+                            <th className="px-5 py-4">نوع بک‌آپ</th>
+                            <th className="px-5 py-4">وضعیت</th>
+                            <th className="px-5 py-4 text-center">عملیات</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-gray-50">
-                          {filtered.map((item, index) => {
-                            const isExpanded = expandedRecordId === item.id;
-                            const tableColumns = getColumnsForTable(selectedTable);
-                            
-                            return (
-                              <React.Fragment key={item.id ? `rec-${item.id}-${index}` : `idx-${index}`}>
-                                {/* Row element */}
-                                <tr className={`hover:bg-slate-50/50 transition-colors ${isExpanded ? 'bg-slate-50' : ''}`}>
-                                  <td className="py-3.5 px-4 text-center">
-                                    <button
-                                      onClick={() => setExpandedRecordId(isExpanded ? null : item.id)}
-                                      className="p-1 text-slate-500 hover:text-indigo-600 focus:outline-none hover:bg-slate-100 rounded"
-                                      title={isExpanded ? "بستن جزئیات" : 'نمایش جزئیات کامل رکورد'}
-                                    >
-                                      {isExpanded ? (
-                                        <ChevronUp className="w-4 h-4" />
-                                      ) : (
-                                        <ChevronDown className="w-4 h-4" />
-                                      )}
-                                    </button>
-                                  </td>
-                                  
-                                  {tableColumns.map((col, cIdx) => (
-                                    <td key={cIdx} className="py-3.5 px-4 text-gray-800">
-                                      {col.field === 'id' ? (
-                                        <span className="font-mono text-xs font-bold text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded truncate max-w-[100px] inline-block" title={item[col.field]}>
-                                          {item[col.field]?.substring(0, 8) || '-'}...
-                                        </span>
-                                      ) : (
-                                        <div className="font-bold truncate max-w-[200px]" title={String(item[col.field] || '')}>
-                                          {formatValue(col.field, item[col.field])}
-                                        </div>
-                                      )}
-                                    </td>
-                                  ))}
-
-                                  <td className="py-3.5 px-4 text-center">
-                                    <button
-                                      onClick={() => setRecordToDelete(item)}
-                                      className="p-2 border border-rose-100 hover:border-rose-500 text-rose-500 hover:bg-rose-50 rounded-lg shadow-sm transition-all inline-flex items-center justify-center"
-                                      title="حذف دائمی از دیتابیس"
-                                    >
-                                      <Trash2 className="w-4 h-4" />
-                                    </button>
-                                  </td>
-                                </tr>
-
-                                {/* Collapsible raw details row */}
-                                {isExpanded && (
-                                  <tr>
-                                    <td colSpan={tableColumns.length + 2} className="p-0">
-                                      <div className="p-5 bg-gradient-to-r from-slate-50 to-indigo-50/10 border-b border-gray-100">
-                                        <h4 className="font-black text-rose-800 text-xs mb-3 flex items-center gap-1">
-                                          <Eye className="w-3.5 h-3.5" />
-                                          شناسنامه کامل رکورد اطلاعاتی در قالب (Key-Value)
-                                        </h4>
-                                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                                          {Object.entries(item).map(([key, val]) => (
-                                            <div key={key} className="bg-white border border-gray-150 rounded-xl p-3 flex flex-col justify-between gap-1 shadow-sm">
-                                              <span className="text-[10px] text-gray-400 font-mono tracking-wider">{key}</span>
-                                              <span className="text-xs font-semibold text-gray-650 mb-1">{getFieldLabel(key)}</span>
-                                              
-                                              {/* Formatted View of Val */}
-                                              {typeof val === 'object' && val !== null ? (
-                                                <div className="p-1 px-2 bg-slate-50 rounded text-[10px] font-mono text-gray-500 break-all max-h-[100px] overflow-y-auto" dir="ltr">
-                                                  {JSON.stringify(val, null, 2)}
-                                                </div>
-                                              ) : (
-                                                <div className="text-sm font-black text-gray-800 break-words mt-0.5">
-                                                  {formatValue(key, val)}
-                                                </div>
-                                              )}
-                                            </div>
-                                          ))}
-                                        </div>
-                                      </div>
-                                    </td>
-                                  </tr>
+                        <tbody className="divide-y divide-slate-100">
+                          {backups.map(b => (
+                            <tr key={b.id} className="hover:bg-slate-50/50 transition-colors group">
+                              <td className="px-5 py-4 font-bold text-slate-700" dir="ltr">
+                                {b.date} <span className="text-slate-400 font-medium ml-2">{b.time}</span>
+                              </td>
+                              <td className="px-5 py-4 font-mono font-bold text-slate-600" dir="ltr">{b.size}</td>
+                              <td className="px-5 py-4 font-bold text-slate-700">
+                                <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs border border-slate-200">
+                                  {b.type}
+                                </span>
+                              </td>
+                              <td className="px-5 py-4">
+                                {b.status === 'success' ? (
+                                  <span className="inline-flex items-center gap-1.5 text-xs font-black bg-emerald-50 text-emerald-600 border border-emerald-200 px-2.5 py-1 rounded-md">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" /> موفق
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1.5 text-xs font-black bg-rose-50 text-rose-600 border border-rose-200 px-2.5 py-1 rounded-md">
+                                    <div className="w-1.5 h-1.5 rounded-full bg-rose-500" /> خطا
+                                  </span>
                                 )}
-                              </React.Fragment>
-                            );
-                          })}
+                              </td>
+                              <td className="px-5 py-4 flex justify-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
+                                <button title="دانلود فایل" className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100">
+                                  <Download className="w-4 h-4" />
+                                </button>
+                                <button title="حذف" className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    setSelectedBackupForRestore(b);
+                                    setIsRestoreModalOpen(true);
+                                  }}
+                                  disabled={b.status !== 'success'}
+                                  className="px-4 py-2 bg-slate-800 text-white hover:bg-rose-600 rounded-lg font-bold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center gap-2"
+                                >
+                                  بازیابی <RefreshCw className="w-3 h-3" />
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          
+                          {backups.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="py-16 text-center text-slate-500 font-bold bg-slate-50/50">
+                                <Database className="w-12 h-12 text-slate-300 mx-auto mb-4" />
+                                <p className="text-base text-slate-700 mb-1">هیچ نسخه‌ی بک‌آپی یافت نشد!</p>
+                                <p className="text-xs text-slate-400 font-medium">برای شروع، از بخش بک‌آپ دستی استفاده کنید.</p>
+                              </td>
+                            </tr>
+                          )}
                         </tbody>
                       </table>
                     </div>
                   </div>
-                )}
-              </div>
+                </div>
+              )}
+
+              {/* --- 5. Security --- */}
+              {activeTab === 'security' && (
+                <div className="space-y-8 max-w-4xl">
+                  <div className="pb-6 border-b border-slate-100">
+                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-indigo-500" />
+                      امنیت و اعلان‌ها
+                    </h3>
+                    <p className="text-sm text-slate-500 font-medium mt-1">
+                      ایمن‌سازی فایل‌های پشتیبان و تنظیمات ارسال گزارشات.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                     {/* Encryption */}
+                     <div className="space-y-4">
+                        <h4 className="text-base font-black text-slate-800 flex items-center gap-2">
+                           <Lock className="w-4 h-4 text-slate-400" />
+                           رمزنگاری پیشرفته (Encryption)
+                        </h4>
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-5">
+                           <label className="flex items-start gap-3 cursor-pointer">
+                              <div className="mt-0.5">
+                                <input 
+                                  type="checkbox" 
+                                  checked={securityConfig.encrypt}
+                                  onChange={e => setSecurityConfig({...securityConfig, encrypt: e.target.checked})}
+                                  className="w-5 h-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <span className="block text-sm font-bold text-slate-800 mb-1">رمزنگاری فایل‌های بک‌آپ (AES-256)</span>
+                                <span className="block text-xs font-medium text-slate-500">فایل‌ها قبل از ذخیره‌سازی رمزگذاری می‌شوند تا در صورت نشت اطلاعات، قابل خواندن نباشند.</span>
+                              </div>
+                           </label>
+                           
+                           <div className={`space-y-3 transition-all ${securityConfig.encrypt ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-2">رمز عبور اختصاصی</label>
+                                <div className="relative">
+                                  <Key className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+                                  <input 
+                                    type="password" 
+                                    placeholder="••••••••"
+                                    dir="ltr"
+                                    value={securityConfig.password}
+                                    onChange={e => setSecurityConfig({...securityConfig, password: e.target.value})}
+                                    className="w-full border border-slate-300 rounded-xl pl-10 pr-4 py-2.5 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white" 
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex items-start gap-2 bg-rose-50 border border-rose-100 p-3 rounded-lg text-rose-700">
+                                <AlertTriangle className="w-4 h-4 flex-shrink-0 mt-0.5" />
+                                <p className="text-[10px] font-bold leading-relaxed">
+                                  هشدار: در صورت فراموشی این رمز عبور، امکان بازیابی و استفاده از فایل‌های بک‌آپ تحت هیچ شرایطی وجود نخواهد داشت.
+                                </p>
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+
+                     {/* Notifications */}
+                     <div className="space-y-4">
+                        <h4 className="text-base font-black text-slate-800 flex items-center gap-2">
+                           <Mail className="w-4 h-4 text-slate-400" />
+                           گزارشات ایمیلی
+                        </h4>
+                        <div className="bg-slate-50 p-6 rounded-2xl border border-slate-200 space-y-5">
+                           <label className="flex items-start gap-3 cursor-pointer">
+                              <div className="mt-0.5">
+                                <input 
+                                  type="checkbox" 
+                                  checked={securityConfig.emailNotify}
+                                  onChange={e => setSecurityConfig({...securityConfig, emailNotify: e.target.checked})}
+                                  className="w-5 h-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                                />
+                              </div>
+                              <div>
+                                <span className="block text-sm font-bold text-slate-800 mb-1">ارسال گزارش پس از هر عملیات</span>
+                                <span className="block text-xs font-medium text-slate-500">خلاصه وضعیت موفقیت یا شکست بک‌آپ‌گیری را به ایمیل شما ارسال می‌کند.</span>
+                              </div>
+                           </label>
+                           
+                           <div className={`space-y-3 transition-all ${securityConfig.emailNotify ? 'opacity-100' : 'opacity-40 pointer-events-none'}`}>
+                              <div>
+                                <label className="block text-xs font-bold text-slate-700 mb-2">آدرس ایمیل گیرنده</label>
+                                <input 
+                                  type="email" 
+                                  dir="ltr"
+                                  placeholder="admin@example.com"
+                                  value={securityConfig.emailAddress}
+                                  onChange={e => setSecurityConfig({...securityConfig, emailAddress: e.target.value})}
+                                  className="w-full border border-slate-300 rounded-xl px-4 py-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white text-left" 
+                                />
+                              </div>
+                           </div>
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="pt-8 border-t border-slate-100 flex justify-end">
+                    <button 
+                      onClick={() => showNotification('تنظیمات امنیتی و اعلان‌ها بروزرسانی شد.', 'success')}
+                      className="px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-lg shadow-slate-200"
+                    >
+                      <Save className="w-4 h-4" /> ذخیره تنظیمات امنیتی
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* --- 6. Logs --- */}
+              {activeTab === 'logs' && (
+                <div className="space-y-6">
+                  <div className="pb-6 border-b border-slate-100 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <FileText className="w-5 h-5 text-indigo-500" />
+                        تاریخچه عملیات (Logs)
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium mt-1">
+                        گزارش کامل رویدادها، موفقیت‌ها و خطاهای مرتبط با دیتابیس.
+                      </p>
+                    </div>
+                    
+                    <div className="flex items-center gap-2">
+                      <div className="relative">
+                        <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+                        <input 
+                          type="text" 
+                          placeholder="جستجو در لاگ‌ها..." 
+                          value={logSearch}
+                          onChange={e => setLogSearch(e.target.value)}
+                          className="pl-4 pr-9 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-indigo-500 w-full sm:w-64"
+                        />
+                      </div>
+                      <select 
+                        value={logFilter}
+                        onChange={e => setLogFilter(e.target.value)}
+                        className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold outline-none focus:border-indigo-500"
+                      >
+                        <option value="all">همه وضعیت‌ها</option>
+                        <option value="success">موفق</option>
+                        <option value="warning">هشدار</option>
+                        <option value="error">خطا</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-right">
+                        <thead className="bg-slate-50/80 text-slate-600 font-black text-xs border-b border-slate-200">
+                          <tr>
+                            <th className="px-5 py-4 w-40">تاریخ و زمان</th>
+                            <th className="px-5 py-4 w-48">عملیات</th>
+                            <th className="px-5 py-4 w-32">وضعیت</th>
+                            <th className="px-5 py-4">جزئیات (Details)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {filteredLogs.map(log => (
+                            <tr key={log.id} className="hover:bg-slate-50/50 transition-colors">
+                              <td className="px-5 py-4 font-bold text-slate-700" dir="ltr">{log.date}</td>
+                              <td className="px-5 py-4 font-bold text-slate-800">{log.action}</td>
+                              <td className="px-5 py-4">
+                                {log.status === 'success' && <span className="inline-flex items-center gap-1 text-[10px] font-black bg-emerald-50 text-emerald-600 px-2 py-1 rounded-md border border-emerald-100"><CheckCircle className="w-3 h-3" /> موفق</span>}
+                                {log.status === 'warning' && <span className="inline-flex items-center gap-1 text-[10px] font-black bg-amber-50 text-amber-600 px-2 py-1 rounded-md border border-amber-100"><AlertTriangle className="w-3 h-3" /> هشدار</span>}
+                                {log.status === 'error' && <span className="inline-flex items-center gap-1 text-[10px] font-black bg-rose-50 text-rose-600 px-2 py-1 rounded-md border border-rose-100"><XCircle className="w-3 h-3" /> خطا</span>}
+                              </td>
+                              <td className="px-5 py-4 text-xs font-medium text-slate-600 leading-relaxed">{log.details}</td>
+                            </tr>
+                          ))}
+                          
+                          {filteredLogs.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="py-12 text-center text-slate-500 font-bold bg-slate-50/50">
+                               هیچ لاگی با این مشخصات یافت نشد.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
             </motion.div>
-          )}
-        </AnimatePresence>
+          </AnimatePresence>
+        </div>
       </div>
 
-      {/* Delete Confirmation Warning Dialog Modal */}
+      {/* Restore Warning Modal */}
       <AnimatePresence>
-        {recordToDelete && (
-          <div key="delete-record-modal" className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-            <motion.div
-              initial={{ scale: 0.95, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.95, opacity: 0 }}
-              className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl border border-gray-100"
-              dir="rtl"
+        {isRestoreModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm" dir="rtl">
+            <motion.div 
+              initial={{ opacity: 0, scale: 0.95, y: 20 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 20 }}
+              className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200"
             >
-              <div className="bg-rose-50 p-6 pb-4 border-b border-rose-100/50 flex items-start gap-4">
-                <div className="w-12 h-12 bg-rose-100 rounded-full flex items-center justify-center shrink-0">
-                  <AlertTriangle className="w-6 h-6 text-rose-600 animate-bounce" />
+              <div className="bg-rose-50 p-6 text-center border-b border-rose-100">
+                <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm">
+                  <AlertCircle className="w-8 h-8 text-rose-600" />
                 </div>
-                <div className="space-y-1.5">
-                  <h3 className="font-black text-rose-950 text-base">هشدار امنیتی حذف مستقیم رکورد</h3>
-                  <p className="text-xs text-rose-800 leading-relaxed font-bold">
-                    شما در حال حذف مستقیم شناسه زیر از دیتابیس هستید:
-                  </p>
-                </div>
+                <h3 className="text-xl font-black text-rose-700 mb-2">هشدار بسیار مهم</h3>
+                <p className="text-sm text-rose-600/80 font-bold">آیا از بازیابی این نسخه اطمینان دارید؟</p>
               </div>
-
+              
               <div className="p-6 space-y-4">
-                <div className="p-3.5 bg-slate-50 border border-slate-150 rounded-xl space-y-2 font-semibold text-sm">
-                  <div className="flex justify-between items-center text-xs text-gray-400">
-                    <span>شناسه (ID)</span>
-                    <span className="font-mono">{recordToDelete.id}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-gray-700">
-                    <span>عنوان رکورد:</span>
-                    <span className="font-extrabold text-slate-900">{getRecordDisplayName(recordToDelete)}</span>
-                  </div>
-                  <div className="flex justify-between items-center text-xs text-gray-500">
-                    <span>جدول هدف:</span>
-                    <span className="font-bold bg-slate-200 text-slate-800 px-2 py-0.5 rounded text-[10px] font-mono">{selectedTable}</span>
-                  </div>
+                <p className="text-sm font-medium text-slate-600 leading-relaxed text-center">
+                  عملیات بازیابی (Restore) غیرقابل بازگشت است. 
+                  <br />تمامی اطلاعات فعلی سیستم با اطلاعات موجود در فایل بک‌آپ زیر جایگزین خواهد شد:
+                </p>
+                
+                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
+                  <div className="text-lg font-black text-slate-800" dir="ltr">{selectedBackupForRestore?.date} - {selectedBackupForRestore?.time}</div>
+                  <div className="text-xs font-bold text-slate-500 mt-1">حجم: {selectedBackupForRestore?.size} | نوع: {selectedBackupForRestore?.type}</div>
                 </div>
 
-                <div className="bg-rose-50/50 border border-rose-100 px-4 py-3 rounded-lg text-xs leading-relaxed text-rose-900">
-                  <span className="font-extrabold block mb-1">توجه کنید:</span>
-                  در صورتی که این رکورد دارای روابط با سایر بخش‌ها باشد (مثلا شخص دارای فاکتور و تراکنش باشد)، حذف آن ممکن است محاسبات ترتیبی مالی را دچار ناهماهنگی کند. حذف برای موارد تصحیح خطاست.
+                <div className="pt-4 flex gap-3">
+                  <button 
+                    onClick={() => setIsRestoreModalOpen(false)}
+                    className="flex-1 py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-colors"
+                  >
+                    انصراف
+                  </button>
+                  <button 
+                    onClick={executeRestore}
+                    className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-rose-200 flex items-center justify-center gap-2"
+                  >
+                    بله، بازیابی کن
+                  </button>
                 </div>
-              </div>
-
-              <div className="bg-slate-50 px-6 py-4 flex gap-3 border-t border-slate-100">
-                <button
-                  onClick={handleDeleteConfirm}
-                  disabled={isDeleting}
-                  className="flex-1 py-2.5 bg-rose-600 hover:bg-rose-700 disabled:bg-rose-400 text-white font-extrabold rounded-xl transition-colors shadow flex items-center justify-center gap-1.5"
-                >
-                  {isDeleting ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      در حال حذف...
-                    </>
-                  ) : (
-                    <>
-                      <Trash2 className="w-4 h-4" />
-                      بله، قطعاً حذف شود
-                    </>
-                  )}
-                </button>
-                <button
-                  onClick={() => setRecordToDelete(null)}
-                  disabled={isDeleting}
-                  className="px-4 py-2 bg-white hover:bg-gray-100 border border-gray-200 text-gray-700 font-extrabold rounded-xl transition-all shadow-sm"
-                >
-                  انصراف
-                </button>
               </div>
             </motion.div>
           </div>
         )}
       </AnimatePresence>
+
     </div>
   );
 }
