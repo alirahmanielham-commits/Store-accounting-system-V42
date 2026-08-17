@@ -303,6 +303,7 @@ const ProductCardModal = React.lazy(() => import('./components/modals/ProductCar
 const ProductLastPricesView = React.lazy(() => import('./components/reports/ProductLastPricesView'));
 const QuickPriceInquiry = React.lazy(() => import('./components/inventory/QuickPriceInquiry'));
 const CheckManagement = React.lazy(() => import('./components/financial/CheckManagement'));
+const CheckbooksManager = React.lazy(() => import('./components/financial/CheckbooksManager'));
 const IssuedChecksPage = React.lazy(() => import('./components/financial/IssuedChecksPage'));
 const IssueCheckStandalone = React.lazy(() => import('./components/financial/IssueCheckStandalone'));
 const CheckCardPage = React.lazy(() => import('./components/financial/checks/CheckCardPage'));
