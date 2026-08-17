@@ -22,7 +22,44 @@ import * as schema from '../db/schema';
 
 const router = Router();
 
-  let backupConfig = { path: '', intervalHours: 4 };
+const appendDbLog = async (action, status, details) => {
+  try {
+    let logs = [];
+    const data = await getDbData('databaseLogs');
+    if (data && Array.isArray(data)) logs = data;
+    logs.unshift({
+      id: Date.now().toString(),
+      date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
+      action, status, details
+    });
+    if (logs.length > 200) logs = logs.slice(0, 200);
+    await setDbData('databaseLogs', logs);
+  } catch(e) {
+    console.error('Failed to append db log', e);
+  }
+};
+
+router.get('/api/db/logs', async (req, res) => {
+  try {
+    const data = await getDbData('databaseLogs');
+    res.json(data || []);
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/db/logs', async (req, res) => {
+  try {
+    const { action, status, details } = req.body;
+    await appendDbLog(action, status, details);
+    res.json({ success: true });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+  let backupConfig = { path: '', intervalHours: 4, storageType: 'local', remoteProvider: 's3', remoteConfig: {}, enabled: true, frequency: 'daily', time: '02:00', retention: 5, cron: '0 2 * * *' };
   (async () => {
     try {
        const backupData = await getDbData('backupConfig');
@@ -50,6 +87,7 @@ const router = Router();
         }
         const fileName = `backup-${Date.now()}.json`;
         await fsPromises.writeFile(path.join(dir, fileName), JSON.stringify(backupData));
+        await appendDbLog('بک‌آپ خودکار/دستی', 'success', `بک‌آپ با حجم ${Buffer.byteLength(JSON.stringify(backupData))} بایت ایجاد شد.`);
         
         // keep only last 20 backups
         const files = await fsPromises.readdir(dir);
@@ -81,10 +119,12 @@ const router = Router();
 router.post('/api/db/backup-config', async (req, res) => {
      backupConfig = { ...backupConfig, ...req.body };
      await setDbData('backupConfig', backupConfig);
+     
      if (backupInterval) clearInterval(backupInterval);
-     if (backupConfig.intervalHours > 0) {
+     if (backupConfig.enabled && backupConfig.intervalHours > 0) {
         backupInterval = setInterval(runBackupJob, backupConfig.intervalHours * 60 * 60 * 1000);
      }
+
      res.json({ success: true, config: backupConfig });
   });
 
@@ -141,8 +181,10 @@ router.post('/api/db/backups/restore/:filename', async (req, res) => {
                  }
              }
          }
+         await appendDbLog('بازیابی اطلاعات', 'success', `نسخه ${filename} با موفقیت بازیابی شد.`);
          res.json({ success: true });
      } catch(e) {
+         await appendDbLog('بازیابی اطلاعات', 'error', `خطا: ${e.message}`);
          console.error('Restore specific backup error:', e);
          res.status(500).json({ success: false, error: e.message });
      }
@@ -221,5 +263,107 @@ router.get('/api/db/backup', async (req, res) => {
     }
   });
 
+
+
+router.get('/api/db/health', async (req, res) => {
+  try {
+    let permissionsOk = true;
+    let permissionsError = '';
+    const dir = getBackupsDir();
+    try {
+      await fsPromises.access(dir, fsPromises.constants.W_OK | fsPromises.constants.R_OK);
+    } catch(e) { 
+      permissionsOk = false;
+      permissionsError = e.message;
+    }
+
+    let connectionOk = true;
+    let connectionError = '';
+    if (isPgActive() && getActivePgPool()) {
+      try { await getActivePgPool().query('SELECT 1'); } catch(e) { connectionOk = false; connectionError = e.message; }
+    } else {
+      try { getDb().prepare('SELECT 1').get(); } catch(e) { connectionOk = false; connectionError = e.message; }
+    }
+
+    let orphanedRecords = 0;
+    if (isPgActive() && getActivePgPool()) {
+      try {
+        const result = await getActivePgPool().query(`
+          SELECT 
+            (SELECT count(*) FROM transactions WHERE account_id IS NOT NULL AND account_id NOT IN (SELECT id FROM accounts)) +
+            (SELECT count(*) FROM invoice_items WHERE invoice_id IS NOT NULL AND invoice_id NOT IN (SELECT id FROM invoices)) as orphaned_count
+        `);
+        orphanedRecords = parseInt(result.rows[0].orphaned_count, 10);
+      } catch(e) { console.error('Orphan check error', e); }
+    }
+
+    res.json({
+      permissionsOk,
+      permissionsError,
+      connectionOk,
+      connectionError,
+      orphanedRecords
+    });
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+router.get('/api/db/table-sizes', async (req, res) => {
+  try {
+    if (isPgActive() && getActivePgPool()) {
+      const result = await getActivePgPool().query(`
+        SELECT 
+          relname as name, 
+          pg_total_relation_size(C.oid) as size,
+          n_live_tup as recordCount
+        FROM pg_class C
+        LEFT JOIN pg_namespace N ON (N.oid = C.relnamespace)
+        LEFT JOIN pg_stat_user_tables S ON (S.relid = C.oid)
+        WHERE nspname NOT IN ('pg_catalog', 'information_schema')
+        AND C.relkind <> 'i'
+        AND nspname !~ '^pg_toast'
+        AND relname IN ('persons', 'invoices', 'invoice_items', 'transactions', 'accounts', 'products', 'cashboxes')
+        ORDER BY pg_total_relation_size(C.oid) DESC;
+      `);
+      let totalSizeRes = await getActivePgPool().query('SELECT pg_database_size(current_database()) as size');
+      let totalSize = parseInt(totalSizeRes.rows[0].size, 10);
+      
+      const tables = result.rows.map(r => ({
+        name: r.name,
+        size: parseInt(r.size, 10),
+        recordCount: parseInt(r.recordcount || '0', 10)
+      }));
+      
+      res.json({ tables, totalSize });
+    } else {
+      res.json({ tables: [], totalSize: 0 });
+    }
+  } catch(e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+
+router.post('/api/db/backups/upload', async (req, res) => {
+  try {
+    const { filename, content } = req.body;
+    if (!filename || !content) return res.status(400).json({ error: 'Missing filename or content' });
+    const dir = getBackupsDir();
+    await fsPromises.mkdir(dir, { recursive: true });
+    const safeName = 'uploaded-' + Date.now() + '-' + path.basename(filename);
+    const filePath = path.join(dir, safeName);
+    
+    // Convert base64 or raw text to file. If it's a JSON string, we just write it.
+    await fsPromises.writeFile(filePath, content, 'utf-8');
+    
+    await appendDbLog('آپلود بک‌آپ', 'success', `فایل ${filename} با موفقیت آپلود شد.`);
+    res.json({ success: true, file: safeName });
+  } catch (err) {
+    await appendDbLog('آپلود بک‌آپ', 'error', `خطا در آپلود: ${err.message}`);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

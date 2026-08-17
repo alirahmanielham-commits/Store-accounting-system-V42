@@ -46,9 +46,21 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       const res = await fetch('/api/db/backup-config');
       const data = await res.json();
       if (data) {
-        setScheduleConfig(prev => ({ ...prev, enabled: data.intervalHours > 0, retention: data.intervalHours }));
-        if (data.path) {
-          setStorageConfig(prev => ({ ...prev, localPath: data.path }));
+        setScheduleConfig(prev => ({
+          ...prev,
+          enabled: data.enabled !== undefined ? data.enabled : data.intervalHours > 0,
+          frequency: data.frequency || 'daily',
+          time: data.time || '02:00',
+          retention: data.retention || 5,
+          cron: data.cron || '0 2 * * *'
+        }));
+        if (data.path || data.storageType) {
+          setStorageConfig(prev => ({ 
+            ...prev, 
+            localPath: data.path || '', 
+            type: data.storageType || 'local', 
+            cloudProvider: data.remoteProvider || 's3' 
+          }));
         }
       }
     } catch (e) {}
@@ -86,17 +98,56 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   });
 
   // Logs state
-  const [logs, setLogs] = useState([
-    { id: '1', date: '1402/11/15 14:30', action: 'بک‌آپ دستی (کامل)', status: 'success', details: 'بک‌آپ با موفقیت در مسیر Local ذخیره شد.' },
-    { id: '2', date: '1402/11/14 02:00', action: 'بک‌آپ خودکار (فقط داده)', status: 'success', details: 'بک‌آپ زمان‌بندی شده ایجاد شد.' },
-    { id: '3', date: '1402/11/13 15:45', action: 'بک‌آپ دستی (افزایشی)', status: 'error', details: 'خطا در ارتباط با فضای ابری S3.' },
-    { id: '4', date: '1402/11/12 10:00', action: 'بازیابی اطلاعات', status: 'warning', details: 'عملیات بازیابی با هشدارهای جزئی پایان یافت.' }
-  ]);
+  
+  const [healthData, setHealthData] = useState<any>(null);
+  const [tableSizes, setTableSizes] = useState<{tables: any[], totalSize: number}>({ tables: [], totalSize: 0 });
+  const [loadingHealth, setLoadingHealth] = useState(false);
+
+  const loadHealthData = async () => {
+    setLoadingHealth(true);
+    try {
+      const [hRes, sRes] = await Promise.all([
+        fetch('/api/db/health'),
+        fetch('/api/db/table-sizes')
+      ]);
+      setHealthData(await hRes.json());
+      setTableSizes(await sRes.json());
+    } catch(e) { console.error(e); }
+    setLoadingHealth(false);
+  };
+
+  useEffect(() => {
+    if (activeTab === 'health') {
+      loadHealthData();
+    }
+  }, [activeTab]);
+
+  
+  const [logs, setLogs] = useState<any[]>([]);
+  const loadLogs = async () => {
+    try {
+      const res = await fetch('/api/db/logs');
+      const data = await res.json();
+      setLogs(Array.isArray(data) ? data : []);
+    } catch(e) {}
+  };
+
+  useEffect(() => {
+    if (activeTab === 'logs') {
+      loadLogs();
+    }
+  }, [activeTab]);
+
   const [logSearch, setLogSearch] = useState('');
   const [logFilter, setLogFilter] = useState('all');
 
   // Restore Modal State
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
+  const [restoreState, setRestoreState] = useState<'confirm' | 'progress' | 'success' | 'error'>('confirm');
+  const [restoreProgress, setRestoreProgress] = useState(0);
+
   const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<any>(null);
 
   // Manual Backup Action
@@ -137,36 +188,92 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     }, 1000);
   };
 
+  
   const executeRestore = async () => {
-    setIsRestoreModalOpen(false);
+    setRestoreState('progress');
+    setRestoreProgress(0);
+    
+    // Simulate some nice progress phases before actual request
+    const phases = [10, 35, 60, 85];
+    for(const phase of phases) {
+      await new Promise(r => setTimeout(r, 400));
+      setRestoreProgress(phase);
+    }
+    
     try {
       if (!selectedBackupForRestore || !selectedBackupForRestore.file) {
-        showNotification('فایل بک‌آپ نامعتبر است.', 'error');
-        return;
+        throw new Error('فایل بک‌آپ نامعتبر است.');
       }
-      const res = await fetch(`/api/db/backups/restore/${selectedBackupForRestore.file}`, { method: 'POST' });
-      if (!res.ok) throw new Error('Restore failed');
-      showNotification('بازیابی اطلاعات با موفقیت انجام شد.', 'success');
-      setLogs([{
-        id: Date.now().toString(),
-        date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
-        action: 'بازیابی اطلاعات',
-        status: 'success',
-        details: `نسخه ${selectedBackupForRestore.date} بازیابی شد.`
-      }, ...logs]);
+      
+      let filename = selectedBackupForRestore.file;
+      
+      // If it's a direct upload (no existing file on server yet)
+      if (selectedBackupForRestore.isUpload) {
+         setRestoreProgress(90);
+         const res = await fetch('/api/db/backups/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ filename: selectedBackupForRestore.rawFile.name, content: selectedBackupForRestore.content })
+         });
+         if (!res.ok) throw new Error('آپلود ناموفق بود.');
+         const data = await res.json();
+         filename = data.file;
+      }
+      
+      setRestoreProgress(95);
+      const res = await fetch(`/api/db/backups/restore/${filename}`, { method: 'POST' });
+      if (!res.ok) throw new Error('بازیابی ناموفق بود.');
+      
+      setRestoreProgress(100);
+      setRestoreState('success');
+      loadBackups(); // reload list
     } catch(e) {
-      showNotification('خطا در بازیابی اطلاعات', 'error');
+      setRestoreState('error');
     }
-    setSelectedBackupForRestore(null);
   };
+
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+       const content = ev.target?.result as string;
+       setSelectedBackupForRestore({
+          isUpload: true,
+          rawFile: file,
+          content,
+          date: new Intl.DateTimeFormat('fa-IR').format(new Date()),
+          time: new Date().toLocaleTimeString('fa-IR'),
+          size: (file.size / 1024 / 1024).toFixed(2) + ' MB',
+          type: 'فایل آپلود شده'
+       });
+       setRestoreState('confirm');
+       setIsRestoreModalOpen(true);
+    };
+    reader.readAsText(file);
+    e.target.value = ''; // reset
+  };
+
 
   
   const saveScheduleSettings = async () => {
     try {
+      let intervalHours = 24;
+      if (scheduleConfig.frequency === 'weekly') intervalHours = 168;
+      if (scheduleConfig.frequency === 'monthly') intervalHours = 720;
+      if (scheduleConfig.frequency === 'custom') intervalHours = 4; // Arbitrary for custom right now
+      
       await fetch('/api/db/backup-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ intervalHours: scheduleConfig.enabled ? scheduleConfig.retention : 0 })
+        body: JSON.stringify({ 
+          enabled: scheduleConfig.enabled,
+          frequency: scheduleConfig.frequency,
+          time: scheduleConfig.time,
+          retention: scheduleConfig.retention,
+          cron: scheduleConfig.cron,
+          intervalHours: intervalHours
+        })
       });
       showNotification('تنظیمات زمان‌بندی ذخیره شد', 'success');
     } catch (e) {
@@ -179,7 +286,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       await fetch('/api/db/backup-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: storageConfig.localPath })
+        body: JSON.stringify({ path: storageConfig.localPath, storageType: storageConfig.type, remoteProvider: storageConfig.cloudProvider })
       });
       showNotification('مسیر ذخیره‌سازی ذخیره شد', 'success');
     } catch (e) {
@@ -205,6 +312,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   };
   
   const tabs = [
+    { id: 'health', label: 'سلامت و فضا', icon: Server },
     { id: 'manual', label: 'بک‌آپ دستی', icon: Play },
     { id: 'schedule', label: 'زمان‌بندی', icon: Calendar },
     { id: 'storage', label: 'مسیر ذخیره‌سازی', icon: HardDrive },
@@ -263,7 +371,125 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
               transition={{ duration: 0.2 }}
             >
               
+              
+              {/* --- Health & Stats --- */}
+              {activeTab === 'health' && (
+                <div className="space-y-6">
+                  <div className="pb-6 border-b border-slate-100 flex justify-between items-center">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <Server className="w-5 h-5 text-indigo-500" />
+                        وضعیت سلامت و فضای پایگاه داده
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium mt-1">
+                        بررسی دسترسی‌ها، ارتباط سرور، رکوردهای یتیم (Orphaned) و حجم جداول.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={loadHealthData} 
+                      className="px-4 py-2 bg-indigo-50 text-indigo-600 rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-100 transition-colors"
+                    >
+                      <RefreshCw className={`w-4 h-4 ${loadingHealth ? 'animate-spin' : ''}`} /> بروزرسانی
+                    </button>
+                  </div>
+                  
+                  {/* Health Check Cards */}
+                  {healthData && (
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div className={`p-5 rounded-2xl border ${healthData.permissionsOk ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                        <div className="flex items-center gap-3 mb-2">
+                          {healthData.permissionsOk ? <CheckCircle className="w-6 h-6 text-emerald-500" /> : <XCircle className="w-6 h-6 text-rose-500" />}
+                          <h4 className={`font-bold ${healthData.permissionsOk ? 'text-emerald-700' : 'text-rose-700'}`}>دسترسی فایل‌ها</h4>
+                        </div>
+                        <p className={`text-xs ${healthData.permissionsOk ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {healthData.permissionsOk ? 'پوشه بک‌آپ دارای دسترسی خواندن و نوشتن است.' : `خطا در دسترسی: ${healthData.permissionsError}`}
+                        </p>
+                      </div>
+
+                      <div className={`p-5 rounded-2xl border ${healthData.connectionOk ? 'bg-emerald-50 border-emerald-100' : 'bg-rose-50 border-rose-100'}`}>
+                        <div className="flex items-center gap-3 mb-2">
+                          {healthData.connectionOk ? <CheckCircle className="w-6 h-6 text-emerald-500" /> : <XCircle className="w-6 h-6 text-rose-500" />}
+                          <h4 className={`font-bold ${healthData.connectionOk ? 'text-emerald-700' : 'text-rose-700'}`}>اتصال به پایگاه داده</h4>
+                        </div>
+                        <p className={`text-xs ${healthData.connectionOk ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {healthData.connectionOk ? 'ارتباط با پایگاه داده پایدار و بدون مشکل است.' : `خطا در ارتباط: ${healthData.connectionError}`}
+                        </p>
+                      </div>
+
+                      <div className={`p-5 rounded-2xl border ${healthData.orphanedRecords === 0 ? 'bg-emerald-50 border-emerald-100' : 'bg-amber-50 border-amber-100'}`}>
+                        <div className="flex items-center gap-3 mb-2">
+                          {healthData.orphanedRecords === 0 ? <CheckCircle className="w-6 h-6 text-emerald-500" /> : <AlertTriangle className="w-6 h-6 text-amber-500" />}
+                          <h4 className={`font-bold ${healthData.orphanedRecords === 0 ? 'text-emerald-700' : 'text-amber-700'}`}>رکوردهای یتیم</h4>
+                        </div>
+                        <p className={`text-xs ${healthData.orphanedRecords === 0 ? 'text-emerald-600' : 'text-amber-600'}`}>
+                          {healthData.orphanedRecords === 0 ? 'هیچ رکورد بدون مرجعی در دفتر کل یافت نشد.' : `هشدار: تعداد ${healthData.orphanedRecords} رکورد یتیم در سیستم یافت شد!`}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Storage Critical Alert */}
+                  {tableSizes.totalSize > 1024 * 1024 * 1024 && ( // Alert if > 1GB
+                    <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 flex items-start gap-3">
+                      <AlertCircle className="w-6 h-6 text-rose-600 flex-shrink-0" />
+                      <div>
+                        <h4 className="font-bold text-rose-700">هشدار حجم بحرانی</h4>
+                        <p className="text-sm text-rose-600 mt-1">حجم کل دیتابیس از سقف ۱ گیگابایت عبور کرده است. لطفاً نسبت به خالی کردن فضا یا افزایش منابع اقدام کنید.</p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Table Sizes */}
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm mt-6">
+                    <div className="px-5 py-4 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+                      <h4 className="font-bold text-slate-700">فضای مصرفی جداول اصلی (SQL)</h4>
+                      <div className="text-xs font-bold text-slate-500 bg-white px-3 py-1 rounded-full border border-slate-200">
+                        حجم کل: {(tableSizes.totalSize / 1024 / 1024).toFixed(2)} مگابایت
+                      </div>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-right">
+                        <thead className="bg-slate-50/50 text-slate-500 font-bold text-xs border-b border-slate-100">
+                          <tr>
+                            <th className="px-5 py-3">نام جدول</th>
+                            <th className="px-5 py-3">تعداد رکوردها</th>
+                            <th className="px-5 py-3">حجم (مگابایت)</th>
+                            <th className="px-5 py-3 w-1/3">نوار مصرف</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {tableSizes.tables.map(t => {
+                            const sizeMb = (t.size / 1024 / 1024).toFixed(2);
+                            const percent = tableSizes.totalSize > 0 ? (t.size / tableSizes.totalSize) * 100 : 0;
+                            return (
+                              <tr key={t.name} className="hover:bg-slate-50/50">
+                                <td className="px-5 py-3 font-bold text-slate-700" dir="ltr">{t.name}</td>
+                                <td className="px-5 py-3 text-slate-600">{t.recordCount.toLocaleString()}</td>
+                                <td className="px-5 py-3 font-medium text-slate-800">{sizeMb} MB</td>
+                                <td className="px-5 py-3">
+                                  <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden">
+                                    <div className="bg-indigo-500 h-full rounded-full" style={{width: `${Math.max(percent, 1)}%`}}></div>
+                                  </div>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {tableSizes.tables.length === 0 && (
+                            <tr>
+                              <td colSpan={4} className="py-8 text-center text-slate-400 font-medium text-sm">
+                                در حال استفاده از SQLite (حجم جداول به تفکیک پشتیبانی نمی‌شود).
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
               {/* --- 1. Manual Backup --- */}
+
               {activeTab === 'manual' && (
                 <div className="space-y-8">
                   <div className="flex flex-col lg:flex-row gap-8 items-start justify-between">
@@ -640,9 +866,14 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                         بازگردانی دیتابیس از نسخه‌های پشتیبان موجود.
                       </p>
                     </div>
-                    <button className="px-5 py-2.5 bg-white border-2 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm">
-                      <Upload className="w-4 h-4" /> آپلود فایل بک‌آپ خارجی
-                    </button>
+                    
+  <div>
+    <input type="file" ref={fileInputRef} className="hidden" accept=".json,.sql" onChange={handleFileUpload} />
+    <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-white border-2 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm">
+      <Upload className="w-4 h-4" /> آپلود فایل بک‌آپ خارجی
+    </button>
+  </div>
+
                   </div>
 
                   <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
@@ -910,6 +1141,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
         </div>
       </div>
 
+      
       {/* Restore Warning Modal */}
       <AnimatePresence>
         {isRestoreModalOpen && (
@@ -920,45 +1152,132 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
               className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200"
             >
-              <div className="bg-rose-50 p-6 text-center border-b border-rose-100">
-                <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm">
-                  <AlertCircle className="w-8 h-8 text-rose-600" />
-                </div>
-                <h3 className="text-xl font-black text-rose-700 mb-2">هشدار بسیار مهم</h3>
-                <p className="text-sm text-rose-600/80 font-bold">آیا از بازیابی این نسخه اطمینان دارید؟</p>
-              </div>
-              
-              <div className="p-6 space-y-4">
-                <p className="text-sm font-medium text-slate-600 leading-relaxed text-center">
-                  عملیات بازیابی (Restore) غیرقابل بازگشت است. 
-                  <br />تمامی اطلاعات فعلی سیستم با اطلاعات موجود در فایل بک‌آپ زیر جایگزین خواهد شد:
-                </p>
-                
-                <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
-                  <div className="text-lg font-black text-slate-800" dir="ltr">{selectedBackupForRestore?.date} - {selectedBackupForRestore?.time}</div>
-                  <div className="text-xs font-bold text-slate-500 mt-1">حجم: {selectedBackupForRestore?.size} | نوع: {selectedBackupForRestore?.type}</div>
-                </div>
+              {restoreState === 'confirm' && (
+                <>
+                  <div className="bg-rose-50 p-6 text-center border-b border-rose-100">
+                    <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm">
+                      <AlertCircle className="w-8 h-8 text-rose-600" />
+                    </div>
+                    <h3 className="text-xl font-black text-rose-700 mb-2">هشدار بسیار مهم</h3>
+                    <p className="text-sm text-rose-600/80 font-bold">آیا از بازیابی این نسخه اطمینان دارید؟</p>
+                  </div>
+                  
+                  <div className="p-6 space-y-4">
+                    <p className="text-sm font-medium text-slate-600 leading-relaxed text-center">
+                      عملیات بازیابی (Restore) غیرقابل بازگشت است. 
+                      <br />تمامی اطلاعات فعلی سیستم با اطلاعات موجود در فایل بک‌آپ زیر جایگزین خواهد شد:
+                    </p>
+                    
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
+                      <div className="text-lg font-black text-slate-800" dir="ltr">{selectedBackupForRestore?.date} - {selectedBackupForRestore?.time}</div>
+                      <div className="text-xs font-bold text-slate-500 mt-1">حجم: {selectedBackupForRestore?.size} | نوع: {selectedBackupForRestore?.type}</div>
+                      {selectedBackupForRestore?.isUpload && (
+                        <div className="mt-2 text-xs font-bold text-indigo-600 bg-indigo-50 py-1 rounded">فایل بارگذاری شده: {selectedBackupForRestore?.rawFile?.name}</div>
+                      )}
+                    </div>
+                    <div className="pt-4 flex gap-3">
+                      <button 
+                        onClick={() => setIsRestoreModalOpen(false)}
+                        className="flex-1 py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-colors"
+                      >
+                        انصراف
+                      </button>
+                      <button 
+                        onClick={executeRestore}
+                        className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-rose-200 flex items-center justify-center gap-2"
+                      >
+                        بله، بازیابی کن
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
-                <div className="pt-4 flex gap-3">
-                  <button 
-                    onClick={() => setIsRestoreModalOpen(false)}
-                    className="flex-1 py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-colors"
+              {restoreState === 'progress' && (
+                <div className="p-10 text-center space-y-6">
+                  <div className="relative w-24 h-24 mx-auto">
+                    <motion.div 
+                      animate={{ rotate: 360 }} 
+                      transition={{ repeat: Infinity, duration: 4, ease: "linear" }}
+                      className="absolute inset-0 rounded-full border-[4px] border-slate-100 border-t-indigo-600"
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center">
+                      <RefreshCw className="w-8 h-8 text-indigo-500" />
+                    </div>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black text-slate-800">در حال بازیابی اطلاعات...</h3>
+                    <p className="text-sm font-medium text-slate-500 mt-2">لطفاً تا پایان عملیات این پنجره را نبندید.</p>
+                  </div>
+                  <div className="w-full bg-slate-100 h-3 rounded-full overflow-hidden">
+                    <motion.div 
+                      className="h-full bg-indigo-500 rounded-full"
+                      initial={{ width: 0 }}
+                      animate={{ width: `${restoreProgress}%` }}
+                    />
+                  </div>
+                  <p className="text-xs font-bold text-indigo-600">{restoreProgress}% تکمیل شده</p>
+                </div>
+              )}
+
+              {restoreState === 'success' && (
+                <div className="p-10 text-center space-y-6">
+                  <motion.div 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    type="spring"
+                    className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto border-8 border-emerald-50"
                   >
-                    انصراف
-                  </button>
+                    <CheckCircle className="w-10 h-10 text-emerald-600" />
+                  </motion.div>
+                  <div>
+                    <h3 className="text-xl font-black text-emerald-700">بازیابی با موفقیت انجام شد!</h3>
+                    <p className="text-sm font-medium text-slate-500 mt-2">سیستم اکنون با داده‌های جدید در دسترس است.</p>
+                  </div>
                   <button 
-                    onClick={executeRestore}
-                    className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-rose-200 flex items-center justify-center gap-2"
+                    onClick={() => {
+                      setIsRestoreModalOpen(false);
+                      setRestoreState('confirm');
+                      setSelectedBackupForRestore(null);
+                      // Force a hard reload if necessary, or let react re-render based on new state.
+                      window.location.reload();
+                    }}
+                    className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-emerald-200"
                   >
-                    بله، بازیابی کن
+                    تازه‌سازی سیستم (بازنشانی)
                   </button>
                 </div>
-              </div>
+              )}
+
+              {restoreState === 'error' && (
+                <div className="p-10 text-center space-y-6">
+                  <motion.div 
+                    initial={{ scale: 0 }}
+                    animate={{ scale: 1 }}
+                    type="spring"
+                    className="w-24 h-24 bg-rose-100 rounded-full flex items-center justify-center mx-auto border-8 border-rose-50"
+                  >
+                    <XCircle className="w-10 h-10 text-rose-600" />
+                  </motion.div>
+                  <div>
+                    <h3 className="text-xl font-black text-rose-700">خطا در عملیات بازیابی</h3>
+                    <p className="text-sm font-medium text-slate-500 mt-2">متأسفانه بازیابی اطلاعات با مشکل مواجه شد. لاگ‌ها را بررسی کنید.</p>
+                  </div>
+                  <button 
+                    onClick={() => {
+                      setIsRestoreModalOpen(false);
+                      setRestoreState('confirm');
+                    }}
+                    className="w-full py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-colors"
+                  >
+                    بستن پنجره
+                  </button>
+                </div>
+              )}
             </motion.div>
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }
