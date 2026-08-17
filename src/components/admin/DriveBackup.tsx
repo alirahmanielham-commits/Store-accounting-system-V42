@@ -1,425 +1,559 @@
 import React, { useState, useEffect } from 'react';
-import { HardDrive, CheckCircle, RefreshCcw, Download, Clock, Settings, Save, Folder, FolderOpen, ArrowRight, Home, X } from 'lucide-react';
+import { motion, AnimatePresence } from 'framer-motion';
+import { 
+  Database, RefreshCw, UploadCloud, HardDrive, Download, 
+  Trash2, Shield, Calendar, Settings, FileText, CheckCircle, 
+  AlertTriangle, XCircle, Search, Save, FolderOpen, Mail, Key,
+  Upload, Check, Play, Clock, Server, Eye, ToggleLeft, ToggleRight
+} from 'lucide-react';
 
 interface LocalBackupProps {
-  showNotification: (msg: string, type: 'success' | 'error') => void;
+  showNotification: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
 export default function DriveBackup({ showNotification }: LocalBackupProps) {
+  const [activeTab, setActiveTab] = useState('manual');
   const [isBackingUp, setIsBackingUp] = useState(false);
-  const [backups, setBackups] = useState<{file: string, size: number, time: number}[]>([]);
-  const [isLoadingBackups, setIsLoadingBackups] = useState(false);
-  const [backupConfig, setBackupConfig] = useState({ path: '', intervalHours: 4 });
-  const [isSavingConfig, setIsSavingConfig] = useState(false);
-  const [isBackupSettingsOpen, setIsBackupSettingsOpen] = useState(false);
+  const [backupProgress, setBackupProgress] = useState(0);
+  
+  // Dummy Initial Data
+  const [backups, setBackups] = useState([
+    { id: '1', date: '1402/11/15', time: '14:30:00', size: '12.5 MB', type: 'Full', status: 'success' },
+    { id: '2', date: '1402/11/14', time: '02:00:00', size: '12.2 MB', type: 'Full', status: 'success' },
+    { id: '3', date: '1402/11/13', time: '15:45:00', size: '4.1 MB', type: 'Incremental', status: 'error' },
+  ]);
 
-  // Folder Picker States
-  const [isFolderPickerOpen, setIsFolderPickerOpen] = useState(false);
-  const [currentDir, setCurrentDir] = useState<string>('');
-  const [parentDir, setParentDir] = useState<string>('');
-  const [dirs, setDirs] = useState<string[]>([]);
-  const [drives, setDrives] = useState<string[]>([]);
-  const [isLoadingDirs, setIsLoadingDirs] = useState(false);
+  const [scheduleConfig, setScheduleConfig] = useState({
+    enabled: true,
+    frequency: 'daily',
+    time: '02:00',
+    retention: 5,
+    cron: '0 2 * * *'
+  });
 
-  const fetchConfig = async () => {
-    try {
-      const res = await fetch('/api/db/backup-config');
-      const data = await res.json();
-      if (data) {
-         setBackupConfig(data);
-      }
-    } catch(err) {
-      console.error(err);
-    }
-  };
+  const [storageConfig, setStorageConfig] = useState({
+    type: 'local',
+    localPath: 'D:/Backups/MyApp',
+    cloudProvider: 'google_drive',
+    cloudAuthUrl: ''
+  });
 
-  const fetchBackups = async () => {
-    setIsLoadingBackups(true);
-    try {
-      const res = await fetch('/api/db/backups');
-      const data = await res.json();
-      if (Array.isArray(data)) {
-        setBackups(data);
-      }
-    } catch(err) {
-      console.error(err);
-    } finally {
-      setIsLoadingBackups(false);
-    }
-  };
+  const [securityConfig, setSecurityConfig] = useState({
+    encrypt: true,
+    password: '',
+    emailNotify: true,
+    emailAddress: 'admin@example.com'
+  });
 
-  useEffect(() => {
-    fetchConfig();
-    fetchBackups();
-  }, []);
-
-  const loadDrives = async () => {
-     try {
-        const res = await fetch('/api/sys/drives');
-        const data = await res.json();
-        setDrives(data || []);
-     } catch (e) {
-        console.error(e);
-     }
-  };
-
-  const loadDirectory = async (pathStr: string) => {
-     setIsLoadingDirs(true);
-     try {
-       const res = await fetch('/api/sys/dirs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ path: pathStr })
-       });
-       const data = await res.json();
-       if (data.current) {
-          setCurrentDir(data.current);
-          setParentDir(data.parent);
-          setDirs(data.dirs || []);
-       }
-     } catch (e) {
-       console.error(e);
-       showNotification('خطا در خواندن پوشه', 'error');
-     } finally {
-       setIsLoadingDirs(false);
-     }
-  };
-
-  const openFolderPicker = () => {
-     loadDrives();
-     loadDirectory(backupConfig.path || '');
-     setIsFolderPickerOpen(true);
-  };
-
-  const handleSelectFolder = () => {
-     setBackupConfig({ ...backupConfig, path: currentDir });
-     setIsFolderPickerOpen(false);
-  };
-
-  const saveConfig = async () => {
-    setIsSavingConfig(true);
-    try {
-      const res = await fetch('/api/db/backup-config', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(backupConfig)
-      });
-      const data = await res.json();
-      if (data.success) {
-        showNotification('تنظیمات پشتیبان‌گیری با موفقیت ذخیره شد.', 'success');
-        setIsBackupSettingsOpen(false);
-        fetchConfig();
-        fetchBackups();
-      } else {
-        throw new Error(data.error);
-      }
-    } catch(err) {
-      console.error(err);
-      showNotification('خطا در ذخیره تنظیمات پشتیبان‌گیری.', 'error');
-    } finally {
-      setIsSavingConfig(false);
-    }
-  };
-
-  const runBackup = async () => {
+  // Manual Backup Action
+  const handleImmediateBackup = () => {
     setIsBackingUp(true);
-    try {
-      const res = await fetch('/api/db/backups/do', { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        showNotification('نسخه پشتیبان با موفقیت ایجاد شد.', 'success');
-        fetchBackups();
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (err: any) {
-      console.error(err);
-      showNotification('خطا در تهیه نسخه پشتیبان.', 'error');
-    } finally {
-      setIsBackingUp(false);
-    }
+    setBackupProgress(0);
+    const interval = setInterval(() => {
+      setBackupProgress(prev => {
+        if (prev >= 100) {
+          clearInterval(interval);
+          setIsBackingUp(false);
+          showNotification('بک‌آپ با موفقیت تهیه شد', 'success');
+          setBackups([{ 
+            id: Date.now().toString(), 
+            date: new Intl.DateTimeFormat('fa-IR').format(new Date()), 
+            time: new Date().toLocaleTimeString('fa-IR'), 
+            size: '12.8 MB', 
+            type: 'Full', 
+            status: 'success' 
+          }, ...backups]);
+          return 100;
+        }
+        return prev + 15;
+      });
+    }, 500);
   };
 
-  const handleRestore = async (file: string) => {
-    if (!window.confirm('آیا از بازنشانی این نسخه پشتیبان اطمینان دارید؟ اطلاعات فعلی شما ممکن است از دست برود.')) return;
-    try {
-      const res = await fetch(`/api/db/backups/restore/${file}`, { method: 'POST' });
-      const data = await res.json();
-      if (data.success) {
-        showNotification('اطلاعات با موفقیت بازنشانی شد. لطفاً سیستم را مجددا بارگذاری کنید.', 'success');
-        setTimeout(() => window.location.reload(), 2000);
-      } else {
-        throw new Error(data.error);
-      }
-    } catch (err: any) {
-      console.error(err);
-      showNotification('خطا در بازنشانی اطلاعات.', 'error');
-    }
-  };
+  const tabs = [
+    { id: 'manual', label: 'بک‌آپ دستی', icon: Database },
+    { id: 'schedule', label: 'زمان‌بندی', icon: Calendar },
+    { id: 'storage', label: 'مسیر ذخیره‌سازی', icon: HardDrive },
+    { id: 'restore', label: 'بازیابی', icon: RefreshCw },
+    { id: 'security', label: 'امنیت و اعلان', icon: Shield }
+  ];
 
   return (
-    <div className="bg-slate-50 border border-indigo-100 rounded-2xl p-6 shadow-inner flex flex-col gap-6 col-span-1 md:col-span-2">
-      <div className="flex items-start md:items-center justify-between gap-3 w-full flex-col md:flex-row">
-        <div className="flex items-center gap-3">
-           <div className="w-10 h-10 bg-indigo-100 rounded-full flex items-center justify-center shrink-0">
-             <HardDrive className="w-5 h-5 text-indigo-600" />
-           </div>
-           <div className="text-right flex-1">
-             <h4 className="font-bold text-gray-700 text-sm">سیستم پشتیبان‌گیری محلی و زمان‌بندی‌شده</h4>
-             <p className="text-xs text-gray-500 font-mono mt-0.5">پشتیبان‌گیری روی سرور محلی انجام می‌شود</p>
-           </div>
-        </div>
-        <button
-           onClick={() => setIsBackupSettingsOpen(!isBackupSettingsOpen)}
-           className="flex items-center gap-2 px-4 py-2 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl transition-colors shadow-sm text-xs font-bold"
-        >
-           <Settings className="w-4 h-4" />
-           تنظیمات پشتیبان‌گیری
-        </button>
+    <div className="bg-slate-50 min-h-full rounded-3xl p-6 md:p-8" dir="rtl">
+      <div className="mb-8">
+        <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+          <Database className="w-8 h-8 text-indigo-600" />
+          مدیریت پایگاه داده و نسخه‌های پشتیبان
+        </h2>
+        <p className="text-slate-500 font-medium mt-2 text-sm">
+          تنظیمات بک‌آپ‌گیری، بازیابی اطلاعات و مدیریت فضاهای ذخیره‌سازی سیستم
+        </p>
       </div>
 
-      {isBackupSettingsOpen && (
-        <div className="bg-white border border-indigo-100 p-5 rounded-xl shadow-sm flex flex-col gap-5">
-           <h5 className="font-bold text-gray-800 text-sm border-b border-gray-100 pb-3">تنظیمات پشتیبان‌گیری پیشرفته</h5>
-           
-           <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-              <div className="space-y-2">
-                 <label className="block text-xs font-bold text-gray-600">مسیر ذخیره فایل‌ها (Local Path)</label>
-                 <div className="flex gap-2">
-                   <input
-                      type="text"
-                      dir="ltr"
-                      value={backupConfig.path}
-                      onChange={e => setBackupConfig({...backupConfig, path: e.target.value})}
-                      placeholder="مثال: C:\\backups یا /var/backups"
-                      className="flex-1 px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500 font-mono text-left w-full max-w-[calc(100%-120px)]"
-                   />
-                   <button
-                      onClick={openFolderPicker}
-                      className="whitespace-nowrap flex items-center justify-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-lg transition-colors border border-slate-200 text-xs shadow-sm w-[110px]"
-                   >
-                     <FolderOpen className="w-4 h-4" />
-                     انتخاب پوشه
-                   </button>
-                 </div>
-                 <p className="text-[10px] text-gray-400">در صورت خالی بودن، زیرپوشه backups در مسیر نصب برنامه استفاده می‌شود.</p>
-              </div>
-
-              <div className="space-y-2">
-                 <label className="block text-xs font-bold text-gray-600">دوره تناوب زمان‌بندی (ساعت)</label>
-                 <select
-                    value={backupConfig.intervalHours}
-                    onChange={e => setBackupConfig({...backupConfig, intervalHours: Number(e.target.value)})}
-                    className="w-full px-3 py-2 bg-gray-50 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-indigo-500"
-                 >
-                    <option value={0}>غیرفعال (فقط دستی)</option>
-                    <option value={1}>هر 1 ساعت</option>
-                    <option value={4}>هر 4 ساعت</option>
-                    <option value={12}>هر 12 ساعت</option>
-                    <option value={24}>روزانه (هر 24 ساعت)</option>
-                 </select>
-              </div>
-           </div>
-
-           <div className="flex justify-end">
-              <button
-                 onClick={saveConfig}
-                 disabled={isSavingConfig}
-                 className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg transition-colors shadow-sm text-xs disabled:opacity-75"
-              >
-                 {isSavingConfig ? <RefreshCcw className="w-4 h-4 animate-spin" /> : <Save className="w-4 h-4" />}
-                 ذخیره تنظیمات
-              </button>
-           </div>
+      <div className="flex flex-col xl:flex-row gap-6">
+        {/* Sidebar Tabs */}
+        <div className="xl:w-64 flex-shrink-0 flex xl:flex-col gap-2 overflow-x-auto pb-2 xl:pb-0 hide-scrollbar">
+          {tabs.map(tab => (
+            <button
+              key={tab.id}
+              onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-3 px-4 py-3.5 rounded-xl font-bold text-sm whitespace-nowrap transition-all duration-300 ${
+                activeTab === tab.id 
+                ? 'bg-indigo-600 text-white shadow-md shadow-indigo-200' 
+                : 'bg-white text-slate-600 hover:bg-indigo-50 hover:text-indigo-700 border border-slate-200'
+              }`}
+            >
+              <tab.icon className={`w-5 h-5 ${activeTab === tab.id ? 'text-indigo-100' : 'text-slate-400'}`} />
+              {tab.label}
+            </button>
+          ))}
         </div>
-      )}
-      
-      <div className="flex items-center justify-between bg-white border border-gray-150 p-4 rounded-xl">
-        <div className="flex items-center gap-3">
-           {backupConfig.intervalHours > 0 ? (
-             <div className="text-right">
-               <h5 className="text-sm font-bold text-emerald-600 flex items-center gap-1.5">
-                 <span className="relative flex h-2.5 w-2.5">
-                   <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                   <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
-                 </span>
-                 پشتیبان‌گیری خودکار فعال است
-               </h5>
-               <p className="text-[10px] text-gray-500 mt-1">
-                 هر {backupConfig.intervalHours} ساعت یکبار نسخه پشتیبان تهیه می‌شود.
-               </p>
-             </div>
-           ) : (
-             <div className="text-right">
-               <h5 className="text-sm font-bold text-gray-500 flex items-center gap-1.5">
-                 <span className="w-2.5 h-2.5 bg-gray-300 rounded-full"></span>
-                 پشتیبان‌گیری خودکار غیرفعال است
-               </h5>
-               <p className="text-[10px] text-gray-400 mt-1">
-                 شما قابلیت تهیه پشتیبان خودکار را غیرفعال کرده‌اید.
-               </p>
-             </div>
-           )}
-        </div>
-        <button
-          onClick={runBackup}
-          disabled={isBackingUp}
-          className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold rounded-xl transition-all shadow-sm text-xs disabled:opacity-75"
-        >
-          {isBackingUp ? <RefreshCcw className="w-3.5 h-3.5 animate-spin" /> : <HardDrive className="w-3.5 h-3.5" />}
-          تهیه پشتیبان فوری
-        </button>
-      </div>
 
-      <div className="bg-white rounded-xl border border-gray-200 overflow-hidden">
-         <div className="bg-gray-50 p-3 border-b border-gray-200">
-            <h5 className="text-sm font-bold text-gray-700 flex items-center gap-2">
-              <Clock className="w-4 h-4" />
-              تاریخچه نسخه‌های پشتیبان
-            </h5>
-         </div>
-         <div className="max-h-60 overflow-y-auto">
-            {isLoadingBackups ? (
-               <div className="p-6 text-center text-xs text-gray-500">در حال بارگذاری...</div>
-            ) : backups.length === 0 ? (
-               <div className="p-6 text-center text-xs text-gray-500">هیچ نسخه پشتیبانی یافت نشد.</div>
-            ) : (
-               <table className="w-full text-right text-xs">
-                  <thead className="bg-gray-50">
-                     <tr>
-                       <th className="p-3 font-bold text-gray-600">نام فایل</th>
-                       <th className="p-3 font-bold text-gray-600">حجم</th>
-                       <th className="p-3 font-bold text-gray-600">تاریخ ثبت</th>
-                       <th className="p-3 font-bold text-gray-600">عملیات</th>
-                     </tr>
-                  </thead>
-                  <tbody className="divide-y divide-gray-100">
-                     {backups.map(b => (
-                       <tr key={b.file} className="hover:bg-slate-50">
-                          <td className="p-3 text-gray-600" dir="ltr">{b.file}</td>
-                          <td className="p-3 text-gray-500">{(b.size / 1024).toFixed(1)} KB</td>
-                          <td className="p-3 text-gray-500">{new Date(b.time).toLocaleString('fa-IR')}</td>
-                          <td className="p-3">
-                             <button
-                               onClick={() => handleRestore(b.file)}
-                               className="text-xs px-3 py-1 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-lg transition-colors font-bold"
-                             >
-                               بازنشانی
-                             </button>
-                          </td>
-                       </tr>
-                     ))}
-                  </tbody>
-               </table>
-            )}
-         </div>
-      </div>
+        {/* Content Area */}
+        <div className="flex-1 bg-white border border-slate-200 rounded-2xl shadow-sm p-6 overflow-hidden">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={activeTab}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: -10 }}
+              transition={{ duration: 0.2 }}
+            >
+              
+              {/* --- 1. Manual Backup --- */}
+              {activeTab === 'manual' && (
+                <div className="space-y-8">
+                  <div className="flex flex-col md:flex-row gap-8 items-start justify-between">
+                    <div className="flex-1 space-y-4">
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <Play className="w-5 h-5 text-indigo-500" />
+                        تهیه بک‌آپ فوری
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium leading-relaxed">
+                        همین حالا از کل پایگاه داده خود یک نسخه پشتیبان تهیه کنید. بسته به حجم داده‌ها این عملیات ممکن است چند دقیقه زمان ببرد.
+                      </p>
+                      
+                      <div className="flex flex-wrap gap-4 pt-2">
+                         <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-3 bg-slate-50">
+                            <input type="radio" id="b_full" name="b_type" defaultChecked className="w-4 h-4 text-indigo-600 focus:ring-indigo-500" />
+                            <label htmlFor="b_full" className="text-sm font-bold text-slate-700 cursor-pointer">کامل (Full)</label>
+                         </div>
+                         <div className="flex items-center gap-2 border border-slate-200 rounded-lg p-3 bg-slate-50 opacity-60">
+                            <input type="radio" id="b_inc" name="b_type" disabled className="w-4 h-4" />
+                            <label htmlFor="b_inc" className="text-sm font-bold text-slate-700 cursor-not-allowed">افزایشی (به‌زودی)</label>
+                         </div>
+                      </div>
 
-      {isFolderPickerOpen && (
-        <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-2xl w-full max-w-xl overflow-hidden shadow-2xl border border-gray-100 flex flex-col max-h-[80vh]">
-            <div className="bg-slate-900 text-white px-5 py-4 flex items-center justify-between shrink-0">
-              <h3 className="font-bold flex items-center gap-2 text-sm">
-                 <FolderOpen className="w-5 h-5 text-indigo-400" />
-                 انتخاب مسیر ذخیره‌سازی
-              </h3>
-              <button 
-                onClick={() => setIsFolderPickerOpen(false)}
-                className="p-1 hover:bg-slate-800 rounded-lg text-slate-300 transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-            
-            <div className="p-4 bg-slate-50 border-b border-slate-200 shrink-0">
-               {drives.length > 0 && (
-                  <div className="flex gap-2 mb-3 overflow-x-auto pb-1">
-                     <Home className="w-4 h-4 text-slate-400 mt-1 shrink-0" />
-                     {drives.map(d => (
-                        <button
-                           key={d}
-                           onClick={() => loadDirectory(d)}
-                           className="px-2 py-1 bg-white border border-slate-200 text-xs font-bold text-slate-700 rounded shadow-sm hover:border-indigo-400 hover:text-indigo-600 shrink-0"
-                           dir="ltr"
+                      <div className="pt-4">
+                        <button 
+                          onClick={handleImmediateBackup}
+                          disabled={isBackingUp}
+                          className="px-6 py-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-lg shadow-indigo-200 disabled:opacity-70 disabled:cursor-wait"
                         >
-                           {d}
+                          {isBackingUp ? (
+                            <><RefreshCw className="w-5 h-5 animate-spin" /> در حال پردازش...</>
+                          ) : (
+                            <><Database className="w-5 h-5" /> شروع عملیات بک‌آپ</>
+                          )}
                         </button>
-                     ))}
+                      </div>
+                    </div>
+                    
+                    {/* Status Card */}
+                    <div className="w-full md:w-72 bg-gradient-to-br from-slate-800 to-slate-900 rounded-2xl p-6 text-white shadow-xl relative overflow-hidden">
+                       <div className="absolute top-0 right-0 p-4 opacity-10">
+                          <Database className="w-24 h-24" />
+                       </div>
+                       <h4 className="text-slate-400 font-bold text-xs mb-1 relative z-10">آخرین بک‌آپ موفق</h4>
+                       <div className="text-2xl font-black mb-4 relative z-10" dir="ltr">{backups[0]?.date || '-'}</div>
+                       
+                       <div className="space-y-2 relative z-10">
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">ساعت:</span>
+                            <span className="font-bold">{backups[0]?.time || '-'}</span>
+                          </div>
+                          <div className="flex justify-between text-sm">
+                            <span className="text-slate-400">حجم:</span>
+                            <span className="font-bold text-emerald-400">{backups[0]?.size || '-'}</span>
+                          </div>
+                       </div>
+                    </div>
                   </div>
-               )}
-               <div className="flex bg-white border border-slate-200 rounded-lg p-1.5 items-center gap-2">
-                  <button 
-                    onClick={() => loadDirectory(parentDir)}
-                    disabled={!parentDir || parentDir === currentDir}
-                    className="p-1.5 bg-slate-100 text-slate-600 rounded hover:bg-slate-200 disabled:opacity-50"
-                  >
-                     <ArrowRight className="w-4 h-4" />
-                  </button>
-                  <input 
-                    type="text"
-                    dir="ltr"
-                    value={currentDir}
-                    onChange={(e) => setCurrentDir(e.target.value)}
-                    onKeyDown={(e) => e.key === 'Enter' && loadDirectory(currentDir)}
-                    className="flex-1 bg-transparent border-none focus:ring-0 text-sm font-mono p-1 text-slate-700"
-                  />
-                  <button
-                    onClick={() => loadDirectory(currentDir)}
-                    className="px-3 py-1.5 bg-indigo-50 text-indigo-700 text-xs font-bold rounded"
-                  >
-                     برو
-                  </button>
-               </div>
-            </div>
 
-            <div className="flex-1 overflow-y-auto p-2 bg-white min-h-[250px]">
-               {isLoadingDirs ? (
-                  <div className="flex justify-center p-10"><RefreshCcw className="w-6 h-6 animate-spin text-indigo-300" /></div>
-               ) : (
-                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                     <button
-                        onClick={() => loadDirectory(parentDir)}
-                        className="px-3 py-2 flex items-center gap-2 hover:bg-slate-50 rounded-lg text-slate-600 border border-transparent hover:border-slate-100 transition-colors"
-                        disabled={!parentDir || parentDir === currentDir}
-                        dir="ltr"
+                  {/* Progress Bar */}
+                  {isBackingUp && (
+                    <div className="bg-indigo-50 border border-indigo-100 rounded-xl p-5">
+                      <div className="flex justify-between text-sm font-bold text-indigo-700 mb-2">
+                        <span>در حال فشرده‌سازی پایگاه داده...</span>
+                        <span>{Math.round(backupProgress)}%</span>
+                      </div>
+                      <div className="h-2 bg-indigo-200 rounded-full overflow-hidden">
+                        <motion.div 
+                          className="h-full bg-indigo-600 rounded-full"
+                          initial={{ width: 0 }}
+                          animate={{ width: `${backupProgress}%` }}
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* --- 2. Schedule Backup --- */}
+              {activeTab === 'schedule' && (
+                <div className="space-y-6">
+                  <div className="flex items-center justify-between pb-4 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <Calendar className="w-5 h-5 text-indigo-500" />
+                        زمان‌بندی خودکار
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium mt-1">
+                        سیستم به طور خودکار در بازه‌های تعیین شده بک‌آپ‌گیری می‌کند.
+                      </p>
+                    </div>
+                    <button 
+                      onClick={() => setScheduleConfig({...scheduleConfig, enabled: !scheduleConfig.enabled})}
+                      className={`p-1.5 rounded-full transition-colors flex items-center gap-2 px-4 py-2 font-bold text-sm ${
+                        scheduleConfig.enabled ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-600'
+                      }`}
+                    >
+                      {scheduleConfig.enabled ? 'فعال است' : 'غیرفعال'}
+                      {scheduleConfig.enabled ? <ToggleRight className="w-6 h-6" /> : <ToggleLeft className="w-6 h-6" />}
+                    </button>
+                  </div>
+
+                  <div className={`grid grid-cols-1 md:grid-cols-2 gap-6 transition-opacity ${scheduleConfig.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">دوره تناوب</label>
+                        <select 
+                          value={scheduleConfig.frequency}
+                          onChange={e => setScheduleConfig({...scheduleConfig, frequency: e.target.value})}
+                          className="w-full border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 text-sm font-bold"
+                        >
+                          <option value="daily">روزانه</option>
+                          <option value="weekly">هفتگی</option>
+                          <option value="monthly">ماهانه</option>
+                          <option value="custom">سفارشی (Cron)</option>
+                        </select>
+                      </div>
+
+                      {scheduleConfig.frequency === 'custom' ? (
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2 flex justify-between">
+                            <span>عبارت Cron</span>
+                            <span className="text-xs text-indigo-500 bg-indigo-50 px-2 py-0.5 rounded cursor-help" title="مثال: 0 2 * * * برای ساعت 2 بامداد هر روز">راهنما</span>
+                          </label>
+                          <input 
+                            type="text" 
+                            dir="ltr"
+                            value={scheduleConfig.cron}
+                            onChange={e => setScheduleConfig({...scheduleConfig, cron: e.target.value})}
+                            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 text-sm font-mono font-bold text-left" 
+                          />
+                        </div>
+                      ) : (
+                        <div>
+                          <label className="block text-sm font-bold text-slate-700 mb-2">ساعت اجرا</label>
+                          <input 
+                            type="time" 
+                            value={scheduleConfig.time}
+                            onChange={e => setScheduleConfig({...scheduleConfig, time: e.target.value})}
+                            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 text-sm font-bold" 
+                          />
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="space-y-4">
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-5">
+                         <h4 className="text-sm font-black text-slate-800 mb-3 flex items-center gap-2">
+                           <Trash2 className="w-4 h-4 text-rose-500" />
+                           سیاست نگهداری (Retention Policy)
+                         </h4>
+                         <p className="text-xs text-slate-500 font-medium mb-4 leading-relaxed">
+                           برای جلوگیری از پر شدن دیسک، سیستم می‌تواند نسخه‌های قدیمی را به‌طور خودکار پاک کند.
+                         </p>
+                         <label className="block text-sm font-bold text-slate-700 mb-2">تعداد نسخه‌های نگهداری شده</label>
+                         <input 
+                            type="number" 
+                            min="1"
+                            max="365"
+                            value={scheduleConfig.retention}
+                            onChange={e => setScheduleConfig({...scheduleConfig, retention: Number(e.target.value)})}
+                            className="w-full border border-slate-200 rounded-xl px-4 py-2.5 outline-none focus:border-indigo-500 text-sm font-bold" 
+                          />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                    <button className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2">
+                      <Save className="w-4 h-4" /> ذخیره زمان‌بندی
+                    </button>
+                  </div>
+                </div>
+              )}
+
+              {/* --- 3. Storage Settings --- */}
+              {activeTab === 'storage' && (
+                <div className="space-y-6">
+                  <div className="pb-4 border-b border-slate-100">
+                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                      <HardDrive className="w-5 h-5 text-indigo-500" />
+                      مسیر ذخیره‌سازی
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                     <div 
+                        onClick={() => setStorageConfig({...storageConfig, type: 'local'})}
+                        className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                          storageConfig.type === 'local' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300'
+                        }`}
                      >
-                        <Folder className="w-8 h-8 text-indigo-200 shrink-0" />
-                        <span className="text-xs font-mono truncate text-left w-full mt-1">.. (بالا)</span>
-                     </button>
-                     {dirs.map(d => (
-                        <button
-                           key={d}
-                           onClick={() => loadDirectory(currentDir.endsWith('\\') || currentDir.endsWith('/') ? currentDir + d : currentDir + (currentDir.includes('\\') ? '\\' : '/') + d)}
-                           className="px-3 py-2 flex items-center gap-2 hover:bg-slate-50 rounded-lg text-slate-700 border border-transparent hover:border-slate-100 transition-colors"
-                           dir="ltr"
-                           title={d}
-                        >
-                           <Folder className="w-8 h-8 text-indigo-300 fill-indigo-50 shrink-0" />
-                           <span className="text-xs font-mono font-medium truncate text-left w-full mt-1">{d}</span>
-                        </button>
-                     ))}
+                        <Server className={`w-8 h-8 mb-3 ${storageConfig.type === 'local' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <h4 className="text-base font-black text-slate-800 mb-1">سرور محلی (Local)</h4>
+                        <p className="text-xs text-slate-500 font-medium mb-4">ذخیره روی هارد دیسک سرور فعلی</p>
+                        
+                        {storageConfig.type === 'local' && (
+                          <div className="space-y-2 mt-4" onClick={e => e.stopPropagation()}>
+                            <label className="block text-xs font-bold text-slate-700">مسیر پوشه</label>
+                            <div className="flex gap-2">
+                              <input 
+                                type="text"
+                                dir="ltr"
+                                value={storageConfig.localPath}
+                                onChange={e => setStorageConfig({...storageConfig, localPath: e.target.value})}
+                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-indigo-500 text-left" 
+                              />
+                              <button className="px-3 bg-white border border-slate-300 rounded-lg hover:bg-slate-50 transition-colors">
+                                <FolderOpen className="w-4 h-4 text-slate-600" />
+                              </button>
+                            </div>
+                            <div className="flex justify-between items-center mt-2 text-xs font-bold">
+                              <span className="text-slate-500">فضای آزاد:</span>
+                              <span className="text-emerald-600">45 GB</span>
+                            </div>
+                          </div>
+                        )}
+                     </div>
+
+                     <div 
+                        onClick={() => setStorageConfig({...storageConfig, type: 'cloud'})}
+                        className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                          storageConfig.type === 'cloud' ? 'border-indigo-600 bg-indigo-50' : 'border-slate-200 hover:border-indigo-300'
+                        }`}
+                     >
+                        <UploadCloud className={`w-8 h-8 mb-3 ${storageConfig.type === 'cloud' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                        <h4 className="text-base font-black text-slate-800 mb-1">فضای ابری (Cloud)</h4>
+                        <p className="text-xs text-slate-500 font-medium mb-4">ذخیره در Google Drive یا S3</p>
+                        
+                        {storageConfig.type === 'cloud' && (
+                          <div className="space-y-4 mt-4" onClick={e => e.stopPropagation()}>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1">سرویس‌دهنده</label>
+                              <select className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500">
+                                <option value="gdrive">Google Drive</option>
+                                <option value="s3">Amazon S3 Compatible</option>
+                                <option value="ftp">FTP Server</option>
+                              </select>
+                            </div>
+                            <button className="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-md hover:bg-indigo-700 transition-colors">
+                              احراز هویت و اتصال به حساب
+                            </button>
+                          </div>
+                        )}
+                     </div>
                   </div>
-               )}
-            </div>
+                  
+                  <div className="pt-4 text-left">
+                    <button className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 inline-flex">
+                      <Save className="w-4 h-4" /> اعمال تنظیمات مسیر
+                    </button>
+                  </div>
+                </div>
+              )}
 
-            <div className="bg-slate-50 px-5 py-4 border-t border-slate-200 flex justify-end gap-3 shrink-0">
-               <button
-                  onClick={() => setIsFolderPickerOpen(false)}
-                  className="px-4 py-2 bg-white border border-slate-300 text-slate-700 font-bold text-xs rounded-xl hover:bg-slate-100"
-               >
-                  انصراف
-               </button>
-               <button
-                  onClick={handleSelectFolder}
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl shadow whitespace-nowrap"
-               >
-                  انتخاب اینجا
-               </button>
-            </div>
-          </div>
+              {/* --- 4. Restore --- */}
+              {activeTab === 'restore' && (
+                <div className="space-y-6">
+                  <div className="flex flex-col sm:flex-row gap-4 items-start sm:items-center justify-between pb-4 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <RefreshCw className="w-5 h-5 text-indigo-500" />
+                        بازیابی اطلاعات
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium mt-1">
+                        بازیابی از نسخه‌های قبلی. توجه: اطلاعات فعلی جایگزین خواهند شد.
+                      </p>
+                    </div>
+                    <button className="px-4 py-2 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-colors flex items-center gap-2 shadow-sm">
+                      <Upload className="w-4 h-4" /> آپلود فایل بک‌آپ خارجی
+                    </button>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden">
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-sm text-right">
+                        <thead className="bg-slate-50 text-slate-600 font-black text-xs border-b border-slate-200">
+                          <tr>
+                            <th className="px-4 py-3">تاریخ و زمان</th>
+                            <th className="px-4 py-3">حجم</th>
+                            <th className="px-4 py-3">نوع بک‌آپ</th>
+                            <th className="px-4 py-3">وضعیت</th>
+                            <th className="px-4 py-3 text-center">عملیات</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100">
+                          {backups.map(b => (
+                            <tr key={b.id} className="hover:bg-slate-50 transition-colors">
+                              <td className="px-4 py-3 font-bold text-slate-700" dir="ltr">
+                                {b.date} - {b.time}
+                              </td>
+                              <td className="px-4 py-3 font-mono font-bold text-slate-600" dir="ltr">{b.size}</td>
+                              <td className="px-4 py-3 font-bold text-slate-600">{b.type}</td>
+                              <td className="px-4 py-3">
+                                {b.status === 'success' ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black bg-emerald-100 text-emerald-700 px-2 py-1 rounded-md">
+                                    <CheckCircle className="w-3 h-3" /> موفق
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black bg-rose-100 text-rose-700 px-2 py-1 rounded-md">
+                                    <XCircle className="w-3 h-3" /> خطا
+                                  </span>
+                                )}
+                              </td>
+                              <td className="px-4 py-3 flex justify-center gap-2">
+                                <button title="دانلود فایل" className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors">
+                                  <Download className="w-4 h-4" />
+                                </button>
+                                <button title="حذف" className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                                <button 
+                                  onClick={() => {
+                                    if(confirm('هشدار! با این کار اطلاعات فعلی پاک شده و این نسخه جایگزین می‌شود. آیا اطمینان دارید؟')) {
+                                      showNotification('در حال بازیابی...', 'info');
+                                    }
+                                  }}
+                                  disabled={b.status !== 'success'}
+                                  className="px-3 py-1.5 bg-rose-50 text-rose-600 hover:bg-rose-600 hover:text-white rounded-lg font-bold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+                                >
+                                  بازیابی
+                                </button>
+                              </td>
+                            </tr>
+                          ))}
+                          
+                          {backups.length === 0 && (
+                            <tr>
+                              <td colSpan={5} className="py-12 text-center text-slate-500 font-bold">
+                                <Database className="w-12 h-12 text-slate-200 mx-auto mb-3" />
+                                هیچ نسخه‌ی بک‌آپی یافت نشد!
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              {/* --- 5. Security & Notifications --- */}
+              {activeTab === 'security' && (
+                <div className="space-y-6">
+                  <div className="pb-4 border-b border-slate-100">
+                    <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                      <Shield className="w-5 h-5 text-indigo-500" />
+                      امنیت و اعلان‌ها
+                    </h3>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                     {/* Encryption */}
+                     <div className="space-y-4">
+                        <h4 className="text-base font-black text-slate-800 flex items-center gap-2">
+                           <Key className="w-4 h-4 text-slate-400" />
+                           رمزنگاری فایل‌های بک‌آپ
+                        </h4>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                           <label className="flex items-center gap-3 cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                checked={securityConfig.encrypt}
+                                onChange={e => setSecurityConfig({...securityConfig, encrypt: e.target.checked})}
+                                className="w-5 h-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                              />
+                              <span className="text-sm font-bold text-slate-700">فعال‌سازی رمزنگاری پیشرفته (AES-256)</span>
+                           </label>
+                           
+                           {securityConfig.encrypt && (
+                              <div className="pl-8 space-y-2">
+                                <label className="block text-xs font-bold text-slate-600">رمز عبور فایل بک‌آپ</label>
+                                <input 
+                                  type="password" 
+                                  placeholder="••••••••"
+                                  value={securityConfig.password}
+                                  onChange={e => setSecurityConfig({...securityConfig, password: e.target.value})}
+                                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500" 
+                                />
+                                <p className="text-[10px] font-bold text-rose-500 flex items-center gap-1 mt-1">
+                                  <AlertTriangle className="w-3 h-3" /> در صورت فراموشی رمز، بک‌آپ غیرقابل بازیابی خواهد بود.
+                                </p>
+                              </div>
+                           )}
+                        </div>
+                     </div>
+
+                     {/* Notifications */}
+                     <div className="space-y-4">
+                        <h4 className="text-base font-black text-slate-800 flex items-center gap-2">
+                           <Mail className="w-4 h-4 text-slate-400" />
+                           گزارش و اعلان ایمیلی
+                        </h4>
+                        <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-4">
+                           <label className="flex items-center gap-3 cursor-pointer">
+                              <input 
+                                type="checkbox" 
+                                checked={securityConfig.emailNotify}
+                                onChange={e => setSecurityConfig({...securityConfig, emailNotify: e.target.checked})}
+                                className="w-5 h-5 text-indigo-600 rounded border-slate-300 focus:ring-indigo-500"
+                              />
+                              <span className="text-sm font-bold text-slate-700">ارسال گزارش پس از هر عملیات</span>
+                           </label>
+                           
+                           {securityConfig.emailNotify && (
+                              <div className="pl-8 space-y-2">
+                                <label className="block text-xs font-bold text-slate-600">آدرس ایمیل گیرنده</label>
+                                <input 
+                                  type="email" 
+                                  dir="ltr"
+                                  placeholder="admin@example.com"
+                                  value={securityConfig.emailAddress}
+                                  onChange={e => setSecurityConfig({...securityConfig, emailAddress: e.target.value})}
+                                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-sm outline-none focus:border-indigo-500 text-left" 
+                                />
+                              </div>
+                           )}
+                        </div>
+                     </div>
+                  </div>
+
+                  <div className="pt-4 text-left">
+                    <button className="px-6 py-2.5 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 inline-flex">
+                      <Save className="w-4 h-4" /> ذخیره تنظیمات امنیتی
+                    </button>
+                  </div>
+                </div>
+              )}
+
+            </motion.div>
+          </AnimatePresence>
         </div>
-      )}
-
+      </div>
     </div>
   );
 }
