@@ -114,6 +114,17 @@ export default function PersonsManager(props: any) {
     return saved ? JSON.parse(saved) : {key: 'name', direction: 'asc'};
   });
   const [isBulkLoading, setIsBulkLoading] = useState(false);
+  const [localSearchTerm, setLocalSearchTerm] = useState(personSearchTerm || "");
+  useEffect(() => { setLocalSearchTerm(personSearchTerm || ""); }, [personSearchTerm]);
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if (localSearchTerm !== personSearchTerm) {
+        setPersonSearchTerm(localSearchTerm);
+        setPersonCurrentPage(1);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [localSearchTerm, personSearchTerm, setPersonSearchTerm, setPersonCurrentPage]);
   const [rowLoadingId, setRowLoadingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -516,8 +527,8 @@ export default function PersonsManager(props: any) {
               type="text"
               className="w-full pl-3 pr-9 py-2 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all text-sm font-bold outline-none"
               placeholder="جستجو: نام، موبایل، کدملی، شناسه..."
-              value={personSearchTerm}
-              onChange={(e) => { setPersonSearchTerm(e.target.value); setPersonCurrentPage(1); }}
+              value={localSearchTerm}
+              onChange={(e) => setLocalSearchTerm(e.target.value)}
             />
           </div>
           

@@ -197,7 +197,7 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
           <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm flex overflow-x-auto gap-2 custom-scrollbar max-w-full">
           {[
             { id: 'check_charts', label: 'داشبورد', icon: <BarChartIcon className="w-4 h-4" /> },
-            { id: 'checkbooks', label: 'دسته‌چک‌ها', icon: <BookOpen className="w-4 h-4" /> },
+            
             
             { id: 'received_checks', label: 'چک‌های دریافتی', icon: <ArrowDownLeft className="w-4 h-4" /> },
             { id: 'check_calendar', label: 'تقویم سررسید', icon: <Calendar className="w-4 h-4" /> },
@@ -237,15 +237,7 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
             formatCurrency={(v) => Number(v).toLocaleString()}
              storeSettings={storeSettings}
           />
-          {activeSubTab === 'checkbooks' && <CheckbooksManager 
-            showNotification={showNotification} 
-            checkbooks={checkbooks} 
-            setCheckbooks={setCheckbooks} 
-            accounts={accounts}
-              storeSettings={storeSettings} 
-            setIssuedCheckbookFilter={filters.setIssuedCheckbookFilter} 
-            setActiveSubTab={setActiveSubTab} 
-          />}
+          
           {activeSubTab === 'issued_checks' && viewMode === 'list' && (
             <IssuedChecksList 
               showNotification={notify} onEditReceiptByCheck={onEditReceiptByCheck}

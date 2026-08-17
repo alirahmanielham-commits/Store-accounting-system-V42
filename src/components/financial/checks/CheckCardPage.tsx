@@ -50,6 +50,9 @@ export default function CheckCardPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const [confirmModalData, setConfirmModalData] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void} | null>(null);
+
   const [editFormData, setEditFormData] = useState<any>({});
 
   useEffect(() => {
@@ -332,9 +335,28 @@ export default function CheckCardPage({
           <h2 className="text-xl font-bold text-slate-600">یک چک را برای مشاهده پرونده انتخاب کنید</h2>
           <p className="text-slate-400 mt-2">ابتدا نوع چک (پرداختی/دریافتی) را مشخص کرده و سپس در کادر بالا جستجو کنید</p>
         </div>
+      <AnimatePresence>
+      {confirmModalData?.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-sm w-full" dir="rtl">
+            <h3 className="text-xl font-black text-slate-800 mb-4">{confirmModalData.title}</h3>
+            <p className="text-slate-600 mb-6 font-medium leading-relaxed">{confirmModalData.message}</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setConfirmModalData(null)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors">
+                انصراف
+              </button>
+              <button onClick={confirmModalData.onConfirm} disabled={saving} className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                {saving ? 'در حال پردازش...' : 'بله، تایید میکنم'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      </AnimatePresence>
+
       </motion.div>
-    );
-  }
+  );
+}
 
   const currentStatus = check.status || 'draft';
   const allowedNext = transitions[currentStatus] || [];
@@ -426,7 +448,7 @@ export default function CheckCardPage({
                     className={`w-full text-right px-4 py-3 border-b border-slate-50 last:border-0 hover:bg-slate-50 transition-colors flex flex-col ${c.id === currentCheckId ? 'bg-indigo-50/50' : ''}`}
                   >
                     <span className="font-bold text-slate-700">چک {c.checkNumber}</span>
-                    <span className="text-xs text-slate-500">{Number(c.amount).toLocaleString('fa-IR')} ریال - شناسه صیاد: {c.sayadId || 'ندارد'}</span>
+                    <span className="text-xs text-slate-500">{Number(c.amount).toLocaleString('fa-IR')} {storeSettings?.currency || 'تومان'} - شناسه صیاد: {c.sayadId || 'ندارد'}</span>
                   </button>
                 ))}
               </div>
@@ -453,9 +475,9 @@ export default function CheckCardPage({
               <span className="text-4xl md:text-5xl font-black tracking-tighter text-white drop-shadow-sm font-sans" dir="ltr">
                 {Number(check.amount).toLocaleString('fa-IR')}
               </span>
-              <span className="text-xl text-slate-300 font-medium mb-1">ریال</span>
+              <span className="text-xl text-slate-300 font-medium mb-1">{storeSettings?.currency || 'تومان'}</span>
             </div>
-            <span className="text-slate-400 text-sm bg-white/10 px-3 py-1 rounded-full">{Num2persian(check.amount)} ریال</span>
+            <span className="text-slate-400 text-sm bg-white/10 px-3 py-1 rounded-full">{Num2persian(check.amount)} {storeSettings?.currency || 'تومان'}</span>
           </div>
 
           <div className="relative z-10 flex flex-col items-center md:items-end">
@@ -746,7 +768,7 @@ export default function CheckCardPage({
                 <input type="text" value={editFormData.checkNumber} onChange={e => setEditFormData({...editFormData, checkNumber: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
               </div>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-1">مبلغ (ریال)</label>
+                <label className="block text-sm font-bold text-slate-700 mb-1">مبلغ ({storeSettings?.currency || 'تومان'})</label>
                 <input type="number" value={editFormData.amount} onChange={e => setEditFormData({...editFormData, amount: e.target.value})} className="w-full px-3 py-2 border rounded-xl" />
               </div>
               <div>

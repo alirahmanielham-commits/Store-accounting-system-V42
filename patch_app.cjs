@@ -1,41 +1,15 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/App.tsx', 'utf8');
 
-const target = `{viewingCheck ? (
-                           <CheckCardPage 
-                             checkId={viewingCheck.id} checkType={viewingCheck._type}
-                             onClose={() => {
-                               setViewingCheck(null);
-                               setActiveTab('check_panel');
-                             }}
-                             showNotification={showNotification}
-                             currentUser={user?.name || 'سیستم'}
-                             storeSettings={storeSettings}
-                             onViewAccountingDoc={(doc) => {
-                               setViewingAccountingDoc(doc);
-                               setIsAccountingDocModalOpen(true);
-                             }}
-                           />
-                        ) : (
-                           <div className="h-full flex flex-col items-center justify-center text-gray-500">
-                              هیچ چکی انتخاب نشده است. لطفا از لیست چک‌ها اقدام کنید.
-                           </div>
-                        )}`;
+// Ensure we import CheckbooksManager if not already imported
+if (!code.includes("import CheckbooksManager")) {
+  code = code.replace(/import CheckManagement from ".\/components\/financial\/CheckManagement";/, 'import CheckManagement from "./components/financial/CheckManagement";\nimport CheckbooksManager from "./components/financial/CheckbooksManager";');
+}
 
-const replacement = `<CheckCardPage 
-                             checkId={viewingCheck?.id || null} checkType={viewingCheck?._type || 'issued'}
-                             onClose={() => {
-                               setViewingCheck(null);
-                               setActiveTab('check_panel');
-                             }}
-                             showNotification={showNotification}
-                             currentUser={user?.name || 'سیستم'}
-                             storeSettings={storeSettings}
-                             onViewAccountingDoc={(doc) => {
-                               setViewingAccountingDoc(doc);
-                               setIsAccountingDocModalOpen(true);
-                             }}
-                           />`;
+// Add the route for /checkbooks right before /check_panel
+code = code.replace(
+  '<Route path="/check_panel"', 
+  '<Route path="/checkbooks" element={<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="h-full"><CheckbooksManager storeSettings={storeSettings} showNotification={showNotification} /></motion.div>} />\n<Route path="/check_panel"'
+);
 
-code = code.replace(target, replacement);
 fs.writeFileSync('src/App.tsx', code, 'utf8');

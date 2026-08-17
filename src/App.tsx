@@ -960,6 +960,7 @@ export default function App() {
                            />
                       </motion.div>} />
 
+<Route path="/checkbooks" element={<motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="h-full"><CheckbooksManager storeSettings={storeSettings} showNotification={showNotification} /></motion.div>} />
 <Route path="/check_panel" element={<motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}

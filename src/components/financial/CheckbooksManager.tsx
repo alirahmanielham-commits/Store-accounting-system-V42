@@ -1,4 +1,5 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { getCheckbooks as fetchCheckbooks, getAccounts } from '../../services/dataService';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Plus, Building2, Edit2, Trash2, X, ChevronDown, Calendar, Save } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
@@ -10,7 +11,20 @@ import { addCheckbook, updateCheckbook, deleteCheckbook, getCheckbooks } from '.
 import { convertToGregorian, formatDateDisplay } from '../../utils/format';
 
 export default function CheckbooksManager(props: any) {
-  const { checkbooks, setCheckbooks, accounts, setIssuedCheckbookFilter, setActiveSubTab, storeSettings, showNotification } = props;
+  const { setIssuedCheckbookFilter, setActiveSubTab, storeSettings, showNotification } = props;
+
+  const [localCheckbooks, setLocalCheckbooks] = useState<any[]>(props.checkbooks || []);
+  const [localAccounts, setLocalAccounts] = useState<any[]>(props.accounts || []);
+  
+  useEffect(() => {
+    if (!props.checkbooks) fetchCheckbooks().then(res => setLocalCheckbooks(res || []));
+    if (!props.accounts) getAccounts().then(res => setLocalAccounts(res || []));
+  }, [props.checkbooks, props.accounts]);
+
+  const checkbooks = props.checkbooks || localCheckbooks;
+  const accounts = props.accounts || localAccounts;
+  const setCheckbooks = props.setCheckbooks || setLocalCheckbooks;
+
   const notify = showNotification || ((msg: any) => console.log(msg));
 
   const [isCheckbookModalOpen, setIsCheckbookModalOpen] = useState(false);
@@ -21,10 +35,18 @@ export default function CheckbooksManager(props: any) {
   const [cbIssued, setCbIssued] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  const [confirmModalData, setConfirmModalData] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void} | null>(null);
+
+
   const handleSaveCheckbook = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!window.confirm(editingCheckbookId ? 'آیا از ویرایش این دسته چک اطمینان دارید؟' : 'آیا از ثبت این دسته چک اطمینان دارید؟')) return;
-    setIsSubmitting(true);
+    setConfirmModalData({
+      isOpen: true,
+      title: editingCheckbookId ? 'ویرایش دسته چک' : 'ثبت دسته چک',
+      message: editingCheckbookId ? 'آیا از ویرایش این دسته چک اطمینان دارید؟' : 'آیا از ثبت این دسته چک اطمینان دارید؟',
+      onConfirm: async () => {
+        setConfirmModalData(null);
+setIsSubmitting(true);
     const payload = {
       accountId: cbAccountId,
       startNumber: cbStart,
@@ -42,11 +64,13 @@ export default function CheckbooksManager(props: any) {
       }
       setIsCheckbookModalOpen(false);
       setCheckbooks(await getCheckbooks());
-    } catch (error) {
-      notify('خطا در ذخیره دسته چک', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
+        } catch (error) {
+          notify('خطا در ذخیره دسته چک', 'error');
+        } finally {
+          setIsSubmitting(false);
+        }
+      }
+    });
   };
 
   const deleteCb = async (id: string|number) => {
@@ -132,9 +156,28 @@ export default function CheckbooksManager(props: any) {
                     <Trash2 className="w-4 h-4" />
                   </button>
                 </div>
+      <AnimatePresence>
+      {confirmModalData?.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 print:hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-sm w-full" dir="rtl">
+            <h3 className="text-xl font-black text-slate-800 mb-4">{confirmModalData.title}</h3>
+            <p className="text-slate-600 mb-6 font-medium leading-relaxed">{confirmModalData.message}</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setConfirmModalData(null)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors">
+                انصراف
+              </button>
+              <button onClick={confirmModalData.onConfirm} disabled={isSubmitting} className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                {isSubmitting ? 'در حال پردازش...' : 'بله، تایید میکنم'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      </AnimatePresence>
+
               </div>
-            );
-        })}
+  );
+})}
         {(checkbooks || []).length === 0 && (
           <div className="col-span-full py-12 flex flex-col items-center justify-center bg-gray-50/50 rounded-2xl border-2 border-dashed border-gray-200">
             <Building2 className="w-12 h-12 text-gray-300 mb-3" />

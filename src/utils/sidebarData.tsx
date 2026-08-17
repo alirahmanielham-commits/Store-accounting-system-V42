@@ -137,6 +137,7 @@ export const allSidebarGroups: SidebarGroup[] = [
     icon: <BookOpen className="w-5 h-5" />,
     items: [
       { id: "check_panel", label: "پنل جامع مدیریت چک", roles: ["admin", "accountant", "manager", "viewer"] },
+      { id: "checkbooks", label: "دسته چک ها", roles: ["admin", "accountant", "manager"] },
       { id: "issue_check_form", label: "صدور چک", roles: ["admin", "accountant", "manager"] },
       { id: "issued_checks_page", label: "لیست چک‌های پرداختی", roles: ["admin", "accountant", "manager", "viewer"] },
       { id: "check_card", label: "کارت/برگه چک", roles: ["admin", "accountant", "manager", "viewer"] },

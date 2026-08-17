@@ -1,53 +1,89 @@
 const fs = require('fs');
-
 let code = fs.readFileSync('src/components/financial/CheckbooksManager.tsx', 'utf8');
 
-const targetState = `  const [cbIssued, setCbIssued] = useState('');`;
-const replacementState = `  const [cbIssued, setCbIssued] = useState('');\n  const [isSubmitting, setIsSubmitting] = useState(false);`;
+// Add confirmModalData state
+const stateToAdd = `
+  const [confirmModalData, setConfirmModalData] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void} | null>(null);
+`;
+code = code.replace('const [isSubmitting, setIsSubmitting] = useState(false);', 'const [isSubmitting, setIsSubmitting] = useState(false);\n' + stateToAdd);
 
-code = code.replace(targetState, replacementState);
-
-const targetFn = `  const handleSaveCheckbook = async (e: React.FormEvent) => {
+// Replace the handleSaveCheckbook logic to use modal
+code = code.replace(
+  /const handleSaveCheckbook = async \(e: React\.FormEvent\) => \{\s*e\.preventDefault\(\);\s*if \(!window\.confirm[^;]+;\s*/,
+  `const handleSaveCheckbook = async (e: React.FormEvent) => {
     e.preventDefault();
-    const payload = {`;
-const replacementFn = `  const handleSaveCheckbook = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!window.confirm(editingCheckbookId ? 'آیا از ویرایش این دسته چک اطمینان دارید؟' : 'آیا از ثبت این دسته چک اطمینان دارید؟')) return;
-    setIsSubmitting(true);
-    const payload = {`;
+    setConfirmModalData({
+      isOpen: true,
+      title: editingCheckbookId ? 'ویرایش دسته چک' : 'ثبت دسته چک',
+      message: editingCheckbookId ? 'آیا از ویرایش این دسته چک اطمینان دارید؟' : 'آیا از ثبت این دسته چک اطمینان دارید؟',
+      onConfirm: async () => {
+        setConfirmModalData(null);
+`
+);
 
-code = code.replace(targetFn, replacementFn);
+// Close the onConfirm logic
+code = code.replace(
+  /setCheckbooks\(await getCheckbooks\(\)\);\s*\} catch \(error\) \{\s*notify\('خطا در ذخیره دسته چک', 'error'\);\s*\} finally \{\s*setIsSubmitting\(false\);\s*\}\s*\};/m,
+  `setCheckbooks(await getCheckbooks());
+        } catch (error) {
+          notify('خطا در ذخیره دسته چک', 'error');
+        } finally {
+          setIsSubmitting(false);
+        }
+      }
+    });
+  };`
+);
 
-const targetTry = `      setIsCheckbookModalOpen(false);
-      setCheckbooks(await getCheckbooks());
-    } catch (error) {
-      notify('خطا در ذخیره دسته چک', 'error');
-    }
-  };`;
-const replacementTry = `      setIsCheckbookModalOpen(false);
-      setCheckbooks(await getCheckbooks());
-    } catch (error) {
-      notify('خطا در ذخیره دسته چک', 'error');
-    } finally {
-      setIsSubmitting(false);
-    }
-  };`;
 
-code = code.replace(targetTry, replacementTry);
+// Also fix delete:
+code = code.replace(
+  /const deleteCb = async \(id: string \| number\) => \{\s*if \(window\.confirm\('آیا از حذف دسته چک مطمئن هستید؟'\)\) \{\s*setIsSubmitting\(true\);\s*try \{/m,
+  `const deleteCb = async (id: string | number) => {
+    setConfirmModalData({
+      isOpen: true,
+      title: 'حذف دسته چک',
+      message: 'آیا از حذف دسته چک مطمئن هستید؟',
+      onConfirm: async () => {
+        setConfirmModalData(null);
+        setIsSubmitting(true);
+        try {`
+);
 
-const targetBtn = `<button type="submit" className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-md shadow-indigo-200 transition-all hover:-translate-y-0.5">
-                      <Save className="w-4 h-4" /> {editingCheckbookId ? 'ذخیره تغییرات' : 'ثبت و تعریف'}
-                    </button>`;
-const replacementBtn = `<button disabled={isSubmitting} type="submit" className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white rounded-xl text-sm font-bold flex items-center gap-2 shadow-md shadow-indigo-200 transition-all">
-                      {isSubmitting ? (
-                         <div className="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin" />
-                      ) : (
-                         <Save className="w-4 h-4" />
-                      )}
-                      {editingCheckbookId ? 'ذخیره تغییرات' : 'ثبت و تعریف'}
-                    </button>`;
+code = code.replace(
+  /notify\('خطا در حذف دسته چک', 'error'\);\s*\} finally \{\s*setIsSubmitting\(false\);\s*\}\s*\}\s*\};/m,
+  `notify('خطا در حذف دسته چک', 'error');
+        } finally {
+          setIsSubmitting(false);
+        }
+      }
+    });
+  };`
+);
 
-code = code.replace(targetBtn, replacementBtn);
+
+// Add JSX for modal
+const modalJsx = `
+      <AnimatePresence>
+      {confirmModalData?.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-[100] flex items-center justify-center p-4 print:hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-sm w-full" dir="rtl">
+            <h3 className="text-xl font-black text-slate-800 mb-4">{confirmModalData.title}</h3>
+            <p className="text-slate-600 mb-6 font-medium leading-relaxed">{confirmModalData.message}</p>
+            <div className="flex justify-end gap-3">
+              <button onClick={() => setConfirmModalData(null)} className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors">
+                انصراف
+              </button>
+              <button onClick={confirmModalData.onConfirm} disabled={isSubmitting} className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors flex items-center gap-2">
+                {isSubmitting ? 'در حال پردازش...' : 'بله، تایید میکنم'}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      </AnimatePresence>
+`;
+
+code = code.replace(/(\s*)<\/div>\s*\);\s*}/, modalJsx + '$1</div>\n  );\n}');
 
 fs.writeFileSync('src/components/financial/CheckbooksManager.tsx', code, 'utf8');
-console.log("Patched CheckbooksManager.tsx");
