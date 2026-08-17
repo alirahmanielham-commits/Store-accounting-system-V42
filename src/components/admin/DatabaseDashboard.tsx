@@ -17,12 +17,47 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const [isBackingUp, setIsBackingUp] = useState(false);
   const [backupProgress, setBackupProgress] = useState(0);
   
-  // Dummy Initial Data
-  const [backups, setBackups] = useState([
-    { id: '1', date: '1402/11/15', time: '14:30:00', size: '12.5 MB', type: 'کامل (Full)', status: 'success' },
-    { id: '2', date: '1402/11/14', time: '02:00:00', size: '12.2 MB', type: 'فقط داده', status: 'success' },
-    { id: '3', date: '1402/11/13', time: '15:45:00', size: '4.1 MB', type: 'افزایشی', status: 'error' },
-  ]);
+  
+  const [backups, setBackups] = useState<any[]>([]);
+  const loadBackups = async () => {
+    try {
+      const res = await fetch('/api/db/backups');
+      const data = await res.json();
+      const formatted = data.map((b: any, index: number) => {
+        const d = new Date(b.time);
+        return {
+          id: b.file,
+          date: new Intl.DateTimeFormat('fa-IR').format(d),
+          time: d.toLocaleTimeString('fa-IR'),
+          size: (b.size / 1024 / 1024).toFixed(2) + ' MB',
+          type: 'کامل (Full)',
+          status: 'success',
+          file: b.file
+        };
+      });
+      setBackups(formatted);
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
+  const loadConfig = async () => {
+    try {
+      const res = await fetch('/api/db/backup-config');
+      const data = await res.json();
+      if (data) {
+        setScheduleConfig(prev => ({ ...prev, enabled: data.intervalHours > 0, retention: data.intervalHours }));
+        if (data.path) {
+          setStorageConfig(prev => ({ ...prev, localPath: data.path }));
+        }
+      }
+    } catch (e) {}
+  };
+
+  useEffect(() => {
+    loadBackups();
+    loadConfig();
+  }, []);
 
   const [backupType, setBackupType] = useState('full');
 
@@ -65,60 +100,110 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<any>(null);
 
   // Manual Backup Action
-  const handleImmediateBackup = () => {
+  const handleImmediateBackup = async () => {
     setIsBackingUp(true);
-    setBackupProgress(0);
-    const interval = setInterval(() => {
-      setBackupProgress(prev => {
-        if (prev >= 100) {
-          clearInterval(interval);
-          setIsBackingUp(false);
-          showNotification('بک‌آپ با موفقیت تهیه شد', 'success');
-          
-          let typeLabel = 'کامل (Full)';
-          if (backupType === 'incremental') typeLabel = 'افزایشی';
-          if (backupType === 'structure') typeLabel = 'فقط ساختار';
-          if (backupType === 'data') typeLabel = 'فقط داده';
-
-          const newBackup = { 
-            id: Date.now().toString(), 
-            date: new Intl.DateTimeFormat('fa-IR').format(new Date()), 
-            time: new Date().toLocaleTimeString('fa-IR'), 
-            size: (Math.random() * 10 + 5).toFixed(1) + ' MB', 
-            type: typeLabel, 
-            status: 'success' 
-          };
-
-          setBackups([newBackup, ...backups]);
-          
-          setLogs([{
-            id: Date.now().toString(),
-            date: `${newBackup.date} ${newBackup.time}`,
-            action: `بک‌آپ دستی (${typeLabel})`,
-            status: 'success',
-            details: 'عملیات با موفقیت توسط کاربر انجام شد.'
-          }, ...logs]);
-
-          return 100;
-        }
-        return prev + 10;
-      });
-    }, 300);
+    setBackupProgress(30);
+    try {
+      const res = await fetch('/api/db/backups/create', { method: 'POST' });
+      if (!res.ok) throw new Error('Backup failed');
+      setBackupProgress(100);
+      showNotification('بک‌آپ با موفقیت تهیه شد', 'success');
+      loadBackups();
+      
+      let typeLabel = 'کامل (Full)';
+      if (backupType === 'incremental') typeLabel = 'افزایشی';
+      if (backupType === 'structure') typeLabel = 'فقط ساختار';
+      if (backupType === 'data') typeLabel = 'فقط داده';
+      setLogs([{
+        id: Date.now().toString(),
+        date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
+        action: `بک‌آپ دستی (${typeLabel})`,
+        status: 'success',
+        details: 'عملیات با موفقیت انجام شد.'
+      }, ...logs]);
+    } catch(err) {
+      showNotification('خطا در تهیه بک‌آپ', 'error');
+      setLogs([{
+        id: Date.now().toString(),
+        date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
+        action: 'بک‌آپ دستی',
+        status: 'error',
+        details: 'خطا در عملیات بک‌آپ'
+      }, ...logs]);
+    }
+    setTimeout(() => {
+      setIsBackingUp(false);
+      setBackupProgress(0);
+    }, 1000);
   };
 
-  const executeRestore = () => {
+  const executeRestore = async () => {
     setIsRestoreModalOpen(false);
-    showNotification('بازیابی اطلاعات با موفقیت انجام شد.', 'success');
-    setLogs([{
-      id: Date.now().toString(),
-      date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
-      action: 'بازیابی اطلاعات',
-      status: 'success',
-      details: `نسخه ${selectedBackupForRestore?.date} بازیابی شد.`
-    }, ...logs]);
+    try {
+      if (!selectedBackupForRestore || !selectedBackupForRestore.file) {
+        showNotification('فایل بک‌آپ نامعتبر است.', 'error');
+        return;
+      }
+      const res = await fetch(`/api/db/backups/restore/${selectedBackupForRestore.file}`, { method: 'POST' });
+      if (!res.ok) throw new Error('Restore failed');
+      showNotification('بازیابی اطلاعات با موفقیت انجام شد.', 'success');
+      setLogs([{
+        id: Date.now().toString(),
+        date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
+        action: 'بازیابی اطلاعات',
+        status: 'success',
+        details: `نسخه ${selectedBackupForRestore.date} بازیابی شد.`
+      }, ...logs]);
+    } catch(e) {
+      showNotification('خطا در بازیابی اطلاعات', 'error');
+    }
     setSelectedBackupForRestore(null);
   };
 
+  
+  const saveScheduleSettings = async () => {
+    try {
+      await fetch('/api/db/backup-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ intervalHours: scheduleConfig.enabled ? scheduleConfig.retention : 0 })
+      });
+      showNotification('تنظیمات زمان‌بندی ذخیره شد', 'success');
+    } catch (e) {
+      showNotification('خطا در ذخیره تنظیمات', 'error');
+    }
+  };
+
+  const saveStorageSettings = async () => {
+    try {
+      await fetch('/api/db/backup-config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: storageConfig.localPath })
+      });
+      showNotification('مسیر ذخیره‌سازی ذخیره شد', 'success');
+    } catch (e) {
+      showNotification('خطا در ذخیره مسیر', 'error');
+    }
+  };
+  
+  
+  const handleDeleteBackup = async (filename: string) => {
+    if (!confirm('آیا از حذف این بک‌آپ اطمینان دارید؟')) return;
+    try {
+      const res = await fetch(`/api/db/backups/${filename}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      showNotification('بک‌آپ با موفقیت حذف شد', 'success');
+      loadBackups();
+    } catch(e) {
+      showNotification('خطا در حذف بک‌آپ', 'error');
+    }
+  };
+
+  const handleDownloadBackup = (filename: string) => {
+    window.open(`/api/db/backups/download/${filename}`, '_blank');
+  };
+  
   const tabs = [
     { id: 'manual', label: 'بک‌آپ دستی', icon: Play },
     { id: 'schedule', label: 'زمان‌بندی', icon: Calendar },
@@ -599,7 +684,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                                 <button title="دانلود فایل" className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100">
                                   <Download className="w-4 h-4" />
                                 </button>
-                                <button title="حذف" className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100">
+                                <button title="حذف" className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100" onClick={() => handleDeleteBackup(b.file)}>
                                   <Trash2 className="w-4 h-4" />
                                 </button>
                                 <button 

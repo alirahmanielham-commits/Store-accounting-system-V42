@@ -69,6 +69,15 @@ const router = Router();
   }
 
 
+  router.post("/api/db/backups/create", async (req, res) => {
+     try {
+        await runBackupJob();
+        res.json({ success: true });
+     } catch (err) {
+        res.status(500).json({ error: err.message });
+     }
+  });
+
 router.post('/api/db/backup-config', async (req, res) => {
      backupConfig = { ...backupConfig, ...req.body };
      await setDbData('backupConfig', backupConfig);
@@ -139,7 +148,19 @@ router.post('/api/db/backups/restore/:filename', async (req, res) => {
      }
   });
 
-router.delete('/api/db/backups/:filename', async (req, res) => {
+router.get('/api/db/backups/download/:filename', async (req, res) => {
+     try {
+         const { filename } = req.params;
+         const dir = getBackupsDir();
+         const filePath = path.join(dir, filename);
+         if (!filePath.startsWith(dir)) return res.status(403).send('Invalid path');
+         res.download(filePath);
+     } catch(e) {
+         res.status(500).json({ error: e.message });
+     }
+  });
+
+  router.delete('/api/db/backups/:filename', async (req, res) => {
       try {
          const { filename } = req.params;
          const dir = getBackupsDir();
