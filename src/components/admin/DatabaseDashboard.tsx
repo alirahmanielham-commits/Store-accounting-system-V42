@@ -152,6 +152,33 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
 
   const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<any>(null);
 
+  const [isPathPickerOpen, setIsPathPickerOpen] = useState(false);
+  const [pickerPath, setPickerPath] = useState('');
+  const [pickerParent, setPickerParent] = useState<string|null>(null);
+  const [pickerFolders, setPickerFolders] = useState<string[]>([]);
+  
+  const openPathPicker = async (initialPath: string) => {
+    setIsPathPickerOpen(true);
+    await loadPickerPath(initialPath || '/');
+  };
+
+  const loadPickerPath = async (targetPath: string) => {
+    try {
+      const res = await fetch('/api/db/explore-folders', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ path: targetPath })
+      });
+      if (!res.ok) throw new Error('Cannot load folders');
+      const data = await res.json();
+      setPickerPath(data.current);
+      setPickerParent(data.parent);
+      setPickerFolders(data.folders || []);
+    } catch (e) {
+      showNotification('خطا در بارگیری لیست پوشه‌ها', 'error');
+    }
+  };
+
   // Manual Backup Action
   const handleImmediateBackup = async () => {
     setIsBackingUp(true);
