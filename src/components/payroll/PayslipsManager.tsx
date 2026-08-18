@@ -24,7 +24,7 @@ export default function PayslipsManager({ personsData, showNotification, formatN
     setLoading(true);
     try {
       const allSlips = await getPayslips();
-      const data = allSlips.filter(s => s.periodYear === year && s.periodMonth === month);
+      const data = allSlips.filter(s => Number(s.periodYear) === Number(year) && Number(s.periodMonth) === Number(month));
       setSlips(data);
     } catch (e) {
       console.error(e);
@@ -38,7 +38,7 @@ export default function PayslipsManager({ personsData, showNotification, formatN
     try {
       // 1. Get attendances for period
       const allAttendances = await getMonthlyAttendances();
-      const attendances = allAttendances.filter(a => a.periodYear === year && a.periodMonth === month);
+      const attendances = allAttendances.filter(a => Number(a.periodYear) === Number(year) && Number(a.periodMonth) === Number(month));
       if (attendances.length === 0) return showNotification('ابتدا کارکرد این ماه را ثبت کنید', 'error');
 
       // 2. Get active contracts
@@ -50,6 +50,8 @@ export default function PayslipsManager({ personsData, showNotification, formatN
       const allContractComps = await getContractComponents();
 
       let count = 0;
+      
+      const { updateMonthlyAttendance } = await import('../../services/hrService');
 
       for (const att of attendances) {
         const contract = contracts.find(c => c.personId === att.personId);
@@ -143,6 +145,12 @@ export default function PayslipsManager({ personsData, showNotification, formatN
         for (const item of pItems) {
            await addPayslipItem({ payslipId: pId, ...item });
         }
+        
+        // Update the attendance record to 'approved'
+        if (att.status !== 'approved') {
+           await updateMonthlyAttendance(att.id, { ...att, status: 'approved' });
+        }
+        
         count++;
       }
 

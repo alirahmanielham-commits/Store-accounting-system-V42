@@ -34,7 +34,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
 
       // Get existing attendance for this period
       const allAttendances = await getMonthlyAttendances();
-      const existing = allAttendances.filter(a => a.periodYear === year && a.periodMonth === month);
+      const existing = allAttendances.filter(a => Number(a.periodYear) === Number(year) && Number(a.periodMonth) === Number(month));
 
       // Merge
       const merged = contracts.map(c => {
