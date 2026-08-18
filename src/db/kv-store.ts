@@ -31,6 +31,8 @@ export async function innerGetDbData(key: string) {
             }
             return obj;
         } catch(e) { return null; }
+      } else if (key === 'backupConfig') {
+          return res.rows.length > 0 ? parseJSONFields(res.rows[0]) : null;
       }
       return res.rows.map(parseJSONFields);
     } catch (e: any) {

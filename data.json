@@ -1,6 +1,6 @@
 {
   "backupConfig": {
-    "path": "/tmp/my_backups",
+    "path": "/tmp/testing",
     "intervalHours": 4,
     "storageType": "local",
     "remoteProvider": "s3",
@@ -12,6 +12,13 @@
     "cron": "0 2 * * *"
   },
   "databaseLogs": [
+    {
+      "id": "1787075161093",
+      "date": "۱۴۰۵/۵/۲۷ ۱۷:۴۶:۰۱",
+      "action": "آپلود بک‌آپ",
+      "status": "success",
+      "details": "فایل test.json با موفقیت آپلود شد."
+    },
     {
       "id": "1787072430496",
       "date": "۱۴۰۵/۵/۲۷ ۱۷:۰۰:۳۰",

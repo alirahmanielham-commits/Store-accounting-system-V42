@@ -259,7 +259,7 @@ router.get('/api/db/backups', async (req, res) => {
         const dir = await getBackupsDir();
         await fsPromises.mkdir(dir, { recursive: true });
         const files = await fsPromises.readdir(dir);
-        const jsonFiles = files.filter(f => f.startsWith('backup-') && (f.endsWith('.json') || f.endsWith('.sql')));
+        const jsonFiles = files.filter(f => (f.startsWith('backup-') || f.startsWith('uploaded-')) && (f.endsWith('.json') || f.endsWith('.sql')));
         const backupsList = [];
         for (const file of jsonFiles) {
            const stat = await fsPromises.stat(path.join(dir, file));

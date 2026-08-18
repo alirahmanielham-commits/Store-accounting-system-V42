@@ -30,7 +30,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
           date: new Intl.DateTimeFormat('fa-IR').format(d),
           time: d.toLocaleTimeString('fa-IR'),
           size: (b.size / 1024 / 1024).toFixed(2) + ' MB',
-          type: 'کامل (Full)',
+          type: b.file.startsWith('uploaded-') ? 'آپلود شده' : 'کامل (Full)',
           status: 'success',
           file: b.file
         };
@@ -817,13 +817,13 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                         </div>
                      </div>
 
-                     {/* Cloud Storage Card */}
+                     {/* Cloud Storage Card (Disabled) */}
                      <div 
-                        onClick={() => setStorageConfig({...storageConfig, type: 'cloud'})}
-                        className={`p-6 rounded-2xl border-2 cursor-pointer transition-all ${
-                          storageConfig.type === 'cloud' ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100/50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
-                        }`}
+                        className="p-6 rounded-2xl border-2 border-slate-200 bg-slate-50 opacity-60 pointer-events-none relative"
                      >
+                        <div className="absolute top-4 left-4 bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-full">
+                           فاز بعدی
+                        </div>
                         <div className="flex items-start justify-between mb-4">
                           <UploadCloud className={`w-8 h-8 ${storageConfig.type === 'cloud' ? 'text-indigo-600' : 'text-slate-400'}`} />
                           <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${storageConfig.type === 'cloud' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
