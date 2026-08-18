@@ -240,20 +240,34 @@ export async function getAllDbData() {
       for (const key of KNOWN_TABLES) {
          const isSoftDeletable = ["checkbooks", "issued_checks", "received_checks"].includes(key);
          let res;
+         await client.query(`SAVEPOINT sp_table`);
          try {
              res = await client.query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
+             await client.query(`RELEASE SAVEPOINT sp_table`);
          } catch (err) {
+             await client.query(`ROLLBACK TO SAVEPOINT sp_table`);
              if (err.code === '42703') {
-                 res = await client.query(`SELECT * FROM "${key}"`);
+                 await client.query(`SAVEPOINT sp_fallback`);
+                 try {
+                     res = await client.query(`SELECT * FROM "${key}"`);
+                     await client.query(`RELEASE SAVEPOINT sp_fallback`);
+                 } catch (errFallback) {
+                     await client.query(`ROLLBACK TO SAVEPOINT sp_fallback`);
+                     res = { rows: [] };
+                 }
+             } else if (err.code === '42P01') {
+                 res = { rows: [] };
              } else {
                  throw err;
              }
          }
          if (key === 'company_profile') {
            let cval = null;
+           await client.query(`SAVEPOINT sp_sysset`);
            try {
               await client.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)`);
               const cres = await client.query(`SELECT * FROM system_settings`);
+              await client.query(`RELEASE SAVEPOINT sp_sysset`);
               if (cres.rows.length > 0) {
                  cval = { id: 'singleton' };
                  for (const r of cres.rows) {
@@ -261,7 +275,9 @@ export async function getAllDbData() {
                     catch(e) { cval[r.setting_key] = r.setting_value; }
                  }
               }
-           } catch(e) { }
+           } catch(e) {
+              await client.query(`ROLLBACK TO SAVEPOINT sp_sysset`);
+           }
            allData.push({ key, value: cval });
          } else if (key === 'backupConfig') {
            allData.push({ key, value: res.rows.length > 0 ? parseJSONFields(res.rows[0]) : null });
