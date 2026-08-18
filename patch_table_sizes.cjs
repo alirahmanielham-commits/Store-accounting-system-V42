@@ -1,10 +1,10 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/routes/backup.routes.ts', 'utf8');
 
-const tableSizesRoute = `
-router.get('/api/db/table-sizes', async (req, res) => {
+const replacement = `router.get('/api/db/table-sizes', async (req, res) => {
   try {
     if (isPgActive() && getActivePgPool()) {
+      const tableList = KNOWN_TABLES.map(t => \`'\${t}'\`).join(', ');
       const result = await getActivePgPool().query(\`
         SELECT 
           relname as name, 
@@ -16,7 +16,7 @@ router.get('/api/db/table-sizes', async (req, res) => {
         WHERE nspname NOT IN ('pg_catalog', 'information_schema')
         AND C.relkind <> 'i'
         AND nspname !~ '^pg_toast'
-        AND relname IN ('persons', 'invoices', 'invoice_items', 'transactions', 'accounts', 'products', 'cashboxes')
+        AND relname IN (\${tableList})
         ORDER BY pg_total_relation_size(C.oid) DESC;
       \`);
       let totalSizeRes = await getActivePgPool().query('SELECT pg_database_size(current_database()) as size');
@@ -32,16 +32,8 @@ router.get('/api/db/table-sizes', async (req, res) => {
     } else {
       res.json({ tables: [], totalSize: 0 });
     }
-  } catch(e) {
-    res.status(500).json({ error: e.message });
-  }
-});
-`;
+  } catch(e) {`;
 
-if (!code.includes('/api/db/table-sizes')) {
-  code = code.replace('export default router;', tableSizesRoute + '\nexport default router;');
-  fs.writeFileSync('src/routes/backup.routes.ts', code);
-  console.log('Table sizes route added.');
-} else {
-  console.log('Table sizes route already exists.');
-}
+code = code.replace(/router\.get\('\/api\/db\/table-sizes', async \(req, res\) => \{[\s\S]*?\} catch\(e\) \{/, replacement);
+
+fs.writeFileSync('src/routes/backup.routes.ts', code);

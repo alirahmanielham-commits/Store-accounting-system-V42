@@ -131,7 +131,7 @@ export default function IssuedChecksPage({ showNotification, currentUser, setVie
         handleDeleteIssuedCheck={() => {}}
         formatDateDisplay={formatDateDisplay}
         sendNotification={() => {}}
-        getCheckAuditLogs={async () => []}
+        getCheckHistoryLogs={async () => []}
         issuedPage={issuedPage}
         setIssuedPage={setIssuedPage}
         totalIssuedPages={totalIssuedPages}

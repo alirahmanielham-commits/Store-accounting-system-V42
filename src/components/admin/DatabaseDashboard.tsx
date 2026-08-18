@@ -21,7 +21,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const [backups, setBackups] = useState<any[]>([]);
   const loadBackups = async () => {
     try {
-      const res = await fetch('/api/db/backups');
+      const res = await apiFetch('/api/db/backups');
       const data = await res.json();
       const formatted = data.map((b: any, index: number) => {
         const d = new Date(b.time);
@@ -43,7 +43,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
 
   const loadConfig = async () => {
     try {
-      const res = await fetch('/api/db/backup-config');
+      const res = await apiFetch('/api/db/backup-config');
       const data = await res.json();
       if (data) {
         setScheduleConfig(prev => ({
@@ -59,7 +59,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
             ...prev, 
             localPath: data.path || '', 
             type: data.storageType || 'local', 
-            cloudProvider: data.remoteProvider || 's3' 
+            cloudProvider: data.remoteProvider || 's3', cloudAuthUrl: data.cloudAuthUrl || prev.cloudAuthUrl, cloudUser: data.cloudUser || prev.cloudUser, cloudPass: data.cloudPass || prev.cloudPass 
           }));
         }
       }
@@ -107,11 +107,13 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     setLoadingHealth(true);
     try {
       const [hRes, sRes] = await Promise.all([
-        fetch('/api/db/health'),
-        fetch('/api/db/table-sizes')
+        apiFetch('/api/db/health'),
+        apiFetch('/api/db/table-sizes')
       ]);
-      setHealthData(await hRes.json());
-      setTableSizes(await sRes.json());
+      const hData = await hRes.json();
+      const sData = await sRes.json();
+      setHealthData(hData);
+      setTableSizes(sData.tables ? sData : { tables: [], totalSize: 0 });
     } catch(e) { console.error(e); }
     setLoadingHealth(false);
   };
@@ -126,7 +128,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const [logs, setLogs] = useState<any[]>([]);
   const loadLogs = async () => {
     try {
-      const res = await fetch('/api/db/logs');
+      const res = await apiFetch('/api/db/logs');
       const data = await res.json();
       setLogs(Array.isArray(data) ? data : []);
     } catch(e) {}
@@ -155,7 +157,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     setIsBackingUp(true);
     setBackupProgress(30);
     try {
-      const res = await fetch('/api/db/backups/create', { method: 'POST' });
+      const res = await apiFetch('/api/db/backups/create', { method: 'POST' });
       if (!res.ok) throw new Error('Backup failed');
       setBackupProgress(100);
       showNotification('بک‌آپ با موفقیت تهیه شد', 'success');
@@ -210,7 +212,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       // If it's a direct upload (no existing file on server yet)
       if (selectedBackupForRestore.isUpload) {
          setRestoreProgress(90);
-         const res = await fetch('/api/db/backups/upload', {
+         const res = await apiFetch('/api/db/backups/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filename: selectedBackupForRestore.rawFile.name, content: selectedBackupForRestore.content })
@@ -221,7 +223,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       }
       
       setRestoreProgress(95);
-      const res = await fetch(`/api/db/backups/restore/${filename}`, { method: 'POST' });
+      const res = await apiFetch(`/api/db/backups/restore/${filename}`, { method: 'POST' });
       if (!res.ok) throw new Error('بازیابی ناموفق بود.');
       
       setRestoreProgress(100);
@@ -263,7 +265,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       if (scheduleConfig.frequency === 'monthly') intervalHours = 720;
       if (scheduleConfig.frequency === 'custom') intervalHours = 4; // Arbitrary for custom right now
       
-      await fetch('/api/db/backup-config', {
+      await apiFetch('/api/db/backup-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -283,10 +285,10 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
 
   const saveStorageSettings = async () => {
     try {
-      await fetch('/api/db/backup-config', {
+      await apiFetch('/api/db/backup-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: storageConfig.localPath, storageType: storageConfig.type, remoteProvider: storageConfig.cloudProvider })
+        body: JSON.stringify({ path: storageConfig.localPath, storageType: storageConfig.type, remoteProvider: storageConfig.cloudProvider, cloudAuthUrl: storageConfig.cloudAuthUrl, cloudUser: storageConfig.cloudUser, cloudPass: storageConfig.cloudPass })
       });
       showNotification('مسیر ذخیره‌سازی ذخیره شد', 'success');
     } catch (e) {
@@ -298,7 +300,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const handleDeleteBackup = async (filename: string) => {
     if (!confirm('آیا از حذف این بک‌آپ اطمینان دارید؟')) return;
     try {
-      const res = await fetch(`/api/db/backups/${filename}`, { method: 'DELETE' });
+      const res = await apiFetch(`/api/db/backups/${filename}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       showNotification('بک‌آپ با موفقیت حذف شد', 'success');
       loadBackups();
@@ -308,7 +310,8 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   };
 
   const handleDownloadBackup = (filename: string) => {
-    window.open(`/api/db/backups/download/${filename}`, '_blank');
+    const storeId = localStorage.getItem('activeStoreId') || 'default';
+    window.open(`/api/db/backups/download/${filename}?storeId=${storeId}`, '_blank');
   };
   
   const tabs = [
@@ -1225,7 +1228,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                   <motion.div 
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    type="spring"
+                    transition={{ type: "spring" }}
                     className="w-24 h-24 bg-emerald-100 rounded-full flex items-center justify-center mx-auto border-8 border-emerald-50"
                   >
                     <CheckCircle className="w-10 h-10 text-emerald-600" />
@@ -1254,7 +1257,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                   <motion.div 
                     initial={{ scale: 0 }}
                     animate={{ scale: 1 }}
-                    type="spring"
+                    transition={{ type: "spring" }}
                     className="w-24 h-24 bg-rose-100 rounded-full flex items-center justify-center mx-auto border-8 border-rose-50"
                   >
                     <XCircle className="w-10 h-10 text-rose-600" />

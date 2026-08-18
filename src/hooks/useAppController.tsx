@@ -680,7 +680,7 @@ const filteredPersons = (persons || []).filter((p) => {
     const terms = personSearchTerm.toLowerCase().split(" ").filter(Boolean);
     const grp = personGroups.find((g) => g.id === p.group);
     const searchable =
-      `${p.name || ""} ${p.alias || ""} ${p.firstName || ""} ${p.lastName || ""} ${p.phone || ""} ${p.nationalId || ""} ${p.personCode || ""} ${p.accountingCode || ""} ${p.companyName || ""} ${p.fatherName || ""} ${p.taxNumber || ""} ${p.mobile || ""} ${grp?.name || ""}`.toLowerCase();
+      `${p.name || ""} ${p.alias || ""} ${p.firstName || ""} ${p.lastName || ""} ${p.phone || ""} ${p.nationalId || ""} ${p.personCode || ""} ${p.accountingCode || ""} ${p.companyName || ""} ${p.fatherName || ""} ${p.taxNumber || ""} ${(p as any).mobile || ""} ${grp?.name || ""}`.toLowerCase();
     return terms.every((term) => searchable.includes(term));
   });
 

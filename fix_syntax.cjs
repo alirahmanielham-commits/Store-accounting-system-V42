@@ -1,16 +1,8 @@
 const fs = require('fs');
+let code = fs.readFileSync('src/routes/backup.routes.ts', 'utf8');
 
-let kv = fs.readFileSync('src/db/kv-store.ts', 'utf8');
+code = code.replace('const runBackupJob = async ()let activeCronJobs', 'let activeCronJobs');
 
-// The simplest way to fix this is to just completely wipe out the `else` blocks containing SQLite
-// or replace the inner text. Let's just redefine `getDb()` to throw an error inside `kv-store.ts` 
-// if it tries to use it. But wait, `getDb` is imported.
+code = code.replace('setupBackupSchedule();\n\ncreate", async (req, res)', 'setupBackupSchedule();\n\nrouter.post("/api/db/backups/create", async (req, res)');
 
-kv = kv.replace(/if \(true\) throw new Error\('SQLite usage is disabled\. Please configure PostgreSQL\.'\); /g, '');
-
-// Then replace `getDb()` with `(() => { throw new Error("SQLite disabled") })()`
-kv = kv.replace(/getDb\(\)\.prepare\(/g, "(() => { throw new Error('SQLite usage is disabled. Please configure PostgreSQL.'); })().prepare(");
-
-fs.writeFileSync('src/db/kv-store.ts', kv);
-
-console.log('Fixed syntax error');
+fs.writeFileSync('src/routes/backup.routes.ts', code);

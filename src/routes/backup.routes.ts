@@ -2,12 +2,31 @@
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
+
+const getFormattedBackupDate = () => {
+   return new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      second: '2-digit',
+      hour12: false,
+      timeZone: 'Asia/Tehran'
+   }).format(new Date()).replace(/[\/\s:,]+/g, '-');
+};
+
 import { migrateSqliteToPostgres } from '../db/migration';
 // import { loginSchema } from '../schemas/validation';
 import { Client, Pool } from 'pg';
 import os from 'os';
 
 import { Router } from 'express';
+
+import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import cron from 'node-cron';
+import { loadPgPoolForStore } from '../db/connection';
+
 import fsPromises from 'fs/promises';
 import path from 'path';
 import bcrypt from 'bcryptjs';
@@ -69,45 +88,137 @@ router.post('/api/db/logs', async (req, res) => {
     } catch(e) { }
   })();
 
-  const getBackupsDir = () => {
-     return backupConfig.path && backupConfig.path.trim() !== '' 
-        ? backupConfig.path 
-        : path.join(process.cwd(), 'backups');
-  };
-
-  let backupInterval = null;
-  const runBackupJob = async () => {
+  const getBackupsDir = async () => {
+     let pathConf = backupConfig.path;
      try {
-        const dir = getBackupsDir();
-        await fsPromises.mkdir(dir, { recursive: true });
-        const rows = await getAllDbData();
-        const backupData = {};
-        for (const row of rows) {
-          backupData[row.key] = row.value;
-        }
-        const fileName = `backup-${Date.now()}.json`;
-        await fsPromises.writeFile(path.join(dir, fileName), JSON.stringify(backupData));
-        await appendDbLog('بک‌آپ خودکار/دستی', 'success', `بک‌آپ با حجم ${Buffer.byteLength(JSON.stringify(backupData))} بایت ایجاد شد.`);
-        
-        // keep only last 20 backups
-        const files = await fsPromises.readdir(dir);
-        const jsonFiles = files.filter(f => f.startsWith('backup-') && (f.endsWith('.json') || f.endsWith('.sql'))).sort((a,b) => b.localeCompare(a));
-        if (jsonFiles.length > 20) {
-           for (let i = 0; i < jsonFiles.length - 20; i++) {
-              await fsPromises.unlink(path.join(dir, jsonFiles[i]));
-           }
-        }
-     } catch (err) {
-        console.error('Backup job failed', err);
-     }
+        const data = await getDbData('backupConfig');
+        if (data && data.path) pathConf = data.path;
+     } catch(e) {}
+     return pathConf && pathConf.trim() !== '' 
+         ? pathConf 
+         : path.join(process.cwd(), 'backups');
   };
 
-  if (backupConfig.intervalHours > 0) {
-     backupInterval = setInterval(runBackupJob, backupConfig.intervalHours * 60 * 60 * 1000);
-  }
+  let activeCronJobs: cron.ScheduledTask[] = [];
 
+const backupStore = async (storeId: string) => {
+    return new Promise<void>((resolve) => {
+        storeContext.run(storeId, async () => {
+             console.log("Running backup for store:", storeId);
+             try {
+                const dir = path.resolve(await getBackupsDir());
+                await fsPromises.mkdir(dir, { recursive: true });
+                const rows = await getAllDbData();
+                const backupData: any = {};
+                for (const row of rows) {
+                  backupData[row.key] = row.value;
+                }
+                const fileName = `backup-${storeId}-${getFormattedBackupDate()}.json`;
+                const filePath = path.join(dir, fileName);
+                const fileContent = JSON.stringify(backupData);
+                await fsPromises.writeFile(filePath, fileContent);
+                
+                // Upload to S3 if enabled
+                if (backupConfig.storageType === 'cloud' || backupConfig.remoteProvider === 's3') {
+                    if (backupConfig.cloudAuthUrl && backupConfig.cloudUser && backupConfig.cloudPass) {
+                       try {
+                           const s3 = new S3Client({
+                              region: 'default',
+                              endpoint: backupConfig.cloudAuthUrl.startsWith('http') ? backupConfig.cloudAuthUrl : `https://${backupConfig.cloudAuthUrl}`,
+                              credentials: {
+                                 accessKeyId: backupConfig.cloudUser,
+                                 secretAccessKey: backupConfig.cloudPass
+                              }
+                           });
+                           await s3.send(new PutObjectCommand({
+                               Bucket: 'backups',
+                               Key: fileName,
+                               Body: fileContent,
+                               ContentType: 'application/json'
+                           }));
+                           await appendDbLog('بک‌آپ ابری', 'success', `آپلود موفق به ابری: ${fileName}`);
+                       } catch(s3Err) {
+                           console.error('S3 Upload Error:', s3Err);
+                           await appendDbLog('بک‌آپ ابری', 'error', `خطا در آپلود ابری: ${s3Err.message}`);
+                       }
+                    }
+                }
+                
+                await appendDbLog('بک‌آپ خودکار/دستی', 'success', `بک‌آپ با حجم ${Buffer.byteLength(fileContent)} بایت ایجاد شد.`);
+                
+                // keep only last N backups per store
+                const retentionCount = backupConfig.retention || 20;
+                const files = await fsPromises.readdir(dir);
+                const jsonFiles = files.filter(f => f.startsWith(`backup-${storeId}-`) && (f.endsWith('.json') || f.endsWith('.sql')));
+                const filesWithStats = await Promise.all(jsonFiles.map(async f => {
+                    const stat = await fsPromises.stat(path.join(dir, f));
+                    return { file: f, time: stat.mtimeMs };
+                }));
+                filesWithStats.sort((a,b) => b.time - a.time);
+                const sortedJsonFiles = filesWithStats.map(f => f.file);
+                
+                if (sortedJsonFiles.length > retentionCount) {
+                   for (let i = retentionCount; i < sortedJsonFiles.length; i++) {
+                      await fsPromises.unlink(path.join(dir, sortedJsonFiles[i])).catch(console.error);
+                   }
+                }
+             } catch (err) {
+                console.error(`Backup job failed for store ${storeId}`, err);
+             } finally {
+                resolve();
+             }
+        });
+    });
+};
 
-  router.post("/api/db/backups/create", async (req, res) => {
+const runBackupJob = async () => {
+    try {
+        await loadPgPoolForStore('default');
+        await backupStore('default');
+
+        const client = getActivePgPool();
+        if (client) {
+            const res = await client.query('SELECT id FROM businesses WHERE deleted_at IS NULL');
+            for (const row of res.rows) {
+                await loadPgPoolForStore(row.id);
+                await backupStore(row.id);
+            }
+        }
+    } catch(e) {
+        console.error('Global backup job error', e);
+    }
+};
+
+const setupBackupSchedule = () => {
+    activeCronJobs.forEach(job => job.stop());
+    activeCronJobs = [];
+    if (!backupConfig.enabled) return;
+    
+    let cronExpr = backupConfig.cron || '0 2 * * *';
+    
+    if (backupConfig.frequency === 'daily') {
+       const parts = (backupConfig.time || '02:00').split(':');
+       cronExpr = `${parts[1] || '0'} ${parts[0] || '2'} * * *`;
+    } else if (backupConfig.frequency === 'weekly') {
+       const parts = (backupConfig.time || '02:00').split(':');
+       cronExpr = `${parts[1] || '0'} ${parts[0] || '2'} * * 0`;
+    } else if (backupConfig.frequency === 'monthly') {
+       const parts = (backupConfig.time || '02:00').split(':');
+       cronExpr = `${parts[1] || '0'} ${parts[0] || '2'} 1 * *`;
+    }
+    
+    try {
+        const job = cron.schedule(cronExpr, () => {
+            runBackupJob();
+        });
+        activeCronJobs.push(job);
+    } catch(e) {
+        console.error('Invalid cron expression', e);
+    }
+};
+setupBackupSchedule();
+
+router.post("/api/db/backups/create", async (req, res) => {
      try {
         await runBackupJob();
         res.json({ success: true });
@@ -120,10 +231,8 @@ router.post('/api/db/backup-config', async (req, res) => {
      backupConfig = { ...backupConfig, ...req.body };
      await setDbData('backupConfig', backupConfig);
      
-     if (backupInterval) clearInterval(backupInterval);
-     if (backupConfig.enabled && backupConfig.intervalHours > 0) {
-        backupInterval = setInterval(runBackupJob, backupConfig.intervalHours * 60 * 60 * 1000);
-     }
+     setupBackupSchedule();
+     
 
      res.json({ success: true, config: backupConfig });
   });
@@ -134,15 +243,16 @@ router.get('/api/db/backup-config', (req, res) => {
 
 router.get('/api/db/backups', async (req, res) => {
      try {
-        const dir = getBackupsDir();
+        const dir = await getBackupsDir();
         await fsPromises.mkdir(dir, { recursive: true });
         const files = await fsPromises.readdir(dir);
-        const jsonFiles = files.filter(f => f.startsWith('backup-') && (f.endsWith('.json') || f.endsWith('.sql'))).sort((a,b) => b.localeCompare(a));
+        const jsonFiles = files.filter(f => f.startsWith('backup-') && (f.endsWith('.json') || f.endsWith('.sql')));
         const backupsList = [];
         for (const file of jsonFiles) {
            const stat = await fsPromises.stat(path.join(dir, file));
            backupsList.push({ file, size: stat.size, time: stat.mtimeMs });
         }
+        backupsList.sort((a,b) => b.time - a.time);
         res.json(backupsList);
      } catch(e) {
         res.status(500).json({ error: e.message });
@@ -152,7 +262,7 @@ router.get('/api/db/backups', async (req, res) => {
 router.post('/api/db/backups/restore/:filename', async (req, res) => {
      try {
          const { filename } = req.params;
-         const dir = getBackupsDir();
+         const dir = await getBackupsDir();
          const filePath = path.join(dir, filename);
          if (!filePath.startsWith(dir)) return res.status(403).send('Invalid path');
          
@@ -193,7 +303,7 @@ router.post('/api/db/backups/restore/:filename', async (req, res) => {
 router.get('/api/db/backups/download/:filename', async (req, res) => {
      try {
          const { filename } = req.params;
-         const dir = getBackupsDir();
+         const dir = await getBackupsDir();
          const filePath = path.join(dir, filename);
          if (!filePath.startsWith(dir)) return res.status(403).send('Invalid path');
          res.download(filePath);
@@ -205,7 +315,7 @@ router.get('/api/db/backups/download/:filename', async (req, res) => {
   router.delete('/api/db/backups/:filename', async (req, res) => {
       try {
          const { filename } = req.params;
-         const dir = getBackupsDir();
+         const dir = await getBackupsDir();
          const filePath = path.join(dir, filename);
          if (!filePath.startsWith(dir)) return res.status(403).send('Invalid path');
          await fsPromises.unlink(filePath);
@@ -248,12 +358,13 @@ router.get('/api/db/stats', async (req, res) => {
 router.get('/api/db/backup', async (req, res) => {
     try {
       const rows = await getAllDbData();
-      const backupData: any = {};
+      const backupData = {};
       for (const row of rows) {
         backupData[row.key] = row.value;
       }
       
-      const fileName = `backup-${Date.now()}.json`;
+      const storeId = storeContext.getStore() || 'default';
+      const fileName = `backup-${storeId}-${getFormattedBackupDate()}.json`;
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
       res.send(JSON.stringify(backupData, null, 2));
@@ -269,7 +380,7 @@ router.get('/api/db/health', async (req, res) => {
   try {
     let permissionsOk = true;
     let permissionsError = '';
-    const dir = getBackupsDir();
+    const dir = await getBackupsDir();
     try {
       await fsPromises.access(dir, fsPromises.constants.W_OK | fsPromises.constants.R_OK);
     } catch(e) { 
@@ -350,7 +461,7 @@ router.post('/api/db/backups/upload', async (req, res) => {
   try {
     const { filename, content } = req.body;
     if (!filename || !content) return res.status(400).json({ error: 'Missing filename or content' });
-    const dir = getBackupsDir();
+    const dir = await getBackupsDir();
     await fsPromises.mkdir(dir, { recursive: true });
     const safeName = 'uploaded-' + Date.now() + '-' + path.basename(filename);
     const filePath = path.join(dir, safeName);

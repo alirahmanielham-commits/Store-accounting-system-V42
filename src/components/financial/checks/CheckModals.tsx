@@ -667,18 +667,6 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                           const newL = (h.newStatus || h.status) ? getStatusLbl(h.newStatus || h.status) : 'عملیات';
                           
                           let userName = h.userId || h.user || 'سیستم';
-                          if (userName !== 'سیستم') {
-                            const u = users.find(x => String(x.id) === String(userName));
-                            if (u) {
-                              if (u.personId) {
-                                const p = persons.find(px => String(px.id) === String(u.personId));
-                                if (p) userName = p.name;
-                                else userName = u.name || u.username || userName;
-                              } else {
-                                userName = u.name || u.username || userName;
-                              }
-                            }
-                          }
 
                           return (
                             <div key={i} className="relative">

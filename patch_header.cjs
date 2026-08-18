@@ -1,4 +1,6 @@
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+const fs = require('fs');
+
+const headerCode = `import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Menu, Settings, Bell, Search, Moon, Sun, Power, AlertTriangle, Grip, ShoppingCart, Box, Calculator, Users, FileText, PieChart, LayoutGrid } from 'lucide-react';
 
 interface HeaderProps {
@@ -67,23 +69,23 @@ export default function Header({ appState, toggleSidebar, isDarkMode, toggleDark
   };
 
   return (
-    <header className={`h-[57px] flex items-center justify-between px-3 sticky top-0 z-30 border-b transition-colors duration-300
-      ${isDarkMode ? 'bg-[#343a40] border-[#4b545c] text-white' : 'bg-white border-[#dee2e6] text-gray-700'}`}>
+    <header className={\`h-[57px] flex items-center justify-between px-3 sticky top-0 z-30 border-b transition-colors duration-300
+      \${isDarkMode ? 'bg-[#343a40] border-[#4b545c] text-white' : 'bg-white border-[#dee2e6] text-gray-700'}\`}>
       
       <div className="flex items-center gap-1">
         <button 
           onClick={toggleSidebar} 
-          className={`p-2 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}`}
+          className={\`p-2 rounded-md transition-colors \${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}\`}
         >
           <Menu className="w-5 h-5" />
         </button>
-        <div className={`hidden sm:flex items-center px-3 py-2 text-[15px] font-medium transition-colors ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
-          <span>{appModules.find(m => m.id === systemModule)?.title || 'داشبورد'}</span>
+        <div className={\`hidden sm:flex items-center px-3 py-2 text-[15px] rounded-md transition-colors cursor-pointer \${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}\`}>
+          <span>خانه</span>
         </div>
       </div>
       
       <div className="flex items-center gap-1 relative">
-        <button className={`p-2 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}`}>
+        <button className={\`p-2 rounded-md transition-colors \${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}\`}>
           <Search className="w-5 h-5" />
         </button>
         
@@ -91,15 +93,15 @@ export default function Header({ appState, toggleSidebar, isDarkMode, toggleDark
         <div ref={appsRef} className="relative">
           <button 
             onClick={() => setIsAppsOpen(!isAppsOpen)} 
-            className={`p-2 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'} ${isAppsOpen ? (isDarkMode ? 'bg-white/10' : 'bg-gray-100') : ''}`}
+            className={\`p-2 rounded-md transition-colors \${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'} \${isAppsOpen ? (isDarkMode ? 'bg-white/10' : 'bg-gray-100') : ''}\`}
             title="تغییر بخش کاربری"
           >
             <Grip className="w-5 h-5" />
           </button>
           
           {isAppsOpen && (
-            <div className={`absolute top-full left-0 sm:left-auto sm:right-0 mt-2 w-[280px] sm:w-72 rounded-xl shadow-lg border overflow-hidden ${isDarkMode ? 'bg-[#343a40] border-[#4b545c]' : 'bg-white border-gray-200'}`}>
-              <div className={`p-3 border-b ${isDarkMode ? 'border-[#4b545c]' : 'border-gray-100'}`}>
+            <div className={\`absolute top-full left-0 mt-2 w-72 rounded-xl shadow-lg border overflow-hidden \${isDarkMode ? 'bg-[#343a40] border-[#4b545c]' : 'bg-white border-gray-200'}\`}>
+              <div className={\`p-3 border-b \${isDarkMode ? 'border-[#4b545c]' : 'border-gray-100'}\`}>
                 <div className="font-medium text-sm text-center">انتخاب بخش کاربری</div>
               </div>
               <div className="p-3 grid grid-cols-3 gap-2">
@@ -110,13 +112,13 @@ export default function Header({ appState, toggleSidebar, isDarkMode, toggleDark
                     <button
                       key={mod.id}
                       onClick={() => handleSelectModule(mod.id)}
-                      className={`flex flex-col items-center justify-center gap-2 p-2 rounded-xl transition-all
-                        ${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}
-                        ${isActive ? (isDarkMode ? 'bg-white/10 ring-1 ring-gray-500' : 'bg-gray-100 ring-1 ring-gray-300') : ''}
-                      `}
+                      className={\`flex flex-col items-center justify-center gap-2 p-2 rounded-xl transition-all
+                        \${isDarkMode ? 'hover:bg-white/5' : 'hover:bg-gray-50'}
+                        \${isActive ? (isDarkMode ? 'bg-white/10 ring-1 ring-gray-500' : 'bg-gray-100 ring-1 ring-gray-300') : ''}
+                      \`}
                     >
-                      <div className={`w-10 h-10 rounded-full flex items-center justify-center ${isDarkMode ? 'bg-white/10' : mod.bg}`}>
-                        <Icon className={`w-5 h-5 ${mod.color}`} />
+                      <div className={\`w-10 h-10 rounded-full flex items-center justify-center \${isDarkMode ? 'bg-white/10' : mod.bg}\`}>
+                        <Icon className={\`w-5 h-5 \${mod.color}\`} />
                       </div>
                       <span className="text-[11px] font-medium text-center truncate w-full">
                         {mod.title}
@@ -129,20 +131,20 @@ export default function Header({ appState, toggleSidebar, isDarkMode, toggleDark
           )}
         </div>
 
-        <button onClick={toggleDarkMode} className={`p-2 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}`}>
+        <button onClick={toggleDarkMode} className={\`p-2 rounded-md transition-colors \${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}\`}>
           {isDarkMode ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
         </button>
-        <button className={`p-2 rounded-md transition-colors relative ${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}`}>
+        <button className={\`p-2 rounded-md transition-colors relative \${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}\`}>
           <Bell className="w-5 h-5" />
         </button>
-        <button className={`p-2 rounded-md transition-colors relative ${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}`}>
-          <AlertTriangle className={`w-5 h-5 ${nearDueChecksCount > 0 ? 'text-amber-500' : ''}`} />
+        <button className={\`p-2 rounded-md transition-colors relative \${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'}\`}>
+          <AlertTriangle className={\`w-5 h-5 \${nearDueChecksCount > 0 ? 'text-amber-500' : ''}\`} />
           {nearDueChecksCount > 0 && <span className="absolute top-1.5 right-1.5 bg-[#dc3545] text-white text-[10px] min-w-[15px] h-[15px] flex items-center justify-center rounded-full font-bold px-1">{nearDueChecksCount}</span>}
         </button>
         <div className="w-px h-6 bg-gray-300 mx-2"></div>
         <button 
           onClick={signOut}
-          className={`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}`}
+          className={\`flex items-center gap-2 px-3 py-1.5 rounded-md transition-colors \${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-600'}\`}
         >
           <Power className="w-[18px] h-[18px] text-[#dc3545]" />
           <span className="text-[15px] hidden sm:block">خروج</span>
@@ -151,3 +153,6 @@ export default function Header({ appState, toggleSidebar, isDarkMode, toggleDark
     </header>
   );
 }
+`;
+
+fs.writeFileSync('src/layouts/AdminLTE/components/Header.tsx', headerCode);

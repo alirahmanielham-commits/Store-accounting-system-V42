@@ -7,7 +7,7 @@ export const KNOWN_TABLES = ['notifications', 'customers_risk_profile', 'repayme
   'transactions', 'invoices', 'accounting_documents', 'checkbooks', 'invoice_items', 'accounting_document_items', 'stocktaking_items',
   'warehouse_stocks', 'stocktakings', 'person_follow_ups', 'loans', 'loan_history',
   'ledger_accounts', 'installments', 'sms_messages', 'person_opening_balances', 'product_price_history', 'sales_invoice_payments', 'purchase_invoice_payments',
-  'issued_checks', 'received_checks', 'check_history', 'check_audit_logs', 'refundRequests', 'crm_columns', 'personal_notes', 'doc_counters',
+  'issued_checks', 'received_checks', 'check_history', 'check_audit_logs', 'refundRequests', 'crm_columns', 'personal_notes', 'doc_counters', 'backupConfig', 'databaseLogs',
   'persons', 'person_contacts', 'person_bank_accounts', 'system_logs',
   'person_categories', 'person_category_mappings', 'person_roles_mapping',
   'roles', 'database_logs', 'backupConfig',

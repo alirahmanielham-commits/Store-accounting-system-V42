@@ -157,7 +157,7 @@ export function IssuedChecksList({
                   };
                 });
                 
-                exportToExcel({ filename: 'چک‌های_پرداختی', title: 'گزارش چک‌های پرداختی', data });
+                exportToExcel({ filename: 'چک‌های_پرداختی', title: 'گزارش چک‌های پرداختی', data, columns: Object.keys(data[0] || {}).map(k => ({ header: k, key: k, width: 20 })) });
               } catch (err) {
                 console.error("Export failed:", err);
                 showNotification?.('خطا در دریافت فایل خروجی', 'error');
