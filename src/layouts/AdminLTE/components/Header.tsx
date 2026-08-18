@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
-import { Menu, Settings, Bell, Search, Moon, Sun, Power, AlertTriangle, Grip, ShoppingCart, Box, Calculator, Users, FileText, PieChart, LayoutGrid } from 'lucide-react';
+import { Menu, Settings, Bell, Search, Moon, Sun, Power, AlertTriangle, Grid3x3, ShoppingCart, Box, Calculator, Users, FileText, PieChart, LayoutGrid } from 'lucide-react';
 
 interface HeaderProps {
   appState: any;
@@ -94,7 +94,7 @@ export default function Header({ appState, toggleSidebar, isDarkMode, toggleDark
             className={`p-2 rounded-md transition-colors ${isDarkMode ? 'hover:bg-white/10 text-gray-300' : 'hover:bg-gray-100 text-gray-500'} ${isAppsOpen ? (isDarkMode ? 'bg-white/10' : 'bg-gray-100') : ''}`}
             title="تغییر بخش کاربری"
           >
-            <Grip className="w-5 h-5" />
+            <Grid3x3 className="w-5 h-5" />
           </button>
           
           {isAppsOpen && (
