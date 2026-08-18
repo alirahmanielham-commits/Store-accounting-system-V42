@@ -1,6 +1,6 @@
 {
   "backupConfig": {
-    "path": "/app/applet/my_backups",
+    "path": "/tmp/my_backups",
     "intervalHours": 4,
     "storageType": "local",
     "remoteProvider": "s3",
@@ -12,6 +12,20 @@
     "cron": "0 2 * * *"
   },
   "databaseLogs": [
+    {
+      "id": "1787072430496",
+      "date": "۱۴۰۵/۵/۲۷ ۱۷:۰۰:۳۰",
+      "action": "بازیابی اطلاعات",
+      "status": "success",
+      "details": "نسخه uploaded-1787072423068-test.json با موفقیت بازیابی شد."
+    },
+    {
+      "id": "1787072423070",
+      "date": "۱۴۰۵/۵/۲۷ ۱۷:۰۰:۲۳",
+      "action": "آپلود بک‌آپ",
+      "status": "success",
+      "details": "فایل test.json با موفقیت آپلود شد."
+    },
     {
       "id": "1787071488958",
       "date": "۱۴۰۵/۵/۲۷ ۱۶:۴۴:۴۸",

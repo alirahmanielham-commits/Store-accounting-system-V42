@@ -850,7 +850,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                   
                   <div className="pt-8 border-t border-slate-100 flex justify-end">
                     <button 
-                      onClick={() => showNotification('تنظیمات ذخیره‌سازی با موفقیت اعمال شد.', 'success')}
+                      onClick={saveStorageSettings}
                       className="px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-lg shadow-slate-200"
                     >
                       <Save className="w-4 h-4" /> اعمال تنظیمات مسیر
@@ -918,7 +918,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                                 )}
                               </td>
                               <td className="px-5 py-4 flex justify-center gap-2 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity">
-                                <button title="دانلود فایل" className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100">
+                                <button onClick={() => window.open(`/api/db/backups/download/${b.file}`, '_blank')} title="دانلود فایل" className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100">
                                   <Download className="w-4 h-4" />
                                 </button>
                                 <button title="حذف" className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors border border-transparent hover:border-rose-100" onClick={() => handleDeleteBackup(b.file)}>
