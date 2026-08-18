@@ -248,8 +248,10 @@ const PersonsManager = React.lazy(() => import('./components/persons/PersonsMana
 const DebtorsNotification = React.lazy(() => import('./components/DebtorsNotification'));
 const BeautifulLoading = React.lazy(() => import('./components/BeautifulLoading'));
 const DataReconciliation = React.lazy(() => import('./components/DataReconciliation'));
-const CreateSalaryPayroll = React.lazy(() => import('./components/payroll/CreateSalaryPayroll'));
-const ListSalaryPayroll = React.lazy(() => import('./components/payroll/ListSalaryPayroll'));
+const SalaryComponentsManager = React.lazy(() => import('./components/payroll/SalaryComponentsManager'));
+const ContractsManager = React.lazy(() => import('./components/payroll/ContractsManager'));
+const MonthlyAttendance = React.lazy(() => import('./components/payroll/MonthlyAttendance'));
+const PayslipsManager = React.lazy(() => import('./components/payroll/PayslipsManager'));
 
 const ProductsTab = React.lazy(() => import('./components/products/ProductsTab'));
 const BulkBarcodeGenerator = React.lazy(() => import('./components/products/BulkBarcodeGenerator'));
@@ -1137,6 +1139,10 @@ export default function App() {
                           setEditingAccountingDoc(null);
                           setActiveTab("accounting_docs_list");
                         }} />} />
+<Route path="/salary_components" element={<SalaryComponentsManager showNotification={showNotification} storeSettings={storeSettings} accounts={accounts} />} />
+<Route path="/employee_contracts" element={<ContractsManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
+<Route path="/monthly_attendance" element={<MonthlyAttendance personsData={persons} showNotification={showNotification} />} />
+<Route path="/payslips" element={<PayslipsManager personsData={persons} showNotification={showNotification} formatNumber={formatNumber} />} />
 <Route path="/" element={<Navigate to="/welcome_page" replace />} />
   <Route path="*" element={<AnimatePresence mode="wait"><motion.div key={location.pathname} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
 </Routes>

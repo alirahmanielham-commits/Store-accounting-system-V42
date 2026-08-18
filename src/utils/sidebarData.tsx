@@ -162,8 +162,10 @@ export const allSidebarGroups: SidebarGroup[] = [
     label: "حقوق و دستمزد",
     icon: <UserCheck className="w-5 h-5" />,
     items: [
-      { id: "create_salary_payroll", label: "ثبت فیش حقوقی", roles: ["admin", "accountant", "manager"] },
-      { id: "list_salary_payroll", label: "لیست فیش‌های حقوقی", roles: ["admin", "accountant", "manager", "viewer"] },
+      { id: "salary_components", label: "اجزای حقوق", roles: ["admin", "accountant", "manager"] },
+      { id: "employee_contracts", label: "قراردادها", roles: ["admin", "accountant", "manager"] },
+      { id: "monthly_attendance", label: "کارکرد ماهانه", roles: ["admin", "accountant", "manager", "viewer"] },
+      { id: "payslips", label: "فیش حقوقی", roles: ["admin", "accountant", "manager", "viewer"] },
     ],
   },
   {

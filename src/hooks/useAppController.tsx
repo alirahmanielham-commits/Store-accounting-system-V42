@@ -18,8 +18,6 @@ import PersonsManager from "../components/persons/PersonsManager";
 import DebtorsNotification from "../components/DebtorsNotification";
 import BeautifulLoading from "../components/BeautifulLoading";
 import DataReconciliation from "../components/DataReconciliation";
-import CreateSalaryPayroll from '../components/payroll/CreateSalaryPayroll';
-import ListSalaryPayroll from '../components/payroll/ListSalaryPayroll';
 import { useStore } from '../store';
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { globalDateFormatter } from "../utils/dateFormatter";
@@ -6390,18 +6388,6 @@ const renderTabContent = () => {
           />
         );
       }
-      case "create_salary_payroll":
-        return (
-          <CreateSalaryPayroll setIsPersonModalOpen={setIsPersonModalOpen} persian={persian} persian_fa={persian_fa} storeSettings={storeSettings} formatCurrency={formatCurrency} DatePicker={DatePicker} SearchableSelect={SearchableSelect} DollarSign={DollarSign} User={User} Save={Save} RefreshCw={RefreshCw} FileSpreadsheet={FileSpreadsheet} handleSubmitSalary={handleSubmitSalary} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} salaryPersonId={salaryPersonId} setSalaryPersonId={setSalaryPersonId} renderPersonInfoBox={renderPersonInfoBox} Calendar={Calendar} salaryPeriodMonth={salaryPeriodMonth} setSalaryPeriodMonth={setSalaryPeriodMonth} salaryPeriodYear={salaryPeriodYear} setSalaryPeriodYear={setSalaryPeriodYear} salaryDate={salaryDate} setSalaryDate={setSalaryDate} salaryBaseAmount={salaryBaseAmount} setSalaryBaseAmount={setSalaryBaseAmount} numToPersianWords={numToPersianWords} PlusCircle={PlusCircle} salaryHousingAllowance={salaryHousingAllowance} setSalaryHousingAllowance={setSalaryHousingAllowance} salaryGroceryAllowance={salaryGroceryAllowance} setSalaryGroceryAllowance={setSalaryGroceryAllowance} salaryOtherAllowances={salaryOtherAllowances} setSalaryOtherAllowances={setSalaryOtherAllowances} MinusCircle={MinusCircle} salaryInsuranceDeduction={salaryInsuranceDeduction} setSalaryInsuranceDeduction={setSalaryInsuranceDeduction} salaryTaxDeduction={salaryTaxDeduction} setSalaryTaxDeduction={setSalaryTaxDeduction} salaryOtherDeductions={salaryOtherDeductions} setSalaryOtherDeductions={setSalaryOtherDeductions} Info={Info} salaryDescription={salaryDescription} setSalaryDescription={setSalaryDescription} submittingSalary={submittingSalary} />
-        );
-
-
-      case "list_salary_payroll":
-        return (
-          <ListSalaryPayroll transactions={transactions} persons={persons} storeSettings={storeSettings}  formatCurrency={formatCurrency} Trash2={Trash2} confirmAction={confirmAction} List={List} toPersianDigits={toPersianDigits} renderPersonLink={renderPersonLink} formatDateDisplay={formatDateDisplay} payslips={payslips} numToPersianWords={numToPersianWords} openPayslip={openPayslip} Eye={Eye} deleteTransaction={deleteTransaction} fetchTransactions={fetchTransactions} />
-        );
-
-
       case "product_categories": {
         return (
           <ProductCategoriesView products={products}

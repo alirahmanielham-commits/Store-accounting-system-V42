@@ -640,3 +640,113 @@ export const notifications = pgTable('notifications', {
   read: boolean('read').default(false),
   createdAt: timestamp('created_at').defaultNow(),
 });
+
+// --- Payroll & HR System ---
+
+export const salaryComponents = pgTable('salary_components', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  code: varchar('code', { length: 50 }).notNull().unique(),
+  title: varchar('title', { length: 255 }).notNull(),
+  type: varchar('type', { length: 50 }).notNull(), // 'earning' or 'deduction'
+  calculationType: varchar('calculation_type', { length: 50 }).notNull(), // 'fixed', 'formula', 'percentage', 'time_based'
+  formula: text('formula'),
+  basePercentage: numeric('base_percentage'),
+  timeFactor: varchar('time_factor', { length: 50 }),
+  isTaxable: boolean('is_taxable').default(true),
+  isInsurable: boolean('is_insurable').default(true),
+  minAmount: numeric('min_amount'),
+  maxAmount: numeric('max_amount'),
+  isActive: boolean('is_active').default(true),
+  accountingAccountId: varchar('accounting_account_id', { length: 50 }),
+  displayOrder: integer('display_order').default(0),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const contractTypes = pgTable('contract_types', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  code: varchar('code', { length: 50 }).notNull().unique(),
+  title: varchar('title', { length: 255 }).notNull(),
+  durationType: varchar('duration_type', { length: 50 }).notNull(), // 'fixed_term', 'indefinite'
+  standardMonthlyHours: integer('standard_monthly_hours').default(220),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const employeeContracts = pgTable('employee_contracts', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  personId: varchar('person_id', { length: 50 }).notNull(),
+  contractTypeId: varchar('contract_type_id', { length: 50 }).notNull(),
+  startDate: varchar('start_date', { length: 50 }).notNull(),
+  endDate: varchar('end_date', { length: 50 }),
+  location: varchar('location', { length: 255 }),
+  status: varchar('status', { length: 50 }).default('active'), // 'active', 'expired', 'terminated', 'pending_renewal'
+  version: integer('version').default(1),
+  parentContractId: varchar('parent_contract_id', { length: 50 }),
+  attachmentUrl: text('attachment_url'),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const contractComponents = pgTable('contract_components', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  contractId: varchar('contract_id', { length: 50 }).notNull(),
+  componentId: varchar('component_id', { length: 50 }).notNull(),
+  overrideAmount: numeric('override_amount'),
+  overrideFormula: text('override_formula'),
+});
+
+export const monthlyAttendance = pgTable('monthly_attendance', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  personId: varchar('person_id', { length: 50 }).notNull(),
+  periodYear: integer('period_year').notNull(),
+  periodMonth: integer('period_month').notNull(),
+  workDays: numeric('work_days').default('0'),
+  absentDays: numeric('absent_days').default('0'),
+  paidLeaveDays: numeric('paid_leave_days').default('0'),
+  unpaidLeaveDays: numeric('unpaid_leave_days').default('0'),
+  sickLeaveDays: numeric('sick_leave_days').default('0'),
+  overtimeHours: numeric('overtime_hours').default('0'),
+  nightWorkHours: numeric('night_work_hours').default('0'),
+  shiftWorkHours: numeric('shift_work_hours').default('0'),
+  holidayWorkHours: numeric('holiday_work_hours').default('0'),
+  missionDays: numeric('mission_days').default('0'),
+  missionHours: numeric('mission_hours').default('0'),
+  delayMinutes: integer('delay_minutes').default(0),
+  earlyLeaveMinutes: integer('early_leave_minutes').default(0),
+  status: varchar('status', { length: 50 }).default('draft'), // 'draft', 'approved'
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  periodPersonIdx: index('idx_monthly_attendance_period_person').on(table.periodYear, table.periodMonth, table.personId),
+}));
+
+export const payslips = pgTable('payslips', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  personId: varchar('person_id', { length: 50 }).notNull(),
+  periodYear: integer('period_year').notNull(),
+  periodMonth: integer('period_month').notNull(),
+  contractId: varchar('contract_id', { length: 50 }),
+  attendanceId: varchar('attendance_id', { length: 50 }),
+  baseSalary: numeric('base_salary').default('0'),
+  totalEarnings: numeric('total_earnings').default('0'),
+  totalDeductions: numeric('total_deductions').default('0'),
+  taxableAmount: numeric('taxable_amount').default('0'),
+  insurableAmount: numeric('insurable_amount').default('0'),
+  taxAmount: numeric('tax_amount').default('0'),
+  insuranceAmount: numeric('insurance_amount').default('0'),
+  netPayable: numeric('net_payable').default('0'),
+  status: varchar('status', { length: 50 }).default('draft'), // 'draft', 'finalized', 'paid'
+  accountingDocumentId: varchar('accounting_document_id', { length: 50 }),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+});
+
+export const payslipItems = pgTable('payslip_items', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  payslipId: varchar('payslip_id', { length: 50 }).notNull(),
+  componentId: varchar('component_id', { length: 50 }).notNull(),
+  title: varchar('title', { length: 255 }).notNull(),
+  type: varchar('type', { length: 50 }).notNull(), // 'earning' or 'deduction'
+  amount: numeric('amount').notNull(),
+});
