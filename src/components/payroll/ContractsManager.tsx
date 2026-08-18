@@ -64,12 +64,23 @@ export default function ContractsManager({ personsData, storeSettings, showNotif
     }
   };
 
+  const getTimestampStr = (dateVal: any) => {
+    if (!dateVal) return Date.now().toString();
+    if (typeof dateVal.toDate === 'function') {
+      return dateVal.toDate().getTime().toString();
+    }
+    if (typeof dateVal.getTime === 'function') {
+      return dateVal.getTime().toString();
+    }
+    return new Date(dateVal).getTime().toString();
+  };
+
   const handleSaveContract = async () => {
     if (!contractForm.personId || !contractForm.contractTypeId) return showNotification('پرسنل و نوع قرارداد الزامی است', 'error');
     try {
       const contractId = editingContractId || Date.now().toString();
-      const startDateStr = (contractForm.startDate as any)?.toUnix ? ((contractForm.startDate as any).toUnix() * 1000).toString() : contractForm.startDate.getTime().toString();
-      const endDateStr = (contractForm.endDate as any)?.toUnix ? ((contractForm.endDate as any).toUnix() * 1000).toString() : contractForm.endDate.getTime().toString();
+      const startDateStr = getTimestampStr(contractForm.startDate);
+      const endDateStr = getTimestampStr(contractForm.endDate);
 
       const payload = {
         personId: contractForm.personId.value,
