@@ -66,13 +66,17 @@ export default function ContractsManager({ personsData, storeSettings, showNotif
 
   const getTimestampStr = (dateVal: any) => {
     if (!dateVal) return Date.now().toString();
+    if (typeof dateVal.toUnix === 'function') {
+      return (dateVal.toUnix() * 1000).toString();
+    }
     if (typeof dateVal.toDate === 'function') {
       return dateVal.toDate().getTime().toString();
     }
     if (typeof dateVal.getTime === 'function') {
       return dateVal.getTime().toString();
     }
-    return new Date(dateVal).getTime().toString();
+    const parsed = new Date(dateVal).getTime();
+    return isNaN(parsed) ? Date.now().toString() : parsed.toString();
   };
 
   const handleSaveContract = async () => {
