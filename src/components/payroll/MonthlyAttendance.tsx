@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Calendar, Users, XCircle, Search } from 'lucide-react';
-import { db } from '../../db';
-import { monthlyAttendance, employeeContracts } from '../../db/schema';
-import { eq, and } from 'drizzle-orm';
+import { getMonthlyAttendances, addMonthlyAttendance, updateMonthlyAttendance, getEmployeeContracts } from '../../services/hrService';
 
 export default function MonthlyAttendance({ personsData, showNotification }) {
   const [year, setYear] = useState(1403);
@@ -30,12 +28,13 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
     setLoading(true);
     try {
       // Get all active contracts
-      const contracts = await db.select().from(employeeContracts).where(eq(employeeContracts.status, 'active'));
+      const allContracts = await getEmployeeContracts();
+      const contracts = allContracts.filter(c => c.status === 'active');
       setActiveContracts(contracts);
 
       // Get existing attendance for this period
-      const existing = await db.select().from(monthlyAttendance)
-        .where(and(eq(monthlyAttendance.periodYear, year), eq(monthlyAttendance.periodMonth, month)));
+      const allAttendances = await getMonthlyAttendances();
+      const existing = allAttendances.filter(a => a.periodYear === year && a.periodMonth === month);
 
       // Merge
       const merged = contracts.map(c => {
@@ -74,9 +73,9 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
         if (a.isNew) {
           const payload = { ...a, id: Date.now().toString() + Math.random().toString() };
           delete payload.isNew;
-          await db.insert(monthlyAttendance).values(payload);
+          await addMonthlyAttendance(payload);
         } else {
-          await db.update(monthlyAttendance).set(a).where(eq(monthlyAttendance.id, a.id));
+          await updateMonthlyAttendance(a.id, a);
         }
       }
       showNotification('کارکرد با موفقیت ذخیره شد', 'success');

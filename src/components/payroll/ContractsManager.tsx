@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Users, FileText, Settings, XCircle } from 'lucide-react';
-import { db } from '../../db';
-import { employeeContracts, contractTypes, persons, salaryComponents, contractComponents } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { getContractTypes, addContractType, updateContractType, deleteContractType, getEmployeeContracts, addEmployeeContract, updateEmployeeContract, deleteEmployeeContract, getSalaryComponents, getContractComponents, addContractComponent, updateContractComponent, deleteContractComponent } from '../../services/hrService';
 import Select from 'react-select';
 
 export default function ContractsManager({ personsData, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
@@ -37,13 +35,13 @@ export default function ContractsManager({ personsData, storeSettings, showNotif
   const fetchData = async () => {
     try {
       const [cTypes, emps, sals] = await Promise.all([
-        db.select().from(contractTypes),
-        db.select().from(employeeContracts),
-        db.select().from(salaryComponents).where(eq(salaryComponents.isActive, true))
+        getContractTypes(),
+        getEmployeeContracts(),
+        getSalaryComponents()
       ]);
-      setTypes(cTypes);
-      setContracts(emps);
-      setSalComponents(sals);
+      setTypes(cTypes || []);
+      setContracts(emps || []);
+      setSalComponents((sals || []).filter(s => s.isActive));
     } catch (e) {
       console.error(e);
     }
@@ -53,10 +51,10 @@ export default function ContractsManager({ personsData, storeSettings, showNotif
     if (!typeForm.code || !typeForm.title) return showNotification('فیلدهای ضروری را پر کنید', 'error');
     try {
       if (editingTypeId) {
-        await db.update(contractTypes).set(typeForm).where(eq(contractTypes.id, editingTypeId));
+        await updateContractType(editingTypeId, typeForm);
         showNotification('با موفقیت ویرایش شد', 'success');
       } else {
-        await db.insert(contractTypes).values({ id: Date.now().toString(), ...typeForm });
+        await addContractType({ id: Date.now().toString(), ...typeForm });
         showNotification('نوع قرارداد جدید ثبت شد', 'success');
       }
       setIsTypeModalOpen(false);
@@ -83,24 +81,26 @@ export default function ContractsManager({ personsData, storeSettings, showNotif
       };
 
       if (editingContractId) {
-        await db.update(employeeContracts).set(payload).where(eq(employeeContracts.id, editingContractId));
-        // Remove old components
-        await db.delete(contractComponents).where(eq(contractComponents.contractId, editingContractId));
+        await updateEmployeeContract(editingContractId, payload);
+        const allComps = await getContractComponents();
+        for (const c of allComps.filter(c => c.contractId === editingContractId)) {
+          await deleteContractComponent(c.id);
+        }
       } else {
-        await db.insert(employeeContracts).values({ id: contractId, ...payload });
+        await addEmployeeContract({ id: contractId, ...payload });
       }
 
       // Insert components
       if (contractForm.selectedComponents.length > 0) {
-        await db.insert(contractComponents).values(
-          contractForm.selectedComponents.map(sc => ({
+        for (const sc of contractForm.selectedComponents) {
+          await addContractComponent({
             id: Date.now().toString() + Math.random().toString(),
             contractId,
             componentId: sc.componentId,
             overrideAmount: sc.overrideAmount ? sc.overrideAmount.toString() : null,
             overrideFormula: sc.overrideFormula || null
-          }))
-        );
+          });
+        }
       }
 
       showNotification('قرارداد با موفقیت ذخیره شد', 'success');
@@ -208,7 +208,8 @@ export default function ContractsManager({ personsData, storeSettings, showNotif
                     <td className="p-4 text-center">
                       <button className="text-indigo-600 hover:text-indigo-800 text-xs font-bold" onClick={async () => {
                         // Load components to edit
-                        const dbComps = await db.select().from(contractComponents).where(eq(contractComponents.contractId, c.id));
+                        const allDbComps = await getContractComponents();
+                        const dbComps = allDbComps.filter(cc => cc.contractId === c.id);
                         setEditingContractId(c.id);
                         setContractForm({
                           personId: { value: c.personId, label: getPersonName(c.personId) },

@@ -1,8 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, CheckCircle, XCircle } from 'lucide-react';
-import { db } from '../../db';
-import { salaryComponents } from '../../db/schema';
-import { eq } from 'drizzle-orm';
+import { getSalaryComponents, addSalaryComponent, updateSalaryComponent, deleteSalaryComponent } from '../../services/hrService';
 import { formatNumber } from '../../utils/format';
 
 export default function SalaryComponentsManager({ storeSettings, accounts, showNotification }) {
@@ -32,8 +30,9 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
 
   const fetchComponents = async () => {
     try {
-      const data = await db.select().from(salaryComponents).orderBy(salaryComponents.displayOrder);
-      setComponents(data);
+      const data = await getSalaryComponents();
+      // Optional: order by displayOrder or similar logic if needed
+      setComponents(data || []);
     } catch (e) {
       console.error(e);
     }
@@ -51,10 +50,10 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
       };
 
       if (editingId) {
-        await db.update(salaryComponents).set(payload).where(eq(salaryComponents.id, editingId));
+        await updateSalaryComponent(editingId, payload);
         showNotification('با موفقیت بروزرسانی شد', 'success');
       } else {
-        await db.insert(salaryComponents).values({
+        await addSalaryComponent({
           id: Date.now().toString(),
           ...payload
         });
@@ -91,7 +90,7 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
   const handleDelete = async (id) => {
     if (!window.confirm('آیا مطمئن هستید؟')) return;
     try {
-      await db.delete(salaryComponents).where(eq(salaryComponents.id, id));
+      await deleteSalaryComponent(id);
       showNotification('با موفقیت حذف شد', 'success');
       fetchComponents();
     } catch (e) {
