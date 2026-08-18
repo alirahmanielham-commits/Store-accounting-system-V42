@@ -180,7 +180,16 @@ const runBackupJob = async () => {
         try { await backupStore('default'); } catch(e) { errors.push(e); }
         const client = getActivePgPool();
         if (client) {
-            const res = await client.query('SELECT id FROM businesses WHERE deleted_at IS NULL');
+            let res;
+            try {
+                res = await client.query('SELECT id FROM businesses WHERE deleted_at IS NULL');
+            } catch (err) {
+                if (err.code === '42703') {
+                    res = await client.query('SELECT id FROM businesses');
+                } else {
+                    throw err;
+                }
+            }
             for (const row of res.rows) {
                 await loadPgPoolForStore(row.id);
                 try { await backupStore(row.id); } catch(e) { errors.push(e); }

@@ -239,7 +239,16 @@ export async function getAllDbData() {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
       for (const key of KNOWN_TABLES) {
          const isSoftDeletable = ["checkbooks", "issued_checks", "received_checks"].includes(key);
-         const res = await client.query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
+         let res;
+         try {
+             res = await client.query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
+         } catch (err) {
+             if (err.code === '42703') {
+                 res = await client.query(`SELECT * FROM "${key}"`);
+             } else {
+                 throw err;
+             }
+         }
          if (key === 'company_profile') {
            let cval = null;
            try {
