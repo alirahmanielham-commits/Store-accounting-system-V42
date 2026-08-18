@@ -21,7 +21,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const [backups, setBackups] = useState<any[]>([]);
   const loadBackups = async () => {
     try {
-      const res = await apiFetch('/api/db/backups');
+      const res = await fetch('/api/db/backups');
       const data = await res.json();
       const formatted = data.map((b: any, index: number) => {
         const d = new Date(b.time);
@@ -43,7 +43,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
 
   const loadConfig = async () => {
     try {
-      const res = await apiFetch('/api/db/backup-config');
+      const res = await fetch('/api/db/backup-config');
       const data = await res.json();
       if (data) {
         setScheduleConfig(prev => ({
@@ -107,8 +107,8 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     setLoadingHealth(true);
     try {
       const [hRes, sRes] = await Promise.all([
-        apiFetch('/api/db/health'),
-        apiFetch('/api/db/table-sizes')
+        fetch('/api/db/health'),
+        fetch('/api/db/table-sizes')
       ]);
       const hData = await hRes.json();
       const sData = await sRes.json();
@@ -128,7 +128,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const [logs, setLogs] = useState<any[]>([]);
   const loadLogs = async () => {
     try {
-      const res = await apiFetch('/api/db/logs');
+      const res = await fetch('/api/db/logs');
       const data = await res.json();
       setLogs(Array.isArray(data) ? data : []);
     } catch(e) {}
@@ -157,8 +157,11 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     setIsBackingUp(true);
     setBackupProgress(30);
     try {
-      const res = await apiFetch('/api/db/backups/create', { method: 'POST' });
-      if (!res.ok) throw new Error('Backup failed');
+      const res = await fetch('/api/db/backups/create', { method: 'POST' });
+      if (!res.ok) {
+          const errorData = await res.json().catch(() => ({}));
+          throw new Error(errorData.error || 'خطای سرور');
+      }
       setBackupProgress(100);
       showNotification('بک‌آپ با موفقیت تهیه شد', 'success');
       loadBackups();
@@ -174,14 +177,14 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
         status: 'success',
         details: 'عملیات با موفقیت انجام شد.'
       }, ...logs]);
-    } catch(err) {
-      showNotification('خطا در تهیه بک‌آپ', 'error');
+    } catch(err: any) {
+      showNotification('خطا در تهیه بک‌آپ: ' + err.message, 'error');
       setLogs([{
         id: Date.now().toString(),
         date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
         action: 'بک‌آپ دستی',
         status: 'error',
-        details: 'خطا در عملیات بک‌آپ'
+        details: 'خطای بک‌آپ: ' + err.message
       }, ...logs]);
     }
     setTimeout(() => {
@@ -212,7 +215,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       // If it's a direct upload (no existing file on server yet)
       if (selectedBackupForRestore.isUpload) {
          setRestoreProgress(90);
-         const res = await apiFetch('/api/db/backups/upload', {
+         const res = await fetch('/api/db/backups/upload', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ filename: selectedBackupForRestore.rawFile.name, content: selectedBackupForRestore.content })
@@ -223,7 +226,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       }
       
       setRestoreProgress(95);
-      const res = await apiFetch(`/api/db/backups/restore/${filename}`, { method: 'POST' });
+      const res = await fetch(`/api/db/backups/restore/${filename}`, { method: 'POST' });
       if (!res.ok) throw new Error('بازیابی ناموفق بود.');
       
       setRestoreProgress(100);
@@ -265,7 +268,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       if (scheduleConfig.frequency === 'monthly') intervalHours = 720;
       if (scheduleConfig.frequency === 'custom') intervalHours = 4; // Arbitrary for custom right now
       
-      await apiFetch('/api/db/backup-config', {
+      await fetch('/api/db/backup-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
@@ -285,7 +288,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
 
   const saveStorageSettings = async () => {
     try {
-      await apiFetch('/api/db/backup-config', {
+      await fetch('/api/db/backup-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ path: storageConfig.localPath, storageType: storageConfig.type, remoteProvider: storageConfig.cloudProvider, cloudAuthUrl: storageConfig.cloudAuthUrl, cloudUser: storageConfig.cloudUser, cloudPass: storageConfig.cloudPass })
@@ -300,7 +303,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const handleDeleteBackup = async (filename: string) => {
     if (!confirm('آیا از حذف این بک‌آپ اطمینان دارید؟')) return;
     try {
-      const res = await apiFetch(`/api/db/backups/${filename}`, { method: 'DELETE' });
+      const res = await fetch(`/api/db/backups/${filename}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Delete failed');
       showNotification('بک‌آپ با موفقیت حذف شد', 'success');
       loadBackups();

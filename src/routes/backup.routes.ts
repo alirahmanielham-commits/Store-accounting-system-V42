@@ -174,21 +174,23 @@ const backupStore = async (storeId: string) => {
 };
 
 const runBackupJob = async () => {
+    let errors = [];
     try {
         await loadPgPoolForStore('default');
-        await backupStore('default');
-
+        try { await backupStore('default'); } catch(e) { errors.push(e); }
         const client = getActivePgPool();
         if (client) {
             const res = await client.query('SELECT id FROM businesses WHERE deleted_at IS NULL');
             for (const row of res.rows) {
                 await loadPgPoolForStore(row.id);
-                await backupStore(row.id);
+                try { await backupStore(row.id); } catch(e) { errors.push(e); }
             }
         }
     } catch(e) {
         console.error('Global backup job error', e);
+        errors.push(e);
     }
+    if (errors.length > 0) throw new Error(errors.map(e => e.message).join(', '));
 };
 
 const setupBackupSchedule = () => {
