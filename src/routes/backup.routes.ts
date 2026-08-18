@@ -144,7 +144,7 @@ const backupStore = async (storeId: string) => {
                     }
                 }
                 
-                await appendDbLog('بک‌آپ خودکار/دستی', 'success', `بک‌آپ با حجم ${Buffer.byteLength(fileContent)} بایت ایجاد شد.`);
+                await appendDbLog('بک‌آپ خودکار/دستی', 'success', `بک‌آپ با حجم ${Buffer.byteLength(fileContent)} بایت در مسیر ${filePath} ایجاد شد.`);
                 
                 // keep only last N backups per store
                 const retentionCount = backupConfig.retention || 20;
@@ -164,6 +164,8 @@ const backupStore = async (storeId: string) => {
                 }
              } catch (err) {
                 console.error(`Backup job failed for store ${storeId}`, err);
+                await appendDbLog('پشتیبان‌گیری', 'error', `خطا در ایجاد بک‌آپ (${storeId}): ${err.message}`);
+                throw err;
              } finally {
                 resolve();
              }
