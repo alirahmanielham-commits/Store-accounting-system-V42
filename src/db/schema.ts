@@ -654,6 +654,7 @@ export const salaryComponents = pgTable('salary_components', {
   timeFactor: varchar('time_factor', { length: 50 }),
   isTaxable: boolean('is_taxable').default(true),
   isInsurable: boolean('is_insurable').default(true),
+  isBaseSalary: boolean('is_base_salary').default(false),
   minAmount: numeric('min_amount'),
   maxAmount: numeric('max_amount'),
   isActive: boolean('is_active').default(true),

@@ -118,7 +118,7 @@ export default function PayslipsManager({ personsData, showNotification }) {
           if (!compDef) continue;
           if (compDef.type === 'earning' && compDef.calculationType === 'fixed') {
             const v = mc.overrideAmount ? parseFloat(mc.overrideAmount) : 0;
-            if (compDef.code === 'base_salary' || compDef.code === 'base') {
+            if (compDef.isBaseSalary || compDef.code === 'base_salary' || compDef.code === 'base') {
               baseSalaryAmount = v;
               break;
             }

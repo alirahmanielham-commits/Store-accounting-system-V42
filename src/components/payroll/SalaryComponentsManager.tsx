@@ -18,6 +18,7 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
     timeFactor: 'days',
     isTaxable: true,
     isInsurable: true,
+    isBaseSalary: false,
     minAmount: '',
     maxAmount: '',
     isActive: true,
@@ -78,6 +79,7 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
       timeFactor: comp.timeFactor || 'days',
       isTaxable: comp.isTaxable ?? true,
       isInsurable: comp.isInsurable ?? true,
+      isBaseSalary: comp.isBaseSalary ?? false,
       minAmount: comp.minAmount || '',
       maxAmount: comp.maxAmount || '',
       isActive: comp.isActive ?? true,
@@ -146,6 +148,11 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
                     <span className={`px-2 py-1 rounded-md text-xs font-bold ${comp.type === 'earning' ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'}`}>
                       {comp.type === 'earning' ? 'مزایا (Earning)' : 'کسورات (Deduction)'}
                     </span>
+                    {comp.isBaseSalary && (
+                      <span className="mr-2 px-2 py-1 rounded-md text-xs font-bold bg-indigo-100 text-indigo-700 border border-indigo-200">
+                        حقوق پایه
+                      </span>
+                    )}
                   </td>
                   <td className="p-4 text-slate-600">
                     {comp.calculationType === 'fixed' && 'مبلغ ثابت'}
@@ -243,7 +250,7 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
                 </div>
               )}
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 border-t border-slate-100 pt-4 mt-2">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 border-t border-slate-100 pt-4 mt-2">
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={formData.isTaxable} onChange={e => setFormData({...formData, isTaxable: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                   <span className="text-sm font-bold text-slate-700">مشمول مالیات</span>
@@ -251,6 +258,10 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
                 <label className="flex items-center gap-3 cursor-pointer">
                   <input type="checkbox" checked={formData.isInsurable} onChange={e => setFormData({...formData, isInsurable: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
                   <span className="text-sm font-bold text-slate-700">مشمول بیمه</span>
+                </label>
+                <label className="flex items-center gap-3 cursor-pointer" title="فعال کردن این گزینه باعث می‌شود مبلغ این جزء به عنوان مبنای محاسبه در اجزای درصدی استفاده شود">
+                  <input type="checkbox" checked={formData.isBaseSalary} onChange={e => setFormData({...formData, isBaseSalary: e.target.checked})} className="w-5 h-5 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" />
+                  <span className="text-sm font-bold text-slate-700">این حقوق پایه است</span>
                 </label>
               </div>
 
