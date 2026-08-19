@@ -3,7 +3,7 @@ import { Calculator, Printer, CheckCircle, Search, FileText, X, Download, FileSp
 import { getPayslips, addPayslip, updatePayslip, getMonthlyAttendances, getEmployeeContracts, getContractComponents, getSalaryComponents, getPayslipItems, addPayslipItem } from '../../services/hrService';
 import { toPersianDigits, formatNumber } from '../../utils/format';
 
-export default function PayslipsManager({ personsData, showNotification }) {
+export default function PayslipsManager({ personsData, storeSettings, showNotification }) {
   const [year, setYear] = useState(1403);
   const [month, setMonth] = useState(1);
   const [slips, setSlips] = useState([]);
@@ -284,7 +284,7 @@ export default function PayslipsManager({ personsData, showNotification }) {
                 <div className="flex justify-between items-center mb-8 border-b-2 border-slate-800 pb-4">
                   <div className="flex-1">
                     <h2 className="text-xl font-bold text-slate-800">فیش حقوقی پرسنل</h2>
-                    <p className="text-sm text-slate-600 mt-2 font-bold">شرکت نمونه</p>
+                    <p className="text-sm text-slate-600 mt-2 font-bold">{storeSettings?.storeName || 'شرکت نمونه'}</p>
                   </div>
                   <div className="flex-1 text-center">
                     <div className="w-16 h-16 bg-slate-100 rounded-full mx-auto border-2 border-slate-300 flex items-center justify-center mb-2">
@@ -394,7 +394,7 @@ export default function PayslipsManager({ personsData, showNotification }) {
           <div className="flex-1 min-w-[180px]">
             <label className="block text-xs font-bold text-slate-500 mb-2 flex items-center gap-1.5"><Building2 className="w-3.5 h-3.5"/> شرکت</label>
             <select className="w-full border-0 bg-slate-50 p-3 rounded-xl font-bold text-slate-700 outline-none focus:ring-2 focus:ring-indigo-500/20 cursor-pointer">
-              <option>شرکت نمونه مرکزی</option>
+              <option>{storeSettings?.storeName || 'شرکت نمونه'}</option>
             </select>
           </div>
           <div className="flex-1 min-w-[180px]">
@@ -516,7 +516,7 @@ export default function PayslipsManager({ personsData, showNotification }) {
                          <TrendingUp className="w-5 h-5 text-emerald-600" />
                       </div>
                     </div>
-                    <div className="text-3xl font-black text-emerald-700 font-mono relative">
+                    <div className="text-3xl font-black text-emerald-700 relative">
                       {toPersianDigits(formatNumber(selectedSlip.totalEarnings))} <span className="text-base font-bold text-emerald-600/70">ریال</span>
                     </div>
                   </div>
@@ -530,7 +530,7 @@ export default function PayslipsManager({ personsData, showNotification }) {
                          <TrendingDown className="w-5 h-5 text-rose-600" />
                       </div>
                     </div>
-                    <div className="text-3xl font-black text-rose-700 font-mono relative">
+                    <div className="text-3xl font-black text-rose-700 relative">
                       {toPersianDigits(formatNumber(selectedSlip.totalDeductions))} <span className="text-base font-bold text-rose-600/70">ریال</span>
                     </div>
                   </div>
@@ -545,7 +545,7 @@ export default function PayslipsManager({ personsData, showNotification }) {
                          <Wallet className="w-5 h-5 text-white" />
                       </div>
                     </div>
-                    <div className="text-3xl font-black text-white font-mono relative">
+                    <div className="text-3xl font-black text-white relative">
                       {toPersianDigits(formatNumber(selectedSlip.netPayable))} <span className="text-base font-bold text-indigo-200">ریال</span>
                     </div>
                   </div>

@@ -96,6 +96,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
       const getTimestampStr = (dateVal) => {
         if (!dateVal) return null;
         if (typeof dateVal.toUnix === 'function') return (dateVal.toUnix() * 1000).toString();
+        if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime().toString();
         if (dateVal instanceof Date) return dateVal.getTime().toString();
         return new Date(dateVal).getTime().toString();
       };
@@ -273,10 +274,10 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                 <tbody className="divide-y divide-slate-100">
                   {types.map(t => (
                     <tr key={t.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 font-mono font-bold text-slate-700">{t.code}</td>
+                      <td className="p-4 font-bold text-slate-700">{t.code}</td>
                       <td className="p-4 font-bold text-indigo-900">{t.title}</td>
                       <td className="p-4 text-slate-600">{t.durationType === 'fixed_term' ? 'مدت معین' : 'دائم'}</td>
-                      <td className="p-4 font-mono text-slate-600">{t.standardMonthlyHours} <span className="font-sans text-xs">ساعت</span></td>
+                      <td className="p-4 text-slate-600">{t.standardMonthlyHours} <span className="font-sans text-xs">ساعت</span></td>
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-2">
                           <button onClick={() => { setEditingTypeId(t.id); setTypeForm(t); setIsTypeModalOpen(true); }} className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"><Edit2 className="w-4 h-4"/></button>
@@ -345,8 +346,8 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                         </div>
                       </td>
                       <td className="p-4 font-bold text-slate-700">{getTypeName(c.contractTypeId)}</td>
-                      <td className="p-4 text-slate-500 font-mono text-xs">{new Date(parseInt(c.startDate)).toLocaleDateString('fa-IR')}</td>
-                      <td className="p-4 text-slate-500 font-mono text-xs">{c.endDate ? new Date(parseInt(c.endDate)).toLocaleDateString('fa-IR') : 'نامحدود'}</td>
+                      <td className="p-4 text-slate-500 text-xs">{new Date(parseInt(c.startDate)).toLocaleDateString('fa-IR')}</td>
+                      <td className="p-4 text-slate-500 text-xs">{c.endDate ? new Date(parseInt(c.endDate)).toLocaleDateString('fa-IR') : 'نامحدود'}</td>
                       <td className="p-4 text-center">
                         <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-bold border ${
                           c.status==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200':
@@ -406,7 +407,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
             <div className="p-6 space-y-5">
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">کد تیپ</label>
-                <input type="text" value={typeForm.code} onChange={e => setTypeForm({...typeForm, code: e.target.value})} className="w-full border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500 font-mono text-left" dir="ltr" placeholder="CON-01" />
+                <input type="text" value={typeForm.code} onChange={e => setTypeForm({...typeForm, code: e.target.value})} className="w-full border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500 text-left" dir="ltr" placeholder="CON-01" />
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">عنوان</label>
@@ -421,7 +422,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-1.5">ساعات کار استاندارد ماهانه</label>
-                <input type="number" value={typeForm.standardMonthlyHours} onChange={e => setTypeForm({...typeForm, standardMonthlyHours: parseInt(e.target.value)})} className="w-full border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500 font-mono text-left" dir="ltr" />
+                <input type="number" value={typeForm.standardMonthlyHours} onChange={e => setTypeForm({...typeForm, standardMonthlyHours: parseInt(e.target.value)})} className="w-full border border-slate-200 rounded-xl p-3 outline-none focus:border-indigo-500 text-left" dir="ltr" />
               </div>
             </div>
             <div className="p-5 border-t border-slate-100 flex justify-end gap-3 bg-slate-50">
@@ -549,7 +550,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           value={contractForm.startDate}
                           onChange={(date) => setContractForm({...contractForm, startDate: date})}
                           calendarPosition="bottom-right"
-                          inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-mono font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
+                          inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
                         />
                       </div>
                       <div>
@@ -560,7 +561,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           value={contractForm.endDate}
                           onChange={(date) => setContractForm({...contractForm, endDate: date})}
                           calendarPosition="bottom-right"
-                          inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-mono font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
+                          inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
                         />
                       </div>
 
@@ -619,20 +620,20 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">تومان (اختیاری)</span>
                                   <input type="number" placeholder="مبلغ اختصاصی قرارداد" value={scData.overrideAmount || ''} onChange={e => {
                                     setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.map(sc => sc.componentId === comp.id ? {...sc, overrideAmount: e.target.value} : sc)})
-                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-28 pr-4 text-sm rounded-xl outline-none font-mono transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
+                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-28 pr-4 text-sm rounded-xl outline-none transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
                                 </div>
                               )}
                               {comp.calculationType === 'formula' && (
                                 <input type="text" placeholder="فرمول محاسباتی اختصاصی - اختیاری" value={scData.overrideFormula || ''} onChange={e => {
                                   setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.map(sc => sc.componentId === comp.id ? {...sc, overrideFormula: e.target.value} : sc)})
-                                }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 px-4 text-sm rounded-xl outline-none font-mono text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
+                                }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 px-4 text-sm rounded-xl outline-none text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
                               )}
                               {comp.calculationType === 'percentage' && (
                                 <div className="relative flex-1">
                                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">% درصد (اختیاری)</span>
                                   <input type="number" placeholder="درصد اختصاصی" value={scData.overrideAmount || ''} onChange={e => {
                                     setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.map(sc => sc.componentId === comp.id ? {...sc, overrideAmount: e.target.value} : sc)})
-                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-32 pr-4 text-sm rounded-xl outline-none font-mono text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
+                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-32 pr-4 text-sm rounded-xl outline-none text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
                                 </div>
                               )}
                               {comp.calculationType === 'time_based' && (
@@ -640,7 +641,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                                   <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">نرخ پایه (اختیاری)</span>
                                   <input type="number" placeholder="نرخ اختصاصی" value={scData.overrideAmount || ''} onChange={e => {
                                     setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.map(sc => sc.componentId === comp.id ? {...sc, overrideAmount: e.target.value} : sc)})
-                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-32 pr-4 text-sm rounded-xl outline-none font-mono text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
+                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-32 pr-4 text-sm rounded-xl outline-none text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
                                 </div>
                               )}
                             </div>
