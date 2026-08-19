@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { Users, Search, Save, User, CheckCircle, FileText } from 'lucide-react';
+import { Users, Search, Save, User, CheckCircle, FileText, X } from 'lucide-react';
 import { updatePerson } from '../../services/dataService';
 import { toPersianDigits } from '../../utils/format';
 

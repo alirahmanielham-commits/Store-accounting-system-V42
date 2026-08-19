@@ -495,7 +495,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           isDisabled={!!editingContractId}
                           options={employees.map(p => ({value: p.id, label: p.name}))}
                           value={contractForm.personIds}
-                          onChange={v => setContractForm({...contractForm, personIds: v || []})}
+                          onChange={v => setContractForm({...contractForm, personIds: (v as any[]) || []})}
                           placeholder="انتخاب کارمند..."
                           className="react-select-container"
                           classNamePrefix="react-select"
@@ -512,7 +512,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           isDisabled={!!editingContractId}
                           options={(personGroups||[]).map(g => ({value: g.id, label: g.name}))}
                           value={contractForm.groupIds}
-                          onChange={v => setContractForm({...contractForm, groupIds: v || []})}
+                          onChange={v => setContractForm({...contractForm, groupIds: (v as any[]) || []})}
                           placeholder="انتخاب گروه‌ها..."
                           className="react-select-container"
                           classNamePrefix="react-select"

@@ -12,7 +12,8 @@ export default function DailyAttendanceManager({ personsData, showNotification, 
   const [form, setForm] = useState({
     personId: '',
     checkIn: '08:00',
-    checkOut: '17:00'
+    checkOut: '17:00',
+    recordType: 'work'
   });
 
   const fetchAttendances = async () => {
@@ -62,25 +63,16 @@ export default function DailyAttendanceManager({ personsData, showNotification, 
     }
 
     try {
-      const existing = attendances.find(a => 
-        a.personId === form.personId && 
-        a.date === timestamp
-      );
-
-      if (existing) {
-        await updateDailyAttendance(existing.id, { ...existing, checkIn: form.checkIn, checkOut: form.checkOut });
-        showNotification('تردد با موفقیت بروزرسانی شد', 'success');
-      } else {
-        await addDailyAttendance({
-          id: generateId(),
-          personId: form.personId,
-          date: timestamp,
-          checkIn: form.checkIn,
-          checkOut: form.checkOut,
-          createdAt: Date.now()
-        });
-        showNotification('تردد با موفقیت ثبت شد', 'success');
-      }
+      await addDailyAttendance({
+        id: generateId(),
+        personId: form.personId,
+        date: timestamp,
+        checkIn: form.checkIn,
+        checkOut: form.checkOut,
+        recordType: form.recordType,
+        createdAt: Date.now()
+      });
+      showNotification('تردد با موفقیت ثبت شد', 'success');
       
       setForm({ ...form, personId: '' });
       fetchAttendances();
@@ -118,6 +110,15 @@ export default function DailyAttendanceManager({ personsData, showNotification, 
              aDate.getDate() === targetDay;
     });
   }, [attendances, selectedDate]);
+
+  const RECORD_TYPES = {
+    work: 'کارکرد عادی',
+    paid_leave: 'مرخصی استحقاقی',
+    sick_leave: 'مرخصی استعلاجی',
+    unpaid_leave: 'مرخصی بدون حقوق',
+    absent: 'غیبت',
+    mission: 'مأموریت'
+  };
 
   const getPersonName = (id: string) => {
     const p = (personsData || []).find(x => x.id === id);
@@ -180,6 +181,18 @@ export default function DailyAttendanceManager({ personsData, showNotification, 
                     ))}
                   </select>
                 </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">نوع تردد</label>
+                  <select 
+                    value={form.recordType}
+                    onChange={e => setForm({...form, recordType: e.target.value})}
+                    className="w-full border border-slate-200 rounded-xl p-3 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-bold"
+                  >
+                    {Object.entries(RECORD_TYPES).map(([k, v]) => (
+                      <option key={k} value={k}>{v}</option>
+                    ))}
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-2">ساعت ورود</label>
@@ -225,6 +238,7 @@ export default function DailyAttendanceManager({ personsData, showNotification, 
                   <thead className="bg-white text-slate-500 border-b border-slate-100">
                     <tr>
                       <th className="p-4 font-bold">کارمند</th>
+                      <th className="p-4 font-bold">نوع</th>
                       <th className="p-4 font-bold text-center">ورود</th>
                       <th className="p-4 font-bold text-center">خروج</th>
                       <th className="p-4 font-bold text-center">مدت زمان (ساعت)</th>
@@ -235,6 +249,9 @@ export default function DailyAttendanceManager({ personsData, showNotification, 
                     {filteredAttendances.map(a => (
                       <tr key={a.id} className="hover:bg-slate-50/70">
                         <td className="p-4 font-bold text-slate-800">{getPersonName(a.personId)}</td>
+                        <td className="p-4 text-xs font-bold text-slate-600 bg-slate-50/50 rounded-lg">
+                          {RECORD_TYPES[a.recordType as keyof typeof RECORD_TYPES] || 'کارکرد عادی'}
+                        </td>
                         <td className="p-4 text-center font-mono font-bold text-slate-600">{toPersianDigits(a.checkIn)}</td>
                         <td className="p-4 text-center font-mono font-bold text-slate-600">{toPersianDigits(a.checkOut)}</td>
                         <td className="p-4 text-center font-bold text-indigo-600">
@@ -252,7 +269,7 @@ export default function DailyAttendanceManager({ personsData, showNotification, 
                     ))}
                     {filteredAttendances.length === 0 && (
                       <tr>
-                        <td colSpan={5} className="p-12 text-center text-slate-400 font-medium">
+                        <td colSpan={6} className="p-12 text-center text-slate-400 font-medium">
                           در این روز ترددی ثبت نشده است
                         </td>
                       </tr>

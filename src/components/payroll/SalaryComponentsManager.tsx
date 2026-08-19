@@ -114,7 +114,7 @@ export default function SalaryComponentsManager({ storeSettings, accounts, showN
               setFormData({
                 code: '', title: '', type: 'earning', calculationType: 'fixed',
                 formula: '', basePercentage: '', timeFactor: 'days',
-                isTaxable: true, isInsurable: true, minAmount: '', maxAmount: '',
+                isTaxable: true, isInsurable: true, isBaseSalary: false, minAmount: '', maxAmount: '',
                 isActive: true, accountingAccountId: ''
               });
               setIsModalOpen(true);

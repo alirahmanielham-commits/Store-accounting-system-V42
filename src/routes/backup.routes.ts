@@ -78,7 +78,7 @@ router.post('/api/db/logs', async (req, res) => {
 });
 
 
-  let backupConfig = { path: '', intervalHours: 4, storageType: 'local', remoteProvider: 's3', remoteConfig: {}, enabled: true, frequency: 'daily', time: '02:00', retention: 5, cron: '0 2 * * *' };
+  let backupConfig: any = { path: '', intervalHours: 4, storageType: 'local', remoteProvider: 's3', remoteConfig: {}, enabled: true, frequency: 'daily', time: '02:00', retention: 5, cron: '0 2 * * *', cloudAuthUrl: '', cloudUser: '', cloudPass: '' };
   (async () => {
     try {
        const backupData = await getDbData('backupConfig');
@@ -99,7 +99,7 @@ router.post('/api/db/logs', async (req, res) => {
          : path.join(process.cwd(), 'backups');
   };
 
-  let activeCronJobs: cron.ScheduledTask[] = [];
+  let activeCronJobs: any[] = [];
 
 const backupStore = async (storeId: string) => {
     return new Promise<void>((resolve) => {
