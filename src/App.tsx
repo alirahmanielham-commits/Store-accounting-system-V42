@@ -1140,7 +1140,7 @@ export default function App() {
                           setActiveTab("accounting_docs_list");
                         }} />} />
 <Route path="/salary_components" element={<SalaryComponentsManager showNotification={showNotification} storeSettings={storeSettings} accounts={accounts} />} />
-<Route path="/employee_contracts" element={<ContractsManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
+<Route path="/employee_contracts" element={<ContractsManager personsData={persons} personGroups={personGroups} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
 <Route path="/monthly_attendance" element={<MonthlyAttendance personsData={persons} showNotification={showNotification} />} />
 <Route path="/payslips" element={<PayslipsManager personsData={persons} showNotification={showNotification} formatNumber={formatNumber} />} />
 <Route path="/" element={<Navigate to="/welcome_page" replace />} />
