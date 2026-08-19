@@ -98,3 +98,15 @@ export const updateMonthlyAttendance = async (id: string | number, data: any) =>
 export const getPayslipItems = () => getLocalData<any[]>('payslip_items', []);
 export const addPayslipItem = async (data: any) => appendLocalData('payslip_items', data);
 export const updatePayslipItem = async (id: string | number, data: any) => updateLocalData('payslip_items', id, data);
+export const deletePayslipItemsByPayslipId = async (payslipId: string | number) => {
+  const data = await getLocalData<any[]>('payslip_items', []);
+  await saveLocalData('payslip_items', data.filter(item => String(item.payslipId) !== String(payslipId)));
+};
+
+export const getDailyAttendances = () => getLocalData<any[]>('daily_attendance', []);
+export const addDailyAttendance = async (data: any) => appendLocalData('daily_attendance', data);
+export const updateDailyAttendance = async (id: string | number, data: any) => updateLocalData('daily_attendance', id, data);
+export const deleteDailyAttendance = async (id: string | number) => {
+  const data = await getLocalData<any[]>('daily_attendance', []);
+  await saveLocalData('daily_attendance', data.filter(item => String(item.id) !== String(id)));
+};

@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Save, Calendar, Users, XCircle, Search } from 'lucide-react';
-import { getMonthlyAttendances, addMonthlyAttendance, updateMonthlyAttendance, getEmployeeContracts } from '../../services/hrService';
+import { Save, Calendar, Users, XCircle, Search, Clock } from 'lucide-react';
+import { getMonthlyAttendances, addMonthlyAttendance, updateMonthlyAttendance, getEmployeeContracts, getDailyAttendances } from '../../services/hrService';
 
 export default function MonthlyAttendance({ personsData, showNotification }) {
   const [year, setYear] = useState(1403);
@@ -85,6 +85,56 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
     }
   };
 
+  const handleCalculateFromDaily = async () => {
+    try {
+      const dailyLogs = await getDailyAttendances();
+      
+      setAttendances(prev => {
+        const next = [...prev];
+        next.forEach(a => {
+           if (a.status === 'approved') return;
+           
+           const personLogs = dailyLogs.filter(l => {
+              if (l.personId !== a.personId) return false;
+              if (!l.date) return false;
+              const d = new Date(Number(l.date));
+              const formatter = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: 'numeric' });
+              const parts = formatter.formatToParts(d);
+              const pYear = parseInt(parts.find(p => p.type === 'year')?.value || '0');
+              const pMonth = parseInt(parts.find(p => p.type === 'month')?.value || '0');
+              return pYear === year && pMonth === month;
+           });
+           
+           if (personLogs.length > 0) {
+             let workDaysCount = 0;
+             let overtimeCount = 0;
+             personLogs.forEach(l => {
+               const [inH, inM] = (l.checkIn || '00:00').split(':').map(Number);
+               const [outH, outM] = (l.checkOut || '00:00').split(':').map(Number);
+               let diff = (outH * 60 + outM) - (inH * 60 + inM);
+               if (diff < 0) diff += 24 * 60;
+               let hrs = diff / 60;
+               if (hrs >= 8) {
+                 workDaysCount += 1;
+                 overtimeCount += (hrs - 8);
+               } else if (hrs > 0) {
+                 workDaysCount += (hrs / 8);
+               }
+             });
+             
+             a.workDays = parseFloat(workDaysCount.toFixed(2));
+             a.overtimeHours = parseFloat(overtimeCount.toFixed(2));
+           }
+        });
+        return next;
+      });
+      showNotification('کارکرد از تردد روزانه با موفقیت محاسبه شد', 'success');
+    } catch (e) {
+      console.error(e);
+      showNotification('خطا در محاسبه از تردد روزانه', 'error');
+    }
+  };
+
   const getPersonName = (id) => {
     const p = (personsData || []).find(x => x.id === id);
     return p ? p.name : 'نامشخص';
@@ -120,6 +170,9 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
           </div>
           <button onClick={fetchAttendance} className="bg-slate-100 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-200">
             <Search className="w-4 h-4"/> فراخوانی
+          </button>
+          <button onClick={handleCalculateFromDaily} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-indigo-100 border border-indigo-100 mr-auto">
+            <Clock className="w-4 h-4"/> محاسبه از تردد روزانه
           </button>
         </div>
 

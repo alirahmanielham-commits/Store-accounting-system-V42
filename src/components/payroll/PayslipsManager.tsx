@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Calculator, Printer, CheckCircle, Search, FileText, X, Download, FileSpreadsheet, Building2, MapPin, Calendar, Clock, DollarSign, Wallet, TrendingUp, TrendingDown, User, Check, AlertCircle } from 'lucide-react';
-import { getPayslips, addPayslip, updatePayslip, getMonthlyAttendances, getEmployeeContracts, getContractComponents, getSalaryComponents, getPayslipItems, addPayslipItem } from '../../services/hrService';
+import { Calculator, Printer, CheckCircle, Search, FileText, X, Download, FileSpreadsheet, Building2, MapPin, Calendar, Clock, DollarSign, Wallet, TrendingUp, TrendingDown, User, Check, AlertCircle, RotateCcw } from 'lucide-react';
+import { getPayslips, addPayslip, updatePayslip, getMonthlyAttendances, getEmployeeContracts, getContractComponents, getSalaryComponents, getPayslipItems, addPayslipItem, deletePayslipItemsByPayslipId } from '../../services/hrService';
+import { getAccountingDocuments, addAccountingDocument, deleteAccountingDocument, getLedgerAccounts, addLedgerAccount, generateId } from '../../services/dataService';
 import { toPersianDigits, formatNumber } from '../../utils/format';
 
 export default function PayslipsManager({ personsData, storeSettings, showNotification }) {
@@ -63,6 +64,93 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
     return p ? p.name : 'نامشخص';
   };
 
+  const ensureSalaryAccounts = async () => {
+    const accs = await getLedgerAccounts();
+    let expenseAcc = accs.find(a => a.code === '5001' || a.title === 'هزینه حقوق و دستمزد');
+    if (!expenseAcc) {
+        expenseAcc = { id: generateId(), code: '5001', title: 'هزینه حقوق و دستمزد', nature: 'debit', level: 'subsidiary' };
+        await addLedgerAccount(expenseAcc);
+    }
+    let payableAcc = accs.find(a => a.code === '2001' || a.title === 'حقوق پرداختنی');
+    if (!payableAcc) {
+        payableAcc = { id: generateId(), code: '2001', title: 'حقوق پرداختنی', nature: 'credit', level: 'subsidiary' };
+        await addLedgerAccount(payableAcc);
+    }
+    return { expenseAcc, payableAcc };
+  };
+
+  const handleFinalize = async (id) => {
+    try {
+      const slip = slips.find(s => s.id === id);
+      if (!slip) return;
+
+      const accs = await ensureSalaryAccounts();
+      
+      const docItems = [
+         {
+             ledgerAccountId: accs.expenseAcc.id,
+             detailedAccountId: '',
+             description: `هزینه حقوق دوره ${slip.periodMonth} - ${slip.periodYear}`,
+             debit: slip.totalEarnings,
+             credit: 0
+         },
+         {
+             ledgerAccountId: accs.payableAcc.id,
+             detailedAccountId: slip.personId,
+             description: 'بدهی به پرسنل',
+             debit: 0,
+             credit: slip.netPayable
+         }
+      ];
+
+      if (slip.totalDeductions > 0) {
+         let taxAcc = (await getLedgerAccounts()).find(a => a.code === '2002' || a.title === 'کسورات پرداختنی');
+         if (!taxAcc) {
+             taxAcc = { id: generateId(), code: '2002', title: 'کسورات پرداختنی', nature: 'credit', level: 'subsidiary' };
+             await addLedgerAccount(taxAcc);
+         }
+         docItems.push({
+             ledgerAccountId: taxAcc.id,
+             detailedAccountId: '',
+             description: 'مجموع کسورات دوره',
+             debit: 0,
+             credit: slip.totalDeductions
+         });
+      }
+
+      await addAccountingDocument({
+         date: Date.now(),
+         description: `صدور فیش حقوقی شماره ${slip.id} - ${getPersonName(slip.personId)}`,
+         sourceType: 'salary',
+         sourceId: slip.id,
+         items: docItems
+      });
+
+      await updatePayslip(id, {status: 'finalized'});
+      showNotification('فیش قطعی شد و سند حسابداری آن ثبت گردید', 'success');
+      fetchPayslips();
+    } catch(e) {
+      console.error(e);
+      showNotification('خطا در ثبت سند یا قطعی سازی', 'error');
+    }
+  };
+
+  const handleRevert = async (id) => {
+    if (!window.confirm('آیا از برگشت فیش به حالت پیش‌نویس اطمینان دارید؟ (سند حسابداری مرتبط حذف خواهد شد)')) return;
+    try {
+      const docs = await getAccountingDocuments();
+      const slipDoc = docs.find(d => d.sourceType === 'salary' && String(d.sourceId) === String(id));
+      if (slipDoc) {
+         await deleteAccountingDocument(slipDoc.id);
+      }
+      await updatePayslip(id, {status: 'draft'});
+      showNotification('فیش به حالت پیش‌نویس بازگشت و سند حذف شد', 'success');
+      fetchPayslips();
+    } catch(e) {
+      console.error(e);
+      showNotification('خطا در برگشت فیش', 'error');
+    }
+  };
   const filteredSlips = useMemo(() => {
     if (!searchQuery) return slips;
     return slips.filter(s => {
@@ -210,6 +298,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
 
         if (existing) {
           await updatePayslip(pId, payload);
+          await deletePayslipItemsByPayslipId(pId);
         } else {
           await addPayslip({ id: pId, ...payload });
         }
@@ -235,13 +324,6 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
     }
   };
 
-  const handleFinalize = async (id) => {
-    try {
-      await updatePayslip(id, {status: 'finalized'});
-      showNotification('فیش قطعی شد', 'success');
-      fetchPayslips();
-    } catch(e) {}
-  };
 
   const handlePrint = async (slip) => {
     setLoading(true);
@@ -493,10 +575,14 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
                       </div>
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 mt-6 sm:mt-0 w-full sm:w-auto">
-                    {selectedSlip.status === 'draft' && (
+                  <div className="flex flex-wrap items-center gap-3 mt-6 sm:mt-0 w-full sm:w-auto">
+                    {selectedSlip.status === 'draft' ? (
                       <button onClick={() => handleFinalize(selectedSlip.id)} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-emerald-50 text-emerald-700 font-bold rounded-xl hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-2 shadow-sm">
                         <CheckCircle className="w-5 h-5" /> قطعی کردن فیش
+                      </button>
+                    ) : (
+                      <button onClick={() => handleRevert(selectedSlip.id)} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-amber-50 text-amber-700 font-bold rounded-xl hover:bg-amber-100 transition-colors border border-amber-200 flex items-center gap-2 shadow-sm">
+                        <RotateCcw className="w-5 h-5" /> ویرایش/برگشت
                       </button>
                     )}
                     <button onClick={() => handlePrint(selectedSlip)} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-white text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors border border-slate-200 flex items-center gap-2 shadow-sm">
