@@ -632,10 +632,10 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                       <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ شروع قرارداد</label>
                         <DatePicker
-                          calendar={persian}
-                          locale={persian_fa}
+                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                           value={contractForm.startDate}
-                          onChange={(date) => setContractForm({...contractForm, startDate: date})}
+                          onChange={(date) => setContractForm({...contractForm, startDate: date?.toDate?.() || (date ? new Date(date) : new Date())})}
                           calendarPosition="bottom-right"
                           inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
                         />
@@ -643,10 +643,10 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                       <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ پایان قرارداد (اختیاری برای دائم)</label>
                         <DatePicker
-                          calendar={persian}
-                          locale={persian_fa}
+                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                           value={contractForm.endDate}
-                          onChange={(date) => setContractForm({...contractForm, endDate: date})}
+                          onChange={(date) => setContractForm({...contractForm, endDate: date?.toDate?.() || (date ? new Date(date) : new Date())})}
                           calendarPosition="bottom-right"
                           inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
                         />
