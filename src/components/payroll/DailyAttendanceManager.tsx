@@ -7,7 +7,7 @@ import { toPersianDigits, formatNumber } from '../../utils/format';
 export default function DailyAttendanceManager({ personsData, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
   const [attendances, setAttendances] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
-  const [selectedDate, setSelectedDate] = useState<any>(new Date());
+  const [selectedDate, setSelectedDate] = useState<any>(Date.now());
   
   const [form, setForm] = useState({
     personId: '',
@@ -163,7 +163,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                     calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                     locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                     value={selectedDate}
-                    onChange={(date) => setSelectedDate(date?.toDate?.() || (date ? new Date(date) : new Date()))}
+                    onChange={(date) => setSelectedDate(date ? date.valueOf() : '')}
                     calendarPosition="bottom-right"
                     inputClass="w-full border border-slate-200 rounded-xl p-3 text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
                   />
