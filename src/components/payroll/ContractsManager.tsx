@@ -28,7 +28,20 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
     endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
     location: '',
     status: 'active',
-    selectedComponents: [] // { componentId, overrideAmount, overrideFormula }
+    selectedComponents: [], // { componentId, overrideAmount, overrideFormula }
+    
+    // Employee details specific to contract
+    insuranceNumber: '',
+    insuranceType: '',
+    educationLevel: '',
+    experienceYears: '',
+    maritalStatus: '',
+    studyField: '',
+    jobTitle: '',
+    jobCategory: '',
+    employmentType: '',
+    contractType: '', // e.g. temporary, official
+    childrenCount: ''
   });
 
   useEffect(() => {
@@ -116,7 +129,18 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
         startDate: getTimestampStr(contractForm.startDate),
         endDate: getTimestampStr(contractForm.endDate),
         location: contractForm.location,
-        status: contractForm.status
+        status: contractForm.status,
+        insuranceNumber: contractForm.insuranceNumber,
+        insuranceType: contractForm.insuranceType,
+        educationLevel: contractForm.educationLevel,
+        experienceYears: contractForm.experienceYears,
+        maritalStatus: contractForm.maritalStatus,
+        studyField: contractForm.studyField,
+        jobTitle: contractForm.jobTitle,
+        jobCategory: contractForm.jobCategory,
+        employmentType: contractForm.employmentType,
+        contractType: contractForm.contractType,
+        childrenCount: contractForm.childrenCount,
       };
 
       if (editingContractId) {
@@ -322,7 +346,27 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
               <button onClick={() => {
                 setEditingContractId(null);
                 setWizardStep(1);
-                setContractForm({ personIds: [], groupIds: [], contractTypeId: '', startDate: new Date(), endDate: new Date(), location: '', status: 'active', selectedComponents: [] });
+                setContractForm({ 
+                  personIds: [], 
+                  groupIds: [], 
+                  contractTypeId: '', 
+                  startDate: new Date(), 
+                  endDate: new Date(), 
+                  location: '', 
+                  status: 'active', 
+                  selectedComponents: [],
+                  insuranceNumber: '',
+                  insuranceType: '',
+                  educationLevel: '',
+                  experienceYears: '',
+                  maritalStatus: '',
+                  studyField: '',
+                  jobTitle: '',
+                  jobCategory: '',
+                  employmentType: '',
+                  contractType: '',
+                  childrenCount: ''
+                });
                 setIsContractModalOpen(true);
               }} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap">
                 <Plus className="w-4 h-4"/> انتساب قرارداد جدید
@@ -382,7 +426,18 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                               endDate: c.endDate ? new Date(parseInt(c.endDate)) : new Date(),
                               location: c.location || '',
                               status: c.status || 'active',
-                              selectedComponents: dbComps
+                              selectedComponents: dbComps,
+                              insuranceNumber: c.insuranceNumber || '',
+                              insuranceType: c.insuranceType || '',
+                              educationLevel: c.educationLevel || '',
+                              experienceYears: c.experienceYears || '',
+                              maritalStatus: c.maritalStatus || '',
+                              studyField: c.studyField || '',
+                              jobTitle: c.jobTitle || '',
+                              jobCategory: c.jobCategory || '',
+                              employmentType: c.employmentType || '',
+                              contractType: c.contractType || '',
+                              childrenCount: c.childrenCount || ''
                             });
                             setIsContractModalOpen(true);
                           }} className="px-3 py-1.5 text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors">
@@ -495,7 +550,29 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           isDisabled={!!editingContractId}
                           options={employees.map(p => ({value: p.id, label: p.name}))}
                           value={contractForm.personIds}
-                          onChange={v => setContractForm({...contractForm, personIds: (v as any[]) || []})}
+                          onChange={v => {
+                            const newPersons = (v as any[]) || [];
+                            const updates: any = { personIds: newPersons };
+                            // If exactly one person is selected and we are creating a new contract (not editing),
+                            // try to load employee details from the person's profile
+                            if (newPersons.length === 1 && !editingContractId) {
+                              const selectedPerson = employees.find(p => p.id === newPersons[0].value);
+                              if (selectedPerson) {
+                                updates.insuranceNumber = selectedPerson.insuranceNumber || contractForm.insuranceNumber;
+                                updates.insuranceType = selectedPerson.insuranceType || contractForm.insuranceType;
+                                updates.educationLevel = selectedPerson.educationLevel || contractForm.educationLevel;
+                                updates.experienceYears = selectedPerson.experienceYears ? String(selectedPerson.experienceYears) : contractForm.experienceYears;
+                                updates.maritalStatus = selectedPerson.maritalStatus || contractForm.maritalStatus;
+                                updates.studyField = selectedPerson.studyField || contractForm.studyField;
+                                updates.jobTitle = selectedPerson.jobTitle || contractForm.jobTitle;
+                                updates.jobCategory = selectedPerson.jobCategory || contractForm.jobCategory;
+                                updates.employmentType = selectedPerson.employmentType || contractForm.employmentType;
+                                updates.contractType = selectedPerson.contractType || contractForm.contractType;
+                                updates.childrenCount = selectedPerson.childrenCount ? String(selectedPerson.childrenCount) : contractForm.childrenCount;
+                              }
+                            }
+                            setContractForm({...contractForm, ...updates});
+                          }}
                           placeholder="انتخاب کارمند..."
                           className="react-select-container"
                           classNamePrefix="react-select"
@@ -581,6 +658,68 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           <MapPin className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
                           <input type="text" value={contractForm.location} onChange={e => setContractForm({...contractForm, location: e.target.value})} className="w-full pl-4 pr-12 py-[14px] bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="مثلا دفتر مرکزی - طبقه دوم" />
                         </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm col-span-1 md:col-span-2 mt-6">
+                    <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+                      <Users className="w-5 h-5 text-indigo-500" />
+                      اطلاعات پرسنلی مرتبط با قرارداد
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">شماره بیمه</label>
+                        <input type="text" value={contractForm.insuranceNumber} onChange={e => setContractForm({...contractForm, insuranceNumber: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">نوع بیمه</label>
+                        <input type="text" value={contractForm.insuranceType} onChange={e => setContractForm({...contractForm, insuranceType: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">مدرک تحصیلی</label>
+                        <input type="text" value={contractForm.educationLevel} onChange={e => setContractForm({...contractForm, educationLevel: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">سابقه کار (سال)</label>
+                        <input type="number" value={contractForm.experienceYears} onChange={e => setContractForm({...contractForm, experienceYears: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all text-center font-mono" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">وضعیت تاهل</label>
+                        <select value={contractForm.maritalStatus} onChange={e => setContractForm({...contractForm, maritalStatus: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all">
+                          <option value="">انتخاب کنید...</option>
+                          <option value="single">مجرد</option>
+                          <option value="married">متاهل</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">تعداد فرزندان</label>
+                        <input type="number" value={contractForm.childrenCount} onChange={e => setContractForm({...contractForm, childrenCount: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all text-center font-mono" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">رشته تحصیلی</label>
+                        <input type="text" value={contractForm.studyField} onChange={e => setContractForm({...contractForm, studyField: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">سمت یا شغل</label>
+                        <input type="text" value={contractForm.jobTitle} onChange={e => setContractForm({...contractForm, jobTitle: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">رسته شغلی</label>
+                        <input type="text" value={contractForm.jobCategory} onChange={e => setContractForm({...contractForm, jobCategory: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">نوع استخدام</label>
+                        <select value={contractForm.employmentType} onChange={e => setContractForm({...contractForm, employmentType: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all">
+                          <option value="">انتخاب کنید...</option>
+                          <option value="official">رسمی</option>
+                          <option value="contractual">پیمانی</option>
+                          <option value="hourly">ساعتی</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">نوع قرارداد</label>
+                        <input type="text" value={contractForm.contractType} onChange={e => setContractForm({...contractForm, contractType: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
                       </div>
                     </div>
                   </div>

@@ -62,6 +62,19 @@ export type Person = {
   initialBalance?: number; // مانده اولیه (افتتاحیه)
   initialBalanceType?: 'debtor' | 'creditor' | 'settled';
   creditLimit?: number; // سقف اعتبار
+
+  // Employee specific fields
+  insuranceNumber?: string;
+  insuranceType?: string;
+  educationLevel?: string;
+  experienceYears?: number | string;
+  maritalStatus?: string;
+  studyField?: string;
+  jobTitle?: string;
+  jobCategory?: string;
+  employmentType?: string;
+  contractType?: string;
+  childrenCount?: number | string;
 };
 
 export type Checkbook = {

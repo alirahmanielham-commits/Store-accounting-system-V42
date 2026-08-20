@@ -249,7 +249,7 @@ const DebtorsNotification = React.lazy(() => import('./components/DebtorsNotific
 const BeautifulLoading = React.lazy(() => import('./components/BeautifulLoading'));
 const DataReconciliation = React.lazy(() => import('./components/DataReconciliation'));
 const SalaryComponentsManager = React.lazy(() => import('./components/payroll/SalaryComponentsManager'));
-const PersonnelCodesManager = React.lazy(() => import('./components/payroll/PersonnelCodesManager'));
+
 const ContractsManager = React.lazy(() => import('./components/payroll/ContractsManager'));
 const DailyAttendanceManager = React.lazy(() => import('./components/payroll/DailyAttendanceManager'));
 const MonthlyAttendance = React.lazy(() => import('./components/payroll/MonthlyAttendance'));
@@ -1142,7 +1142,7 @@ export default function App() {
                           setActiveTab("accounting_docs_list");
                         }} />} />
 <Route path="/salary_components" element={<SalaryComponentsManager showNotification={showNotification} storeSettings={storeSettings} accounts={accounts} />} />
-<Route path="/personnel_codes" element={<PersonnelCodesManager personsData={persons} showNotification={showNotification} fetchPersons={fetchPersons} />} />
+
 <Route path="/employee_contracts" element={<ContractsManager personsData={persons} personGroups={personGroups} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
 <Route path="/daily_attendance" element={<DailyAttendanceManager personsData={persons} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
 <Route path="/monthly_attendance" element={<MonthlyAttendance personsData={persons} showNotification={showNotification} />} />

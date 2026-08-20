@@ -77,7 +77,18 @@ export default function PersonFormModal({
   const [duplicates, setDuplicates] = useState<any[]>([]);
   const [showDuplicatesModal, setShowDuplicatesModal] = useState(false);
 
-  const [personFormTab, setPersonFormTab] = useState<"general" | "contact" | "financial" | "settings">("general");
+  const [personFormTab, setPersonFormTab] = useState<"general" | "contact" | "financial" | "settings" | "employee">("general");
+  const [newPersonInsuranceNumber, setNewPersonInsuranceNumber] = useState("");
+  const [newPersonInsuranceType, setNewPersonInsuranceType] = useState("");
+  const [newPersonEducationLevel, setNewPersonEducationLevel] = useState("");
+  const [newPersonExperienceYears, setNewPersonExperienceYears] = useState("");
+  const [newPersonMaritalStatus, setNewPersonMaritalStatus] = useState("");
+  const [newPersonStudyField, setNewPersonStudyField] = useState("");
+  const [newPersonJobTitle, setNewPersonJobTitle] = useState("");
+  const [newPersonJobCategory, setNewPersonJobCategory] = useState("");
+  const [newPersonEmploymentType, setNewPersonEmploymentType] = useState("");
+  const [newPersonContractType, setNewPersonContractType] = useState("");
+  const [newPersonChildrenCount, setNewPersonChildrenCount] = useState("");
   const [submittingPerson, setSubmittingPerson] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
 
@@ -143,6 +154,18 @@ export default function PersonFormModal({
           setNewPersonEconomicCode(person.economicCode || "");
           setNewPersonRegistrationNumber(person.registrationNumber || "");
           setNewPersonContacts(person.contacts || []);
+          
+          setNewPersonInsuranceNumber(person.insuranceNumber || "");
+          setNewPersonInsuranceType(person.insuranceType || "");
+          setNewPersonEducationLevel(person.educationLevel || "");
+          setNewPersonExperienceYears(person.experienceYears ? String(person.experienceYears) : "");
+          setNewPersonMaritalStatus(person.maritalStatus || "");
+          setNewPersonStudyField(person.studyField || "");
+          setNewPersonJobTitle(person.jobTitle || "");
+          setNewPersonJobCategory(person.jobCategory || "");
+          setNewPersonEmploymentType(person.employmentType || "");
+          setNewPersonContractType(person.contractType || "");
+          setNewPersonChildrenCount(person.childrenCount ? String(person.childrenCount) : "");
         }
       } else {
         setNewPersonFirstName("");
@@ -180,6 +203,18 @@ export default function PersonFormModal({
         setNewPersonEconomicCode("");
         setNewPersonRegistrationNumber("");
         setNewPersonContacts([]);
+        
+        setNewPersonInsuranceNumber("");
+        setNewPersonInsuranceType("");
+        setNewPersonEducationLevel("");
+        setNewPersonExperienceYears("");
+        setNewPersonMaritalStatus("");
+        setNewPersonStudyField("");
+        setNewPersonJobTitle("");
+        setNewPersonJobCategory("");
+        setNewPersonEmploymentType("");
+        setNewPersonContractType("");
+        setNewPersonChildrenCount("");
       }
       setPersonFormTab("general");
     }
@@ -391,6 +426,18 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
         registrationDate: newPersonRegistrationDate ? (
           convertToGregorian(newPersonRegistrationDate)
         ) : new Date().toISOString(),
+        
+        insuranceNumber: newPersonInsuranceNumber,
+        insuranceType: newPersonInsuranceType,
+        educationLevel: newPersonEducationLevel,
+        experienceYears: newPersonExperienceYears ? Number(newPersonExperienceYears) : undefined,
+        maritalStatus: newPersonMaritalStatus,
+        studyField: newPersonStudyField,
+        jobTitle: newPersonJobTitle,
+        jobCategory: newPersonJobCategory,
+        employmentType: newPersonEmploymentType,
+        contractType: newPersonContractType,
+        childrenCount: newPersonChildrenCount ? Number(newPersonChildrenCount) : undefined,
       };
 
       let addedPerson;
@@ -463,6 +510,19 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
       setNewPersonImage("");
       setNewPersonPhone("");
       setNewPersonContacts([]);
+      
+      setNewPersonInsuranceNumber("");
+      setNewPersonInsuranceType("");
+      setNewPersonEducationLevel("");
+      setNewPersonExperienceYears("");
+      setNewPersonMaritalStatus("");
+      setNewPersonStudyField("");
+      setNewPersonJobTitle("");
+      setNewPersonJobCategory("");
+      setNewPersonEmploymentType("");
+      setNewPersonContractType("");
+      setNewPersonChildrenCount("");
+
       setNewPersonGroup("");
       setNewPersonProvince("");
       setNewPersonCity("");
@@ -583,6 +643,15 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
                       >
                         تنظیمات و وضعیت
                       </button>
+                      {(newPersonRole === "employee" || newPersonRoles.includes("employee")) && (
+                        <button
+                          type="button"
+                          onClick={() => setPersonFormTab("employee")}
+                          className={`px-4 py-2 border-b-2 font-bold text-sm transition-colors cursor-pointer ${personFormTab === "employee" ? "border-indigo-600 text-indigo-600" : "border-transparent text-gray-500 hover:text-gray-700 hover:border-gray-300"}`}
+                        >
+                          اطلاعات پرسنلی
+                        </button>
+                      )}
                     </div>
 
                     <div className="p-6 overflow-y-auto">
@@ -1269,6 +1338,63 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
                                     ))}
                                   </select>
                                 </div>
+                              </div>
+                            </>
+                          )}
+                          {personFormTab === "employee" && (
+                            <>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">شماره بیمه</label>
+                                <input type="text" value={newPersonInsuranceNumber} onChange={(e) => setNewPersonInsuranceNumber(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-mono text-left" placeholder="Insurance Number" />
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">نوع بیمه</label>
+                                <input type="text" value={newPersonInsuranceType} onChange={(e) => setNewPersonInsuranceType(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-bold" placeholder="مثال: تامین اجتماعی" />
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">مدرک تحصیلی</label>
+                                <input type="text" value={newPersonEducationLevel} onChange={(e) => setNewPersonEducationLevel(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-bold" placeholder="مثال: لیسانس" />
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">رشته تحصیلی</label>
+                                <input type="text" value={newPersonStudyField} onChange={(e) => setNewPersonStudyField(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-bold" placeholder="مثال: مهندسی نرم افزار" />
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">سابقه کار (سال)</label>
+                                <input type="number" value={newPersonExperienceYears} onChange={(e) => setNewPersonExperienceYears(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-mono text-center" />
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">وضعیت تاهل</label>
+                                <select value={newPersonMaritalStatus} onChange={(e) => setNewPersonMaritalStatus(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-bold">
+                                  <option value="">انتخاب کنید</option>
+                                  <option value="single">مجرد</option>
+                                  <option value="married">متاهل</option>
+                                </select>
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">تعداد فرزندان</label>
+                                <input type="number" value={newPersonChildrenCount} onChange={(e) => setNewPersonChildrenCount(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-mono text-center" />
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">سمت یا شغل</label>
+                                <input type="text" value={newPersonJobTitle} onChange={(e) => setNewPersonJobTitle(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-bold" placeholder="مثال: حسابدار" />
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">رسته شغلی</label>
+                                <input type="text" value={newPersonJobCategory} onChange={(e) => setNewPersonJobCategory(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-bold" placeholder="مثال: خدمات" />
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">نوع استخدام</label>
+                                <select value={newPersonEmploymentType} onChange={(e) => setNewPersonEmploymentType(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-bold">
+                                  <option value="">انتخاب کنید</option>
+                                  <option value="official">رسمی</option>
+                                  <option value="contractual">پیمانی</option>
+                                  <option value="hourly">ساعتی</option>
+                                </select>
+                              </div>
+                              <div className="w-full text-right">
+                                <label className="block text-sm font-medium text-gray-700 mb-2">نوع قرارداد</label>
+                                <input type="text" value={newPersonContractType} onChange={(e) => setNewPersonContractType(e.target.value)} className="w-full px-4 py-3 rounded-xl border border-gray-200 focus:ring-2 focus:ring-indigo-500 font-bold" placeholder="مثال: موقت" />
                               </div>
                             </>
                           )}

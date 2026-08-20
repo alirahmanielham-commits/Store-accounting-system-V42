@@ -163,7 +163,7 @@ export const allSidebarGroups: SidebarGroup[] = [
     icon: <UserCheck className="w-5 h-5" />,
     items: [
       { id: "salary_components", label: "اجزای حقوق", roles: ["admin", "accountant", "manager"] },
-      { id: "personnel_codes", label: "مدیریت کدهای پرسنلی", roles: ["admin", "accountant", "manager"] },
+
       { id: "employee_contracts", label: "قراردادها", roles: ["admin", "accountant", "manager"] },
       { id: "daily_attendance", label: "ورود و خروج روزانه", roles: ["admin", "accountant", "manager", "viewer"] },
       { id: "monthly_attendance", label: "کارکرد ماهانه پرسنل", roles: ["admin", "accountant", "manager", "viewer"] },
