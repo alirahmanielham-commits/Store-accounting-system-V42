@@ -163,7 +163,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                     calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                     locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                     value={selectedDate}
-                    onChange={(date) => setSelectedDate(date ? date.valueOf() : '')}
+                    onChange={(date) => setSelectedDate(date)}
                     calendarPosition="bottom-right"
                     inputClass="w-full border border-slate-200 rounded-xl p-3 text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
                   />

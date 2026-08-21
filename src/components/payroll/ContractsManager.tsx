@@ -8,7 +8,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
   const [types, setTypes] = useState([]);
   const [contracts, setContracts] = useState([]);
   const [salComponents, setSalComponents] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState();
   
   const [isTypeModalOpen, setIsTypeModalOpen] = useState(false);
   const [isContractModalOpen, setIsContractModalOpen] = useState(false);
@@ -21,8 +21,9 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
   const [wizardStep, setWizardStep] = useState(1);
   const [editingContractId, setEditingContractId] = useState(null);
   const [contractForm, setContractForm] = useState({
-    personIds: [],
-    groupIds: [],
+    personId: null,
+    contractNumber: '',
+    terminationDate: null,
     contractTypeId: '',
     startDate: new Date(),
     endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
@@ -30,18 +31,6 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
     status: 'active',
     selectedComponents: [], // { componentId, overrideAmount, overrideFormula }
     
-    // Employee details specific to contract
-    insuranceNumber: '',
-    insuranceType: '',
-    educationLevel: '',
-    experienceYears: '',
-    maritalStatus: '',
-    studyField: '',
-    jobTitle: '',
-    jobCategory: '',
-    employmentType: '',
-    contractType: '', // e.g. temporary, official
-    childrenCount: ''
   });
 
   useEffect(() => {
@@ -97,14 +86,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
 
   const handleSaveContract = async () => {
     if (!contractForm.contractTypeId) return showNotification('نوع قرارداد الزامی است', 'error');
-    
-    // Resolve all targeted employees
-    const explicitEmps = contractForm.personIds.map(p => p.value);
-    const groupEmps = employees.filter(p => contractForm.groupIds.some(g => g.value === p.group)).map(p => p.id);
-    const allTargetEmpIds = [...new Set([...explicitEmps, ...groupEmps])];
-    
-    if (allTargetEmpIds.length === 0) return showNotification('حداقل یک پرسنل باید انتخاب شود', 'error');
-
+    if (!contractForm.personId) return showNotification('پرسنل باید انتخاب شود', 'error');
     try {
       const getTimestampStr = (dateVal) => {
         if (!dateVal) return null;
@@ -126,26 +108,18 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
       
       const payloadBase = {
         contractTypeId: contractForm.contractTypeId,
+        contractNumber: contractForm.contractNumber,
+        terminationDate: getTimestampStr(contractForm.terminationDate),
         startDate: getTimestampStr(contractForm.startDate),
         endDate: getTimestampStr(contractForm.endDate),
         location: contractForm.location,
         status: contractForm.status,
-        insuranceNumber: contractForm.insuranceNumber,
-        insuranceType: contractForm.insuranceType,
-        educationLevel: contractForm.educationLevel,
-        experienceYears: contractForm.experienceYears,
-        maritalStatus: contractForm.maritalStatus,
-        studyField: contractForm.studyField,
-        jobTitle: contractForm.jobTitle,
-        jobCategory: contractForm.jobCategory,
-        employmentType: contractForm.employmentType,
-        contractType: contractForm.contractType,
-        childrenCount: contractForm.childrenCount,
+        
       };
 
       if (editingContractId) {
         // Editing a single existing contract
-        await updateEmployeeContract(editingContractId, { ...payloadBase, personId: allTargetEmpIds[0] });
+        await updateEmployeeContract(editingContractId, { ...payloadBase, personId: contractForm.personId.value });
         const allComps = await getContractComponents();
         for (const c of allComps.filter(c => c.contractId === editingContractId)) {
           await deleteContractComponent(c.id);
@@ -161,18 +135,16 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
         }
       } else {
         // Bulk or single new contract assignment
-        for (const personId of allTargetEmpIds) {
-          const contractId = Date.now().toString() + Math.random().toString().substring(2,8);
-          await addEmployeeContract({ id: contractId, personId, ...payloadBase });
-          for (const sc of contractForm.selectedComponents) {
-            await addContractComponent({
-              id: Date.now().toString() + Math.random().toString(),
-              contractId,
-              componentId: sc.componentId,
-              overrideAmount: sc.overrideAmount ? sc.overrideAmount.toString() : null,
-              overrideFormula: sc.overrideFormula || null
-            });
-          }
+        const contractId = Date.now().toString() + Math.random().toString().substring(2,8);
+        await addEmployeeContract({ id: contractId, personId: contractForm.personId.value, ...payloadBase });
+        for (const sc of contractForm.selectedComponents) {
+          await addContractComponent({
+            id: Date.now().toString() + Math.random().toString(),
+            contractId,
+            componentId: sc.componentId,
+            overrideAmount: sc.overrideAmount ? sc.overrideAmount.toString() : null,
+            overrideFormula: sc.overrideFormula || null
+          });
         }
       }
 
@@ -347,25 +319,16 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                 setEditingContractId(null);
                 setWizardStep(1);
                 setContractForm({ 
-                  personIds: [], 
-                  groupIds: [], 
+                  personId: null,
+    contractNumber: '',
+    terminationDate: null, 
                   contractTypeId: '', 
                   startDate: new Date(), 
                   endDate: new Date(), 
                   location: '', 
                   status: 'active', 
                   selectedComponents: [],
-                  insuranceNumber: '',
-                  insuranceType: '',
-                  educationLevel: '',
-                  experienceYears: '',
-                  maritalStatus: '',
-                  studyField: '',
-                  jobTitle: '',
-                  jobCategory: '',
-                  employmentType: '',
-                  contractType: '',
-                  childrenCount: ''
+                  
                 });
                 setIsContractModalOpen(true);
               }} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap">
@@ -378,9 +341,11 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                 <thead className="bg-white text-slate-500 border-b border-slate-100">
                   <tr>
                     <th className="p-4 font-bold text-slate-600">پرسنل</th>
+                    <th className="p-4 font-bold text-slate-600">شماره قرارداد</th>
                     <th className="p-4 font-bold text-slate-600">نوع قرارداد</th>
                     <th className="p-4 font-bold text-slate-600">تاریخ شروع</th>
                     <th className="p-4 font-bold text-slate-600">تاریخ پایان</th>
+                    <th className="p-4 font-bold text-slate-600">تاریخ ترک کار</th>
                     <th className="p-4 font-bold text-slate-600 text-center">وضعیت</th>
                     <th className="p-4 font-bold text-slate-600 text-center">عملیات</th>
                   </tr>
@@ -399,9 +364,11 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           </div>
                         </div>
                       </td>
+                      <td className="p-4 text-slate-600">{c.contractNumber || '---'}</td>
                       <td className="p-4 font-bold text-slate-700">{getTypeName(c.contractTypeId)}</td>
                       <td className="p-4 text-slate-500 text-xs">{new Date(parseInt(c.startDate)).toLocaleDateString('fa-IR')}</td>
                       <td className="p-4 text-slate-500 text-xs">{c.endDate ? new Date(parseInt(c.endDate)).toLocaleDateString('fa-IR') : 'نامحدود'}</td>
+                      <td className="p-4 text-slate-500 text-xs">{c.terminationDate ? new Date(parseInt(c.terminationDate)).toLocaleDateString('fa-IR') : '---'}</td>
                       <td className="p-4 text-center">
                         <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-bold border ${
                           c.status==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200':
@@ -419,25 +386,16 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                             setEditingContractId(c.id);
                             setWizardStep(1);
                             setContractForm({
-                              personIds: [{ value: c.personId, label: getPersonName(c.personId) }],
-                              groupIds: [],
+                              personId: { value: c.personId, label: getPersonName(c.personId) },
+                              contractNumber: c.contractNumber || '',
+                              terminationDate: c.terminationDate ? new Date(parseInt(c.terminationDate)) : null,
                               contractTypeId: c.contractTypeId,
                               startDate: new Date(parseInt(c.startDate)),
                               endDate: c.endDate ? new Date(parseInt(c.endDate)) : new Date(),
                               location: c.location || '',
                               status: c.status || 'active',
                               selectedComponents: dbComps,
-                              insuranceNumber: c.insuranceNumber || '',
-                              insuranceType: c.insuranceType || '',
-                              educationLevel: c.educationLevel || '',
-                              experienceYears: c.experienceYears || '',
-                              maritalStatus: c.maritalStatus || '',
-                              studyField: c.studyField || '',
-                              jobTitle: c.jobTitle || '',
-                              jobCategory: c.jobCategory || '',
-                              employmentType: c.employmentType || '',
-                              contractType: c.contractType || '',
-                              childrenCount: c.childrenCount || ''
+                              
                             });
                             setIsContractModalOpen(true);
                           }} className="px-3 py-1.5 text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors">
@@ -505,7 +463,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
             <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
               <div className="flex items-center gap-3">
                 <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center"><FileSignature className="w-5 h-5"/></div>
-                <h3 className="font-bold text-slate-800 text-lg">{editingContractId ? 'ویرایش قرارداد پرسنل' : 'انتساب گروهی/فردی قرارداد جدید'}</h3>
+                <h3 className="font-bold text-slate-800 text-lg">{editingContractId ? 'ویرایش قرارداد پرسنل' : 'ثبت قرارداد جدید'}</h3>
               </div>
               <button onClick={() => setIsContractModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 bg-white rounded-lg border border-slate-200"><X className="w-5 h-5"/></button>
             </div>
@@ -540,35 +498,21 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                       <Users className="w-5 h-5 text-indigo-500" />
                       انتخاب پرسنل جهت انتساب قرارداد
                     </h4>
-                    <p className="text-sm text-slate-500 mb-6">شما می‌توانید مستقیماً کارمندان را انتخاب کنید و یا با انتخاب گروه، قرارداد را به تمامی کارمندان آن گروه منتسب کنید. <span className="font-bold text-indigo-600">تنها افرادی که دارای نقش «کارمند» هستند در لیست نمایش داده می‌شوند.</span></p>
-
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <p className="text-sm text-slate-500 mb-6">شما می‌توانید مستقیم کارمند مورد نظر خود را برای ثبت قرارداد انتخاب کنید. <span className="font-bold text-indigo-600">تنها افرادی که دارای نقش «کارمند» هستند در لیست نمایش داده می‌شوند.</span></p>
+                    <div className="grid grid-cols-1 gap-6">
                       <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">انتخاب مستقیم کارمند(ها)</label>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">انتخاب کارمند</label>
                         <Select
-                          isMulti
                           isDisabled={!!editingContractId}
                           options={employees.map(p => ({value: p.id, label: p.name}))}
-                          value={contractForm.personIds}
+                          value={contractForm.personId}
                           onChange={v => {
-                            const newPersons = (v as any[]) || [];
-                            const updates: any = { personIds: newPersons };
-                            // If exactly one person is selected and we are creating a new contract (not editing),
-                            // try to load employee details from the person's profile
-                            if (newPersons.length === 1 && !editingContractId) {
-                              const selectedPerson = employees.find(p => p.id === newPersons[0].value);
+                            const newPerson = v;
+                            const updates: any = { personId: newPerson };
+                            if (newPerson && !editingContractId) {
+                              const selectedPerson = employees.find(p => p.id === newPerson.value);
                               if (selectedPerson) {
-                                updates.insuranceNumber = selectedPerson.insuranceNumber || contractForm.insuranceNumber;
-                                updates.insuranceType = selectedPerson.insuranceType || contractForm.insuranceType;
-                                updates.educationLevel = selectedPerson.educationLevel || contractForm.educationLevel;
-                                updates.experienceYears = selectedPerson.experienceYears ? String(selectedPerson.experienceYears) : contractForm.experienceYears;
-                                updates.maritalStatus = selectedPerson.maritalStatus || contractForm.maritalStatus;
-                                updates.studyField = selectedPerson.studyField || contractForm.studyField;
-                                updates.jobTitle = selectedPerson.jobTitle || contractForm.jobTitle;
-                                updates.jobCategory = selectedPerson.jobCategory || contractForm.jobCategory;
-                                updates.employmentType = selectedPerson.employmentType || contractForm.employmentType;
-                                updates.contractType = selectedPerson.contractType || contractForm.contractType;
-                                updates.childrenCount = selectedPerson.childrenCount ? String(selectedPerson.childrenCount) : contractForm.childrenCount;
+                                // Removed auto-fill of personnel info to contract form as they are now managed in EmployeeProfilesManager
                               }
                             }
                             setContractForm({...contractForm, ...updates});
@@ -582,23 +526,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           }}
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">انتخاب گروهی (دپارتمان/گروه)</label>
-                        <Select
-                          isMulti
-                          isDisabled={!!editingContractId}
-                          options={(personGroups||[]).map(g => ({value: g.id, label: g.name}))}
-                          value={contractForm.groupIds}
-                          onChange={v => setContractForm({...contractForm, groupIds: (v as any[]) || []})}
-                          placeholder="انتخاب گروه‌ها..."
-                          className="react-select-container"
-                          classNamePrefix="react-select"
-                          noOptionsMessage={() => "گروهی یافت نشد"}
-                          styles={{
-                            control: (base) => ({...base, borderRadius: '0.75rem', borderColor: '#e2e8f0', padding: '4px', boxShadow: 'none', '&:hover': {borderColor: '#cbd5e1'}}),
-                          }}
-                        />
-                      </div>
+                      
                     </div>
                   </div>
                 </div>
@@ -606,13 +534,17 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
 
               {/* Step 2: Contract Info */}
               {wizardStep === 2 && (
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
                   <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm col-span-1 md:col-span-2">
                     <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
                       <FileText className="w-5 h-5 text-indigo-500" />
                       اطلاعات پایه قرارداد
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">شماره قرارداد</label>
+                        <input type="text" value={contractForm.contractNumber} onChange={e => setContractForm({...contractForm, contractNumber: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all" />
+                      </div>
                       <div>
                         <label className="block text-sm font-bold text-slate-700 mb-2">نوع (تیپ) قرارداد</label>
                         <select value={contractForm.contractTypeId} onChange={e => setContractForm({...contractForm, contractTypeId: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all">
@@ -635,7 +567,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                           locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                           value={contractForm.startDate}
-                          onChange={(date) => setContractForm({...contractForm, startDate: date ? date.valueOf() : ''})}
+                          onChange={(date) => setContractForm({...contractForm, startDate: date})}
                           calendarPosition="bottom-right"
                           inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
                         />
@@ -646,7 +578,18 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                           locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                           value={contractForm.endDate}
-                          onChange={(date) => setContractForm({...contractForm, endDate: date ? date.valueOf() : ''})}
+                          onChange={(date) => setContractForm({...contractForm, endDate: date})}
+                          calendarPosition="bottom-right"
+                          inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ ترک کار</label>
+                        <DatePicker
+                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                          value={contractForm.terminationDate}
+                          onChange={(date) => setContractForm({...contractForm, terminationDate: date})}
                           calendarPosition="bottom-right"
                           inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
                         />
@@ -662,70 +605,9 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                     </div>
                   </div>
 
-                  <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm col-span-1 md:col-span-2 mt-6">
-                    <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
-                      <Users className="w-5 h-5 text-indigo-500" />
-                      اطلاعات پرسنلی مرتبط با قرارداد
-                    </h4>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">شماره بیمه</label>
-                        <input type="text" value={contractForm.insuranceNumber} onChange={e => setContractForm({...contractForm, insuranceNumber: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">نوع بیمه</label>
-                        <input type="text" value={contractForm.insuranceType} onChange={e => setContractForm({...contractForm, insuranceType: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">مدرک تحصیلی</label>
-                        <input type="text" value={contractForm.educationLevel} onChange={e => setContractForm({...contractForm, educationLevel: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">سابقه کار (سال)</label>
-                        <input type="number" value={contractForm.experienceYears} onChange={e => setContractForm({...contractForm, experienceYears: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all text-center font-mono" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">وضعیت تاهل</label>
-                        <select value={contractForm.maritalStatus} onChange={e => setContractForm({...contractForm, maritalStatus: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all">
-                          <option value="">انتخاب کنید...</option>
-                          <option value="single">مجرد</option>
-                          <option value="married">متاهل</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">تعداد فرزندان</label>
-                        <input type="number" value={contractForm.childrenCount} onChange={e => setContractForm({...contractForm, childrenCount: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all text-center font-mono" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">رشته تحصیلی</label>
-                        <input type="text" value={contractForm.studyField} onChange={e => setContractForm({...contractForm, studyField: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">سمت یا شغل</label>
-                        <input type="text" value={contractForm.jobTitle} onChange={e => setContractForm({...contractForm, jobTitle: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">رسته شغلی</label>
-                        <input type="text" value={contractForm.jobCategory} onChange={e => setContractForm({...contractForm, jobCategory: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">نوع استخدام</label>
-                        <select value={contractForm.employmentType} onChange={e => setContractForm({...contractForm, employmentType: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all">
-                          <option value="">انتخاب کنید...</option>
-                          <option value="official">رسمی</option>
-                          <option value="contractual">پیمانی</option>
-                          <option value="hourly">ساعتی</option>
-                        </select>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-2">نوع قرارداد</label>
-                        <input type="text" value={contractForm.contractType} onChange={e => setContractForm({...contractForm, contractType: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all" />
-                      </div>
-                    </div>
-                  </div>
                 </div>
               )}
-
+              
               {/* Step 3: Components Assignment */}
               {wizardStep === 3 && (
                 <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">

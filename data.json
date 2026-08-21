@@ -89,5 +89,713 @@
       "status": "success",
       "details": "بک‌آپ با حجم 213 بایت ایجاد شد."
     }
+  ],
+  "users": [
+    {
+      "id": "lnifj9k2gq",
+      "username": "admin",
+      "password": "$2b$10$6k6tMWUEpgPezgv1jCqYBe4PMS2lvqxSEWa9k6G9NEDCwuxjw.Ep.",
+      "role": "admin",
+      "createdAt": "2026-08-21T16:06:58.634Z",
+      "firstName": "مدیر",
+      "lastName": "سیستم",
+      "isActive": true
+    }
+  ],
+  "system_logs": [
+    {
+      "id": "u94whea5ur",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "person_roles",
+      "entityId": "customer",
+      "changes": "{\"id\":\"customer\",\"name\":\"مشتری\",\"code\":\"10\",\"color\":\"bg-emerald-50 text-emerald-800 border-emerald-100\",\"createdAt\":1787328419032}",
+      "timestamp": 1787328419207
+    },
+    {
+      "id": "rhzum5mx89g",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "person_roles",
+      "entityId": "supplier",
+      "changes": "{\"id\":\"supplier\",\"name\":\"تامین کننده\",\"code\":\"20\",\"color\":\"bg-orange-50 text-orange-850 border-orange-100\",\"createdAt\":1787328419032}",
+      "timestamp": 1787328419207
+    },
+    {
+      "id": "cbmtxax4frs",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "person_roles",
+      "entityId": "employee",
+      "changes": "{\"id\":\"employee\",\"name\":\"کارمند\",\"code\":\"30\",\"color\":\"bg-purple-50 text-purple-800 border-purple-100\",\"createdAt\":1787328419032}",
+      "timestamp": 1787328419207
+    },
+    {
+      "id": "qactjvlnkc",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "financial_years",
+      "entityId": "db4148fa-fa50-40d9-8333-01bb7e5f6af8",
+      "changes": "{\"name\":\"سال مالی ۱۴۰۵\",\"startDate\":\"2026-03-21T00:00:00.000Z\",\"endDate\":\"2027-03-20T00:00:00.000Z\",\"description\":\"\",\"status\":\"open\",\"id\":\"db4148fa-fa50-40d9-8333-01bb7e5f6af8\",\"createdAt\":1787328436985,\"updatedAt\":1787328436985}",
+      "timestamp": 1787328437175
+    },
+    {
+      "id": "7yeg7hqj5lk",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "8cddfd5f-bf80-4059-a44f-f6c83168b79d",
+      "changes": "{\"id\":\"8cddfd5f-bf80-4059-a44f-f6c83168b79d\",\"code\":\"1\",\"title\":\"دارایی‌ها\",\"type\":\"group\",\"nature\":\"debit\",\"parentId\":null}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "cn2bjvp0gf4",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "321b6cf1-12b5-4a23-bf7a-6719d0c3c8b6",
+      "changes": "{\"id\":\"321b6cf1-12b5-4a23-bf7a-6719d0c3c8b6\",\"code\":\"2\",\"title\":\"بدهی‌ها\",\"type\":\"group\",\"nature\":\"credit\",\"parentId\":null}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "aic0ut21g5s",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "6bc3531f-e3c2-4d25-92bd-bfd186c814b0",
+      "changes": "{\"id\":\"6bc3531f-e3c2-4d25-92bd-bfd186c814b0\",\"code\":\"3\",\"title\":\"حقوق صاحبان سهام\",\"type\":\"group\",\"nature\":\"credit\",\"parentId\":null}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "tifs5c8blj",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "aa4022b5-6247-4988-8e35-c41f1f836205",
+      "changes": "{\"id\":\"aa4022b5-6247-4988-8e35-c41f1f836205\",\"code\":\"4\",\"title\":\"درآمدها\",\"type\":\"group\",\"nature\":\"credit\",\"parentId\":null}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "w18alqnjiag",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac",
+      "changes": "{\"id\":\"34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac\",\"code\":\"5\",\"title\":\"هزینه‌ها\",\"type\":\"group\",\"nature\":\"debit\",\"parentId\":null}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "5k75nihqiv4",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "04f1eb08-4d39-4f18-99ec-e59590c28cf1",
+      "changes": "{\"id\":\"04f1eb08-4d39-4f18-99ec-e59590c28cf1\",\"code\":\"11\",\"title\":\"موجودی نقد و بانک\",\"type\":\"general\",\"nature\":\"debit\",\"parentId\":\"8cddfd5f-bf80-4059-a44f-f6c83168b79d\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "xt5rzygh1mr",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "b7502619-3a44-41a3-a9de-76cf9819b4f2",
+      "changes": "{\"id\":\"b7502619-3a44-41a3-a9de-76cf9819b4f2\",\"code\":\"12\",\"title\":\"حساب‌ها و اسناد دریافتنی تجاری\",\"type\":\"general\",\"nature\":\"debit\",\"parentId\":\"8cddfd5f-bf80-4059-a44f-f6c83168b79d\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "x217cpwgcyp",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "6a414fe6-a003-44ee-8778-b9f23aa8f867",
+      "changes": "{\"id\":\"6a414fe6-a003-44ee-8778-b9f23aa8f867\",\"code\":\"13\",\"title\":\"موجودی مواد و کالا\",\"type\":\"general\",\"nature\":\"debit\",\"parentId\":\"8cddfd5f-bf80-4059-a44f-f6c83168b79d\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "68aiwbbvk5c",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "a1339d6f-1902-4bd7-9c2b-2a4863b62e97",
+      "changes": "{\"id\":\"a1339d6f-1902-4bd7-9c2b-2a4863b62e97\",\"code\":\"14\",\"title\":\"پیش پرداخت‌ها\",\"type\":\"general\",\"nature\":\"debit\",\"parentId\":\"8cddfd5f-bf80-4059-a44f-f6c83168b79d\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "mulviabfcdm",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "a65bcd57-d5dd-4749-83d5-671694aa6976",
+      "changes": "{\"id\":\"a65bcd57-d5dd-4749-83d5-671694aa6976\",\"code\":\"15\",\"title\":\"دارایی‌های ثابت\",\"type\":\"general\",\"nature\":\"debit\",\"parentId\":\"8cddfd5f-bf80-4059-a44f-f6c83168b79d\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "8pjxvd20g2n",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "ccfd618b-26f2-4efd-9b43-2e286a20c4f0",
+      "changes": "{\"id\":\"ccfd618b-26f2-4efd-9b43-2e286a20c4f0\",\"code\":\"21\",\"title\":\"حساب‌ها و اسناد پرداختنی تجاری\",\"type\":\"general\",\"nature\":\"credit\",\"parentId\":\"321b6cf1-12b5-4a23-bf7a-6719d0c3c8b6\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "5t571zdk5n",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "e4fb270e-961e-4315-9004-ff1a3e4fb293",
+      "changes": "{\"id\":\"e4fb270e-961e-4315-9004-ff1a3e4fb293\",\"code\":\"22\",\"title\":\"پیش دریافت‌ها\",\"type\":\"general\",\"nature\":\"credit\",\"parentId\":\"321b6cf1-12b5-4a23-bf7a-6719d0c3c8b6\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "3kwhmq3d9x6",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "f811caad-7f5a-4455-812c-005f6fc7916f",
+      "changes": "{\"id\":\"f811caad-7f5a-4455-812c-005f6fc7916f\",\"code\":\"31\",\"title\":\"سرمایه\",\"type\":\"general\",\"nature\":\"credit\",\"parentId\":\"6bc3531f-e3c2-4d25-92bd-bfd186c814b0\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "y88f56iyc5b",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "eda7b58a-92f4-4a66-a446-0f77cbf2b68a",
+      "changes": "{\"id\":\"eda7b58a-92f4-4a66-a446-0f77cbf2b68a\",\"code\":\"41\",\"title\":\"فروش کالا و خدمات\",\"type\":\"general\",\"nature\":\"credit\",\"parentId\":\"aa4022b5-6247-4988-8e35-c41f1f836205\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "h8kjm9um4pp",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "5cb306df-661a-45ec-9bd8-13129ee40ac2",
+      "changes": "{\"id\":\"5cb306df-661a-45ec-9bd8-13129ee40ac2\",\"code\":\"51\",\"title\":\"بهای تمام شده کالای فروش رفته\",\"type\":\"general\",\"nature\":\"debit\",\"parentId\":\"34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "bv71f0d5jrk",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "2fdb9a06-ca43-4ee6-82e9-488317184862",
+      "changes": "{\"id\":\"2fdb9a06-ca43-4ee6-82e9-488317184862\",\"code\":\"52\",\"title\":\"هزینه‌های حقوق و دستمزد\",\"type\":\"general\",\"nature\":\"debit\",\"parentId\":\"34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "gyacqq09hkv",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "f5ed5039-3742-4cf3-9449-4f2220dd005a",
+      "changes": "{\"id\":\"f5ed5039-3742-4cf3-9449-4f2220dd005a\",\"code\":\"53\",\"title\":\"هزینه‌های اداری و تشکیلاتی\",\"type\":\"general\",\"nature\":\"debit\",\"parentId\":\"34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac\"}",
+      "timestamp": 1787328453096
+    },
+    {
+      "id": "hrjdw9hx6uj",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "50dc8f8a-e274-4f58-94f0-62a321e4731d",
+      "changes": "{\"id\":\"50dc8f8a-e274-4f58-94f0-62a321e4731d\",\"code\":\"2102\",\"title\":\"کارکنان\",\"type\":\"subsidiary\",\"nature\":\"credit\",\"parentId\":\"ccfd618b-26f2-4efd-9b43-2e286a20c4f0\"}",
+      "timestamp": 1787328453456
+    },
+    {
+      "id": "cyplvjkrvun",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "696e29a3-f81d-44ff-8678-9b5d3de9d79e",
+      "changes": "{\"id\":\"696e29a3-f81d-44ff-8678-9b5d3de9d79e\",\"code\":\"21020001\",\"title\":\"آقای رادوین بازیار\",\"type\":\"detailed\",\"nature\":\"credit\",\"parentId\":\"50dc8f8a-e274-4f58-94f0-62a321e4731d\"}",
+      "timestamp": 1787328453879
+    },
+    {
+      "id": "ruaxod52t09",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "persons",
+      "entityId": "08eecdc1-2909-4880-902c-854a51baf689",
+      "changes": "{\"type\":\"employee\",\"name\":\"رادوین بازیار\",\"fullName\":\"رادوین بازیار\",\"title\":\"آقای\",\"alias\":\"آقای رادوین بازیار\",\"personType\":\"real\",\"firstName\":\"رادوین\",\"lastName\":\"بازیار\",\"companyName\":\"\",\"fatherName\":\"\",\"nationalId\":\"\",\"gender\":\"male\",\"accountingCode\":\"21020001\",\"address\":\"\",\"imageUrl\":\"\",\"role\":\"employee\",\"roles\":[],\"categories\":[],\"phone\":\"\",\"mobile\":\"\",\"code\":\"\",\"postalCode\":\"\",\"email\":\"\",\"description\":\"\",\"groupId\":\"\",\"roleId\":\"\",\"company\":\"\",\"economicCode\":\"\",\"registrationNumber\":\"\",\"initialBalance\":0,\"initialBalanceType\":\"\",\"creditLimit\":0,\"group\":\"\",\"province\":\"\",\"city\":\"\",\"isActive\":true,\"registrationDate\":\"2026-08-21T16:07:31.452Z\",\"insuranceNumber\":\"\",\"insuranceType\":\"\",\"educationLevel\":\"\",\"maritalStatus\":\"\",\"studyField\":\"\",\"jobTitle\":\"\",\"id\":\"08eecdc1-2909-4880-902c-854a51baf689\",\"createdAt\":1787328453876,\"updatedAt\":1787328453876,\"personCode\":\"300001\"}",
+      "timestamp": 1787328454070
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "70w6skytc7"
+    },
+    {
+      "id": "eyiga6irddu",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "70w6skytc7",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"70w6skytc7\"}",
+      "timestamp": 1787328454823
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "f3an6swpcoc"
+    },
+    {
+      "id": "vjq6wg15ds",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "f3an6swpcoc",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"f3an6swpcoc\"}",
+      "timestamp": 1787328454921
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "u1ro4j3uonr"
+    },
+    {
+      "id": "8zadkfizwsx",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "u1ro4j3uonr",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"u1ro4j3uonr\"}",
+      "timestamp": 1787328454939
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "g0l6c4ntudh"
+    },
+    {
+      "id": "0s0sf3s6zhwh",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "g0l6c4ntudh",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"g0l6c4ntudh\"}",
+      "timestamp": 1787328454954
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "dy2qx0xo145"
+    },
+    {
+      "id": "9c4yyytewvu",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "dy2qx0xo145",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"dy2qx0xo145\"}",
+      "timestamp": 1787328454966
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "x8ij517bgv"
+    },
+    {
+      "id": "nwl5y9mg4k",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "x8ij517bgv",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"x8ij517bgv\"}",
+      "timestamp": 1787328455003
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "n24ce2nd3mp"
+    },
+    {
+      "id": "0j0j02h32dpq",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "n24ce2nd3mp",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"n24ce2nd3mp\"}",
+      "timestamp": 1787328455160
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "mgh00lc2qm"
+    },
+    {
+      "id": "pxuc93g2o6",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "mgh00lc2qm",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"mgh00lc2qm\"}",
+      "timestamp": 1787328455202
+    },
+    {
+      "action": "FRONTEND_ERROR",
+      "entityType": "error",
+      "entityId": "1",
+      "oldData": "REACT_KEY_ERROR",
+      "newData": "[\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\",\"08eecdc1-2909-4880-902c-854a51baf689\"]",
+      "id": "xvwpjjz5p8"
+    },
+    {
+      "id": "e3gczu7gyk7",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "system_logs",
+      "entityId": "xvwpjjz5p8",
+      "changes": "{\"action\":\"FRONTEND_ERROR\",\"entityType\":\"error\",\"entityId\":\"1\",\"oldData\":\"REACT_KEY_ERROR\",\"newData\":\"[\\\"Encountered two children with the same key, `%s`. Keys should be unique so that components maintain their identity across updates. Non-unique keys may cause children to be duplicated and/or omitted — the behavior is unsupported and could change in a future version.\\\",\\\"08eecdc1-2909-4880-902c-854a51baf689\\\"]\",\"id\":\"xvwpjjz5p8\"}",
+      "timestamp": 1787328455304
+    },
+    {
+      "id": "kxnynk9ytlf",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "workplaces",
+      "entityId": "2898a677-7cd8-41e0-93e0-67c010e7c13e",
+      "changes": "{\"id\":\"2898a677-7cd8-41e0-93e0-67c010e7c13e\",\"code\":\"4324\",\"name\":\"شسیشس\",\"employerName\":\"4234\",\"postalCode\":\"424\",\"address\":\"4234\",\"branchCode\":\"4324\",\"branchName\":\"4324\",\"isActive\":true}",
+      "timestamp": 1787328949191
+    }
+  ],
+  "person_roles": [
+    {
+      "id": "customer",
+      "name": "مشتری",
+      "code": "10",
+      "color": "bg-emerald-50 text-emerald-800 border-emerald-100",
+      "createdAt": 1787328419093
+    },
+    {
+      "id": "supplier",
+      "name": "تامین کننده",
+      "code": "20",
+      "color": "bg-orange-50 text-orange-850 border-orange-100",
+      "createdAt": 1787328419093
+    },
+    {
+      "id": "employee",
+      "name": "کارمند",
+      "code": "30",
+      "color": "bg-purple-50 text-purple-800 border-purple-100",
+      "createdAt": 1787328419093
+    }
+  ],
+  "InventoryTransactions": [],
+  "warehouse_stocks": [],
+  "company_profile": {
+    "storeName": "بازیار",
+    "address": "",
+    "phone": "",
+    "logoUrl": "",
+    "currency": "دلار",
+    "fontFamily": "Vazirmatn",
+    "theme": "classic",
+    "allowNegativeStock": false,
+    "requireWarehouse": false,
+    "prefix_warehouse_receipt": "REC-",
+    "prefix_warehouse_remittance": "REM-",
+    "prefix_purchase": "PUR-",
+    "prefix_sale": "INV-",
+    "prefix_receive_receipt": "RD-",
+    "prefix_pay_receipt": "PD-",
+    "prefix_proforma": "PF-",
+    "prefix_salary": "PAY-",
+    "print_footer_note": "",
+    "print_signature_1": "",
+    "print_signature_2": "",
+    "print_signature_3": "",
+    "isSetup": true
+  },
+  "doc_counters": {
+    "person": 300001
+  },
+  "financial_years": [
+    {
+      "name": "سال مالی ۱۴۰۵",
+      "startDate": "2026-03-21T00:00:00.000Z",
+      "endDate": "2027-03-20T00:00:00.000Z",
+      "description": "",
+      "status": "open",
+      "id": "db4148fa-fa50-40d9-8333-01bb7e5f6af8",
+      "createdAt": 1787328436985,
+      "updatedAt": 1787328436985
+    }
+  ],
+  "ledger_accounts": [
+    {
+      "id": "8cddfd5f-bf80-4059-a44f-f6c83168b79d",
+      "code": "1",
+      "title": "دارایی‌ها",
+      "type": "group",
+      "nature": "debit",
+      "parentId": null
+    },
+    {
+      "id": "321b6cf1-12b5-4a23-bf7a-6719d0c3c8b6",
+      "code": "2",
+      "title": "بدهی‌ها",
+      "type": "group",
+      "nature": "credit",
+      "parentId": null
+    },
+    {
+      "id": "6bc3531f-e3c2-4d25-92bd-bfd186c814b0",
+      "code": "3",
+      "title": "حقوق صاحبان سهام",
+      "type": "group",
+      "nature": "credit",
+      "parentId": null
+    },
+    {
+      "id": "aa4022b5-6247-4988-8e35-c41f1f836205",
+      "code": "4",
+      "title": "درآمدها",
+      "type": "group",
+      "nature": "credit",
+      "parentId": null
+    },
+    {
+      "id": "34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac",
+      "code": "5",
+      "title": "هزینه‌ها",
+      "type": "group",
+      "nature": "debit",
+      "parentId": null
+    },
+    {
+      "id": "04f1eb08-4d39-4f18-99ec-e59590c28cf1",
+      "code": "11",
+      "title": "موجودی نقد و بانک",
+      "type": "general",
+      "nature": "debit",
+      "parentId": "8cddfd5f-bf80-4059-a44f-f6c83168b79d"
+    },
+    {
+      "id": "b7502619-3a44-41a3-a9de-76cf9819b4f2",
+      "code": "12",
+      "title": "حساب‌ها و اسناد دریافتنی تجاری",
+      "type": "general",
+      "nature": "debit",
+      "parentId": "8cddfd5f-bf80-4059-a44f-f6c83168b79d"
+    },
+    {
+      "id": "6a414fe6-a003-44ee-8778-b9f23aa8f867",
+      "code": "13",
+      "title": "موجودی مواد و کالا",
+      "type": "general",
+      "nature": "debit",
+      "parentId": "8cddfd5f-bf80-4059-a44f-f6c83168b79d"
+    },
+    {
+      "id": "a1339d6f-1902-4bd7-9c2b-2a4863b62e97",
+      "code": "14",
+      "title": "پیش پرداخت‌ها",
+      "type": "general",
+      "nature": "debit",
+      "parentId": "8cddfd5f-bf80-4059-a44f-f6c83168b79d"
+    },
+    {
+      "id": "a65bcd57-d5dd-4749-83d5-671694aa6976",
+      "code": "15",
+      "title": "دارایی‌های ثابت",
+      "type": "general",
+      "nature": "debit",
+      "parentId": "8cddfd5f-bf80-4059-a44f-f6c83168b79d"
+    },
+    {
+      "id": "ccfd618b-26f2-4efd-9b43-2e286a20c4f0",
+      "code": "21",
+      "title": "حساب‌ها و اسناد پرداختنی تجاری",
+      "type": "general",
+      "nature": "credit",
+      "parentId": "321b6cf1-12b5-4a23-bf7a-6719d0c3c8b6"
+    },
+    {
+      "id": "e4fb270e-961e-4315-9004-ff1a3e4fb293",
+      "code": "22",
+      "title": "پیش دریافت‌ها",
+      "type": "general",
+      "nature": "credit",
+      "parentId": "321b6cf1-12b5-4a23-bf7a-6719d0c3c8b6"
+    },
+    {
+      "id": "f811caad-7f5a-4455-812c-005f6fc7916f",
+      "code": "31",
+      "title": "سرمایه",
+      "type": "general",
+      "nature": "credit",
+      "parentId": "6bc3531f-e3c2-4d25-92bd-bfd186c814b0"
+    },
+    {
+      "id": "eda7b58a-92f4-4a66-a446-0f77cbf2b68a",
+      "code": "41",
+      "title": "فروش کالا و خدمات",
+      "type": "general",
+      "nature": "credit",
+      "parentId": "aa4022b5-6247-4988-8e35-c41f1f836205"
+    },
+    {
+      "id": "5cb306df-661a-45ec-9bd8-13129ee40ac2",
+      "code": "51",
+      "title": "بهای تمام شده کالای فروش رفته",
+      "type": "general",
+      "nature": "debit",
+      "parentId": "34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac"
+    },
+    {
+      "id": "2fdb9a06-ca43-4ee6-82e9-488317184862",
+      "code": "52",
+      "title": "هزینه‌های حقوق و دستمزد",
+      "type": "general",
+      "nature": "debit",
+      "parentId": "34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac"
+    },
+    {
+      "id": "f5ed5039-3742-4cf3-9449-4f2220dd005a",
+      "code": "53",
+      "title": "هزینه‌های اداری و تشکیلاتی",
+      "type": "general",
+      "nature": "debit",
+      "parentId": "34e32e1c-d834-4a8b-b1ee-2ad5a9e931ac"
+    },
+    {
+      "id": "50dc8f8a-e274-4f58-94f0-62a321e4731d",
+      "code": "2102",
+      "title": "کارکنان",
+      "type": "subsidiary",
+      "nature": "credit",
+      "parentId": "ccfd618b-26f2-4efd-9b43-2e286a20c4f0"
+    },
+    {
+      "id": "696e29a3-f81d-44ff-8678-9b5d3de9d79e",
+      "code": "21020001",
+      "title": "آقای رادوین بازیار",
+      "type": "detailed",
+      "nature": "credit",
+      "parentId": "50dc8f8a-e274-4f58-94f0-62a321e4731d"
+    }
+  ],
+  "persons": [
+    {
+      "type": "employee",
+      "name": "رادوین بازیار",
+      "fullName": "رادوین بازیار",
+      "title": "آقای",
+      "alias": "آقای رادوین بازیار",
+      "personType": "real",
+      "firstName": "رادوین",
+      "lastName": "بازیار",
+      "companyName": "",
+      "fatherName": "",
+      "nationalId": "",
+      "gender": "male",
+      "accountingCode": "21020001",
+      "address": "",
+      "imageUrl": "",
+      "role": "employee",
+      "roles": [],
+      "categories": [],
+      "phone": "",
+      "mobile": "",
+      "code": "",
+      "postalCode": "",
+      "email": "",
+      "description": "",
+      "groupId": "",
+      "roleId": "",
+      "company": "",
+      "economicCode": "",
+      "registrationNumber": "",
+      "initialBalance": 0,
+      "initialBalanceType": "",
+      "creditLimit": 0,
+      "group": "",
+      "province": "",
+      "city": "",
+      "isActive": true,
+      "registrationDate": "2026-08-21T16:07:31.452Z",
+      "insuranceNumber": "",
+      "insuranceType": "",
+      "educationLevel": "",
+      "maritalStatus": "",
+      "studyField": "",
+      "jobTitle": "",
+      "id": "08eecdc1-2909-4880-902c-854a51baf689",
+      "createdAt": 1787328453876,
+      "updatedAt": 1787328453876,
+      "personCode": "300001"
+    }
+  ],
+  "workplaces": [
+    {
+      "id": "2898a677-7cd8-41e0-93e0-67c010e7c13e",
+      "code": "4324",
+      "name": "شسیشس",
+      "employerName": "4234",
+      "postalCode": "424",
+      "address": "4234",
+      "branchCode": "4324",
+      "branchName": "4324",
+      "isActive": true
+    }
   ]
 }

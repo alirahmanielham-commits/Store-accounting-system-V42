@@ -110,3 +110,27 @@ export const deleteDailyAttendance = async (id: string | number) => {
   const data = await getLocalData<any[]>('daily_attendance', []);
   await saveLocalData('daily_attendance', data.filter(item => String(item.id) !== String(id)));
 };
+
+export const getWorkplaces = () => getLocalData<any[]>('workplaces', []);
+export const addWorkplace = async (data: any) => appendLocalData('workplaces', data);
+export const updateWorkplace = async (id: string | number, data: any) => updateLocalData('workplaces', id, data);
+export const deleteWorkplace = async (id: string | number) => {
+  const all = await getWorkplaces();
+  await saveLocalData('workplaces', all.filter((item: any) => item.id !== id));
+};
+
+export const getOrderTemplates = () => getLocalData<any[]>('order_templates', []);
+export const addOrderTemplate = async (data: any) => appendLocalData('order_templates', data);
+export const updateOrderTemplate = async (id: string | number, data: any) => updateLocalData('order_templates', id, data);
+export const deleteOrderTemplate = async (id: string | number) => {
+  const all = await getOrderTemplates();
+  await saveLocalData('order_templates', all.filter((item: any) => item.id !== id));
+};
+
+export const getEmployeeProfiles = () => getLocalData<any[]>('employee_profiles', []);
+export const addEmployeeProfile = async (data: any) => appendLocalData('employee_profiles', data);
+export const updateEmployeeProfile = async (id: string | number, data: any) => updateLocalData('employee_profiles', id, data);
+export const deleteEmployeeProfile = async (id: string | number) => {
+  const data = await getLocalData<any[]>('employee_profiles', []);
+  await saveLocalData('employee_profiles', data.filter(item => String(item.id) !== String(id)));
+};
