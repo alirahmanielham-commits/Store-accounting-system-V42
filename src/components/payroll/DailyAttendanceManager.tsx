@@ -138,7 +138,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
 
   return (
     <div className="min-h-full bg-slate-50/50 p-4 md:p-8" dir="rtl">
-      <div className="max-w-6xl mx-auto">
+      <div className="w-full mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">

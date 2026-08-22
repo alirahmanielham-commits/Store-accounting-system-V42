@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Users, Edit2, Search, XCircle, FileText, CheckCircle, Save } from 'lucide-react';
 import { getEmployeeProfiles, addEmployeeProfile, updateEmployeeProfile } from '../../services/hrService';
 
-export default function EmployeeProfilesManager({ personsData, showNotification }) {
+export default function EmployeeProfilesManager({ personsData, showNotification }: any) {
   const [profiles, setProfiles] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'all' | 'incomplete'>('all');
   
   const [formData, setFormData] = useState({
     insuranceNumber: '',
@@ -17,7 +18,7 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
     jobTitle: '',
     jobCategory: '',
     employmentType: 'full_time',
-    contractType: '',
+    
     childrenCount: '0'
   });
 
@@ -35,13 +36,22 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
   }, []);
 
   const employees = useMemo(() => {
-    return (personsData || []).filter(p => p.role === 'employee');
+    return (personsData || []).filter((p: any) => p.role === 'employee');
   }, [personsData]);
 
   const filteredEmployees = useMemo(() => {
-    if (!searchQuery) return employees;
-    return employees.filter(e => e.name.includes(searchQuery));
-  }, [employees, searchQuery]);
+    let result = employees;
+    if (activeTab === 'incomplete') {
+      result = result.filter((e: any) => {
+        const profile = profiles.find(p => p.personId === e.id);
+        return !(profile && profile.insuranceNumber && profile.jobTitle);
+      });
+    }
+    if (searchQuery) {
+      result = result.filter((e: any) => e.name.includes(searchQuery));
+    }
+    return result;
+  }, [employees, searchQuery, activeTab, profiles]);
 
   const handleEdit = (personId: string) => {
     setEditingPersonId(personId);
@@ -57,7 +67,7 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
         jobTitle: existingProfile.jobTitle || '',
         jobCategory: existingProfile.jobCategory || '',
         employmentType: existingProfile.employmentType || 'full_time',
-        contractType: existingProfile.contractType || '',
+        
         childrenCount: existingProfile.childrenCount || '0'
       });
     } else {
@@ -71,7 +81,7 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
         jobTitle: '',
         jobCategory: '',
         employmentType: 'full_time',
-        contractType: '',
+        
         childrenCount: '0'
       });
     }
@@ -101,7 +111,7 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
 
   return (
     <div className="min-h-full bg-slate-50/50 p-4 md:p-8" dir="rtl">
-      <div className="max-w-[1200px] mx-auto">
+      <div className="w-full mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div className="flex items-center gap-3">
             <div className="w-12 h-12 rounded-2xl bg-indigo-100 text-indigo-600 flex items-center justify-center">
@@ -116,6 +126,20 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
 
         <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
           <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6">
+            <div className="flex items-center gap-2 bg-slate-100 p-1 rounded-xl w-full sm:w-auto">
+              <button
+                onClick={() => setActiveTab('all')}
+                className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'all' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+              >
+                همه افراد
+              </button>
+              <button
+                onClick={() => setActiveTab('incomplete')}
+                className={`flex-1 sm:flex-none px-6 py-2.5 rounded-lg text-sm font-bold transition-all ${activeTab === 'incomplete' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-600 hover:text-slate-800'}`}
+              >
+                افراد ناقص
+              </button>
+            </div>
             <div className="relative w-full sm:w-96">
               <Search className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -139,7 +163,7 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {filteredEmployees.map(emp => {
+                {filteredEmployees.map((emp: any) => {
                   const profile = profiles.find(p => p.personId === emp.id);
                   const isCompleted = profile && profile.insuranceNumber && profile.jobTitle;
                   return (
@@ -185,7 +209,7 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
                 </div>
                 <div>
                   <h3 className="font-black text-lg text-slate-800">
-                    تکمیل اطلاعات پرسنلی: {employees.find(e => e.id === editingPersonId)?.name}
+                    تکمیل اطلاعات پرسنلی: {employees.find((e: any) => e.id === editingPersonId)?.name}
                   </h3>
                 </div>
               </div>
@@ -292,15 +316,7 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
                     <option value="hourly">ساعتی</option>
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">نوع قرارداد کاری</label>
-                  <input
-                    type="text"
-                    value={formData.contractType}
-                    onChange={e => setFormData({...formData, contractType: e.target.value})}
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
-                  />
-                </div>
+                
               </div>
             </div>
 

@@ -73,7 +73,6 @@ export type Person = {
   jobTitle?: string;
   jobCategory?: string;
   employmentType?: string;
-  contractType?: string;
   childrenCount?: number | string;
 };
 

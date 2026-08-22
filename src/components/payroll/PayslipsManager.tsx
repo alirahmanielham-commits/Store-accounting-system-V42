@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Calculator, Printer, CheckCircle, Search, FileText, X, Download, FileSpreadsheet, Building2, MapPin, Calendar, Clock, DollarSign, Wallet, TrendingUp, TrendingDown, User, Check, AlertCircle, RotateCcw } from 'lucide-react';
-import { getPayslips, addPayslip, updatePayslip, getMonthlyAttendances, getEmployeeContracts, getContractComponents, getSalaryComponents, getPayslipItems, addPayslipItem, deletePayslipItemsByPayslipId } from '../../services/hrService';
+import { getOrderTemplates, getPayslips, addPayslip, updatePayslip, getMonthlyAttendances, getEmployeeContracts, getPayslipItems, getSalaryComponents, addPayslipItem, deletePayslipItemsByPayslipId, getEmployeeOrders } from '../../services/hrService';
 import { getAccountingDocuments, addAccountingDocument, deleteAccountingDocument, getLedgerAccounts, addLedgerAccount, generateId } from '../../services/dataService';
 import { toPersianDigits, formatNumber } from '../../utils/format';
 
@@ -174,23 +174,28 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       const attendances = allAttendances;
       if (attendances.length === 0) return showNotification('ابتدا کارکرد این ماه را در منوی ورود و خروج ثبت کنید', 'error');
 
-      const allContracts = await getEmployeeContracts();
-      const contracts = allContracts.filter(c => c.status === 'active');
+      const allOrders = await getEmployeeOrders();
+      const activeOrders = allOrders.filter(o => o.status === 'active');
       
-      const allComps = await getSalaryComponents();
-      const allContractComps = await getContractComponents();
+      const allContracts = await getEmployeeContracts();
+      const salComponents = await getSalaryComponents();
+      const allTemplates = await getOrderTemplates();
+      
 
       let count = 0;
       const { updateMonthlyAttendance } = await import('../../services/hrService');
 
       for (const att of attendances) {
-        const contract = contracts.find(c => c.personId === att.personId);
+        const order = activeOrders.find(o => o.personId === att.personId);
+        if (!order) continue; // Must have an active order to generate payroll
+
+        const contract = allContracts.find(c => c.id === order.contractId);
         if (!contract) continue;
 
         const existing = slips.find(s => s.personId === att.personId);
         if (existing && existing.status === 'finalized') continue;
 
-        const myComps = allContractComps.filter(cc => cc.contractId === contract.id);
+        
         
         let totalEarnings = 0;
         let totalDeductions = 0;
@@ -198,6 +203,8 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
         let insurable = 0;
 
         const pItems = [];
+        const myComps = contract.selectedComponents || [];
+        const allComps = salComponents || [];
         
         // 1. Identify base salary
         let baseSalaryAmount = 0;
@@ -314,11 +321,73 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
         count++;
       }
 
-      showNotification(`محاسبه برای ${toPersianDigits(count)} فیش انجام شد`, 'success');
+      showNotification(`محاسبه حقوق برای ${toPersianDigits(count)} نفر (بر اساس احکام فعال) انجام شد`, 'success');
       fetchPayslips();
     } catch (e) {
       console.error(e);
       showNotification('خطا در صدور فیش', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCopyFromPrevious = async () => {
+    setLoading(true);
+    try {
+      const prevMonth = month === 1 ? 12 : month - 1;
+      const prevYear = month === 1 ? year - 1 : year;
+      
+      const allSlips = await getPayslips();
+      const prevSlips = allSlips.filter(s => Number(s.periodYear) === prevYear && Number(s.periodMonth) === prevMonth);
+      
+      if (prevSlips.length === 0) {
+        setLoading(false);
+        return showNotification('لیست حقوق برای ماه قبل یافت نشد', 'error');
+      }
+      
+      const sItems = await getPayslipItems();
+      let count = 0;
+      
+      for (const pSlip of prevSlips) {
+        const existing = slips.find(s => s.personId === pSlip.personId);
+        if (existing && existing.status === 'finalized') continue;
+
+        const pId = existing ? existing.id : Date.now().toString() + Math.random().toString();
+        
+        const payload = {
+          personId: pSlip.personId,
+          periodYear: year,
+          periodMonth: month,
+          contractId: pSlip.contractId,
+          attendanceId: pSlip.attendanceId, // Uses previous month's attendance ID reference, could be updated if a matching attendance exists
+          totalEarnings: pSlip.totalEarnings,
+          totalDeductions: pSlip.totalDeductions,
+          taxableAmount: pSlip.taxableAmount,
+          insurableAmount: pSlip.insurableAmount,
+          taxAmount: pSlip.taxAmount,
+          insuranceAmount: pSlip.insuranceAmount,
+          netPayable: pSlip.netPayable,
+          status: 'draft'
+        };
+
+        if (existing) {
+          await updatePayslip(pId, payload);
+          await deletePayslipItemsByPayslipId(pId);
+        } else {
+          await addPayslip({ id: pId, ...payload });
+        }
+
+        const prevItems = sItems.filter(i => i.payslipId === pSlip.id);
+        for (const item of prevItems) {
+           await addPayslipItem({ ...item, id: Date.now().toString() + Math.random().toString(), payslipId: pId });
+        }
+        count++;
+      }
+      showNotification(`لیست ${toPersianDigits(count)} نفر از ماه قبل با موفقیت کپی شد`, 'success');
+      fetchPayslips();
+    } catch (e) {
+      console.error(e);
+      showNotification('خطا در کپی لیست حقوق', 'error');
     } finally {
       setLoading(false);
     }
@@ -447,7 +516,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       )}
 
       {/* NEW METRONIC INSPIRED LAYOUT */}
-      <div className="max-w-[1400px] mx-auto print:hidden">
+      <div className="w-full mx-auto print:hidden">
         
         {/* Top Header */}
         <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4 mb-8">
@@ -463,6 +532,10 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
             <button onClick={handleExportPDF} className="flex-1 lg:flex-none justify-center items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 font-bold transition-all shadow-sm flex">
               <Download className="w-5 h-5 text-rose-600" />
               <span className="hidden sm:inline">خروجی PDF</span>
+            </button>
+            <button onClick={handleCopyFromPrevious} disabled={loading} className="flex-1 lg:flex-none justify-center items-center gap-2 px-4 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 font-bold transition-all shadow-sm flex">
+              <RotateCcw className="w-5 h-5 text-indigo-600" />
+              <span className="hidden sm:inline">کپی از ماه قبل</span>
             </button>
             <button onClick={handleGenerate} disabled={loading} className="flex-1 lg:flex-none justify-center items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm font-bold transition-all flex">
               {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Calculator className="w-5 h-5" />}

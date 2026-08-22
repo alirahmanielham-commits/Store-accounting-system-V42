@@ -248,11 +248,12 @@ const PersonsManager = React.lazy(() => import('./components/persons/PersonsMana
 const DebtorsNotification = React.lazy(() => import('./components/DebtorsNotification'));
 const BeautifulLoading = React.lazy(() => import('./components/BeautifulLoading'));
 const DataReconciliation = React.lazy(() => import('./components/DataReconciliation'));
-const SalaryComponentsManager = React.lazy(() => import('./components/payroll/SalaryComponentsManager'));
+
 const PayrollSettings = React.lazy(() => import('./components/payroll/PayrollSettings'));
 
 const EmployeeProfilesManager = React.lazy(() => import("./components/payroll/EmployeeProfilesManager"));
 const ContractsManager = React.lazy(() => import('./components/payroll/ContractsManager'));
+const EmployeeOrdersManager = React.lazy(() => import('./components/payroll/EmployeeOrdersManager'));
 const DailyAttendanceManager = React.lazy(() => import('./components/payroll/DailyAttendanceManager'));
 const MonthlyAttendance = React.lazy(() => import('./components/payroll/MonthlyAttendance'));
 const PayslipsManager = React.lazy(() => import('./components/payroll/PayslipsManager'));
@@ -1143,11 +1144,12 @@ export default function App() {
                           setEditingAccountingDoc(null);
                           setActiveTab("accounting_docs_list");
                         }} />} />
-<Route path="/salary_components" element={<SalaryComponentsManager showNotification={showNotification} storeSettings={storeSettings} accounts={accounts} />} />
+
 <Route path="/payroll_settings" element={<PayrollSettings showNotification={showNotification} />} />
 
 <Route path="/employee_profiles" element={<EmployeeProfilesManager personsData={persons} showNotification={showNotification} />} />
 <Route path="/employee_contracts" element={<ContractsManager personsData={persons} personGroups={personGroups} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
+<Route path="/employee_orders" element={<EmployeeOrdersManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
 <Route path="/daily_attendance" element={<DailyAttendanceManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
 <Route path="/monthly_attendance" element={<MonthlyAttendance personsData={persons} showNotification={showNotification} />} />
 <Route path="/payslips" element={<PayslipsManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} />} />

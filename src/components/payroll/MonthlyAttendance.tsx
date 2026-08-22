@@ -182,7 +182,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
 
   return (
     <div className="p-6 bg-slate-50 min-h-full" dir="rtl">
-      <div className="max-w-7xl mx-auto">
+      <div className="w-full mx-auto">
         <div className="flex justify-between items-center mb-6">
           <div>
             <h1 className="text-2xl font-bold text-slate-800">ثبت کارکرد ماهانه پرسنل</h1>

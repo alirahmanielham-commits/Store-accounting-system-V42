@@ -664,21 +664,10 @@ export const salaryComponents = pgTable('salary_components', {
   updatedAt: timestamp('updated_at').defaultNow(),
 });
 
-export const contractTypes = pgTable('contract_types', {
-  id: varchar('id', { length: 50 }).primaryKey(),
-  code: varchar('code', { length: 50 }).notNull().unique(),
-  title: varchar('title', { length: 255 }).notNull(),
-  durationType: varchar('duration_type', { length: 50 }).notNull(), // 'fixed_term', 'indefinite'
-  standardMonthlyHours: integer('standard_monthly_hours').default(220),
-  createdAt: timestamp('created_at').defaultNow(),
-  updatedAt: timestamp('updated_at').defaultNow(),
-});
-
 export const employeeContracts = pgTable('employee_contracts', {
   id: varchar('id', { length: 50 }).primaryKey(),
   personId: varchar('person_id', { length: 50 }).notNull(),
-  contractTypeId: varchar('contract_type_id', { length: 50 }).notNull(),
-  startDate: varchar('start_date', { length: 50 }).notNull(),
+    startDate: varchar('start_date', { length: 50 }).notNull(),
   endDate: varchar('end_date', { length: 50 }),
   location: varchar('location', { length: 255 }),
   status: varchar('status', { length: 50 }).default('active'), // 'active', 'expired', 'terminated', 'pending_renewal'
