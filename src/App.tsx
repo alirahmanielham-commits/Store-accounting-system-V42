@@ -1147,7 +1147,7 @@ export default function App() {
 
 <Route path="/payroll_settings" element={<PayrollSettings showNotification={showNotification} />} />
 
-<Route path="/employee_profiles" element={<EmployeeProfilesManager personsData={persons} showNotification={showNotification} />} />
+<Route path="/employee_profiles" element={<EmployeeProfilesManager personsData={persons} fetchPersons={fetchPersons} showNotification={showNotification} />} />
 <Route path="/employee_contracts" element={<ContractsManager personsData={persons} personGroups={personGroups} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
 <Route path="/employee_orders" element={<EmployeeOrdersManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
 <Route path="/daily_attendance" element={<DailyAttendanceManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />

@@ -23,7 +23,7 @@ export const KNOWN_TABLES = ['notifications', 'customers_risk_profile', 'repayme
   'issued_checks', 'received_checks', 'payslips'
 , 'InventoryTransactions', 'personal_notes',
   'sms_providers', 'sms_provider_settings', 'sms_templates', 'sms_campaigns',
-  'sms_delivery_logs', 'sms_retry_logs', 'sms_settings', 'sms_quota_logs', 'sms_audit_logs'];
+  'sms_delivery_logs', 'sms_retry_logs', 'sms_settings', 'sms_quota_logs', 'sms_audit_logs', 'employee_orders', 'employee_profiles', 'order_templates', 'workplaces'];
 export const tableSchemas = new Map<string, Set<string>>();
 
 export async function syncTableSchema(client: any, tableName: string, dataObj: any) {

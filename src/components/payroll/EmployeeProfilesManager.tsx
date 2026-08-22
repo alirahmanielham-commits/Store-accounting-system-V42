@@ -1,9 +1,8 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useMemo } from 'react';
 import { Users, Edit2, Search, XCircle, FileText, CheckCircle, Save } from 'lucide-react';
-import { getEmployeeProfiles, addEmployeeProfile, updateEmployeeProfile } from '../../services/hrService';
+import { updatePerson } from '../../services/personService';
 
-export default function EmployeeProfilesManager({ personsData, showNotification }: any) {
-  const [profiles, setProfiles] = useState<any[]>([]);
+export default function EmployeeProfilesManager({ personsData, fetchPersons, showNotification }: any) {
   const [searchQuery, setSearchQuery] = useState('');
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'incomplete'>('all');
@@ -18,22 +17,8 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
     jobTitle: '',
     jobCategory: '',
     employmentType: 'full_time',
-    
     childrenCount: '0'
   });
-
-  const fetchData = async () => {
-    try {
-      const data = await getEmployeeProfiles();
-      setProfiles(data || []);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  useEffect(() => {
-    fetchData();
-  }, []);
 
   const employees = useMemo(() => {
     return (personsData || []).filter((p: any) => p.role === 'employee');
@@ -43,46 +28,30 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
     let result = employees;
     if (activeTab === 'incomplete') {
       result = result.filter((e: any) => {
-        const profile = profiles.find(p => p.personId === e.id);
-        return !(profile && profile.insuranceNumber && profile.jobTitle);
+        return !(e.insuranceNumber && e.jobTitle);
       });
     }
     if (searchQuery) {
-      result = result.filter((e: any) => e.name.includes(searchQuery));
+      result = result.filter((e: any) => e.name?.includes(searchQuery));
     }
     return result;
-  }, [employees, searchQuery, activeTab, profiles]);
+  }, [employees, searchQuery, activeTab]);
 
   const handleEdit = (personId: string) => {
     setEditingPersonId(personId);
-    const existingProfile = profiles.find(p => p.personId === personId);
-    if (existingProfile) {
+    const existingPerson = employees.find((p: any) => p.id === personId);
+    if (existingPerson) {
       setFormData({
-        insuranceNumber: existingProfile.insuranceNumber || '',
-        insuranceType: existingProfile.insuranceType || '',
-        educationLevel: existingProfile.educationLevel || '',
-        experienceYears: existingProfile.experienceYears || '',
-        maritalStatus: existingProfile.maritalStatus || 'single',
-        studyField: existingProfile.studyField || '',
-        jobTitle: existingProfile.jobTitle || '',
-        jobCategory: existingProfile.jobCategory || '',
-        employmentType: existingProfile.employmentType || 'full_time',
-        
-        childrenCount: existingProfile.childrenCount || '0'
-      });
-    } else {
-      setFormData({
-        insuranceNumber: '',
-        insuranceType: '',
-        educationLevel: '',
-        experienceYears: '',
-        maritalStatus: 'single',
-        studyField: '',
-        jobTitle: '',
-        jobCategory: '',
-        employmentType: 'full_time',
-        
-        childrenCount: '0'
+        insuranceNumber: existingPerson.insuranceNumber || '',
+        insuranceType: existingPerson.insuranceType || '',
+        educationLevel: existingPerson.educationLevel || '',
+        experienceYears: existingPerson.experienceYears || '',
+        maritalStatus: existingPerson.maritalStatus || 'single',
+        studyField: existingPerson.studyField || '',
+        jobTitle: existingPerson.jobTitle || '',
+        jobCategory: existingPerson.jobCategory || '',
+        employmentType: existingPerson.employmentType || 'full_time',
+        childrenCount: existingPerson.childrenCount || '0'
       });
     }
   };
@@ -90,19 +59,13 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
   const handleSave = async () => {
     if (!editingPersonId) return;
     try {
-      const existingProfile = profiles.find(p => p.personId === editingPersonId);
-      if (existingProfile) {
-        await updateEmployeeProfile(existingProfile.id, { ...existingProfile, ...formData });
-      } else {
-        await addEmployeeProfile({
-          id: Date.now().toString(),
-          personId: editingPersonId,
-          ...formData
-        });
+      const existingPerson = employees.find((p: any) => p.id === editingPersonId);
+      if (existingPerson) {
+        await updatePerson(existingPerson.id, { ...existingPerson, ...formData });
       }
       showNotification('اطلاعات پرسنلی با موفقیت ذخیره شد', 'success');
       setEditingPersonId(null);
-      fetchData();
+      if (fetchPersons) fetchPersons();
     } catch (e) {
       console.error(e);
       showNotification('خطا در ذخیره اطلاعات', 'error');
@@ -164,12 +127,12 @@ export default function EmployeeProfilesManager({ personsData, showNotification 
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {filteredEmployees.map((emp: any) => {
-                  const profile = profiles.find(p => p.personId === emp.id);
-                  const isCompleted = profile && profile.insuranceNumber && profile.jobTitle;
+                  
+                  const isCompleted = emp.insuranceNumber && emp.jobTitle;
                   return (
                     <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
                       <td className="p-4 font-bold text-slate-800">{emp.name}</td>
-                      <td className="p-4 text-slate-600">{profile?.jobTitle || '---'}</td>
+                      <td className="p-4 text-slate-600">{emp.jobTitle || '---'}</td>
                       <td className="p-4 text-center">
                         {isCompleted ? (
                           <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
