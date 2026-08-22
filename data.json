@@ -554,6 +554,76 @@
       "entityId": "9neb4oe61cj",
       "changes": "{\"personId\":\"123\",\"jobTitle\":\"developer\",\"id\":\"9neb4oe61cj\"}",
       "timestamp": 1787389853333
+    },
+    {
+      "id": "0x95o7rtdei",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "employee_contracts",
+      "entityId": "1787427757109106173",
+      "changes": "{\"id\":\"1787427757109106173\",\"personId\":\"08eecdc1-2909-4880-902c-854a51baf689\",\"contractNumber\":\"12356\",\"workplaceId\":\"2898a677-7cd8-41e0-93e0-67c010e7c13e\",\"startDate\":\"2026-08-21T20:30:00.000Z\",\"endDate\":\"2026-08-21T20:30:00.000Z\",\"location\":\"\",\"status\":\"draft\"}",
+      "timestamp": 1787427754096
+    },
+    {
+      "id": "u1z07r3dmcf",
+      "action": "UPDATE",
+      "userId": "system",
+      "details": "ویرایش رکورد",
+      "entityType": "employee_contracts",
+      "entityId": "1787427757109106173",
+      "changes": "{\"contractNumber\":\"12356\",\"workplaceId\":\"2898a677-7cd8-41e0-93e0-67c010e7c13e\",\"startDate\":\"2026-08-21T20:30:00.000Z\",\"endDate\":\"2026-08-21T20:30:00.000Z\",\"location\":\"\",\"status\":\"draft\",\"personId\":\"08eecdc1-2909-4880-902c-854a51baf689\"}",
+      "timestamp": 1787428046523
+    },
+    {
+      "id": "xetx2deu8x",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "8dc3633d-c4bc-414d-86cc-30b723dfa026",
+      "changes": "{\"id\":\"8dc3633d-c4bc-414d-86cc-30b723dfa026\",\"code\":\"21020002\",\"title\":\"آقای رضا بازایار\",\"type\":\"detailed\",\"nature\":\"credit\",\"parentId\":\"50dc8f8a-e274-4f58-94f0-62a321e4731d\"}",
+      "timestamp": 1787428160202
+    },
+    {
+      "id": "3694uecppnq",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "persons",
+      "entityId": "cc012d81-bd56-4749-8359-ff29996f96d0",
+      "changes": "{\"type\":\"employee\",\"name\":\"رضا بازایار\",\"fullName\":\"رضا بازایار\",\"title\":\"آقای\",\"alias\":\"آقای رضا بازایار\",\"personType\":\"real\",\"firstName\":\"رضا\",\"lastName\":\"بازایار\",\"companyName\":\"\",\"fatherName\":\"\",\"nationalId\":\"\",\"gender\":\"male\",\"accountingCode\":\"21020002\",\"address\":\"\",\"imageUrl\":\"\",\"role\":\"employee\",\"roles\":[],\"categories\":[],\"phone\":\"\",\"mobile\":\"\",\"code\":\"\",\"postalCode\":\"\",\"email\":\"\",\"description\":\"\",\"groupId\":\"\",\"roleId\":\"\",\"company\":\"\",\"economicCode\":\"\",\"registrationNumber\":\"\",\"initialBalance\":0,\"initialBalanceType\":\"\",\"creditLimit\":0,\"group\":\"\",\"province\":\"\",\"city\":\"\",\"isActive\":true,\"registrationDate\":\"2026-08-22T19:49:21.585Z\",\"insuranceNumber\":\"\",\"insuranceType\":\"\",\"educationLevel\":\"\",\"maritalStatus\":\"\",\"studyField\":\"\",\"jobTitle\":\"\",\"id\":\"cc012d81-bd56-4749-8359-ff29996f96d0\",\"createdAt\":1787428163429,\"updatedAt\":1787428163429,\"personCode\":\"300002\"}",
+      "timestamp": 1787428160397
+    },
+    {
+      "id": "f4mj7hsgbku",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "employee_contracts",
+      "entityId": "1787428187164782835",
+      "changes": "{\"id\":\"1787428187164782835\",\"personId\":\"cc012d81-bd56-4749-8359-ff29996f96d0\",\"contractNumber\":\"4444\",\"workplaceId\":\"2898a677-7cd8-41e0-93e0-67c010e7c13e\",\"startDate\":\"2026-08-21T20:30:00.000Z\",\"endDate\":\"2026-08-21T20:30:00.000Z\",\"location\":\"\",\"status\":\"draft\"}",
+      "timestamp": 1787428184143
+    },
+    {
+      "id": "f5wbtk1nak",
+      "action": "UPDATE",
+      "userId": "system",
+      "details": "ویرایش رکورد",
+      "entityType": "employee_contracts",
+      "entityId": "1787427757109106173",
+      "changes": "{\"id\":\"1787427757109106173\",\"personId\":\"08eecdc1-2909-4880-902c-854a51baf689\",\"contractNumber\":\"12356\",\"workplaceId\":\"2898a677-7cd8-41e0-93e0-67c010e7c13e\",\"startDate\":\"2026-08-21T20:30:00.000Z\",\"endDate\":\"2026-08-21T20:30:00.000Z\",\"location\":\"\",\"status\":\"active\"}",
+      "timestamp": 1787428729292
+    },
+    {
+      "id": "p5yw27h4zxs",
+      "action": "UPDATE",
+      "userId": "system",
+      "details": "ویرایش رکورد",
+      "entityType": "employee_contracts",
+      "entityId": "1787428187164782835",
+      "changes": "{\"id\":\"1787428187164782835\",\"personId\":\"cc012d81-bd56-4749-8359-ff29996f96d0\",\"contractNumber\":\"4444\",\"workplaceId\":\"2898a677-7cd8-41e0-93e0-67c010e7c13e\",\"startDate\":\"2026-08-21T20:30:00.000Z\",\"endDate\":\"2026-08-21T20:30:00.000Z\",\"location\":\"\",\"status\":\"active\"}",
+      "timestamp": 1787428731300
     }
   ],
   "person_roles": [
@@ -606,7 +676,7 @@
     "isSetup": true
   },
   "doc_counters": {
-    "person": 300001
+    "person": 300002
   },
   "financial_years": [
     {
@@ -772,6 +842,14 @@
       "type": "detailed",
       "nature": "credit",
       "parentId": "50dc8f8a-e274-4f58-94f0-62a321e4731d"
+    },
+    {
+      "id": "8dc3633d-c4bc-414d-86cc-30b723dfa026",
+      "code": "21020002",
+      "title": "آقای رضا بازایار",
+      "type": "detailed",
+      "nature": "credit",
+      "parentId": "50dc8f8a-e274-4f58-94f0-62a321e4731d"
     }
   ],
   "persons": [
@@ -823,6 +901,55 @@
       "createdAt": 1787328453876,
       "updatedAt": 1787328453876,
       "personCode": "300001"
+    },
+    {
+      "type": "employee",
+      "name": "رضا بازایار",
+      "fullName": "رضا بازایار",
+      "title": "آقای",
+      "alias": "آقای رضا بازایار",
+      "personType": "real",
+      "firstName": "رضا",
+      "lastName": "بازایار",
+      "companyName": "",
+      "fatherName": "",
+      "nationalId": "",
+      "gender": "male",
+      "accountingCode": "21020002",
+      "address": "",
+      "imageUrl": "",
+      "role": "employee",
+      "roles": [],
+      "categories": [],
+      "phone": "",
+      "mobile": "",
+      "code": "",
+      "postalCode": "",
+      "email": "",
+      "description": "",
+      "groupId": "",
+      "roleId": "",
+      "company": "",
+      "economicCode": "",
+      "registrationNumber": "",
+      "initialBalance": 0,
+      "initialBalanceType": "",
+      "creditLimit": 0,
+      "group": "",
+      "province": "",
+      "city": "",
+      "isActive": true,
+      "registrationDate": "2026-08-22T19:49:21.585Z",
+      "insuranceNumber": "",
+      "insuranceType": "",
+      "educationLevel": "",
+      "maritalStatus": "",
+      "studyField": "",
+      "jobTitle": "",
+      "id": "cc012d81-bd56-4749-8359-ff29996f96d0",
+      "createdAt": 1787428163429,
+      "updatedAt": 1787428163429,
+      "personCode": "300002"
     }
   ],
   "workplaces": [
@@ -858,6 +985,28 @@
       "personId": "123",
       "jobTitle": "developer",
       "id": "9neb4oe61cj"
+    }
+  ],
+  "employee_contracts": [
+    {
+      "id": "1787427757109106173",
+      "personId": "08eecdc1-2909-4880-902c-854a51baf689",
+      "contractNumber": "12356",
+      "workplaceId": "2898a677-7cd8-41e0-93e0-67c010e7c13e",
+      "startDate": "2026-08-21T20:30:00.000Z",
+      "endDate": "2026-08-21T20:30:00.000Z",
+      "location": "",
+      "status": "active"
+    },
+    {
+      "id": "1787428187164782835",
+      "personId": "cc012d81-bd56-4749-8359-ff29996f96d0",
+      "contractNumber": "4444",
+      "workplaceId": "2898a677-7cd8-41e0-93e0-67c010e7c13e",
+      "startDate": "2026-08-21T20:30:00.000Z",
+      "endDate": "2026-08-21T20:30:00.000Z",
+      "location": "",
+      "status": "active"
     }
   ]
 }

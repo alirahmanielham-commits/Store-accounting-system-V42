@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Users, FileText, Settings, XCircle, Search, Calendar, MapPin, CheckCircle, AlertCircle, X, ChevronDown, Check, Building, FileSignature, ArrowRight, ArrowLeft } from 'lucide-react';
-import { getSalaryComponents, getContractComponents,  getEmployeeContracts, addEmployeeContract, updateEmployeeContract, deleteEmployeeContract,     deleteContractComponent, getEmployeeProfiles, getWorkplaces } from '../../services/hrService';
+import { getSalaryComponents, getContractComponents,  getEmployeeContracts, addEmployeeContract, updateEmployeeContract, deleteEmployeeContract,     deleteContractComponent, getEmployeeProfiles, getWorkplaces, getEmployeeOrders, getPayslips } from '../../services/hrService';
 import Select from 'react-select';
 
 export default function ContractsManager({ personsData, personGroups, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
@@ -33,6 +33,8 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
     const [viewContractId, setViewContractId] = useState(null);
   const [terminateContractId, setTerminateContractId] = useState(null);
   const [terminateDate, setTerminateDate] = useState(new Date());
+  const [deleteContractId, setDeleteContractId] = useState(null);
+  const [deleteError, setDeleteError] = useState('');
   const [contractForm, setContractForm] = useState({
     personId: null,
     contractNumber: '',
@@ -135,10 +137,24 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
       const newEnd = endDateIso ? new Date(endDateIso).getTime() : Infinity;
 
       const hasOverlap = personContracts.some(existing => {
+        // If terminated, the effective end date is the termination date.
+        const effectiveEnd = (existing.status === 'terminated' && existing.terminationDate) 
+                              ? existing.terminationDate 
+                              : existing.endDate;
         const exStartObj = parseSafeDate(existing.startDate);
-        const exEndObj = parseSafeDate(existing.endDate);
-        const exStart = exStartObj ? exStartObj.getTime() : 0;
+        const exEndObj = parseSafeDate(effectiveEnd);
+        
+        // Exclude contracts that don't have a valid start date
+        if (!exStartObj) return false;
+        
+        const exStart = exStartObj.getTime();
         const exEnd = exEndObj ? exEndObj.getTime() : Infinity;
+        
+        // Strict overlap: one starts BEFORE the other ends, AND one ends AFTER the other starts
+        // Also handle the case where a contract starts exactly when another ends as NOT an overlap 
+        // by using strictly less than (<) if appropriate, but <= is standard if day is inclusive.
+        // Usually, if exEnd is 2024-05-10, and newStart is 2024-05-11, 2024-05-11 <= 2024-05-10 is False. No overlap.
+        // If newStart is 2024-05-10, 2024-05-10 <= 2024-05-10 is True. Overlap. This is correct for inclusive days.
         return (newStart <= exEnd) && (newEnd >= exStart);
       });
 
@@ -174,15 +190,27 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
     }
   };
 
-  const handleDeleteContract = async (id) => {
-    if(!window.confirm('آیا از حذف این قرارداد مطمئن هستید؟')) return;
+  const handleConfirmDelete = async () => {
     try {
-      await deleteEmployeeContract(id);
+      const orders = await getEmployeeOrders();
+      const payslips = await getPayslips();
+      
+      const hasOrders = orders.some(o => o.contractId === deleteContractId);
+      const hasPayslips = payslips.some(p => p.contractId === deleteContractId);
+      
+      if (hasOrders || hasPayslips) {
+        setDeleteError('امکان حذف وجود ندارد. برای این قرارداد حکم یا فیش حقوقی ثبت شده است.');
+        return;
+      }
+      
+      await deleteEmployeeContract(deleteContractId);
       const allComps = await getContractComponents();
-      for (const c of allComps.filter(c => c.contractId === id)) {
+      for (const c of allComps.filter(c => c.contractId === deleteContractId)) {
         await deleteContractComponent(c.id);
       }
       showNotification('قرارداد با موفقیت حذف شد', 'success');
+      setDeleteContractId(null);
+      setDeleteError('');
       fetchData();
     } catch(e) {
       showNotification('خطا در حذف', 'error');
@@ -341,7 +369,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                             }} className="px-3 py-1.5 text-indigo-600 bg-indigo-50 border border-indigo-100 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-colors">
                               ویرایش
                             </button>
-                            <button onClick={() => handleDeleteContract(c.id)} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
+                            <button onClick={() => { setDeleteContractId(c.id); setDeleteError(''); }} className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors">
                               <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
@@ -358,6 +386,35 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
           </div>
           
       {/* Modals */}
+
+      {deleteContractId && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 md:p-6">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl flex flex-col overflow-hidden">
+            <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center"><AlertCircle className="w-5 h-5"/></div>
+                <h3 className="font-bold text-slate-800 text-lg">حذف قرارداد</h3>
+              </div>
+              <button onClick={() => { setDeleteContractId(null); setDeleteError(''); }} className="text-slate-400 hover:text-slate-600 p-2 bg-white rounded-lg border border-slate-200"><X className="w-5 h-5"/></button>
+            </div>
+            <div className="p-6 bg-slate-50/50 space-y-4 text-center">
+              <p className="text-sm text-slate-600 mb-2">آیا از حذف این قرارداد مطمئن هستید؟ این عملیات غیرقابل بازگشت است.</p>
+              {deleteError && (
+                <div className="p-3 bg-rose-50 border border-rose-100 text-rose-700 text-sm rounded-xl font-bold">
+                  {deleteError}
+                </div>
+              )}
+            </div>
+            <div className="p-5 border-t border-slate-200 flex justify-end gap-3 bg-white">
+              <button onClick={()=>{ setDeleteContractId(null); setDeleteError(''); }} className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors">انصراف</button>
+              <button onClick={handleConfirmDelete} className="px-6 py-2.5 bg-rose-600 text-white rounded-xl font-bold shadow-sm hover:bg-rose-700 transition-all">
+                حذف قرارداد
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
 
       {viewContractId && (() => {
         const c = contracts.find(x => x.id === viewContractId);
@@ -439,12 +496,14 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                     locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                     value={terminateDate}
                     onChange={(date) => {
-                      if(date) {
-                          const d = (date && typeof date.toDate === 'function') ? date.toDate() : new Date(date);
+                      if (!date) {
+                          setTerminateDate(null);
+                          return;
+                      }
+                      let d = date?.toDate?.() || new Date(date);
+                      if (d && !isNaN(d.getTime())) {
                           d.setHours(0,0,0,0);
                           setTerminateDate(d);
-                      } else {
-                          setTerminateDate(null);
                       }
                     }}
                     calendarPosition="bottom-right"
@@ -480,7 +539,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                     <label className="block text-sm font-bold text-slate-700 mb-2">انتخاب کارمند</label>
                     <Select
                       isDisabled={!!editingContractId}
-                      options={employees.map(p => ({value: p.id, label: p.name}))}
+                      options={employees.map(p => ({value: p.id, label: p.name + (!p.nationalId ? ' (نقص اطلاعات - کد ملی)' : ''), isDisabled: !p.nationalId}))}
                       value={contractForm.personId}
                       onChange={v => setContractForm({...contractForm, personId: v})}
                       placeholder="جستجو و انتخاب شخص..."
@@ -515,14 +574,16 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                      locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                      value={contractForm.startDate}
                      onChange={(date) => {
-                        if(date) {
-                            const d = (date && typeof date.toDate === 'function') ? date.toDate() : new Date(date);
-                            d.setHours(0,0,0,0);
-                            setContractForm({...contractForm, startDate: d});
-                        } else {
-                            setContractForm({...contractForm, startDate: null});
-                        }
-                     }}
+                      if (!date) {
+                          setContractForm(prev => ({...prev, startDate: null}));
+                          return;
+                      }
+                      let d = date?.toDate?.() || new Date(date);
+                      if (d && !isNaN(d.getTime())) {
+                          d.setHours(0,0,0,0);
+                          setContractForm(prev => ({...prev, startDate: d}));
+                      }
+                    }}
                      calendarPosition="bottom-right"
                      inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-white"
                    />
@@ -535,14 +596,16 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                      locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                      value={contractForm.endDate}
                      onChange={(date) => {
-                        if(date) {
-                            const d = (date && typeof date.toDate === 'function') ? date.toDate() : new Date(date);
-                            d.setHours(0,0,0,0);
-                            setContractForm({...contractForm, endDate: d});
-                        } else {
-                            setContractForm({...contractForm, endDate: null});
-                        }
-                     }}
+                      if (!date) {
+                          setContractForm(prev => ({...prev, endDate: null}));
+                          return;
+                      }
+                      let d = date?.toDate?.() || new Date(date);
+                      if (d && !isNaN(d.getTime())) {
+                          d.setHours(0,0,0,0);
+                          setContractForm(prev => ({...prev, endDate: d}));
+                      }
+                    }}
                      calendarPosition="bottom-right"
                      inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-white"
                    />
