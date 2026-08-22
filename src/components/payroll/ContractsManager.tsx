@@ -2,12 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Users, FileText, Settings, XCircle, Search, Calendar, MapPin, CheckCircle, AlertCircle, X, ChevronDown, Check, Building, FileSignature, ArrowRight, ArrowLeft } from 'lucide-react';
 import { getSalaryComponents, getContractComponents,  getEmployeeContracts, addEmployeeContract, updateEmployeeContract, deleteEmployeeContract,     deleteContractComponent, getEmployeeProfiles, getWorkplaces, getEmployeeOrders, getPayslips } from '../../services/hrService';
 import Select from 'react-select';
+import { convertToGregorian } from '../../utils/format';
+
 
 export default function ContractsManager({ personsData, personGroups, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
    
   
   const [contracts, setContracts] = useState([]);
   const [salComponents, setSalComponents] = useState([]);
+  const [orders, setOrders] = useState([]);
   const [employeeProfiles, setEmployeeProfiles] = useState([]);
   const [workplaces, setWorkplaces] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -326,8 +329,8 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           </div>
                         </td>
                         <td className="p-4 text-slate-600">{c.contractNumber || '---'}</td>
-                        <td className="p-4 text-slate-500 text-xs">{parseSafeDate(c.startDate)?.toLocaleDateString('fa-IR')}</td>
-                        <td className="p-4 text-slate-500 text-xs">{c.endDate ? parseSafeDate(c.endDate)?.toLocaleDateString('fa-IR') : 'نامحدود'}</td>
+                        <td className="p-4 text-slate-500 text-xs">{parseSafeDate(c.startDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR')}</td>
+                        <td className="p-4 text-slate-500 text-xs">{c.endDate ? parseSafeDate(c.endDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR') : 'نامحدود'}</td>
                         <td className="p-4 text-center">
                           <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-bold border ${
                             c.status==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200':
@@ -440,11 +443,11 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
                   <span className="text-slate-500 text-sm">تاریخ شروع:</span>
-                  <span className="font-bold text-slate-800">{parseSafeDate(c.startDate)?.toLocaleDateString('fa-IR')}</span>
+                  <span className="font-bold text-slate-800">{parseSafeDate(c.startDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR')}</span>
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
                   <span className="text-slate-500 text-sm">تاریخ پایان:</span>
-                  <span className="font-bold text-slate-800">{c.endDate ? parseSafeDate(c.endDate)?.toLocaleDateString('fa-IR') : 'نامحدود'}</span>
+                  <span className="font-bold text-slate-800">{c.endDate ? parseSafeDate(c.endDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR') : 'نامحدود'}</span>
                 </div>
                 {c.terminationDate && (
                   <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
@@ -464,6 +467,37 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                   </span>
                 </div>
               </div>
+              
+              {(() => {
+                const contractOrders = orders.filter(o => o.contractId === c.id);
+                if (contractOrders.length > 0) {
+                  return (
+                    <div className="px-6 py-4 bg-white border-t border-slate-100">
+                      <h4 className="font-bold text-slate-800 mb-3 flex items-center gap-2">
+                        <FileText className="w-4 h-4 text-indigo-500" />
+                        احکام کارگزینی ثبت شده
+                      </h4>
+                      <div className="space-y-2">
+                        {contractOrders.map((order, idx) => (
+                          <div key={idx} className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex justify-between items-center">
+                            <div>
+                              <div className="font-bold text-slate-700 text-sm">{order.name || 'حکم بدون نام'}</div>
+                              <div className="text-xs text-slate-500 mt-1">
+                                تاریخ: {order.issueDate ? new Date(Number(order.issueDate)).toLocaleDateString('fa-IR') : '---'}
+                              </div>
+                            </div>
+                            <span className={`px-2 py-1 rounded-lg text-xs font-bold ${order.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
+                              {order.status === 'active' ? 'فعال' : 'غیرفعال'}
+                            </span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               <div className="p-5 border-t border-slate-200 flex justify-end gap-3 bg-white">
                 <button onClick={()=>setViewContractId(null)} className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors">بستن</button>
                 {c.status === 'draft' && (
@@ -500,7 +534,12 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           setTerminateDate(null);
                           return;
                       }
-                      let d = date?.toDate?.() || new Date(date);
+                      let d;
+                      if (typeof date === 'string') {
+                          d = new Date(convertToGregorian(date));
+                      } else {
+                          d = date?.toDate?.() || new Date(date);
+                      }
                       if (d && !isNaN(d.getTime())) {
                           d.setHours(0,0,0,0);
                           setTerminateDate(d);
@@ -578,7 +617,12 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           setContractForm(prev => ({...prev, startDate: null}));
                           return;
                       }
-                      let d = date?.toDate?.() || new Date(date);
+                      let d;
+                      if (typeof date === 'string') {
+                          d = new Date(convertToGregorian(date));
+                      } else {
+                          d = date?.toDate?.() || new Date(date);
+                      }
                       if (d && !isNaN(d.getTime())) {
                           d.setHours(0,0,0,0);
                           setContractForm(prev => ({...prev, startDate: d}));
@@ -600,7 +644,12 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
                           setContractForm(prev => ({...prev, endDate: null}));
                           return;
                       }
-                      let d = date?.toDate?.() || new Date(date);
+                      let d;
+                      if (typeof date === 'string') {
+                          d = new Date(convertToGregorian(date));
+                      } else {
+                          d = date?.toDate?.() || new Date(date);
+                      }
                       if (d && !isNaN(d.getTime())) {
                           d.setHours(0,0,0,0);
                           setContractForm(prev => ({...prev, endDate: d}));

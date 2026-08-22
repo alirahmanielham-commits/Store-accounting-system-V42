@@ -1,3 +1,4 @@
+import { convertToGregorian } from '../../utils/format';
 import React, { useState, useEffect, useMemo } from 'react';
 import { Clock, Search, Save, X, Trash2, Calendar } from 'lucide-react';
 import { getDailyAttendances, addDailyAttendance, updateDailyAttendance, deleteDailyAttendance } from '../../services/hrService';
@@ -35,6 +36,10 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   const getTimestampStr = (dateVal: any) => {
     if (!dateVal) return null;
     try {
+      if (typeof dateVal === 'string') {
+        const d = new Date(convertToGregorian(dateVal));
+        if (!isNaN(d.getTime())) return d.getTime().toString();
+      }
       if (typeof dateVal.valueOf === 'function') {
         const val = dateVal.valueOf();
         if (typeof val === 'number' && !isNaN(val)) return val.toString();

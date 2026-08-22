@@ -1,3 +1,4 @@
+import { convertToGregorian } from '../../utils/format';
 import React, { useState, useEffect } from 'react';
 import { 
   DndContext, 
@@ -534,7 +535,7 @@ export default function DebtorsTracking({ persons, showNotification, storeSettin
                       value={newNextDate ? new Date(newNextDate) : null}
                       onChange={(date: any) => {
                           if (date) {
-                              const d = new Date(date.toDate());
+                              const d = typeof date === 'string' ? new Date(convertToGregorian(date)) : new Date(date.toDate());
                               const localDate = new Date(d.getTime() - d.getTimezoneOffset() * 60000);
                               setNewNextDate(localDate.toISOString().split('T')[0]);
                           } else {

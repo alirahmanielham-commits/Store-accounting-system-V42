@@ -1,3 +1,4 @@
+import { convertToGregorian } from '../../utils/format';
 import React, { useState, useEffect, useMemo } from "react";
 import { Package, Search, Download, FileText, ArrowUpDown, Filter, Printer, Box, RefreshCw, AlertTriangle, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 const BeautifulLoading = () => <div className="flex justify-center items-center h-48"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>;
@@ -193,7 +194,7 @@ const InventoryReport: React.FC<InventoryReportProps> = ({ showNotification, cat
              <label className="block text-xs font-bold text-gray-500 mb-2">از تاریخ</label>
              <DatePicker
                  value={startDate}
-                 onChange={(date: any) => setStartDate(date?.toDate?.() || null)}
+                 onChange={(date: any) => setStartDate(typeof date === 'string' ? new Date(convertToGregorian(date)) : (date?.toDate?.() || null))}
                  calendar={settings?.calendarType === 'gregorian' ? undefined : persian}
                  locale={settings?.calendarType === 'gregorian' ? undefined : persian_fa}
                  calendarPosition="bottom-right"
@@ -206,7 +207,7 @@ const InventoryReport: React.FC<InventoryReportProps> = ({ showNotification, cat
              <label className="block text-xs font-bold text-gray-500 mb-2">تا تاریخ</label>
              <DatePicker
                  value={endDate}
-                 onChange={(date: any) => setEndDate(date?.toDate?.() || null)}
+                 onChange={(date: any) => setEndDate(typeof date === 'string' ? new Date(convertToGregorian(date)) : (date?.toDate?.() || null))}
                  calendar={settings?.calendarType === 'gregorian' ? undefined : persian}
                  locale={settings?.calendarType === 'gregorian' ? undefined : persian_fa}
                  calendarPosition="bottom-right"
