@@ -1,247 +1,7 @@
-import React, { useState, useEffect, useMemo } from 'react';
-import { Plus, Edit2, Trash2, Users, FileText, Settings, XCircle, Search, Calendar, MapPin, CheckCircle, AlertCircle, X, ChevronDown, Check, Building, FileSignature, ArrowRight, ArrowLeft } from 'lucide-react';
-import { getSalaryComponents, getContractComponents,  getEmployeeContracts, addEmployeeContract, updateEmployeeContract, deleteEmployeeContract,     deleteContractComponent, getEmployeeProfiles, getWorkplaces } from '../../services/hrService';
-import Select from 'react-select';
+import re
 
-export default function ContractsManager({ personsData, personGroups, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
-   
-  
-  const [contracts, setContracts] = useState([]);
-  const [salComponents, setSalComponents] = useState([]);
-  const [employeeProfiles, setEmployeeProfiles] = useState([]);
-  const [workplaces, setWorkplaces] = useState([]);
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  
-  const [isContractModalOpen, setIsContractModalOpen] = useState(false);
-
-  // States for Type
-  
-  const typeFormDummy = ({ code: '', title: '', durationType: 'fixed_term', standardMonthlyHours: 220 });
-
-  // States for Contract Wizard
-  const [wizardStep, setWizardStep] = useState(1);
-  const [editingContractId, setEditingContractId] = useState(null);
-  const [contractForm, setContractForm] = useState({
-    personId: null,
-    contractNumber: '',
-    startDate: new Date(new Date().setHours(0,0,0,0)),
-    endDate: new Date(new Date(new Date().setFullYear(new Date().getFullYear() + 1)).setHours(0,0,0,0)),
-    location: '',
-    workplaceId: '',
-    status: 'draft'
-  });
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
-    try {
-      const [emps, sals, profiles, works] = await Promise.all([
-        getEmployeeContracts(),
-        getSalaryComponents(),
-        getEmployeeProfiles(),
-        getWorkplaces()
-      ]);
-      
-      setContracts(emps || []);
-      setSalComponents((sals || []).filter(s => s.isActive));
-      setWorkplaces(works || []);
-    } catch (e) {
-      console.error(e);
-    }
-  };
-
-  const employees = useMemo(() => {
-    return (personsData || []).filter(p => p.role === 'employee');
-  }, [personsData]);
-
-  
-
-  const handleSaveContract = async () => {
-    if (!contractForm.personId) return showNotification('پرسنل باید انتخاب شود', 'error');
-    try {
-      const getTimestampStr = (dateVal) => {
-        if (!dateVal) return null;
-        try {
-          if (typeof dateVal.valueOf === 'function') {
-            const val = dateVal.valueOf();
-            if (typeof val === 'number' && !isNaN(val)) return val.toString();
-          }
-          if (typeof dateVal.toUnix === 'function') return (dateVal.toUnix() * 1000).toString();
-          if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime().toString();
-          if (dateVal instanceof Date) return dateVal.getTime().toString();
-          const parsed = new Date(dateVal).getTime();
-          if (!isNaN(parsed)) return parsed.toString();
-          return null;
-        } catch(e) {
-          return null;
-        }
-      };
-      
-      const startDateStr = getTimestampStr(contractForm.startDate);
-      const endDateStr = getTimestampStr(contractForm.endDate);
-      
-
-      if (!startDateStr) return showNotification('تاریخ شروع قرارداد الزامی است', 'error');
-
-      // Overlap validation
-      const personContracts = contracts.filter(c => c.personId === contractForm.personId.value && c.id !== editingContractId);
-      const newStart = Number(startDateStr);
-      const newEnd = endDateStr ? Number(endDateStr) : Infinity;
-
-      const hasOverlap = personContracts.some(existing => {
-        const exStart = Number(existing.startDate);
-        const exEnd = existing.endDate ? Number(existing.endDate) : Infinity;
-        return (newStart <= exEnd) && (newEnd >= exStart);
-      });
-
-      if (hasOverlap) {
-        return showNotification('بازه زمانی این قرارداد با سایر قراردادهای این شخص تداخل دارد.', 'error');
-      }
-
-      const payloadBase = {
-        
-        contractNumber: contractForm.contractNumber,
-        workplaceId: contractForm.workplaceId,
-        startDate: startDateStr,
-        endDate: endDateStr,
-        location: contractForm.location,
-        status: contractForm.status
-      };
-
-      if (editingContractId) {
-        // Editing a single existing contract
-        await updateEmployeeContract(editingContractId, { ...payloadBase, personId: contractForm.personId.value });
-        } else {
-        // Bulk or single new contract assignment
-        const contractId = Date.now().toString() + Math.random().toString().substring(2,8);
-        await addEmployeeContract({ id: contractId, personId: contractForm.personId.value, ...payloadBase });
-        }
-
-      showNotification('قرارداد(ها) با موفقیت ذخیره شد', 'success');
-      setIsContractModalOpen(false);
-      fetchData();
-    } catch (e) {
-      console.error(e);
-      showNotification('خطا در ثبت قرارداد', 'error');
-    }
-  };
-
-  const handleDeleteContract = async (id) => {
-    if(!window.confirm('آیا از حذف این قرارداد مطمئن هستید؟')) return;
-    try {
-      await deleteEmployeeContract(id);
-      const allComps = await getContractComponents();
-      for (const c of allComps.filter(c => c.contractId === id)) {
-        await deleteContractComponent(c.id);
-      }
-      showNotification('قرارداد با موفقیت حذف شد', 'success');
-      fetchData();
-    } catch(e) {
-      showNotification('خطا در حذف', 'error');
-    }
-  };
-
-  const getPersonName = (id) => {
-    const p = (personsData || []).find(x => x.id === id);
-    return p ? p.name : 'نامشخص';
-  };
-
-  
-  const filteredContracts = useMemo(() => {
-    if (!searchQuery) return contracts;
-    return contracts.filter(c => {
-      const pName = getPersonName(c.personId) || '';
-      return pName.includes(searchQuery) ;
-    });
-  }, [contracts, searchQuery, personsData]);
-
-  const activeContractsCount = contracts.filter(c => c.status === 'active').length;
-  const expiredContractsCount = contracts.filter(c => c.status === 'expired').length;
-
-  return (
-    <div className="min-h-full bg-slate-50/50 p-4 md:p-8" dir="rtl">
-      <div className="w-full mx-auto">
-        
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-              <FileSignature className="w-8 h-8 text-indigo-600" />
-              مدیریت پیشرفته قراردادها
-            </h1>
-            <p className="text-sm text-slate-500 mt-2 font-medium">ثبت قرارداد به پرسنل</p>
-          </div>
-          
-          
-        </div>
-
-        
-          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
-            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center"><FileText className="w-6 h-6"/></div>
-              <div>
-                <p className="text-sm text-slate-500 font-bold mb-1">کل قراردادها</p>
-                <h4 className="text-2xl font-black text-slate-800">{contracts.length}</h4>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center"><CheckCircle className="w-6 h-6"/></div>
-              <div>
-                <p className="text-sm text-slate-500 font-bold mb-1">قراردادهای فعال</p>
-                <h4 className="text-2xl font-black text-slate-800">{activeContractsCount}</h4>
-              </div>
-            </div>
-            <div className="bg-white rounded-2xl p-5 border border-slate-100 shadow-sm flex items-center gap-4">
-              <div className="w-12 h-12 rounded-xl bg-rose-50 text-rose-600 flex items-center justify-center"><AlertCircle className="w-6 h-6"/></div>
-              <div>
-                <p className="text-sm text-slate-500 font-bold mb-1">منقضی / فسخ شده</p>
-                <h4 className="text-2xl font-black text-slate-800">{expiredContractsCount}</h4>
-              </div>
-            </div>
-          </div>
-        
-          <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
-             <div className="p-5 border-b border-slate-100 flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-slate-50/50">
-              <div className="relative max-w-md w-full">
-                <Search className="w-5 h-5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
-                <input 
-                  type="text" 
-                  placeholder="جستجوی پرسنل..." 
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                  className="w-full pl-4 pr-10 py-2.5 bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium"
-                />
-              </div>
-              <button onClick={() => {
-                setEditingContractId(null);
-                setWizardStep(1);
-                setContractForm({ personId: null, contractNumber: '', startDate: new Date(new Date().setHours(0,0,0,0)), endDate: new Date(new Date().setHours(0,0,0,0)), location: '', workplaceId: '', status: 'draft' });
-                setIsContractModalOpen(true);
-              }} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap">
-                <Plus className="w-4 h-4"/> ثبت قرارداد جدید
-              </button>
-            </div>
-            
-            <div className="overflow-x-auto">
-              <table className="w-full text-right text-sm">
-                <thead className="bg-white text-slate-500 border-b border-slate-100">
-                  <tr>
-                    <th className="p-4 font-bold text-slate-600">پرسنل</th>
-                    <th className="p-4 font-bold text-slate-600">شماره قرارداد</th>
-                    <th className="p-4 font-bold text-slate-600">تاریخ شروع</th>
-                    <th className="p-4 font-bold text-slate-600">تاریخ پایان</th>
-                    <th className="p-4 font-bold text-slate-600 text-center">وضعیت</th>
-                    <th className="p-4 font-bold text-slate-600 text-center">عملیات</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {filteredContracts.map(c => (
-                    <tr key={c.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4">
-                      
+# I will recreate the truncated part from my context
+table_end = """
                           <div className="flex items-center gap-3">
                             <div className="w-10 h-10 rounded-full bg-indigo-100 text-indigo-700 font-bold flex items-center justify-center text-lg flex-shrink-0">
                               {getPersonName(c.personId).substring(0, 1)}
@@ -423,3 +183,18 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
     </div>
   );
 }
+"""
+
+with open('src/components/payroll/ContractsManager.tsx', 'r', encoding='utf-8') as f:
+    code = f.read()
+
+# We will cut the code where it got corrupted and append this part
+idx = code.find('<td className="p-4">')
+if idx != -1:
+    code = code[:idx]
+    code += table_end
+    with open('src/components/payroll/ContractsManager.tsx', 'w', encoding='utf-8') as f:
+        f.write(code)
+    print("Fixed syntax")
+else:
+    print("Could not find cut point")

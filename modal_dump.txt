@@ -1,0 +1,241 @@
+   480	                        </div>
+   481	                      );
+   482	                    })}
+   483	                  </div>
+   484	                </div>
+   485	              )}
+   486	
+   487	              <div className="flex items-center gap-3">
+   488	                <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center"><FileSignature className="w-5 h-5"/></div>
+   489	                <h3 className="font-bold text-slate-800 text-lg">{editingContractId ? 'ویرایش قرارداد پرسنل' : 'ثبت قرارداد جدید'}</h3>
+   490	              </div>
+   491	              <button onClick={() => setIsContractModalOpen(false)} className="text-slate-400 hover:text-slate-600 p-2 bg-white rounded-lg border border-slate-200"><X className="w-5 h-5"/></button>
+   492	            </div>
+   493	
+   494	            {/* Stepper Header */}
+   495	            <div className="bg-white border-b border-slate-100 px-6 py-4 flex items-center justify-between">
+   496	               <div className="flex items-center gap-4 w-full">
+   497	                 <div className={`flex items-center gap-2 ${wizardStep >= 1 ? 'text-indigo-600' : 'text-slate-400'}`}>
+   498	                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${wizardStep >= 1 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>1</div>
+   499	                   <span className="font-bold text-sm hidden sm:block">انتخاب پرسنل</span>
+   500	                 </div>
+   501	                 <div className={`flex-1 h-1 rounded-full ${wizardStep >= 2 ? 'bg-indigo-600' : 'bg-slate-100'}`}></div>
+   502	                 <div className={`flex items-center gap-2 ${wizardStep >= 2 ? 'text-indigo-600' : 'text-slate-400'}`}>
+   503	                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${wizardStep >= 2 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>2</div>
+   504	                   <span className="font-bold text-sm hidden sm:block">اطلاعات قرارداد</span>
+   505	                 </div>
+   506	                 <div className={`flex-1 h-1 rounded-full ${wizardStep >= 3 ? 'bg-indigo-600' : 'bg-slate-100'}`}></div>
+   507	                 <div className={`flex items-center gap-2 ${wizardStep >= 3 ? 'text-indigo-600' : 'text-slate-400'}`}>
+   508	                   <div className={`w-8 h-8 rounded-full flex items-center justify-center font-bold text-sm ${wizardStep >= 3 ? 'bg-indigo-600 text-white' : 'bg-slate-100 text-slate-500'}`}>3</div>
+   509	                   <span className="font-bold text-sm hidden sm:block">تخصیص اجزا</span>
+   510	                 </div>
+   511	               </div>
+   512	            </div>
+   513	            
+   514	            <div className="p-6 overflow-y-auto custom-scrollbar flex-1 bg-slate-50/50">
+   515	              
+   516	              {/* Step 1: Employees Selection */}
+   517	              {wizardStep === 1 && (
+   518	                <div className="space-y-6 animate-in fade-in slide-in-from-right-4 duration-300">
+   519	                  <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm w-[840px] max-w-full mx-auto">
+   520	                    <h4 className="font-bold text-slate-800 mb-4 flex items-center gap-2">
+   521	                      <Users className="w-5 h-5 text-indigo-500" />
+   522	                      انتخاب پرسنل جهت انتساب قرارداد
+   523	                    </h4>
+   524	                    <p className="text-sm text-slate-500 mb-6">شما می‌توانید مستقیم کارمند مورد نظر خود را برای ثبت قرارداد انتخاب کنید. <span className="font-bold text-indigo-600">تنها افرادی که دارای نقش «کارمند» هستند در لیست نمایش داده می‌شوند.</span></p>
+   525	                    <div className="grid grid-cols-1 gap-6">
+   526	                      <div>
+   527	                        <label className="block text-sm font-bold text-slate-700 mb-2">انتخاب کارمند</label>
+   528	                        <Select
+   529	                          isDisabled={!!editingContractId}
+   530	                          options={employees.map(p => ({value: p.id, label: p.name}))}
+   531	                          value={contractForm.personId}
+   532	                          onChange={v => {
+   533	                            const newPerson = v;
+   534	                            const updates: any = { personId: newPerson };
+   535	                            if (newPerson && !editingContractId) {
+   536	                              const selectedPerson = employees.find(p => p.id === newPerson.value);
+   537	
+   538	                            }
+   539	                            setContractForm({...contractForm, ...updates});
+   540	                          }}
+   541	                          placeholder="انتخاب کارمند..."
+   542	                          className="react-select-container"
+   543	                          classNamePrefix="react-select"
+   544	                          noOptionsMessage={() => "کارمندی یافت نشد"}
+   545	                          styles={{
+   546	                            control: (base) => ({...base, borderRadius: '0.75rem', borderColor: '#e2e8f0', padding: '4px', boxShadow: 'none', '&:hover': {borderColor: '#cbd5e1'}}),
+   547	                          }}
+   548	                        />
+   549	                      </div>
+   550	                      
+   551	                    </div>
+   552	                  </div>
+   553	                </div>
+   554	              )}
+   555	
+   556	              {/* Step 2: Contract Info */}
+   557	              {wizardStep === 2 && (
+   558	                <div className="grid grid-cols-1 md:grid-cols-3 gap-6 animate-in fade-in slide-in-from-right-4 duration-300">
+   559	                  <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm col-span-1 md:col-span-2">
+   560	                    <h4 className="font-bold text-slate-800 mb-6 flex items-center gap-2">
+   561	                      <FileText className="w-5 h-5 text-indigo-500" />
+   562	                      اطلاعات پایه قرارداد
+   563	                    </h4>
+   564	                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+   565	                      <div>
+   566	                        <label className="block text-sm font-bold text-slate-700 mb-2">شماره قرارداد</label>
+   567	                        <input type="text" value={contractForm.contractNumber} onChange={e => setContractForm({...contractForm, contractNumber: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all" />
+   568	                      </div>
+   569	                      
+   570	                      <div>
+   571	                        <label className="block text-sm font-bold text-slate-700 mb-2">وضعیت قرارداد</label>
+   572	                        <select value={contractForm.status} onChange={e => setContractForm({...contractForm, status: e.target.value})} className="w-full border border-slate-200 bg-white rounded-xl p-[14px] outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-medium transition-all">
+   573	                          <option value="active">فعال (در حال اجرا)</option>
+   574	                          <option value="expired">منقضی شده</option>
+   575	                          <option value="terminated">فسخ شده</option>
+   576	                        </select>
+   577	                      </div>
+   578	
+   579	                      <div>
+   580	                        <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ شروع قرارداد</label>
+   581	                        <DatePicker
+   582	                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+   583	                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+   584	                          value={contractForm.startDate}
+   585	                          onChange={(date) => setContractForm({...contractForm, startDate: date})}
+   586	                          calendarPosition="bottom-right"
+   587	                          inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
+   588	                        />
+   589	                      </div>
+   590	                      <div>
+   591	                        <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ پایان قرارداد (اختیاری برای دائم)</label>
+   592	                        <DatePicker
+   593	                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+   594	                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+   595	                          value={contractForm.endDate}
+   596	                          onChange={(date) => setContractForm({...contractForm, endDate: date})}
+   597	                          calendarPosition="bottom-right"
+   598	                          inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
+   599	                        />
+   600	                      </div>
+   601	                      <div>
+   602	                        <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ ترک کار</label>
+   603	                        <DatePicker
+   604	                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+   605	                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+   606	                          value={contractForm.terminationDate}
+   607	                          onChange={(date) => setContractForm({...contractForm, terminationDate: date})}
+   608	                          calendarPosition="bottom-right"
+   609	                          inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
+   610	                        />
+   611	                      </div>
+   612	
+   613	                      <div className="md:col-span-2">
+   614	                        <label className="block text-sm font-bold text-slate-700 mb-2">محل خدمت</label>
+   615	                        <div className="relative">
+   616	                          <MapPin className="w-5 h-5 absolute right-4 top-1/2 -translate-y-1/2 text-slate-400" />
+   617	                          <input type="text" value={contractForm.location} onChange={e => setContractForm({...contractForm, location: e.target.value})} className="w-full pl-4 pr-12 py-[14px] bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all" placeholder="مثلا دفتر مرکزی - طبقه دوم" />
+   618	                        </div>
+   619	                      </div>
+   620	                    </div>
+   621	                  </div>
+   622	
+   623	                </div>
+   624	              )}
+   625	
+   626	              {/* Step 3: Components Assignment */}
+   627	              {wizardStep === 3 && (
+   628	                <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
+   629	                  <div className="bg-slate-50 border-b border-slate-200 p-5">
+   630	                    <h4 className="font-bold text-slate-800 flex items-center gap-2"><Building className="w-5 h-5 text-indigo-500"/> مدیریت اجزای حقوقی و کسورات در این قرارداد</h4>
+   631	                    <p className="text-sm text-slate-500 mt-2">آیتم‌های مورد نظر را برای این قرارداد فعال کنید. مقادیر پیش‌فرض از تنظیمات حقوق خوانده می‌شود، اما می‌توانید مبلغ، درصد یا فرمول اختصاصی تعریف کنید.</p>
+   632	                  </div>
+   633	                  
+   634	                  <div className="p-5 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
+   635	                    {salComponents.map(comp => {
+   636	                      const scData = contractForm.selectedComponents.find(sc => sc.componentId === comp.id);
+   637	                      const isSelected = !!scData;
+   638	                      return (
+   639	                        <div key={comp.id} className={`p-5 border rounded-2xl flex flex-col lg:flex-row lg:items-center gap-5 transition-all ${isSelected ? 'bg-indigo-50/40 border-indigo-200 shadow-sm' : 'bg-white border-slate-200 hover:border-slate-300'}`}>
+   640	                          
+   641	                          <label className="flex items-center gap-4 font-bold min-w-[240px] cursor-pointer group">
+   642	                            <div className={`w-6 h-6 rounded-md flex items-center justify-center transition-colors border ${isSelected ? 'bg-indigo-600 border-indigo-600' : 'bg-white border-slate-300 group-hover:border-indigo-400'}`}>
+   643	                              {isSelected && <Check className="w-4 h-4 text-white" />}
+   644	                            </div>
+   645	                            <input type="checkbox" checked={isSelected} onChange={(e) => {
+   646	                              if (e.target.checked) {
+   647	                                setContractForm({...contractForm, selectedComponents: [...contractForm.selectedComponents, { componentId: comp.id, overrideAmount: '', overrideFormula: '' }]});
+   648	                              } else {
+   649	                                setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.filter(sc => sc.componentId !== comp.id)});
+   650	                              }
+   651	                            }} className="hidden" />
+   652	                            <div className="flex flex-col">
+   653	                              <span className={isSelected ? 'text-indigo-900 text-base' : 'text-slate-700 text-base'}>{comp.title} {comp.isBaseSalary && <span className="mr-2 text-[10px] bg-indigo-100 text-indigo-700 px-1.5 py-0.5 rounded border border-indigo-200">پایه</span>}</span>
+   654	                              <span className="text-xs text-slate-400 mt-1">{comp.type === 'earning' ? 'مزایا' : 'کسورات'} • {
+   655	                                comp.calculationType === 'fixed' ? 'مبلغ ثابت' : 
+   656	                                comp.calculationType === 'formula' ? 'فرمول' : 
+   657	                                comp.calculationType === 'percentage' ? 'درصدی' : 'وابسته به زمان'
+   658	                              }</span>
+   659	                            </div>
+   660	                          </label>
+   661	                          
+   662	                          {isSelected && (
+   663	                            <div className="flex-1 flex gap-3 mt-3 lg:mt-0 animate-in fade-in slide-in-from-right-4 duration-200">
+   664	                              {comp.calculationType === 'fixed' && (
+   665	                                <div className="relative flex-1">
+   666	                                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">تومان (اختیاری)</span>
+   667	                                  <input type="number" placeholder="مبلغ اختصاصی قرارداد" value={scData.overrideAmount || ''} onChange={e => {
+   668	                                    setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.map(sc => sc.componentId === comp.id ? {...sc, overrideAmount: e.target.value} : sc)})
+   669	                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-28 pr-4 text-sm rounded-xl outline-none transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
+   670	                                </div>
+   671	                              )}
+   672	                              {comp.calculationType === 'formula' && (
+   673	                                <input type="text" placeholder="فرمول محاسباتی اختصاصی - اختیاری" value={scData.overrideFormula || ''} onChange={e => {
+   674	                                  setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.map(sc => sc.componentId === comp.id ? {...sc, overrideFormula: e.target.value} : sc)})
+   675	                                }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 px-4 text-sm rounded-xl outline-none text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
+   676	                              )}
+   677	                              {comp.calculationType === 'percentage' && (
+   678	                                <div className="relative flex-1">
+   679	                                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">% درصد (اختیاری)</span>
+   680	                                  <input type="number" placeholder="درصد اختصاصی" value={scData.overrideAmount || ''} onChange={e => {
+   681	                                    setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.map(sc => sc.componentId === comp.id ? {...sc, overrideAmount: e.target.value} : sc)})
+   682	                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-32 pr-4 text-sm rounded-xl outline-none text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
+   683	                                </div>
+   684	                              )}
+   685	                              {comp.calculationType === 'time_based' && (
+   686	                                <div className="relative flex-1">
+   687	                                  <span className="absolute left-4 top-1/2 -translate-y-1/2 text-xs font-bold text-slate-400">نرخ پایه (اختیاری)</span>
+   688	                                  <input type="number" placeholder="نرخ اختصاصی" value={scData.overrideAmount || ''} onChange={e => {
+   689	                                    setContractForm({...contractForm, selectedComponents: contractForm.selectedComponents.map(sc => sc.componentId === comp.id ? {...sc, overrideAmount: e.target.value} : sc)})
+   690	                                  }} className="w-full bg-white border border-indigo-200 focus:border-indigo-500 py-3 pl-32 pr-4 text-sm rounded-xl outline-none text-left transition-all focus:ring-4 focus:ring-indigo-500/10" dir="ltr" />
+   691	                                </div>
+   692	                              )}
+   693	                            </div>
+   694	                          )}
+   695	                        </div>
+   696	                      )
+   697	                    })}
+   698	                    {salComponents.length === 0 && (
+   699	                      <div className="text-center py-12 text-slate-500 bg-slate-50 rounded-2xl border border-dashed border-slate-200">ابتدا باید اجزای حقوقی را در تنظیمات تعریف کنید</div>
+   700	                    )}
+   701	                  </div>
+   702	                </div>
+   703	              )}
+   704	
+   705	            </div>
+   706	
+   707	            <div className="p-5 border-t border-slate-200 flex justify-between gap-3 bg-white">
+   708	              <button onClick={()=>setIsContractModalOpen(false)} className="px-6 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold transition-colors">انصراف</button>
+   709	              
+   710	
+   711	              {/* Step 3: Components Assignment */}
+   712	              {wizardStep === 3 && (
+   713	                <div className="border border-slate-200 rounded-2xl bg-white overflow-hidden shadow-sm animate-in fade-in slide-in-from-right-4 duration-300">
+   714	                  <div className="bg-slate-50 border-b border-slate-200 p-5">
+   715	                    <h4 className="font-bold text-slate-800 flex items-center gap-2"><Building className="w-5 h-5 text-indigo-500"/> مدیریت اجزای حقوقی و کسورات در این قرارداد</h4>
+   716	                    <p className="text-sm text-slate-500 mt-2">آیتم‌های مورد نظر را برای این قرارداد فعال کنید. مقادیر پیش‌فرض از تنظیمات حقوق خوانده می‌شود، اما می‌توانید مبلغ، درصد یا فرمول اختصاصی تعریف کنید.</p>
+   717	                  </div>
+   718	                  
+   719	                  <div className="p-5 space-y-4 max-h-[500px] overflow-y-auto custom-scrollbar">
+   720	                    {salComponents.map(comp => {
