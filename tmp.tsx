@@ -445,44 +445,6 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                     ))}
                   </select>
                 </div>
-                {formData.contractId && (
-                  <div className="md:col-span-2 bg-indigo-50/50 p-4 rounded-2xl border border-indigo-100">
-                    <h4 className="font-bold text-indigo-900 mb-3 flex items-center gap-2">
-                      <FileText className="w-4 h-4" /> احکام ثبت شده برای این قرارداد
-                    </h4>
-                    {orders.filter(o => o.contractId === formData.contractId && o.id !== editingId).length > 0 ? (
-                      <div className="space-y-2">
-                        {orders.filter(o => o.contractId === formData.contractId && o.id !== editingId).map(ord => (
-                          <div key={ord.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-indigo-50">
-                            <div>
-                              <div className="font-bold text-sm text-slate-800">{ord.name || 'حکم بدون نام'}</div>
-                              <div className="text-xs text-slate-500 mt-1">تاریخ صدور: {ord.issueDate ? new Date(Number(ord.issueDate)).toLocaleDateString('fa-IR') : '---'}</div>
-                            </div>
-                            <div>
-                              {ord.status === 'active' ? (
-                                <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
-                                  تایید نهایی / فعال
-                                </span>
-                              ) : ord.status === 'inactive' ? (
-                                <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
-                                  غیرفعال / بایگانی
-                                </span>
-                              ) : (
-                                <span className="inline-flex items-center px-2 py-1 rounded text-[10px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
-                                  پیش‌نویس
-                                </span>
-                              )}
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-                    ) : (
-                      <div className="text-sm font-bold text-slate-500 bg-white p-3 rounded-xl border border-indigo-50 text-center">
-                        حکمی برای این قرارداد یافت نشد
-                      </div>
-                    )}
-                  </div>
-                )}
 
                 <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-slate-700 mb-2">قالب حکم کارگزینی</label>
