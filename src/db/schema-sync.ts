@@ -2,7 +2,7 @@ import { getActivePgPool, isPgActive } from './connection';
 
 export const KNOWN_TABLES = ['notifications', 'customers_risk_profile', 'repayment_transactions', 'repayment_schedules', 'loan_accounts', 'collaterals', 'loan_applications', 'loan_types', 
   'users', 'company_profile', 'financial_years', 'person_groups', 'person_roles',
-  'payslips', 'salary_components', 'employee_contracts', 'contract_components', 'monthly_attendance', 'daily_attendance', 'payslip_items', 'debtors_trackings',
+  'payslips', 'salary_components', 'employee_contracts', 'contract_components', 'monthly_attendance', 'daily_attendance', 'employee_leaves', 'employee_missions', 'payslip_items', 'debtors_trackings',
   'accounts', 'cashboxes', 'warehouses', 'product_categories', 'products',
   'transactions', 'invoices', 'accounting_documents', 'checkbooks', 'invoice_items', 'accounting_document_items', 'stocktaking_items',
   'warehouse_stocks', 'stocktakings', 'person_follow_ups', 'loans', 'loan_history',

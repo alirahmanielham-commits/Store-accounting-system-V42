@@ -79,6 +79,40 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
     try {
       const c = contracts.find(x => x.id === cId);
       if(!c) return;
+
+      // Overlap validation for finalizing
+      const personContracts = contracts.filter(x => x.personId === c.personId && x.id !== c.id && x.status === 'active');
+      const newStartObj = parseSafeDate(c.startDate);
+      if (!newStartObj) return showNotification('تاریخ شروع قرارداد نامعتبر است', 'error');
+      
+      newStartObj.setHours(0,0,0,0);
+      const newStart = newStartObj.getTime();
+      
+      const newEndObj = parseSafeDate(c.endDate);
+      if (newEndObj) newEndObj.setHours(23,59,59,999);
+      const newEnd = newEndObj ? newEndObj.getTime() : Infinity;
+      
+      const hasOverlap = personContracts.some(existing => {
+        const effectiveEnd = (existing.status === 'terminated' && existing.terminationDate) 
+                              ? existing.terminationDate 
+                              : existing.endDate;
+        const exStartObj = parseSafeDate(existing.startDate);
+        const exEndObj = parseSafeDate(effectiveEnd);
+        if (!exStartObj) return false;
+        
+        exStartObj.setHours(0,0,0,0);
+        const exStart = exStartObj.getTime();
+
+        if (exEndObj) exEndObj.setHours(23,59,59,999);
+        const exEnd = exEndObj ? exEndObj.getTime() : Infinity;
+        
+        return (newStart <= exEnd) && (newEnd >= exStart);
+      });
+
+      if (hasOverlap) {
+        return showNotification('بازه زمانی این قرارداد با سایر قراردادهای فعال این شخص تداخل دارد.', 'error');
+      }
+
       await updateEmployeeContract(c.id, { ...c, status: 'active' });
       showNotification('قرارداد با موفقیت تایید نهایی شد', 'success');
       setViewContractId(null);
@@ -135,9 +169,14 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
       if (!startDateIso) return showNotification('تاریخ شروع قرارداد الزامی است', 'error');
 
       // Overlap validation
-      const personContracts = contracts.filter(c => c.personId === contractForm.personId.value && c.id !== editingContractId);
-      const newStart = new Date(startDateIso).getTime();
-      const newEnd = endDateIso ? new Date(endDateIso).getTime() : Infinity;
+      const personContracts = contracts.filter(c => c.personId === contractForm.personId.value && c.id !== editingContractId && c.status === 'active');
+      const newStartObj = new Date(startDateIso);
+      newStartObj.setHours(0,0,0,0);
+      const newStart = newStartObj.getTime();
+
+      const newEndObj = endDateIso ? new Date(endDateIso) : null;
+      if (newEndObj) newEndObj.setHours(23,59,59,999);
+      const newEnd = newEndObj ? newEndObj.getTime() : Infinity;
 
       const hasOverlap = personContracts.some(existing => {
         // If terminated, the effective end date is the termination date.
@@ -150,19 +189,18 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
         // Exclude contracts that don't have a valid start date
         if (!exStartObj) return false;
         
+        exStartObj.setHours(0,0,0,0);
         const exStart = exStartObj.getTime();
+
+        if (exEndObj) exEndObj.setHours(23,59,59,999);
         const exEnd = exEndObj ? exEndObj.getTime() : Infinity;
         
         // Strict overlap: one starts BEFORE the other ends, AND one ends AFTER the other starts
-        // Also handle the case where a contract starts exactly when another ends as NOT an overlap 
-        // by using strictly less than (<) if appropriate, but <= is standard if day is inclusive.
-        // Usually, if exEnd is 2024-05-10, and newStart is 2024-05-11, 2024-05-11 <= 2024-05-10 is False. No overlap.
-        // If newStart is 2024-05-10, 2024-05-10 <= 2024-05-10 is True. Overlap. This is correct for inclusive days.
         return (newStart <= exEnd) && (newEnd >= exStart);
       });
 
-      if (hasOverlap) {
-        return showNotification('بازه زمانی این قرارداد با سایر قراردادهای این شخص تداخل دارد.', 'error');
+      if (hasOverlap && contractForm.status === 'active') {
+        return showNotification('بازه زمانی این قرارداد با سایر قراردادهای فعال این شخص تداخل دارد.', 'error');
       }
 
       const payloadBase = {

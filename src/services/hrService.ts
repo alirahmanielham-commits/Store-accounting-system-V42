@@ -135,3 +135,19 @@ export const deleteEmployeeOrder = async (id: string | number) => {
   const data = await getLocalData<any[]>('employee_orders', []);
   await saveLocalData('employee_orders', data.filter(item => String(item.id) !== String(id)));
 };
+
+export const getLeaves = () => getLocalData<any[]>('employee_leaves', []);
+export const addLeave = async (data: any) => appendLocalData('employee_leaves', data);
+export const updateLeave = async (id: string | number, data: any) => updateLocalData('employee_leaves', id, data);
+export const deleteLeave = async (id: string | number) => {
+  const data = await getLocalData<any[]>('employee_leaves', []);
+  await saveLocalData('employee_leaves', data.filter(item => String(item.id) !== String(id)));
+};
+
+export const getMissions = () => getLocalData<any[]>('employee_missions', []);
+export const addMission = async (data: any) => appendLocalData('employee_missions', data);
+export const updateMission = async (id: string | number, data: any) => updateLocalData('employee_missions', id, data);
+export const deleteMission = async (id: string | number) => {
+  const data = await getLocalData<any[]>('employee_missions', []);
+  await saveLocalData('employee_missions', data.filter(item => String(item.id) !== String(id)));
+};

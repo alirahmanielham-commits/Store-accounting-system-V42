@@ -168,7 +168,7 @@ export const allSidebarGroups: SidebarGroup[] = [
       { id: "employee_profiles", label: "تکمیل اطلاعات پرسنلی", roles: ["admin", "accountant", "manager"] },
       { id: "employee_contracts", label: "قراردادها", roles: ["admin", "accountant", "manager"] },
       { id: "employee_orders", label: "احکام کارگزینی", roles: ["admin", "accountant", "manager"] },
-      { id: "daily_attendance", label: "ورود و خروج روزانه", roles: ["admin", "accountant", "manager", "viewer"] },
+      { id: "daily_attendance", label: "ثبت داده های پرسنل", roles: ["admin", "accountant", "manager", "viewer"] },
       { id: "monthly_attendance", label: "کارکرد ماهانه پرسنل", roles: ["admin", "accountant", "manager", "viewer"] },
       { id: "payslips", label: "فیش حقوقی", roles: ["admin", "accountant", "manager", "viewer"] },
     ],

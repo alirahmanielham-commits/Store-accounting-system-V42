@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Plus, Edit2, Trash2, Save, X, Building2, FileText, CheckCircle, XCircle } from 'lucide-react';
-import { getWorkplaces, addWorkplace, updateWorkplace, deleteWorkplace, getOrderTemplates, addOrderTemplate, updateOrderTemplate, deleteOrderTemplate } from '../../services/hrService';
+import { getWorkplaces, addWorkplace, updateWorkplace, deleteWorkplace, getOrderTemplates, addOrderTemplate, updateOrderTemplate, deleteOrderTemplate, getEmployeeOrders } from '../../services/hrService';
 import { generateId } from '../../services/dataService';
 import { formatNumber, toPersianDigits } from '../../utils/format';
 import { motion, AnimatePresence } from 'framer-motion';
@@ -138,13 +138,21 @@ export default function PayrollSettings({ showNotification }: { showNotification
   };
 
   const handleDeleteTemplate = async (id: string) => {
-    if (!window.confirm('آیا از حذف این قالب مطمئن هستید؟')) return;
     try {
+      const orders = await getEmployeeOrders();
+      const isUsed = orders.some(o => o.templateId === id);
+      if (isUsed) {
+        showNotification('این قالب در صدور احکام استفاده شده است و قابل حذف نیست', 'error');
+        return;
+      }
+      
+      if (!window.confirm('آیا از حذف این قالب مطمئن هستید؟')) return;
+      
       await deleteOrderTemplate(id);
       showNotification('قالب حذف شد', 'success');
       fetchData();
     } catch (e) {
-      showNotification('خطا در حذف قالب', 'error');
+      showNotification('خطا در بررسی یا حذف قالب', 'error');
     }
   };
 
