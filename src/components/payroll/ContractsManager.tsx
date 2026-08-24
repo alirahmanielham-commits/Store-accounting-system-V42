@@ -2,10 +2,11 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, Users, FileText, Settings, XCircle, Search, Calendar, MapPin, CheckCircle, AlertCircle, X, ChevronDown, Check, Building, FileSignature, ArrowRight, ArrowLeft } from 'lucide-react';
 import { getSalaryComponents, getContractComponents,  getEmployeeContracts, addEmployeeContract, updateEmployeeContract, deleteEmployeeContract,     deleteContractComponent, getEmployeeProfiles, getWorkplaces, getEmployeeOrders, getPayslips } from '../../services/hrService';
 import Select from 'react-select';
+import RentContractsManager from './RentContractsManager';
 import { convertToGregorian } from '../../utils/format';
 
 
-export default function ContractsManager({ personsData, personGroups, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
+function EmploymentContracts({ personsData, personGroups, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
    
   
   const [contracts, setContracts] = useState([]);
@@ -278,19 +279,7 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
   return (
     <div className="min-h-full bg-slate-50/50 p-4 md:p-8" dir="rtl">
       <div className="w-full mx-auto">
-        
-        {/* Header Section */}
-        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
-          <div>
-            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-              <FileSignature className="w-8 h-8 text-indigo-600" />
-              مدیریت پیشرفته قراردادها
-            </h1>
-            <p className="text-sm text-slate-500 mt-2 font-medium">ثبت قرارداد به پرسنل</p>
-          </div>
-          
-          
-        </div>
+
 
         
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
@@ -749,6 +738,53 @@ export default function ContractsManager({ personsData, personGroups, storeSetti
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+export default function ContractsManager(props) {
+  const { personsData, personGroups, storeSettings, showNotification, DatePicker, persian, persian_fa } = props;
+  const [activeTab, setActiveTab] = React.useState('employment');
+  
+  return (
+    <div className="min-h-full bg-slate-50/50 p-4 md:p-8" dir="rtl">
+      <div className="w-full mx-auto">
+        {/* Header Section */}
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
+          <div>
+            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+              <FileSignature className="w-8 h-8 text-indigo-600" />
+              مدیریت پیشرفته قراردادها
+            </h1>
+            <p className="text-sm text-slate-500 mt-2 font-medium">ثبت و مدیریت قراردادهای کاری و اجاره</p>
+          </div>
+        </div>
+
+        {/* Tabs */}
+        <div className="flex border-b border-slate-200 mb-8 overflow-x-auto hide-scrollbar">
+          <button 
+            className={`px-6 py-3 font-bold text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'employment' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            onClick={() => setActiveTab('employment')}
+          >
+            قراردادهای کاری
+          </button>
+          <button 
+            className={`px-6 py-3 font-bold text-sm border-b-2 transition-colors whitespace-nowrap ${activeTab === 'rent' ? 'border-indigo-600 text-indigo-600' : 'border-transparent text-slate-500 hover:text-slate-700'}`}
+            onClick={() => setActiveTab('rent')}
+          >
+            قراردادهای اجاره
+          </button>
+        </div>
+
+        {activeTab === 'employment' ? (
+          <div className="-mx-4 md:-mx-8 -my-4 md:-my-8 mt-0 pt-0">
+            <EmploymentContracts {...props} />
+          </div>
+        ) : (
+          <RentContractsManager {...props} />
+        )}
+      </div>
     </div>
   );
 }

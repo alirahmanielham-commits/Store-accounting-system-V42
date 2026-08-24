@@ -68,6 +68,14 @@ export const deleteSalaryComponent = async (id: string | number) => {
 };
 
 
+export const getRentContracts = () => getLocalData<any[]>('rent_contracts', []);
+export const addRentContract = async (data: any) => appendLocalData('rent_contracts', data);
+export const updateRentContract = async (id: string | number, data: any) => updateLocalData('rent_contracts', id, data);
+export const deleteRentContract = async (id: string | number) => {
+  const data = await getLocalData<any[]>('rent_contracts', []);
+  await saveLocalData('rent_contracts', data.filter(item => String(item.id) !== String(id)));
+};
+
 export const getEmployeeContracts = () => getLocalData<any[]>('employee_contracts', []);
 export const addEmployeeContract = async (data: any) => appendLocalData('employee_contracts', data);
 export const updateEmployeeContract = async (id: string | number, data: any) => updateLocalData('employee_contracts', id, data);
