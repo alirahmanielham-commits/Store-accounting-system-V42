@@ -1,3 +1,3 @@
 {
-  "engine": "sqlite"
+  "engine": "PostgreSQL"
 }

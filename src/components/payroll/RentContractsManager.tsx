@@ -2,6 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, FileText, Check, X, AlertCircle } from 'lucide-react';
 import { getRentContracts, addRentContract, updateRentContract, deleteRentContract } from '../../services/hrService';
 import Select from 'react-select';
+import { NumericFormat } from 'react-number-format';
 
 export default function RentContractsManager({ personsData, storeSettings, showNotification, DatePicker, persian, persian_fa }: any) {
   const [contracts, setContracts] = useState<any[]>([]);
@@ -16,6 +17,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
     startDate: new Date(),
     endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
     monthlyAmount: '',
+    depositAmount: '',
     description: '',
     status: 'draft'
   });
@@ -104,6 +106,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
         startDate: startDateIso,
         endDate: endDateIso,
         monthlyAmount: Number(form.monthlyAmount),
+        depositAmount: Number(form.depositAmount),
         description: form.description,
         status: form.status
       };
@@ -155,7 +158,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
               startDate: new Date(new Date().setHours(0,0,0,0)),
               endDate: new Date(new Date(new Date().setFullYear(new Date().getFullYear() + 1)).setHours(0,0,0,0)),
               monthlyAmount: '',
-              description: '',
+    depositAmount: '',
+    description: '',
               status: 'draft'
             });
             setIsModalOpen(true);
@@ -175,7 +179,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                 <th className="p-4 font-bold">طرف قرارداد</th>
                 <th className="p-4 font-bold">شماره قرارداد</th>
                 <th className="p-4 font-bold">بازه زمانی</th>
-                <th className="p-4 font-bold text-center">مبلغ ماهانه (ریال)</th>
+                <th className="p-4 font-bold text-center">مبالغ قرارداد</th>
                 <th className="p-4 font-bold text-center">وضعیت</th>
                 <th className="p-4 font-bold text-center">عملیات</th>
               </tr>
@@ -190,7 +194,12 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                     {' '}تا{' '}
                     {c.endDate ? parseSafeDate(c.endDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR') : 'نامحدود'}
                   </td>
-                  <td className="p-4 text-center font-bold text-emerald-600">{Number(c.monthlyAmount).toLocaleString()}</td>
+                  <td className="p-4 text-center text-sm">
+                    <div className="flex flex-col gap-1 items-center">
+                      <span className="font-bold text-emerald-600" title="اجاره ماهانه">{Number(c.monthlyAmount).toLocaleString()} {storeSettings?.currency || 'ریال'}</span>
+                      {c.depositAmount ? <span className="text-xs text-amber-600" title="ودیعه">(ودیعه: {Number(c.depositAmount).toLocaleString()} {storeSettings?.currency || 'ریال'})</span> : null}
+                    </div>
+                  </td>
                   <td className="p-4 text-center">
                     <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-bold border \${
                       c.status==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200':
@@ -210,6 +219,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                           startDate: parseSafeDate(c.startDate) || new Date(),
                           endDate: c.endDate ? parseSafeDate(c.endDate) : new Date(),
                           monthlyAmount: c.monthlyAmount || '',
+                          depositAmount: c.depositAmount || '',
                           description: c.description || '',
                           status: c.status || 'draft'
                         });
@@ -293,11 +303,22 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">مبلغ ماهانه تعهد (ریال) <span className="text-rose-500">*</span></label>
-                  <input 
-                    type="number" 
+                  <label className="block text-sm font-bold text-slate-700 mb-2">مبلغ ماهانه تعهد ({storeSettings?.currency || 'ریال'}) <span className="text-rose-500">*</span></label>
+                  <NumericFormat 
                     value={form.monthlyAmount}
-                    onChange={e => setForm({...form, monthlyAmount: e.target.value})}
+                    onValueChange={(values) => setForm({...form, monthlyAmount: values.value})}
+                    thousandSeparator=","
+                    className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
+                    placeholder="0"
+                    dir="ltr"
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">مبلغ ودیعه/پیش‌پرداخت ({storeSettings?.currency || 'ریال'})</label>
+                  <NumericFormat 
+                    value={form.depositAmount}
+                    onValueChange={(values) => setForm({...form, depositAmount: values.value})}
+                    thousandSeparator=","
                     className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
                     placeholder="0"
                     dir="ltr"

@@ -864,6 +864,16 @@
       "entityId": "1787431265411",
       "changes": "{\"id\":\"1787431265411\",\"personId\":\"08eecdc1-2909-4880-902c-854a51baf689\",\"contractId\":\"1787430945686434135\",\"templateId\":\"baa3359d-acd3-49f3-a9eb-aee4e1338edf\",\"issueDate\":\"1787431195764\",\"status\":\"draft\"}",
       "timestamp": 1787431263068
+    },
+    {
+      "id": "pfvdc317wqf",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "rent_contracts",
+      "entityId": "test1",
+      "changes": "{\"id\":\"test1\",\"contractNumber\":\"123\"}",
+      "timestamp": 1787561870882
     }
   ],
   "person_roles": [
@@ -1341,6 +1351,12 @@
       "templateId": "baa3359d-acd3-49f3-a9eb-aee4e1338edf",
       "issueDate": "1787431195764",
       "status": "draft"
+    }
+  ],
+  "rent_contracts": [
+    {
+      "id": "test1",
+      "contractNumber": "123"
     }
   ]
 }
