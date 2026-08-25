@@ -3,27 +3,41 @@ import re
 with open('src/components/payroll/RentContractsManager.tsx', 'r', encoding='utf-8') as f:
     code = f.read()
 
-state_insertion = """  const [searchQuery, setSearchQuery] = useState('');
-  const [issueDocModal, setIssueDocModal] = useState<any>(null);
-  const [docForm, setDocForm] = useState({ date: new Date(), amount: '', description: '', ledgerAccountId: '' });
-  const [ledgerAccounts, setLedgerAccounts] = useState<any[]>([]);
-  const [reportModal, setReportModal] = useState<any>(null);
-  const [reportData, setReportData] = useState<any>({ docs: [], transactions: [] });"""
+# Add paymentDay input after depositAmount
+deposit_html = """                  <NumericFormat 
+                    value={form.depositAmount}
+                    onValueChange={(values) => setForm({...form, depositAmount: values.value})}
+                    thousandSeparator=","
+                    className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
+                    placeholder="0"
+                    dir="ltr"
+                  />
+                </div>"""
 
-code = code.replace("  const [searchQuery, setSearchQuery] = useState('');", state_insertion)
+payment_day_html = deposit_html + """
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">روز تعهد پرداخت (۱ تا ۳۱)</label>
+                  <NumericFormat 
+                    value={form.paymentDay}
+                    onValueChange={(values) => setForm({...form, paymentDay: values.value})}
+                    className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-center"
+                    placeholder="پیش‌فرض: روز تاریخ شروع"
+                    dir="ltr"
+                    allowNegative={false}
+                    decimalScale={0}
+                    isAllowed={(values) => {
+                      const { floatValue } = values;
+                      return floatValue === undefined || (floatValue >= 1 && floatValue <= 31);
+                    }}
+                  />
+                </div>"""
 
-fetch_insertion = """  const fetchData = async () => {
-    try {
-      const data = await getRentContracts();
-      setContracts(data || []);
-      const accs = await getLedgerAccounts();
-      setLedgerAccounts(accs || []);
-    } catch (e) {
-      console.error(e);
-    }
-  };"""
+code = code.replace(deposit_html, payment_day_html)
 
-code = re.sub(r"const fetchData = async \(\) => \{[\s\S]*?setContracts\(data \|\| \[\]\);\n\s*\} catch \(e\) \{\n\s*console\.error\(e\);\n\s*\}\n\s*\};", fetch_insertion, code)
+# Set paymentDay automatically when startDate changes if it's not set.
+# Wait, actually since calendar type might be gregorian or jalali, the day is based on the selected calendar date.
+# A simpler approach: if `paymentDay` is not set during save, we extract the Jalali day. But how?
+# The user can just type it. Or we calculate it using Persian date formatter.
 
 with open('src/components/payroll/RentContractsManager.tsx', 'w', encoding='utf-8') as f:
     f.write(code)

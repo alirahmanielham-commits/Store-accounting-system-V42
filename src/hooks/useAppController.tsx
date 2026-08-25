@@ -1,3 +1,4 @@
+import { autoGenerateRentCommitments } from "../services/hrService";
 import CustomDatePicker from "../components/ui/CustomDatePicker";
 import { SystemUpdatePage } from "../components/admin/SystemUpdatePage";
 import { PersonalNotesManager } from "../components/notes/PersonalNotesManager";
@@ -3755,6 +3756,7 @@ const fetchSmsMessages = async () => {
         fetchLoansAndInstallments(),
       ]);
       await fetchInvoices();
+      await autoGenerateRentCommitments();
     } catch (error) {
       console.error("Error silently fetching data:", error);
     }

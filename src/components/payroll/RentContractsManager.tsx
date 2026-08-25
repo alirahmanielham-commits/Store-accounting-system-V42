@@ -26,6 +26,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
     endDate: new Date(new Date().setFullYear(new Date().getFullYear() + 1)),
     monthlyAmount: '',
     depositAmount: '',
+    paymentDay: '',
+    expenseAccountId: '',
     description: '',
     status: 'draft'
   });
@@ -73,6 +75,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       endDate: c.endDate ? new Date(c.endDate) : new Date(),
       monthlyAmount: c.monthlyAmount || '',
       depositAmount: c.depositAmount || '',
+      paymentDay: c.paymentDay || '',
+      expenseAccountId: c.expenseAccountId || '',
       description: c.description || '',
       status: c.status || 'draft'
     });
@@ -164,6 +168,12 @@ export default function RentContractsManager({ personsData, storeSettings, showN
         return showNotification('این طرف قرارداد در این بازه زمانی قرارداد فعال دیگری دارد.', 'error');
       }
 
+      let pDay = Number(form.paymentDay);
+      if (!pDay) {
+        const jd = new Intl.DateTimeFormat('fa-IR-u-nu-latn', {day: 'numeric'}).format(new Date(startDateIso));
+        pDay = parseInt(jd, 10) || 1;
+      }
+
       const payload = {
         personId: form.personId.value,
         contractNumber: form.contractNumber,
@@ -171,6 +181,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
         endDate: endDateIso,
         monthlyAmount: Number(form.monthlyAmount),
         depositAmount: Number(form.depositAmount),
+        paymentDay: pDay,
+        expenseAccountId: form.expenseAccountId,
         description: form.description,
         status: form.status
       };
@@ -223,6 +235,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
               endDate: new Date(new Date(new Date().setFullYear(new Date().getFullYear() + 1)).setHours(0,0,0,0)),
               monthlyAmount: '',
     depositAmount: '',
+    paymentDay: '',
+    expenseAccountId: '',
     description: '',
               status: 'draft'
             });
@@ -426,6 +440,33 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                     dir="ltr"
                   />
                 </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">روز تعهد پرداخت (۱ تا ۳۱)</label>
+                  <NumericFormat 
+                    value={form.paymentDay}
+                    onValueChange={(values) => setForm({...form, paymentDay: values.value})}
+                    className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-center"
+                    placeholder="پیش‌فرض: روز تاریخ شروع"
+                    dir="ltr"
+                    allowNegative={false}
+                    decimalScale={0}
+                    isAllowed={(values) => {
+                      const { floatValue } = values;
+                      return floatValue === undefined || (floatValue >= 1 && floatValue <= 31);
+                    }}
+                  />
+                </div>
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">حساب هزینه (برای صدور اتوماتیک)</label>
+                  <Select
+                    options={ledgerAccounts.map(a => ({ value: a.id, label: `${a.code} - ${a.title}` }))}
+                    value={form.expenseAccountId ? { value: form.expenseAccountId, label: ledgerAccounts.find(a => String(a.id) === String(form.expenseAccountId))?.title } : null}
+                    onChange={(val: any) => setForm({ ...form, expenseAccountId: val?.value || '' })}
+                    placeholder="انتخاب حساب..."
+                    className="text-sm font-bold"
+                  />
+                </div>
+
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">وضعیت</label>
                   <select 
