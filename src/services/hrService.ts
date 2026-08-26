@@ -18,6 +18,7 @@ import {
 } from './coreService';
 import { CompanySettings } from '../types';
 import { convertToGregorian } from '../utils/format';
+import { addAccountingDocument, getAccountingDocuments } from './dataService';
 
 
 export const getPayslips = () => getLocalData<any[]>('payslips', []);
@@ -236,5 +237,44 @@ export const autoGenerateRentCommitments = async () => {
     }
   } catch(e) {
     console.error('Failed to auto generate rent commitments', e);
+  }
+};
+
+
+export const testGenerateRentCommitments = async () => {
+  try {
+    const contracts = await getRentContracts();
+    const activeContracts = contracts.filter(c => c.status === 'active');
+    
+    for (const contract of activeContracts) {
+      if (!contract.monthlyAmount || !contract.expenseAccountId) continue;
+      
+      const tag = `rent_test_${contract.id}_${Date.now()}`;
+      
+      await addAccountingDocument({
+        date: new Date().toISOString(),
+        description: `سند تستی تعهد اجاره بابت قرارداد ${contract.contractNumber || ''}`,
+        status: 'approved',
+        sourceType: 'rent_contract_auto',
+        sourceId: tag,
+        items: [
+          {
+            accountId: contract.expenseAccountId,
+            debtor: Number(contract.monthlyAmount),
+            creditor: 0,
+            description: `تعهد اجاره (تستی)`
+          },
+          {
+            personId: contract.personId,
+            debtor: 0,
+            creditor: Number(contract.monthlyAmount),
+            description: `تعهد اجاره (تستی)`
+          }
+        ]
+      });
+    }
+  } catch (e) {
+    console.error('Failed to test rent commitments', e);
+    throw e;
   }
 };
