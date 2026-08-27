@@ -209,99 +209,131 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
          setLoading(false);
          return showNotification('اطلاعات پرسنل یافت نشد', 'error');
       }
+      
+            const orderItems = order.items || [];
+      const workDays = parseFloat(att.workDays || 0);
+      const overtimeHours = parseFloat(att.overtimeHours || 0);
+      const absenceDays = parseFloat(att.absentDays || 0);
+      const childrenCount = parseInt(person.childrenCount) || 0;
+      const isMarried = person.maritalStatus === 'married' ? 1 : 0;
 
       let totalEarnings = 0;
       let totalDeductions = 0;
       let taxable = 0;
       let insurable = 0;
+      let baseWageTotal = 0;
+      let taxAmount = 0;
+      let insAmount = 0;
 
       const pItems = [];
-      const myComps = contract.selectedComponents || [];
-      const allComps = salComponents || [];
-      
-      // 1. Identify base salary
-      let baseSalaryAmount = 0;
-      for (const mc of myComps) {
-        const compDef = allComps.find(c => c.id === mc.componentId);
-        if (!compDef) continue;
-        if (compDef.type === 'earning' && compDef.calculationType === 'fixed') {
-          const v = mc.overrideAmount ? parseFloat(mc.overrideAmount) : 0;
-          if (compDef.isBaseSalary || compDef.code === 'base_salary' || compDef.code === 'base') {
-            baseSalaryAmount = v;
-            break;
-          }
-          if (v > baseSalaryAmount) baseSalaryAmount = v;
-        }
-      }
 
-      // 2. Calculate components
-      for (const mc of myComps) {
-        const compDef = allComps.find(c => c.id === mc.componentId);
-        if (!compDef) continue;
-
-        let val = 0;
-        const baseNum = mc.overrideAmount ? parseFloat(mc.overrideAmount) : 0; 
-        const workDays = parseFloat(att.workDays || 0);
+      // 1. Calculate all Earnings first
+      for (const item of orderItems) {
+        if (item.type !== 'earning') continue;
         
-        if (compDef.calculationType === 'fixed') {
-           val = (baseNum / 30) * workDays;
-        } else if (compDef.calculationType === 'time_based') {
-           if (compDef.timeFactor === 'days') val = baseNum * workDays;
-           else if (compDef.timeFactor === 'overtime_hours') val = baseNum * parseFloat(att.overtimeHours || 0);
-           else if (compDef.timeFactor === 'absence_days') val = baseNum * parseFloat(att.absentDays || 0);
-        } else if (compDef.calculationType === 'percentage') {
-           const percent = mc.overrideAmount ? parseFloat(mc.overrideAmount) : parseFloat(compDef.basePercentage || 0);
-           const proratedBase = (baseSalaryAmount / 30) * workDays;
-           val = (proratedBase * percent) / 100;
-        } else if (compDef.calculationType === 'formula') {
-           let formulaStr = mc.overrideFormula || compDef.formula || '';
-           if (formulaStr) {
-             try {
-               const childrenCount = parseInt(person.childrenCount) || 0;
-               const isMarried = person.maritalStatus === 'married' ? 1 : 0;
-               formulaStr = formulaStr.replace(/base_salary/g, baseSalaryAmount.toString());
-               formulaStr = formulaStr.replace(/is_married/g, isMarried.toString());
-               formulaStr = formulaStr.replace(/overtime_hours/g, (att.overtimeHours || 0).toString());
-               formulaStr = formulaStr.replace(/absence_days/g, (att.absentDays || 0).toString());
-               formulaStr = formulaStr.replace(/work_days/g, workDays.toString());
-               formulaStr = formulaStr.replace(/children_count/g, childrenCount.toString());
-               formulaStr = formulaStr.replace(/children/g, childrenCount.toString());
-               val = Function(`'use strict'; return (${formulaStr})`)();
-             } catch(err) {
-               console.error("Formula error:", formulaStr, err);
-               val = 0;
-             }
+        let val = 0;
+        let formulaStr = String(item.amount || '0').trim();
+        
+        if (/^\d+(\.\d+)?$/.test(formulaStr)) {
+           val = (parseFloat(formulaStr) / 30) * workDays;
+        } else {
+           try {
+             formulaStr = formulaStr.replace(/children_count/g, childrenCount.toString());
+             formulaStr = formulaStr.replace(/children/g, childrenCount.toString());
+             formulaStr = formulaStr.replace(/work_days/g, workDays.toString());
+             formulaStr = formulaStr.replace(/overtime_hours/g, overtimeHours.toString());
+             formulaStr = formulaStr.replace(/absence_days/g, absenceDays.toString());
+             formulaStr = formulaStr.replace(/is_married/g, isMarried.toString());
+             
+             val = Function(`'use strict'; return (${formulaStr})`)();
+           } catch(err) {
+             console.error("Formula error:", formulaStr, err);
+             val = 0;
            }
         }
         
         val = Math.round(val);
-
+        
         if (val > 0 || val < 0) {
           pItems.push({
             id: Date.now().toString() + Math.random().toString(),
-            componentId: compDef.id,
-            title: compDef.title,
-            type: compDef.type,
+            componentId: item.id || Math.random().toString(),
+            title: item.title,
+            type: 'earning',
             amount: val.toString()
           });
 
-          if (compDef.type === 'earning') {
-            totalEarnings += val;
-            if (compDef.isTaxable) taxable += val;
-            if (compDef.isInsurable) insurable += val;
-          } else {
-            totalDeductions += val;
-          }
+          totalEarnings += val;
+          if (!item.isTaxExempt) taxable += val;
+          if (!item.isInsuranceExempt) insurable += val;
+          if (item.isBaseWage) baseWageTotal += val;
         }
       }
 
-      const taxAmount = taxable > 12000000 ? Math.round((taxable - 12000000) * 0.1) : 0;
-      const insAmount = Math.round(insurable * 0.07);
+      // Implicit tax & insurance
+      const implicitTax = taxable > 120000000 ? Math.round((taxable - 120000000) * 0.1) : 0;
+      const implicitIns = Math.round(insurable * 0.07);
 
-      totalDeductions += taxAmount + insAmount;
+      // 2. Calculate Deductions
+      for (const item of orderItems) {
+        if (item.type !== 'deduction') continue;
+        
+        let val = 0;
+        let formulaStr = String(item.amount || '0').trim();
+        
+        if (formulaStr === 'tax_formula') {
+           val = implicitTax;
+           taxAmount = val;
+        } else if (/^\d+(\.\d+)?$/.test(formulaStr)) {
+           val = parseFloat(formulaStr);
+        } else {
+           try {
+             formulaStr = formulaStr.replace(/base/g, insurable.toString());
+             formulaStr = formulaStr.replace(/insurable_earnings/g, insurable.toString());
+             formulaStr = formulaStr.replace(/taxable_earnings/g, taxable.toString());
+             formulaStr = formulaStr.replace(/base_wage/g, baseWageTotal.toString());
+             formulaStr = formulaStr.replace(/children_count/g, childrenCount.toString());
+             formulaStr = formulaStr.replace(/children/g, childrenCount.toString());
+             formulaStr = formulaStr.replace(/work_days/g, workDays.toString());
+             formulaStr = formulaStr.replace(/overtime_hours/g, overtimeHours.toString());
+             formulaStr = formulaStr.replace(/absence_days/g, absenceDays.toString());
+             formulaStr = formulaStr.replace(/is_married/g, isMarried.toString());
+             
+             val = Function(`'use strict'; return (${formulaStr})`)();
+           } catch(err) {
+             console.error("Formula error:", formulaStr, err);
+             val = 0;
+           }
+        }
+        
+        val = Math.round(val);
+        
+        if (val > 0) {
+          pItems.push({
+            id: Date.now().toString() + Math.random().toString(),
+            componentId: item.id || Math.random().toString(),
+            title: item.title,
+            type: 'deduction',
+            amount: val.toString()
+          });
+          totalDeductions += val;
+
+          if (item.title.includes('مالیات') && taxAmount === 0) taxAmount = val;
+          if (item.title.includes('بیمه') && insAmount === 0) insAmount = val;
+        }
+      }
+
+      if (taxAmount === 0 && implicitTax > 0) {
+          taxAmount = implicitTax;
+          totalDeductions += taxAmount;
+          pItems.push({ id: Date.now().toString() + Math.random().toString(), componentId: 'tax_auto', title: 'مالیات حقوق (خودکار)', type: 'deduction', amount: taxAmount.toString() });
+      }
       
-      if (taxAmount > 0) pItems.push({ id: Date.now().toString() + Math.random().toString(), componentId: 'tax', title: 'مالیات حقوق', type: 'deduction', amount: taxAmount.toString() });
-      if (insAmount > 0) pItems.push({ id: Date.now().toString() + Math.random().toString(), componentId: 'ins', title: 'حق بیمه (سهم کارمند)', type: 'deduction', amount: insAmount.toString() });
+      if (insAmount === 0 && implicitIns > 0) {
+          insAmount = implicitIns;
+          totalDeductions += insAmount;
+          pItems.push({ id: Date.now().toString() + Math.random().toString(), componentId: 'ins_auto', title: 'حق بیمه (سهم کارمند - خودکار)', type: 'deduction', amount: insAmount.toString() });
+      }
 
       const netPayable = totalEarnings - totalDeductions;
       
@@ -393,110 +425,135 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
 
         const existing = slips.find(s => s.personId === att.personId);
         if (existing && existing.status === 'finalized') continue;
-
-        
-        
-        let totalEarnings = 0;
-        let totalDeductions = 0;
-        let taxable = 0;
-        let insurable = 0;
-
+      
         const person = (personsData || []).find(p => p.id === att.personId);
         if (!person) continue;
+            const orderItems = order.items || [];
+      const workDays = parseFloat(att.workDays || 0);
+      const overtimeHours = parseFloat(att.overtimeHours || 0);
+      const absenceDays = parseFloat(att.absentDays || 0);
+      const childrenCount = parseInt(person.childrenCount) || 0;
+      const isMarried = person.maritalStatus === 'married' ? 1 : 0;
 
-        const pItems = [];
-        const myComps = contract.selectedComponents || [];
-        const allComps = salComponents || [];
+      let totalEarnings = 0;
+      let totalDeductions = 0;
+      let taxable = 0;
+      let insurable = 0;
+      let baseWageTotal = 0;
+      let taxAmount = 0;
+      let insAmount = 0;
+
+      const pItems = [];
+
+      // 1. Calculate all Earnings first
+      for (const item of orderItems) {
+        if (item.type !== 'earning') continue;
         
-        // 1. Identify base salary
-        let baseSalaryAmount = 0;
-        for (const mc of myComps) {
-          const compDef = allComps.find(c => c.id === mc.componentId);
-          if (!compDef) continue;
-          if (compDef.type === 'earning' && compDef.calculationType === 'fixed') {
-            const v = mc.overrideAmount ? parseFloat(mc.overrideAmount) : 0;
-            if (compDef.isBaseSalary || compDef.code === 'base_salary' || compDef.code === 'base') {
-              baseSalaryAmount = v;
-              break;
-            }
-            if (v > baseSalaryAmount) baseSalaryAmount = v;
-          }
-        }
-
-        // 2. Calculate components
-        for (const mc of myComps) {
-          const compDef = allComps.find(c => c.id === mc.componentId);
-          if (!compDef) continue;
-
-          let val = 0;
-          const baseNum = mc.overrideAmount ? parseFloat(mc.overrideAmount) : 0; 
-          const workDays = parseFloat(att.workDays || 0);
-          
-          if (compDef.calculationType === 'fixed') {
-             // Prorate fixed amounts based on work days (assuming 30-day month standard)
-             val = (baseNum / 30) * workDays;
-          } else if (compDef.calculationType === 'time_based') {
-             if (compDef.timeFactor === 'days') val = baseNum * workDays;
-             else if (compDef.timeFactor === 'overtime_hours') val = baseNum * parseFloat(att.overtimeHours || 0);
-             else if (compDef.timeFactor === 'absence_days') val = baseNum * parseFloat(att.absentDays || 0);
-          } else if (compDef.calculationType === 'percentage') {
-             const percent = mc.overrideAmount ? parseFloat(mc.overrideAmount) : parseFloat(compDef.basePercentage || 0);
-             // Base salary already prorated in some contexts, but usually percentage is off the prorated base
-             const proratedBase = (baseSalaryAmount / 30) * workDays;
-             val = (proratedBase * percent) / 100;
-          } else if (compDef.calculationType === 'formula') {
-             let formulaStr = mc.overrideFormula || compDef.formula || '';
-             if (formulaStr) {
-               try {
-                 const childrenCount = parseInt(person.childrenCount) || 0;
-                 const isMarried = person.maritalStatus === 'married' ? 1 : 0;
-                 formulaStr = formulaStr.replace(/base_salary/g, baseSalaryAmount.toString());
-                 formulaStr = formulaStr.replace(/is_married/g, isMarried.toString());
-                 formulaStr = formulaStr.replace(/overtime_hours/g, (att.overtimeHours || 0).toString());
-                 formulaStr = formulaStr.replace(/absence_days/g, (att.absentDays || 0).toString());
-                 formulaStr = formulaStr.replace(/work_days/g, workDays.toString());
-                 formulaStr = formulaStr.replace(/children_count/g, childrenCount.toString());
-                 formulaStr = formulaStr.replace(/children/g, childrenCount.toString());
-                 
-                 // Safe evaluation
-                 val = Function(`'use strict'; return (${formulaStr})`)();
-               } catch(err) {
-                 console.error("Formula error:", formulaStr, err);
-                 val = 0;
-               }
-             }
-          }
-          
-          val = Math.round(val); // round to nearest integer
-
-          if (val > 0 || val < 0) {
-            pItems.push({
-              id: Date.now().toString() + Math.random().toString(),
-              componentId: compDef.id,
-              title: compDef.title,
-              type: compDef.type,
-              amount: val.toString()
-            });
-
-            if (compDef.type === 'earning') {
-              totalEarnings += val;
-              if (compDef.isTaxable) taxable += val;
-              if (compDef.isInsurable) insurable += val;
-            } else {
-              totalDeductions += val;
-            }
-          }
-        }
-
-        const taxAmount = taxable > 12000000 ? Math.round((taxable - 12000000) * 0.1) : 0;
-        const insAmount = Math.round(insurable * 0.07);
-
-        totalDeductions += taxAmount + insAmount;
+        let val = 0;
+        let formulaStr = String(item.amount || '0').trim();
         
-        if (taxAmount > 0) pItems.push({ id: Date.now().toString() + Math.random().toString(), componentId: 'tax', title: 'مالیات حقوق', type: 'deduction', amount: taxAmount.toString() });
-        if (insAmount > 0) pItems.push({ id: Date.now().toString() + Math.random().toString(), componentId: 'ins', title: 'حق بیمه (سهم کارمند)', type: 'deduction', amount: insAmount.toString() });
+        if (/^\d+(\.\d+)?$/.test(formulaStr)) {
+           val = (parseFloat(formulaStr) / 30) * workDays;
+        } else {
+           try {
+             formulaStr = formulaStr.replace(/children_count/g, childrenCount.toString());
+             formulaStr = formulaStr.replace(/children/g, childrenCount.toString());
+             formulaStr = formulaStr.replace(/work_days/g, workDays.toString());
+             formulaStr = formulaStr.replace(/overtime_hours/g, overtimeHours.toString());
+             formulaStr = formulaStr.replace(/absence_days/g, absenceDays.toString());
+             formulaStr = formulaStr.replace(/is_married/g, isMarried.toString());
+             
+             val = Function(`'use strict'; return (${formulaStr})`)();
+           } catch(err) {
+             console.error("Formula error:", formulaStr, err);
+             val = 0;
+           }
+        }
+        
+        val = Math.round(val);
+        
+        if (val > 0 || val < 0) {
+          pItems.push({
+            id: Date.now().toString() + Math.random().toString(),
+            componentId: item.id || Math.random().toString(),
+            title: item.title,
+            type: 'earning',
+            amount: val.toString()
+          });
 
-        const netPayable = totalEarnings - totalDeductions;
+          totalEarnings += val;
+          if (!item.isTaxExempt) taxable += val;
+          if (!item.isInsuranceExempt) insurable += val;
+          if (item.isBaseWage) baseWageTotal += val;
+        }
+      }
+
+      // Implicit tax & insurance
+      const implicitTax = taxable > 120000000 ? Math.round((taxable - 120000000) * 0.1) : 0;
+      const implicitIns = Math.round(insurable * 0.07);
+
+      // 2. Calculate Deductions
+      for (const item of orderItems) {
+        if (item.type !== 'deduction') continue;
+        
+        let val = 0;
+        let formulaStr = String(item.amount || '0').trim();
+        
+        if (formulaStr === 'tax_formula') {
+           val = implicitTax;
+           taxAmount = val;
+        } else if (/^\d+(\.\d+)?$/.test(formulaStr)) {
+           val = parseFloat(formulaStr);
+        } else {
+           try {
+             formulaStr = formulaStr.replace(/base/g, insurable.toString());
+             formulaStr = formulaStr.replace(/insurable_earnings/g, insurable.toString());
+             formulaStr = formulaStr.replace(/taxable_earnings/g, taxable.toString());
+             formulaStr = formulaStr.replace(/base_wage/g, baseWageTotal.toString());
+             formulaStr = formulaStr.replace(/children_count/g, childrenCount.toString());
+             formulaStr = formulaStr.replace(/children/g, childrenCount.toString());
+             formulaStr = formulaStr.replace(/work_days/g, workDays.toString());
+             formulaStr = formulaStr.replace(/overtime_hours/g, overtimeHours.toString());
+             formulaStr = formulaStr.replace(/absence_days/g, absenceDays.toString());
+             formulaStr = formulaStr.replace(/is_married/g, isMarried.toString());
+             
+             val = Function(`'use strict'; return (${formulaStr})`)();
+           } catch(err) {
+             console.error("Formula error:", formulaStr, err);
+             val = 0;
+           }
+        }
+        
+        val = Math.round(val);
+        
+        if (val > 0) {
+          pItems.push({
+            id: Date.now().toString() + Math.random().toString(),
+            componentId: item.id || Math.random().toString(),
+            title: item.title,
+            type: 'deduction',
+            amount: val.toString()
+          });
+          totalDeductions += val;
+
+          if (item.title.includes('مالیات') && taxAmount === 0) taxAmount = val;
+          if (item.title.includes('بیمه') && insAmount === 0) insAmount = val;
+        }
+      }
+
+      if (taxAmount === 0 && implicitTax > 0) {
+          taxAmount = implicitTax;
+          totalDeductions += taxAmount;
+          pItems.push({ id: Date.now().toString() + Math.random().toString(), componentId: 'tax_auto', title: 'مالیات حقوق (خودکار)', type: 'deduction', amount: taxAmount.toString() });
+      }
+      
+      if (insAmount === 0 && implicitIns > 0) {
+          insAmount = implicitIns;
+          totalDeductions += insAmount;
+          pItems.push({ id: Date.now().toString() + Math.random().toString(), componentId: 'ins_auto', title: 'حق بیمه (سهم کارمند - خودکار)', type: 'deduction', amount: insAmount.toString() });
+      }
+
+      const netPayable = totalEarnings - totalDeductions;
 
         const pId = existing ? existing.id : Date.now().toString() + Math.random().toString();
         
