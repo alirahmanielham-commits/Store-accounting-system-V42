@@ -88,7 +88,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
 
   const getPersonnelCode = (id) => {
     const p = (personsData || []).find(x => x.id === id);
-    return p?.personnelCode ? p.personnelCode : id.substring(0, 6);
+    return p?.personCode ? p.personCode : id.substring(0, 6);
   };
 
   const getPersonName = (id) => {

@@ -8,7 +8,7 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
   const [activeTab, setActiveTab] = useState<'all' | 'incomplete'>('all');
   
   const [formData, setFormData] = useState({
-    personnelCode: '',
+    personCode: '',
     insuranceNumber: '',
     insuranceType: '',
     educationLevel: '',
@@ -43,7 +43,7 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
     const existingPerson = employees.find((p: any) => p.id === personId);
     if (existingPerson) {
       setFormData({
-        personnelCode: existingPerson.personnelCode || '',
+        personCode: existingPerson.personCode || '',
         insuranceNumber: existingPerson.insuranceNumber || '',
         insuranceType: existingPerson.insuranceType || '',
         educationLevel: existingPerson.educationLevel || '',
@@ -134,7 +134,7 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
                   const isCompleted = emp.insuranceNumber && emp.jobTitle;
                   return (
                     <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 font-mono text-slate-500">{emp.personnelCode || "-"}</td>
+                      <td className="p-4 font-mono text-slate-500">{emp.personCode || "-"}</td>
                     <td className="p-4 font-bold text-slate-800">{emp.name}</td>
                       <td className="p-4 text-slate-600">{emp.jobTitle || '---'}</td>
                       <td className="p-4 text-center">
@@ -191,8 +191,8 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
                   <label className="block text-sm font-bold text-slate-700 mb-2">شماره پرسنلی</label>
                   <input
                     type="text"
-                    value={formData.personnelCode}
-                    onChange={e => setFormData({...formData, personnelCode: e.target.value})}
+                    value={formData.personCode}
+                    onChange={e => setFormData({...formData, personCode: e.target.value})}
                     className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
                   />
                 </div>
