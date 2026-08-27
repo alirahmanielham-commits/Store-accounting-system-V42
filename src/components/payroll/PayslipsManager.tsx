@@ -9,6 +9,8 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
   const [month, setMonth] = useState(1);
   const [slips, setSlips] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [showGenerateModal, setShowGenerateModal] = useState(false);
+  const [selectedForGen, setSelectedForGen] = useState<string[]>([]);
   const [printSlip, setPrintSlip] = useState(null);
   const [printSlipItems, setPrintSlipItems] = useState([]);
   
@@ -34,7 +36,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       await updateMonthlyAttendance(editAttendanceForm.id, editAttendanceForm);
       showNotification('کارکرد با موفقیت ذخیره شد. در حال محاسبه مجدد...', 'success');
       setIsEditingAttendance(false);
-      await handleGenerate();
+      await handleGenerate([editAttendanceForm.personId]);
     } catch (e) {
       console.error(e);
       showNotification('خطا در ذخیره کارکرد', 'error');
@@ -81,6 +83,12 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
     } finally {
       setLoading(false);
     }
+  };
+
+
+  const getPersonnelCode = (id) => {
+    const p = (personsData || []).find(x => x.id === id);
+    return p?.personnelCode ? p.personnelCode : id.substring(0, 6);
   };
 
   const getPersonName = (id) => {
@@ -397,7 +405,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
   const selectedEarnings = useMemo(() => allSlipItems.filter(i => i.payslipId === selectedSlipId && i.type === 'earning'), [allSlipItems, selectedSlipId]);
   const selectedDeductions = useMemo(() => allSlipItems.filter(i => i.payslipId === selectedSlipId && i.type === 'deduction'), [allSlipItems, selectedSlipId]);
 
-  const handleGenerate = async () => {
+  const handleGenerate = async (targetPersonIds: string[]) => {
     setLoading(true);
     try {
       const allAtts = await getMonthlyAttendances();
@@ -807,9 +815,16 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
               <RotateCcw className="w-5 h-5 text-indigo-600" />
               <span className="hidden sm:inline">کپی از ماه قبل</span>
             </button>
-            <button onClick={handleGenerate} disabled={loading} className="flex-1 lg:flex-none justify-center items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm font-bold transition-all flex">
+            <button onClick={() => {
+              const available = allAttendances.filter(a => {
+                 const existing = slips.find(s => s.personId === a.personId);
+                 return !existing || existing.status !== 'finalized';
+              });
+              setSelectedForGen(available.map(a => a.personId));
+              setShowGenerateModal(true);
+            }} disabled={loading} className="flex-1 lg:flex-none justify-center items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm font-bold transition-all flex">
               {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Calculator className="w-5 h-5" />}
-              محاسبه خودکار حقوق
+              صدور فیش (تکی/گروهی)
             </button>
           </div>
         </div>
@@ -911,7 +926,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
                     <div>
                       <h2 className="text-2xl font-black text-slate-800">{getPersonName(selectedSlip.personId)}</h2>
                       <div className="flex items-center gap-3 mt-2">
-                        <span className="text-sm font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-lg shadow-sm">کد پرسنلی: {toPersianDigits(selectedSlip.personId.substring(0, 6))}</span>
+                        <span className="text-sm font-bold text-slate-500 bg-white border border-slate-200 px-3 py-1 rounded-lg shadow-sm">کد پرسنلی: {toPersianDigits(getPersonnelCode(selectedSlip.personId))}</span>
                         <span className={`text-sm font-bold px-3 py-1 rounded-lg flex items-center gap-1.5 shadow-sm border ${selectedSlip.status === 'finalized' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-amber-50 text-amber-700 border-amber-200'}`}>
                           {selectedSlip.status === 'finalized' ? <><Check className="w-4 h-4"/> تایید و قطعی</> : <><Clock className="w-4 h-4"/> پیش‌نویس</>}
                         </span>
@@ -1120,6 +1135,78 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
         </div>
 
       </div>
+
+      {showGenerateModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-800/40 backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-2xl shadow-xl overflow-hidden flex flex-col max-h-[85vh]">
+            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50">
+              <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                <Calculator className="w-5 h-5 text-indigo-500" />
+                صدور و محاسبه فیش حقوقی (دوره {year}/{month})
+              </h3>
+              <button onClick={() => setShowGenerateModal(false)} className="text-slate-400 hover:bg-slate-200 p-2 rounded-full transition-colors">
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-4 overflow-y-auto flex-1">
+              {(() => {
+                 const available = allAttendances.filter(a => {
+                   const existing = slips.find(s => s.personId === a.personId);
+                   return !existing || existing.status !== 'finalized';
+                 });
+                 if (available.length === 0) return <div className="text-center p-8 text-slate-500">موردی برای صدور فیش یافت نشد (همه فیش‌ها تایید نهایی شده‌اند یا کارکردی ثبت نشده است).</div>;
+                 return (
+                   <table className="w-full text-right text-sm border border-slate-100 rounded-lg overflow-hidden">
+                     <thead className="bg-slate-50 text-slate-600">
+                       <tr>
+                         <th className="p-3 w-12 text-center">
+                           <input type="checkbox" checked={selectedForGen.length === available.length && available.length > 0} onChange={(e) => {
+                             if (e.target.checked) setSelectedForGen(available.map(a => a.personId));
+                             else setSelectedForGen([]);
+                           }} />
+                         </th>
+                         <th className="p-3 font-bold">شماره پرسنلی</th>
+                         <th className="p-3 font-bold">نام پرسنل</th>
+                         <th className="p-3 font-bold text-center">کارکرد (روز)</th>
+                         <th className="p-3 font-bold text-center">وضعیت فعلی</th>
+                       </tr>
+                     </thead>
+                     <tbody className="divide-y divide-slate-100">
+                       {available.map(a => {
+                         const existing = slips.find(s => s.personId === a.personId);
+                         return (
+                           <tr key={a.personId} className="hover:bg-slate-50">
+                             <td className="p-3 text-center">
+                               <input type="checkbox" checked={selectedForGen.includes(a.personId)} onChange={(e) => {
+                                 if (e.target.checked) setSelectedForGen([...selectedForGen, a.personId]);
+                                 else setSelectedForGen(selectedForGen.filter(id => id !== a.personId));
+                               }} />
+                             </td>
+                             <td className="p-3 font-mono text-slate-500">{toPersianDigits(getPersonnelCode(a.personId))}</td>
+                             <td className="p-3 font-bold text-slate-800">{getPersonName(a.personId)}</td>
+                             <td className="p-3 text-center font-mono">{toPersianDigits(a.workDays.toString())}</td>
+                             <td className="p-3 text-center">
+                               {existing ? <span className="bg-amber-100 text-amber-700 px-2 py-1 rounded-md text-xs">پیشنویس (آماده محاسبه مجدد)</span> : <span className="bg-slate-100 text-slate-600 px-2 py-1 rounded-md text-xs">صادر نشده</span>}
+                             </td>
+                           </tr>
+                         )
+                       })}
+                     </tbody>
+                   </table>
+                 )
+              })()}
+            </div>
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+              <button onClick={() => setShowGenerateModal(false)} className="px-6 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-colors">
+                انصراف
+              </button>
+              <button disabled={selectedForGen.length === 0 || loading} onClick={() => handleGenerate(selectedForGen)} className="px-6 py-2 bg-indigo-600 text-white rounded-xl font-bold hover:bg-indigo-700 transition-colors shadow-sm disabled:opacity-50">
+                {loading ? 'در حال صدور...' : `صدور فیش (${toPersianDigits(selectedForGen.length)} نفر)`}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

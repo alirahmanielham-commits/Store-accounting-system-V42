@@ -261,6 +261,11 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
     }
   };
 
+  const getPersonnelCode = (id: string) => {
+    const p = (personsData || []).find((x: any) => x.id === id);
+    return p?.personnelCode ? p.personnelCode : id.substring(0, 6);
+  };
+
   const getPersonName = (id: string) => {
     const p = (personsData || []).find((x: any) => String(x.id) === String(id));
     return p ? p.name : 'نامشخص';
@@ -321,6 +326,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                       }}
                     />
                   </th>
+                  <th className="p-3 font-bold whitespace-nowrap">شماره پرسنلی</th>
                   <th className="p-3 font-bold whitespace-nowrap">نام پرسنل</th>
                   <th className="p-3 font-bold whitespace-nowrap text-center">وضعیت</th>
                   <th className="p-3 font-bold whitespace-nowrap text-center w-24">روز کارکرد</th>
@@ -347,6 +353,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                         }}
                       />
                     </td>
+                    <td className="p-3 font-mono text-slate-500 whitespace-nowrap">{getPersonnelCode(a.personId)}</td>
                     <td className="p-3 font-bold text-slate-800 whitespace-nowrap">{getPersonName(a.personId)}</td>
                     {(() => {
                       const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));

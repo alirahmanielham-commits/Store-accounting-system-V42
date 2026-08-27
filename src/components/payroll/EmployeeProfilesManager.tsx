@@ -8,6 +8,7 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
   const [activeTab, setActiveTab] = useState<'all' | 'incomplete'>('all');
   
   const [formData, setFormData] = useState({
+    personnelCode: '',
     insuranceNumber: '',
     insuranceType: '',
     educationLevel: '',
@@ -42,6 +43,7 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
     const existingPerson = employees.find((p: any) => p.id === personId);
     if (existingPerson) {
       setFormData({
+        personnelCode: existingPerson.personnelCode || '',
         insuranceNumber: existingPerson.insuranceNumber || '',
         insuranceType: existingPerson.insuranceType || '',
         educationLevel: existingPerson.educationLevel || '',
@@ -119,6 +121,7 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
             <table className="w-full text-right text-sm">
               <thead className="bg-slate-50 text-slate-500 border-b border-slate-100">
                 <tr>
+                  <th className="p-4 font-bold">شماره پرسنلی</th>
                   <th className="p-4 font-bold">نام پرسنل</th>
                   <th className="p-4 font-bold">عنوان شغل</th>
                   <th className="p-4 font-bold text-center">وضعیت تکمیل اطلاعات</th>
@@ -131,7 +134,8 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
                   const isCompleted = emp.insuranceNumber && emp.jobTitle;
                   return (
                     <tr key={emp.id} className="hover:bg-slate-50 transition-colors">
-                      <td className="p-4 font-bold text-slate-800">{emp.name}</td>
+                      <td className="p-4 font-mono text-slate-500">{emp.personnelCode || "-"}</td>
+                    <td className="p-4 font-bold text-slate-800">{emp.name}</td>
                       <td className="p-4 text-slate-600">{emp.jobTitle || '---'}</td>
                       <td className="p-4 text-center">
                         {isCompleted ? (
@@ -183,6 +187,15 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
 
             <div className="p-6">
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-2">شماره پرسنلی</label>
+                  <input
+                    type="text"
+                    value={formData.personnelCode}
+                    onChange={e => setFormData({...formData, personnelCode: e.target.value})}
+                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
+                  />
+                </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">شماره بیمه</label>
                   <input
