@@ -49,6 +49,30 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
     status: 'draft'
   });
 
+  const autoGenerateContractNumber = (selectedPersonId: any, sDate: any, eDate: any) => {
+    if (!selectedPersonId || !sDate || !eDate || !personsData) return '';
+    const person = personsData.find(p => String(p.id) === String(selectedPersonId));
+    if (!person) return '';
+    const code = person.personCode || person.id;
+    try {
+      const sYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(sDate);
+      const eYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(eDate);
+      return `${code}${sYear}${eYear}`;
+    } catch(e) {
+      return '';
+    }
+  };
+
+  useEffect(() => {
+    if (!editingContractId && contractForm.personId && contractForm.startDate && contractForm.endDate) {
+      const generated = autoGenerateContractNumber(contractForm.personId.value, contractForm.startDate, contractForm.endDate);
+      if (generated && generated !== contractForm.contractNumber) {
+        setContractForm(prev => ({ ...prev, contractNumber: generated }));
+      }
+    }
+  }, [contractForm.personId, contractForm.startDate, contractForm.endDate, editingContractId, personsData]);
+
+
   useEffect(() => {
     fetchData();
   }, []);

@@ -1,12 +1,12 @@
 import re
 
-with open('src/components/payroll/RentContractsManager.tsx', 'r', encoding='utf-8') as f:
+with open('src/components/payroll/ContractsManager.tsx', 'r', encoding='utf-8') as f:
     code = f.read()
 
 generator_func = """
   const autoGenerateContractNumber = (selectedPersonId: any, sDate: any, eDate: any) => {
     if (!selectedPersonId || !sDate || !eDate || !personsData) return '';
-    const person = personsData.find((p: any) => String(p.id) === String(selectedPersonId));
+    const person = personsData.find(p => String(p.id) === String(selectedPersonId));
     if (!person) return '';
     const code = person.personCode || person.id;
     try {
@@ -19,18 +19,18 @@ generator_func = """
   };
 
   useEffect(() => {
-    if (!editingId && form.personId && form.startDate && form.endDate) {
-      const generated = autoGenerateContractNumber(form.personId.value, form.startDate, form.endDate);
-      if (generated && generated !== form.contractNumber) {
-        setForm(prev => ({ ...prev, contractNumber: generated }));
+    if (!editingContractId && contractForm.personId && contractForm.startDate && contractForm.endDate) {
+      const generated = autoGenerateContractNumber(contractForm.personId.value, contractForm.startDate, contractForm.endDate);
+      if (generated && generated !== contractForm.contractNumber) {
+        setContractForm(prev => ({ ...prev, contractNumber: generated }));
       }
     }
-  }, [form.personId, form.startDate, form.endDate, editingId, personsData]);
+  }, [contractForm.personId, contractForm.startDate, contractForm.endDate, editingContractId, personsData]);
 """
 
 target = "status: 'draft'\n  });"
 if "autoGenerateContractNumber" not in code:
     code = code.replace(target, target + "\n" + generator_func)
 
-with open('src/components/payroll/RentContractsManager.tsx', 'w', encoding='utf-8') as f:
+with open('src/components/payroll/ContractsManager.tsx', 'w', encoding='utf-8') as f:
     f.write(code)

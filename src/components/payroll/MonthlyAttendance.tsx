@@ -15,6 +15,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
 
   const [activeContracts, setActiveContracts] = useState<any[]>([]);
   const [viewDetailsPersonId, setViewDetailsPersonId] = useState<string | null>(null);
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [allDailyLogs, setAllDailyLogs] = useState<any[]>([]);
 
   useEffect(() => {
@@ -33,6 +34,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
 
   const fetchAttendance = async () => {
     setLoading(true);
+    setSelectedPersonIds([]);
     try {
       const dLogs = await getDailyAttendances();
       setAllDailyLogs(dLogs);
@@ -77,9 +79,13 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
     setAttendances(prev => prev.map(a => a.personId === personId ? {...a, [field]: value} : a));
   };
 
-  const handleSave = async () => {
+  const handleSave = async (targetIds?: string[]) => {
+    const idsToSave = Array.isArray(targetIds) ? targetIds : (selectedPersonIds.length > 0 ? selectedPersonIds : attendances.map(a => a.personId));
+    if (idsToSave.length === 0) return showNotification('پرسنلی برای ذخیره یافت نشد (لطفا چک باکس موارد دلخواه را انتخاب کنید)', 'error');
+
     try {
-      for (const a of attendances) {
+      const targets = attendances.filter(a => idsToSave.includes(a.personId));
+      for (const a of targets) {
         if (a.isNew) {
           const payload = { ...a, id: Date.now().toString() + Math.random().toString() };
           delete payload.isNew;
@@ -88,14 +94,17 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
           await updateMonthlyAttendance(a.id, a);
         }
       }
-      showNotification('کارکرد با موفقیت ذخیره شد', 'success');
+      showNotification(`کارکرد ${toPersianDigits(targets.length)} نفر با موفقیت ذخیره شد`, 'success');
       fetchAttendance();
     } catch (e) {
       showNotification('خطا در ذخیره سازی', 'error');
     }
   };
 
-  const handleCalculateFromDaily = async () => {
+  const handleCalculateFromDaily = async (targetIds?: string[]) => {
+    const idsToCalc = Array.isArray(targetIds) ? targetIds : (selectedPersonIds.length > 0 ? selectedPersonIds : attendances.map(a => a.personId));
+    if (idsToCalc.length === 0) return showNotification('پرسنلی برای محاسبه یافت نشد (لطفا چک باکس موارد دلخواه را انتخاب کنید)', 'error');
+
     try {
       const dailyLogs = await getDailyAttendances();
       const leaves = await getLeaves();
@@ -109,6 +118,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
       setAttendances(prev => {
         const next = [...prev];
         next.forEach(a => {
+           if (!idsToCalc.includes(a.personId)) return;
            if (a.status === 'approved') return;
            
            // 1. Calculate work days and overtime from daily logs
@@ -251,9 +261,9 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
             <h1 className="text-2xl font-bold text-slate-800">ثبت کارکرد ماهانه پرسنل</h1>
             <p className="text-sm text-slate-500 mt-1">ورود اطلاعات حضور و غیاب جهت محاسبه حقوق</p>
           </div>
-          <button onClick={handleSave} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm font-bold transition-all">
+          <button onClick={() => handleSave()} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm font-bold transition-all">
             <Save className="w-5 h-5" />
-            ذخیره کارکرد
+            ذخیره کارکرد (گروهی)
           </button>
         </div>
 
@@ -274,8 +284,8 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
           <button onClick={fetchAttendance} className="bg-slate-100 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-slate-200">
             <Search className="w-4 h-4"/> فراخوانی
           </button>
-          <button onClick={handleCalculateFromDaily} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-indigo-100 border border-indigo-100 mr-auto">
-            <Clock className="w-4 h-4"/> محاسبه از تردد روزانه
+          <button onClick={() => handleCalculateFromDaily()} className="bg-indigo-50 text-indigo-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 hover:bg-indigo-100 border border-indigo-100 mr-auto">
+            <Clock className="w-4 h-4"/> محاسبه از تردد روزانه (گروهی)
           </button>
         </div>
 
@@ -286,6 +296,18 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
             <table className="w-full text-right text-sm">
               <thead className="bg-slate-50 text-slate-600 border-b border-slate-100">
                 <tr>
+                  <th className="p-3 w-10 text-center">
+                    <input type="checkbox" className="rounded text-indigo-600 cursor-pointer" 
+                      checked={attendances.length > 0 && selectedPersonIds.length === attendances.length}
+                      onChange={e => {
+                        if (e.target.checked) {
+                          setSelectedPersonIds(attendances.map((a: any) => a.personId));
+                        } else {
+                          setSelectedPersonIds([]);
+                        }
+                      }}
+                    />
+                  </th>
                   <th className="p-3 font-bold whitespace-nowrap">نام پرسنل</th>
                   <th className="p-3 font-bold whitespace-nowrap text-center">وضعیت</th>
                   <th className="p-3 font-bold whitespace-nowrap text-center w-24">روز کارکرد</th>
@@ -299,7 +321,19 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {attendances.map((a: any) => (
-                  <tr key={a.personId} className="hover:bg-slate-50">
+                  <tr key={a.personId} className={`hover:bg-slate-50 ${selectedPersonIds.includes(a.personId) ? 'bg-indigo-50/30' : ''}`}>
+                    <td className="p-3 text-center">
+                      <input type="checkbox" className="rounded text-indigo-600 cursor-pointer" 
+                        checked={selectedPersonIds.includes(a.personId)}
+                        onChange={e => {
+                          if (e.target.checked) {
+                            setSelectedPersonIds(prev => [...prev, a.personId]);
+                          } else {
+                            setSelectedPersonIds(prev => prev.filter(id => id !== a.personId));
+                          }
+                        }}
+                      />
+                    </td>
                     <td className="p-3 font-bold text-slate-800 whitespace-nowrap">{getPersonName(a.personId)}</td>
                     <td className="p-3 text-center">
                       <select disabled value={a.status} className={`text-xs p-1 rounded font-bold ${a.status==='approved'?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-700'}`}>
@@ -313,15 +347,21 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                     <td className="p-3"><input type="number" min="0" value={a.paidLeaveDays} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
                     <td className="p-3"><input type="number" min="0" value={a.sickLeaveDays} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
                     <td className="p-3"><input type="number" min="0" value={a.missionDays} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
-                    <td className="p-3 text-center">
-                      <button onClick={() => setViewDetailsPersonId(a.personId)} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded transition-colors" title="مشاهده ریز کارکرد">
+                    <td className="p-3 text-center flex items-center justify-center gap-1">
+                      <button onClick={() => handleCalculateFromDaily([a.personId])} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded transition-colors" title="محاسبه کارکرد شخص">
+                        <Clock className="w-5 h-5" />
+                      </button>
+                      <button onClick={() => handleSave([a.personId])} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded transition-colors" title="ذخیره کارکرد شخص">
+                        <Save className="w-5 h-5" />
+                      </button>
+                      <button onClick={() => setViewDetailsPersonId(a.personId)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded transition-colors" title="مشاهده ریز کارکرد">
                         <Eye className="w-5 h-5" />
                       </button>
                     </td>
                   </tr>
                 ))}
                 {attendances.length === 0 && (
-                  <tr><td colSpan={8} className="p-8 text-center text-slate-500">پرسنل فعالی برای این دوره یافت نشد. (ابتدا قرارداد ثبت کنید)</td></tr>
+                  <tr><td colSpan={10} className="p-8 text-center text-slate-500">پرسنل فعالی برای این دوره یافت نشد. (ابتدا قرارداد ثبت کنید)</td></tr>
                 )}
               </tbody>
             </table>

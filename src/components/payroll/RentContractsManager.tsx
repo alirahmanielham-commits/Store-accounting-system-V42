@@ -33,6 +33,30 @@ export default function RentContractsManager({ personsData, storeSettings, showN
     status: 'draft'
   });
 
+  const autoGenerateContractNumber = (selectedPersonId: any, sDate: any, eDate: any) => {
+    if (!selectedPersonId || !sDate || !eDate || !personsData) return '';
+    const person = personsData.find((p: any) => String(p.id) === String(selectedPersonId));
+    if (!person) return '';
+    const code = person.personCode || person.id;
+    try {
+      const sYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(sDate);
+      const eYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(eDate);
+      return `${code}${sYear}${eYear}`;
+    } catch(e) {
+      return '';
+    }
+  };
+
+  useEffect(() => {
+    if (!editingId && form.personId && form.startDate && form.endDate) {
+      const generated = autoGenerateContractNumber(form.personId.value, form.startDate, form.endDate);
+      if (generated && generated !== form.contractNumber) {
+        setForm(prev => ({ ...prev, contractNumber: generated }));
+      }
+    }
+  }, [form.personId, form.startDate, form.endDate, editingId, personsData]);
+
+
   const [deleteId, setDeleteId] = useState<string | null>(null);
 
   const parseSafeDate = (val: any) => {
