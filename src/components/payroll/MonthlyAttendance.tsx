@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Save, Calendar, Users, XCircle, Search, Clock, Eye, X, FileText } from 'lucide-react';
-import { getMonthlyAttendances, addMonthlyAttendance, updateMonthlyAttendance, getEmployeeContracts, getDailyAttendances, getLeaves, getMissions } from '../../services/hrService';
+import { getMonthlyAttendances, addMonthlyAttendance, updateMonthlyAttendance, getEmployeeContracts, getDailyAttendances, getLeaves, getMissions, getPayslips } from '../../services/hrService';
 import { toPersianDigits } from '../../utils/format';
 import DateObjectModule from 'react-date-object';
 import persian from 'react-date-object/calendars/persian';
@@ -17,6 +17,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
   const [viewDetailsPersonId, setViewDetailsPersonId] = useState<string | null>(null);
   const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
   const [allDailyLogs, setAllDailyLogs] = useState<any[]>([]);
+  const [monthPayslips, setMonthPayslips] = useState<any[]>([]);
 
   useEffect(() => {
     // Basic defaults
@@ -38,6 +39,8 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
     try {
       const dLogs = await getDailyAttendances();
       setAllDailyLogs(dLogs);
+      const pSlips = await getPayslips();
+      setMonthPayslips(pSlips);
 
       // Get all active contracts
       const allContracts = await getEmployeeContracts();
@@ -84,7 +87,15 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
     if (idsToSave.length === 0) return showNotification('پرسنلی برای ذخیره یافت نشد (لطفا چک باکس موارد دلخواه را انتخاب کنید)', 'error');
 
     try {
-      const targets = attendances.filter(a => idsToSave.includes(a.personId));
+      const targets = attendances.filter(a => {
+        if (!idsToSave.includes(a.personId)) return false;
+        const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));
+        if (hasPayslip) return false;
+        return true;
+      });
+      
+      if (targets.length === 0) return showNotification('رکوردی برای ذخیره یافت نشد (ممکن است فیش صادر شده باشد)', 'error');
+
       for (const a of targets) {
         if (a.isNew) {
           const payload = { ...a, id: Date.now().toString() + Math.random().toString() };
@@ -120,6 +131,8 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
         next.forEach(a => {
            if (!idsToCalc.includes(a.personId)) return;
            if (a.status === 'approved') return;
+           const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));
+           if (hasPayslip) return;
            
            // 1. Calculate work days and overtime from daily logs
            let workDaysCount = 0;
@@ -335,28 +348,51 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                       />
                     </td>
                     <td className="p-3 font-bold text-slate-800 whitespace-nowrap">{getPersonName(a.personId)}</td>
-                    <td className="p-3 text-center">
-                      <select disabled value={a.status} className={`text-xs p-1 rounded font-bold ${a.status==='approved'?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-700'}`}>
-                        <option value="draft">پیشنویس</option>
-                        <option value="approved">تایید نهایی</option>
-                      </select>
-                    </td>
-                    <td className="p-3"><input type="number" min="0" value={a.workDays} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
-                    <td className="p-3"><input type="number" min="0" value={a.overtimeHours} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
-                    <td className="p-3"><input type="number" min="0" value={a.absentDays} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
-                    <td className="p-3"><input type="number" min="0" value={a.paidLeaveDays} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
-                    <td className="p-3"><input type="number" min="0" value={a.sickLeaveDays} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
-                    <td className="p-3"><input type="number" min="0" value={a.missionDays} className="w-full border p-1.5 rounded text-center bg-slate-50 text-slate-500 font-mono" disabled title="محاسبه خودکار از فرم ورود و خروج" /></td>
+                    {(() => {
+                      const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));
+                      const isApproved = a.status === 'approved';
+                      const disableInputs = isApproved || hasPayslip;
+                      
+                      return (
+                        <>
+                          <td className="p-3 text-center">
+                            <select 
+                              disabled={hasPayslip} 
+                              value={a.status} 
+                              onChange={(e) => handleChange(a.personId, 'status', e.target.value)}
+                              className={`text-xs p-1 rounded font-bold cursor-pointer ${a.status==='approved'?'bg-emerald-100 text-emerald-700':'bg-amber-100 text-amber-700'} ${hasPayslip ? 'opacity-50 cursor-not-allowed' : ''}`}>
+                              <option value="draft">پیشنویس</option>
+                              <option value="approved">تایید نهایی</option>
+                            </select>
+                          </td>
+                          <td className="p-3"><input type="number" min="0" value={a.workDays} onChange={(e) => handleChange(a.personId, 'workDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
+                          <td className="p-3"><input type="number" min="0" value={a.overtimeHours} onChange={(e) => handleChange(a.personId, 'overtimeHours', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
+                          <td className="p-3"><input type="number" min="0" value={a.absentDays} onChange={(e) => handleChange(a.personId, 'absentDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
+                          <td className="p-3"><input type="number" min="0" value={a.paidLeaveDays} onChange={(e) => handleChange(a.personId, 'paidLeaveDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
+                          <td className="p-3"><input type="number" min="0" value={a.sickLeaveDays} onChange={(e) => handleChange(a.personId, 'sickLeaveDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
+                          <td className="p-3"><input type="number" min="0" value={a.missionDays} onChange={(e) => handleChange(a.personId, 'missionDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
+                        </>
+                      )
+                    })()}
                     <td className="p-3 text-center flex items-center justify-center gap-1">
-                      <button onClick={() => handleCalculateFromDaily([a.personId])} className="p-1.5 text-indigo-500 hover:bg-indigo-50 rounded transition-colors" title="محاسبه کارکرد شخص">
-                        <Clock className="w-5 h-5" />
-                      </button>
-                      <button onClick={() => handleSave([a.personId])} className="p-1.5 text-emerald-500 hover:bg-emerald-50 rounded transition-colors" title="ذخیره کارکرد شخص">
-                        <Save className="w-5 h-5" />
-                      </button>
-                      <button onClick={() => setViewDetailsPersonId(a.personId)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded transition-colors" title="مشاهده ریز کارکرد">
-                        <Eye className="w-5 h-5" />
-                      </button>
+                      {(() => {
+                        const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));
+                        const isApproved = a.status === 'approved';
+                        const disableInputs = isApproved || hasPayslip;
+                        return (
+                          <>
+                            <button onClick={() => !disableInputs && handleCalculateFromDaily([a.personId])} disabled={disableInputs} className={`p-1.5 rounded transition-colors ${disableInputs ? 'text-slate-300 cursor-not-allowed' : 'text-indigo-500 hover:bg-indigo-50'}`} title={disableInputs ? "غیرقابل محاسبه" : "محاسبه کارکرد شخص"}>
+                              <Clock className="w-5 h-5" />
+                            </button>
+                            <button onClick={() => !hasPayslip && handleSave([a.personId])} disabled={hasPayslip} className={`p-1.5 rounded transition-colors ${hasPayslip ? 'text-slate-300 cursor-not-allowed' : 'text-emerald-500 hover:bg-emerald-50'}`} title={hasPayslip ? "فیش صادر شده است" : "ذخیره کارکرد شخص"}>
+                              <Save className="w-5 h-5" />
+                            </button>
+                            <button onClick={() => setViewDetailsPersonId(a.personId)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded transition-colors" title="مشاهده ریز کارکرد">
+                              <Eye className="w-5 h-5" />
+                            </button>
+                          </>
+                        )
+                      })()}
                     </td>
                   </tr>
                 ))}
