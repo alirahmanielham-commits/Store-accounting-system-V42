@@ -20,6 +20,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
     contractId: '',
     templateId: '',
     name: '',
+    childrenCount: '',
+    experienceYears: '',
     items: [] as any[],
     issueDate: new Date(),
     executionDate: new Date(),
@@ -70,6 +72,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
         contractId: order.contractId || '',
         templateId: order.templateId || '',
         name: order.name || '',
+        childrenCount: order.childrenCount !== undefined ? order.childrenCount : '',
+        experienceYears: order.experienceYears !== undefined ? order.experienceYears : '',
         items: order.items || [],
         issueDate: order.issueDate ? new Date(Number(order.issueDate)) : new Date(),
         executionDate: order.executionDate ? new Date(Number(order.executionDate)) : new Date(),
@@ -82,6 +86,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
         contractId: '',
         templateId: '',
         name: '',
+        childrenCount: '',
+        experienceYears: '',
         items: [],
         issueDate: new Date(),
     executionDate: new Date(),
@@ -177,6 +183,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
         contractId: formData.contractId,
         templateId: formData.templateId,
         name: formData.name,
+        childrenCount: formData.childrenCount,
+        experienceYears: formData.experienceYears,
         items: formData.items,
         issueDate: issueDateStr,
         executionDate: formData.executionDate.getTime().toString(),
@@ -422,7 +430,15 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                   <select
                     value={formData.personId}
                     onChange={e => {
-                      setFormData({...formData, personId: e.target.value, contractId: ''});
+                      const selectedPersonId = e.target.value;
+                      const profile = personsData?.find((p: any) => p.id === selectedPersonId);
+                      setFormData({
+                        ...formData, 
+                        personId: selectedPersonId, 
+                        contractId: '',
+                        childrenCount: profile?.childrenCount || '',
+                        experienceYears: profile?.experienceYears || ''
+                      });
                     }}
                     className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
                   >
@@ -515,26 +531,64 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                   </select>
                 </div>
 
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">نام / عنوان حکم</label>
-                  <input
-                    type="text"
-                    value={formData.name || ''}
-                    onChange={e => setFormData({...formData, name: e.target.value})}
-                    placeholder="مثال: حکم کارگزینی سال 1403"
-                    className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ صدور</label>
-                  <DatePicker
-                    calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                    locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
-                    value={formData.issueDate}
-                    onChange={(date: any) => setFormData({...formData, issueDate: typeof date === 'string' ? new Date(convertToGregorian(date)) : (date?.toDate?.() || new Date(date))})}
-                    calendarPosition="bottom-right"
-                    inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
-                  />
+                <div className="md:col-span-2 grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">نام / عنوان حکم</label>
+                    <input
+                      type="text"
+                      value={formData.name || ''}
+                      onChange={e => setFormData({...formData, name: e.target.value})}
+                      placeholder="مثال: حکم کارگزینی سال 1403"
+                      className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">تعداد فرزندان مشمول</label>
+                    <input
+                      type="number"
+                      min="0"
+                      value={formData.childrenCount}
+                      onChange={e => setFormData({...formData, childrenCount: e.target.value})}
+                      placeholder="برای محاسبه حق اولاد"
+                      className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-2">سابقه کار (سال)</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.5"
+                      value={formData.experienceYears}
+                      onChange={e => setFormData({...formData, experienceYears: e.target.value})}
+                      placeholder="برای محاسبه پایه سنوات"
+                      className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
+                    />
+                  </div>
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ صدور</label>
+                      <DatePicker
+                        calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                        locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                        value={formData.issueDate}
+                        onChange={(date: any) => setFormData({...formData, issueDate: typeof date === 'string' ? new Date(convertToGregorian(date)) : (date?.toDate?.() || new Date(date))})}
+                        calendarPosition="bottom-right"
+                        inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ اجرا</label>
+                      <DatePicker
+                        calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                        locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                        value={formData.executionDate}
+                        onChange={(date: any) => setFormData({...formData, executionDate: typeof date === 'string' ? new Date(convertToGregorian(date)) : (date?.toDate?.() || new Date(date))})}
+                        calendarPosition="bottom-right"
+                        inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
+                      />
+                    </div>
+                  </div>
                 </div>
 
                 {formData.items && formData.items.length > 0 && (
@@ -548,7 +602,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                             const newItems = [...formData.items];
                             newItems[idx].title = e.target.value;
                             setFormData({...formData, items: newItems});
-                          }} className="w-full border border-slate-200 bg-white rounded-lg p-2 outline-none font-bold text-sm" />
+                          }} className="w-full border border-slate-200 bg-white rounded-lg p-2 outline-none font-bold text-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed" 
+                          disabled={['daily_wage', 'housing', 'marriage', 'grocery', 'child'].includes(item.id)} />
                         </div>
                         <div className="w-32">
                           <label className="block text-xs font-bold text-slate-500 mb-1">نوع</label>
@@ -556,7 +611,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                             const newItems = [...formData.items];
                             newItems[idx].type = e.target.value;
                             setFormData({...formData, items: newItems});
-                          }} className="w-full border border-slate-200 bg-white rounded-lg p-2 outline-none font-bold text-sm">
+                          }} className="w-full border border-slate-200 bg-white rounded-lg p-2 outline-none font-bold text-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
+                          disabled={['daily_wage', 'housing', 'marriage', 'grocery', 'child'].includes(item.id)}>
                             <option value="earning">مزایا (+)</option>
                             <option value="deduction">کسورات (-)</option>
                           </select>
@@ -573,7 +629,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                     ))}
                   </div>
                 )}
-                <div>
+                <div className="md:col-span-2">
                   <label className="block text-sm font-bold text-slate-700 mb-2">وضعیت حکم</label>
                   <select
                     value={formData.status}
@@ -592,10 +648,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                     </p>
                   )}
                 </div>
-
               </div>
             </div>
-
             <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex items-center justify-end gap-3 rounded-b-3xl">
               <button
                 onClick={() => setIsModalOpen(false)}

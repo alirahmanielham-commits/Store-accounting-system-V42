@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Clock, Search, Save, X, Trash2, Calendar, Plane, UserX, FileText, Plus } from 'lucide-react';
-import { getDailyAttendances, addDailyAttendance, deleteDailyAttendance, getLeaves, addLeave, deleteLeave, getMissions, getEmployeeContracts, addMission, deleteMission } from '../../services/hrService';
+import { getDailyAttendances, addDailyAttendance, updateDailyAttendance, deleteDailyAttendance, getLeaves, addLeave, deleteLeave, getMissions, getEmployeeContracts, addMission, deleteMission } from '../../services/hrService';
 import { generateId, getPersons } from '../../services/dataService';
 import { toPersianDigits, formatNumber, convertToGregorian } from '../../utils/format';
 import DateObjectModule from 'react-date-object';
@@ -40,7 +40,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
     personId: '',
     checkIn: '08:00',
     checkOut: '17:00',
-    recordType: 'work'
+    recordType: 'work',
+    mode: 'both'
   });
 
   const [leaveForm, setLeaveForm] = useState({
@@ -138,6 +139,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   };
 
   const isTimeOverlap = (in1: string, out1: string, in2: string, out2: string) => {
+    if (!in1 || !out1 || !in2 || !out2) return false;
     const [h1in, m1in] = in1.split(':').map(Number);
     const [h1out, m1out] = out1.split(':').map(Number);
     const [h2in, m2in] = in2.split(':').map(Number);
@@ -174,8 +176,17 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   const handleSaveAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.personId) return showNotification('لطفاً کارمند را انتخاب کنید', 'error');
-    if (form.checkIn >= form.checkOut) return showNotification('ساعت خروج باید پس از ساعت ورود باشد', 'error');
     if (!currentDayStr) return;
+
+    if (form.mode === 'both') {
+      if (!form.checkIn || !form.checkOut) return showNotification('ساعت ورود و خروج الزامی است', 'error');
+      if (form.checkIn >= form.checkOut) return showNotification('ساعت خروج باید پس از ساعت ورود باشد', 'error');
+    } else if (form.mode === 'entry') {
+      if (!form.checkIn) return showNotification('ساعت ورود الزامی است', 'error');
+    } else if (form.mode === 'exit') {
+      if (!form.checkOut) return showNotification('ساعت خروج الزامی است', 'error');
+    }
+
     if (checkTermination(form.personId, currentDayStr)) return showNotification('این شخص ترک کار کرده است و امکان ثبت داده بعد از تاریخ ترک کار وجود ندارد', 'error');
 
     const personLeaves = leaves.filter(l => l.personId === form.personId);
@@ -188,22 +199,37 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
     if (personMissions.some(m => isDayInRange(currentDayStr, m.startDate, m.endDate))) {
        return showNotification('برای این روز ماموریت ثبت شده است و امکان ثبت تردد وجود ندارد', 'error');
     }
-    if (personAtts.some(a => isTimeOverlap(form.checkIn, form.checkOut, a.checkIn, a.checkOut))) {
+    if (form.mode === 'both' && personAtts.some(a => isTimeOverlap(form.checkIn, form.checkOut, a.checkIn, a.checkOut))) {
        return showNotification('ساعت ورود و خروج با تردد دیگری در همین روز هم‌پوشانی دارد', 'error');
     }
 
     try {
-      const newRecord = {
-        id: generateId(),
-        personId: form.personId,
-        date: currentDayStr,
-        checkIn: form.checkIn,
-        checkOut: form.checkOut,
-        recordType: form.recordType,
-        createdAt: Date.now()
-      };
-      await addDailyAttendance(newRecord);
-      showNotification('تردد با موفقیت ثبت شد', 'success');
+      if (form.mode === 'exit') {
+        const openEntry = personAtts.find(a => a.checkIn && (!a.checkOut || a.checkOut === ''));
+        if (openEntry) {
+          if (form.checkOut <= openEntry.checkIn) return showNotification('ساعت خروج باید پس از ساعت ورود باشد', 'error');
+          await updateDailyAttendance(openEntry.id, { ...openEntry, checkOut: form.checkOut });
+          showNotification('خروج با موفقیت ثبت شد', 'success');
+        } else {
+          await addDailyAttendance({
+            id: generateId(), personId: form.personId, date: currentDayStr, checkIn: '', checkOut: form.checkOut, recordType: form.recordType, createdAt: Date.now()
+          });
+          showNotification('تردد خروج با موفقیت ثبت شد', 'success');
+        }
+      } else {
+        const newRecord = {
+          id: generateId(),
+          personId: form.personId,
+          date: currentDayStr,
+          checkIn: form.mode === 'entry' ? form.checkIn : form.checkIn,
+          checkOut: form.mode === 'entry' ? '' : form.checkOut,
+          recordType: form.recordType,
+          createdAt: Date.now()
+        };
+        await addDailyAttendance(newRecord);
+        showNotification(form.mode === 'entry' ? 'ورود با موفقیت ثبت شد' : 'تردد با موفقیت ثبت شد', 'success');
+      }
+
       setForm({ ...form, checkIn: '08:00', checkOut: '17:00' });
       setIsAttendanceModalOpen(false);
       fetchData();
@@ -238,6 +264,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   }, [attendances, currentDayStr]);
 
   const calculateHours = (inTime: string, outTime: string) => {
+    if (!inTime || !outTime) return '-';
     const [inH, inM] = inTime.split(':').map(Number);
     const [outH, outM] = outTime.split(':').map(Number);
     let diff = (outH + outM/60) - (inH + inM/60);
@@ -401,8 +428,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                     <td className="p-4 text-xs font-bold text-slate-600 bg-slate-50/50 rounded-lg">
                       {RECORD_TYPES[a.recordType as keyof typeof RECORD_TYPES] || 'کارکرد عادی'}
                     </td>
-                    <td className="p-4 text-center font-mono font-bold text-slate-600">{toPersianDigits(a.checkIn)}</td>
-                    <td className="p-4 text-center font-mono font-bold text-slate-600">{toPersianDigits(a.checkOut)}</td>
+                    <td className="p-4 text-center font-mono font-bold text-slate-600">{toPersianDigits(a.checkIn || '-')}</td>
+                    <td className="p-4 text-center font-mono font-bold text-slate-600">{toPersianDigits(a.checkOut || '-')}</td>
                     <td className="p-4 text-center font-bold text-indigo-600">
                       {toPersianDigits(calculateHours(a.checkIn, a.checkOut))}
                     </td>
@@ -833,39 +860,57 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                     ))}
                   </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-1">نوع تردد</label>
-                  <select 
-                    value={form.recordType}
-                    onChange={e => setForm({...form, recordType: e.target.value})}
-                    className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-bold"
-                  >
-                    {Object.entries(RECORD_TYPES).map(([k, v]) => (
-                      <option key={k} value={k}>{v}</option>
-                    ))}
-                  </select>
-                </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">ساعت ورود</label>
-                    <input 
-                      type="time" 
-                      value={form.checkIn}
-                      onChange={e => setForm({...form, checkIn: e.target.value})}
-                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 font-mono text-center"
-                      required
-                    />
+                    <label className="block text-sm font-bold text-slate-700 mb-1">ثبت اطلاعات</label>
+                    <select 
+                      value={form.mode}
+                      onChange={e => setForm({...form, mode: e.target.value})}
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-bold"
+                    >
+                      <option value="both">ورود و خروج کامل</option>
+                      <option value="entry">فقط ثبت ورود</option>
+                      <option value="exit">فقط ثبت خروج</option>
+                    </select>
                   </div>
                   <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1">ساعت خروج</label>
-                    <input 
-                      type="time" 
-                      value={form.checkOut}
-                      onChange={e => setForm({...form, checkOut: e.target.value})}
-                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 font-mono text-center"
-                      required
-                    />
+                    <label className="block text-sm font-bold text-slate-700 mb-1">نوع تردد</label>
+                    <select 
+                      value={form.recordType}
+                      onChange={e => setForm({...form, recordType: e.target.value})}
+                      className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 font-bold"
+                    >
+                      {Object.entries(RECORD_TYPES).map(([k, v]) => (
+                        <option key={k} value={k}>{v}</option>
+                      ))}
+                    </select>
                   </div>
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  {(form.mode === 'both' || form.mode === 'entry') && (
+                    <div className={form.mode === 'entry' ? 'col-span-2' : ''}>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">ساعت ورود</label>
+                      <input 
+                        type="time" 
+                        value={form.checkIn}
+                        onChange={e => setForm({...form, checkIn: e.target.value})}
+                        className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 font-mono text-center"
+                        required={form.mode === 'both' || form.mode === 'entry'}
+                      />
+                    </div>
+                  )}
+                  {(form.mode === 'both' || form.mode === 'exit') && (
+                    <div className={form.mode === 'exit' ? 'col-span-2' : ''}>
+                      <label className="block text-sm font-bold text-slate-700 mb-1">ساعت خروج</label>
+                      <input 
+                        type="time" 
+                        value={form.checkOut}
+                        onChange={e => setForm({...form, checkOut: e.target.value})}
+                        className="w-full border border-slate-200 rounded-xl p-2.5 bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2 font-mono text-center"
+                        required={form.mode === 'both' || form.mode === 'exit'}
+                      />
+                    </div>
+                  )}
                 </div>
                 <button 
                   type="submit" 

@@ -77,6 +77,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
           unpaidLeaveDays: 0,
           sickLeaveDays: 0,
           overtimeHours: 0,
+          shortageHours: 0,
           missionDays: 0,
           status: 'draft',
           isNew: true
@@ -239,6 +240,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
 
            a.workDays = parseFloat(workDaysCount.toFixed(2));
            a.overtimeHours = parseFloat(overtimeCount.toFixed(2));
+           a.shortageHours = 0;
            a.paidLeaveDays = pLeave;
            a.sickLeaveDays = sLeave;
            a.unpaidLeaveDays = uLeave;
@@ -386,6 +388,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                           </td>
                           <td className="p-3"><input type="number" min="0" value={a.workDays} onChange={(e) => handleChange(a.personId, 'workDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
                           <td className="p-3"><input type="number" min="0" value={a.overtimeHours} onChange={(e) => handleChange(a.personId, 'overtimeHours', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
+                          <td className="p-3"><input type="number" min="0" value={a.shortageHours || 0} onChange={(e) => handleChange(a.personId, 'shortageHours', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
                           <td className="p-3"><input type="number" min="0" value={a.absentDays} onChange={(e) => handleChange(a.personId, 'absentDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
                           <td className="p-3"><input type="number" min="0" value={a.paidLeaveDays} onChange={(e) => handleChange(a.personId, 'paidLeaveDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>
                           <td className="p-3"><input type="number" min="0" value={a.sickLeaveDays} onChange={(e) => handleChange(a.personId, 'sickLeaveDays', Number(e.target.value))} className={`w-full border p-1.5 rounded text-center font-mono ${disableInputs ? 'bg-slate-50 text-slate-500 cursor-not-allowed' : 'bg-white text-slate-800'}`} disabled={disableInputs} /></td>

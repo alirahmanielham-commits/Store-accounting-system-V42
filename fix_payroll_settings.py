@@ -1,25 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import re
+
+with open('src/components/payroll/PayrollSettings.tsx', 'r', encoding='utf-8') as f:
+    content = f.read()
+
+new_content = """import React, { useState, useEffect } from 'react';
 import { FileText, Plus, Edit2, Trash2, Save, CheckCircle, Settings, Building2 } from 'lucide-react';
 import { getOrderTemplates, addOrderTemplate, updateOrderTemplate, deleteOrderTemplate, getEmployeeOrders } from '../../services/hrService';
 import { generateId } from '../../services/dataService';
 import WorkplaceManagerModal from './WorkplaceManagerModal';
 
-const REQUIRED_DEFAULTS = [
-  { id: 'daily_wage', title: 'دستمزد روزانه', type: 'earning', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: true, nature: 'continuous' },
-  { id: 'housing', title: 'حق مسکن', type: 'earning', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' },
-  { id: 'marriage', title: 'حق تاهل', type: 'earning', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' },
-  { id: 'grocery', title: 'خوار بار', type: 'earning', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' },
-  { id: 'child', title: 'حق اولاد', type: 'earning', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' }
-];
-
 const DEFAULT_COMPONENTS = [
-  ...REQUIRED_DEFAULTS,
-  { id: 'insurance', title: 'بیمه تامین اجتماعی (سهم کارگر)', type: 'deduction', amount: 'daily_wage * 31 * 0.07', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' },
+  { id: 'base', title: 'حقوق پایه', type: 'earning', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: true, nature: 'continuous' },
+  { id: 'housing', title: 'حق مسکن', type: 'earning', amount: '', isTaxExempt: true, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' },
+  { id: 'grocery', title: 'بن کارگری', type: 'earning', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' },
+  { id: 'child', title: 'حق اولاد', type: 'earning', amount: '', isTaxExempt: true, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' },
+  { id: 'insurance', title: 'بیمه تامین اجتماعی (سهم کارگر)', type: 'deduction', amount: 'base * 0.07', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' },
   { id: 'tax', title: 'مالیات حقوق', type: 'deduction', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: false, nature: 'continuous' }
 ];
-
-const DEFAULT_IDS = ['daily_wage', 'housing', 'marriage', 'grocery', 'child'];
-
 
 export default function PayrollSettings({ showNotification, storeSettings }: any) {
   const [orderTemplates, setOrderTemplates] = useState<any[]>([]);
@@ -77,15 +74,6 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
       });
     }
     
-
-    // Ensure all required defaults exist
-    REQUIRED_DEFAULTS.forEach(rd => {
-      const exists = migratedItems.find(i => i.id === rd.id);
-      if (!exists) {
-        migratedItems.unshift({...rd}); // Add to top or where appropriate
-      }
-    });
-
     setTemplateForm({ name: t.name || '', items: migratedItems });
     setEditingTemplateId(t.id);
     setShowTemplateForm(true);
@@ -234,8 +222,7 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
                               value={item.title}
                               onChange={e => handleUpdateComponent(index, 'title', e.target.value)}
                               placeholder="مثال: پایه حقوق"
-                              className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 font-bold transition-all text-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
-                              disabled={DEFAULT_IDS.includes(item.id)}
+                              className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 font-bold transition-all text-sm"
                             />
                           </div>
                           
@@ -244,8 +231,7 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
                             <select 
                               value={item.type}
                               onChange={e => handleUpdateComponent(index, 'type', e.target.value)}
-                              className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 font-bold transition-all text-sm disabled:bg-slate-100 disabled:text-slate-500 disabled:cursor-not-allowed"
-                              disabled={DEFAULT_IDS.includes(item.id)}
+                              className="w-full border border-slate-200 bg-white rounded-lg px-3 py-2 outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/10 font-bold transition-all text-sm"
                             >
                               <option value="earning">مزایا (+)</option>
                               <option value="deduction">کسورات (-)</option>
@@ -277,11 +263,9 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
                             </select>
                           </div>
 
-                          {!DEFAULT_IDS.includes(item.id) && (
-                            <button onClick={() => handleRemoveComponent(index)} className="mt-6 p-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors self-end md:self-auto" title="حذف جزء">
-                              <Trash2 className="w-5 h-5" />
-                            </button>
-                          )}
+                          <button onClick={() => handleRemoveComponent(index)} className="mt-6 p-2 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-100 transition-colors self-end md:self-auto" title="حذف جزء">
+                            <Trash2 className="w-5 h-5" />
+                          </button>
                         </div>
                         
                         <div className="flex flex-wrap gap-4 pt-4 border-t border-slate-200">
@@ -334,3 +318,7 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
     </div>
   );
 }
+"""
+
+with open('src/components/payroll/PayrollSettings.tsx', 'w', encoding='utf-8') as f:
+    f.write(new_content)
