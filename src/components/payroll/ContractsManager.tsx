@@ -388,7 +388,7 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                             c.status==='expired'?'bg-amber-50 text-amber-700 border-amber-200':
                             'bg-rose-50 text-rose-700 border-rose-200'
                           }`}>
-                            {c.status === 'active' ? 'فعال' : c.status === 'expired' ? 'منقضی' : 'پیش‌نویس'}
+                            {c.status === 'active' ? 'فعال' : c.status === 'expired' ? 'منقضی' : c.status === 'terminated' ? 'ترک کار' : 'پیش‌نویس'}
                           </span>
                         </td>
                         <td className="p-4 text-center">

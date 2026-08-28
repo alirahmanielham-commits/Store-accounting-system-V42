@@ -22,6 +22,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
     name: '',
     items: [] as any[],
     issueDate: new Date(),
+    executionDate: new Date(),
     status: 'draft'
   });
 
@@ -71,6 +72,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
         name: order.name || '',
         items: order.items || [],
         issueDate: order.issueDate ? new Date(Number(order.issueDate)) : new Date(),
+        executionDate: order.executionDate ? new Date(Number(order.executionDate)) : new Date(),
         status: order.status || 'draft'
       });
     } else {
@@ -82,6 +84,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
         name: '',
         items: [],
         issueDate: new Date(),
+    executionDate: new Date(),
         status: 'draft'
       });
     }
@@ -176,6 +179,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
         name: formData.name,
         items: formData.items,
         issueDate: issueDateStr,
+        executionDate: formData.executionDate.getTime().toString(),
         status: formData.status
       };
 

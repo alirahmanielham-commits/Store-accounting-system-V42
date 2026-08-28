@@ -42,9 +42,21 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
       const pSlips = await getPayslips();
       setMonthPayslips(pSlips);
 
-      // Get all active contracts
+      // Get all active contracts and appropriately terminated ones
       const allContracts = await getEmployeeContracts();
-      const contracts = allContracts.filter(c => c.status === 'active');
+      const contracts = allContracts.filter(c => {
+        if (c.status === 'active') return true;
+        if (c.status === 'terminated' && c.terminationDate) {
+           const termDateStr = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: 'numeric' }).format(new Date(c.terminationDate));
+           const [termY, termM] = termDateStr.split('/').map(Number);
+           const mY = Number(year);
+           const mM = Number(month);
+           if (termY > mY || (termY === mY && termM >= mM)) {
+             return true;
+           }
+        }
+        return false;
+      });
       setActiveContracts(contracts);
 
       // Get existing attendance for this period

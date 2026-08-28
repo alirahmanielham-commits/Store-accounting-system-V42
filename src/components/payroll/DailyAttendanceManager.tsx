@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Clock, Search, Save, X, Trash2, Calendar, Plane, UserX, FileText, Plus } from 'lucide-react';
-import { getDailyAttendances, addDailyAttendance, deleteDailyAttendance, getLeaves, addLeave, deleteLeave, getMissions, addMission, deleteMission } from '../../services/hrService';
+import { getDailyAttendances, addDailyAttendance, deleteDailyAttendance, getLeaves, addLeave, deleteLeave, getMissions, getEmployeeContracts, addMission, deleteMission } from '../../services/hrService';
 import { generateId, getPersons } from '../../services/dataService';
 import { toPersianDigits, formatNumber, convertToGregorian } from '../../utils/format';
 import DateObjectModule from 'react-date-object';
@@ -32,6 +32,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   const [attendances, setAttendances] = useState<any[]>([]);
   const [leaves, setLeaves] = useState<any[]>([]);
   const [missions, setMissions] = useState<any[]>([]);
+  const [contracts, setContracts] = useState<any[]>([]);
   
   // Forms
   const [selectedDate, setSelectedDate] = useState<any>(Date.now());
@@ -72,14 +73,16 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   const fetchData = async () => {
     setLoading(true);
     try {
-      const [att, lv, mis] = await Promise.all([
+      const [att, lv, mis, cnt] = await Promise.all([
         getDailyAttendances(),
         getLeaves(),
-        getMissions()
+        getMissions(),
+        getEmployeeContracts()
       ]);
       setAttendances(att);
       setLeaves(lv);
       setMissions(mis);
+      setContracts(cnt);
     } catch (e) {
       console.error(e);
     } finally {
@@ -149,11 +152,31 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   };
 
   // --- ATTENDANCE ---
+  const checkTermination = (personId: string, dateIso: string) => {
+    const personContracts = contracts.filter(c => c.personId === personId);
+    if (personContracts.length === 0) return false;
+    // If they have any active contract, they are not terminated.
+    if (personContracts.some(c => c.status === 'active')) return false;
+    // Find the latest terminated contract
+    const terminated = personContracts.filter(c => c.status === 'terminated' && c.terminationDate).sort((a,b) => (new Date(b.terminationDate).getTime()) - (new Date(a.terminationDate).getTime()));
+    if (terminated.length > 0) {
+      const tDate = new Date(terminated[0].terminationDate);
+      tDate.setHours(0,0,0,0);
+      const targetDate = new Date(dateIso);
+      targetDate.setHours(0,0,0,0);
+      if (targetDate.getTime() > tDate.getTime()) {
+        return true;
+      }
+    }
+    return false;
+  };
+
   const handleSaveAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.personId) return showNotification('لطفاً کارمند را انتخاب کنید', 'error');
     if (form.checkIn >= form.checkOut) return showNotification('ساعت خروج باید پس از ساعت ورود باشد', 'error');
     if (!currentDayStr) return;
+    if (checkTermination(form.personId, currentDayStr)) return showNotification('این شخص ترک کار کرده است و امکان ثبت داده بعد از تاریخ ترک کار وجود ندارد', 'error');
 
     const personLeaves = leaves.filter(l => l.personId === form.personId);
     const personMissions = missions.filter(m => m.personId === form.personId);
@@ -228,6 +251,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
     const tsStart = getTimestampStr(leaveForm.startDate);
     const tsEnd = getTimestampStr(leaveForm.endDate);
     if (!tsStart || !tsEnd || parseInt(tsStart) > parseInt(tsEnd)) return showNotification('تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد', 'error');
+    if (checkTermination(missionForm.personId, tsEnd)) return showNotification('این شخص ترک کار کرده است و امکان ثبت داده بعد از تاریخ ترک کار وجود ندارد', 'error');
+    if (checkTermination(leaveForm.personId, tsEnd)) return showNotification('این شخص ترک کار کرده است و امکان ثبت داده بعد از تاریخ ترک کار وجود ندارد', 'error');
 
     const pLeaves = leaves.filter(l => l.personId === leaveForm.personId);
     const pMissions = missions.filter(m => m.personId === leaveForm.personId);
@@ -285,6 +310,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
     const tsStart = getTimestampStr(missionForm.startDate);
     const tsEnd = getTimestampStr(missionForm.endDate);
     if (!tsStart || !tsEnd || parseInt(tsStart) > parseInt(tsEnd)) return showNotification('تاریخ پایان نمی‌تواند قبل از تاریخ شروع باشد', 'error');
+    if (checkTermination(missionForm.personId, tsEnd)) return showNotification('این شخص ترک کار کرده است و امکان ثبت داده بعد از تاریخ ترک کار وجود ندارد', 'error');
+    if (checkTermination(leaveForm.personId, tsEnd)) return showNotification('این شخص ترک کار کرده است و امکان ثبت داده بعد از تاریخ ترک کار وجود ندارد', 'error');
 
     const pLeaves = leaves.filter(l => l.personId === missionForm.personId);
     const pMissions = missions.filter(m => m.personId === missionForm.personId);
