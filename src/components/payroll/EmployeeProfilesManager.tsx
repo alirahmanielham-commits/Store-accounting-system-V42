@@ -59,7 +59,8 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
   };
 
   const handleSave = async () => {
-    if (!editingPersonId) return;
+    if (!editingPersonId || loading) return;
+    setLoading(true);
     try {
       const existingPerson = employees.find((p: any) => p.id === editingPersonId);
       if (existingPerson) {
@@ -71,11 +72,22 @@ export default function EmployeeProfilesManager({ personsData, fetchPersons, sho
     } catch (e) {
       console.error(e);
       showNotification('خطا در ذخیره اطلاعات', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
   return (
-    <div className="min-h-full bg-slate-50/50 p-4 md:p-8" dir="rtl">
+    <div className="min-h-full bg-slate-50/50 p-4 md:p-8 relative" dir="rtl">
+      {loading && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/20 backdrop-blur-sm transition-all duration-300">
+          <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 min-w-[200px] border border-slate-100">
+            <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+            <span className="font-bold text-slate-700 animate-pulse">در حال ذخیره...</span>
+          </div>
+        </div>
+      )}
+
       <div className="w-full mx-auto">
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div className="flex items-center gap-3">

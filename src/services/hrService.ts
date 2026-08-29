@@ -161,11 +161,24 @@ export const deleteMission = async (id: string | number) => {
   await saveLocalData('employee_missions', data.filter(item => String(item.id) !== String(id)));
 };
 
+
+const ensurePayableAccount = async () => {
+  const { getLedgerAccounts, addLedgerAccount, generateId } = await import('./dataService');
+  const accs = await getLedgerAccounts();
+  let payableAcc = accs.find((a: any) => a.code === '2001' || a.title === 'حسابهای پرداختنی' || a.title === 'بدهی به پرسنل' || a.title === 'حقوق پرداختنی');
+  if (!payableAcc) {
+      payableAcc = { id: generateId(), code: '2001', title: 'حسابهای پرداختنی', nature: 'credit', level: 'subsidiary' };
+      await addLedgerAccount(payableAcc);
+  }
+  return payableAcc;
+};
+
 export const autoGenerateRentCommitments = async () => {
   try {
     const contracts = await getRentContracts();
     const docs = await getAccountingDocuments();
     const activeContracts = contracts.filter(c => c.status === 'active');
+    const payableAcc = await ensurePayableAccount();
     
     const now = new Date();
     const formatter = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: 'numeric', day: 'numeric' });
@@ -213,15 +226,17 @@ export const autoGenerateRentCommitments = async () => {
             sourceId: tag,
             items: [
               {
-                accountId: contract.expenseAccountId,
-                debtor: Number(contract.monthlyAmount),
-                creditor: 0,
+                ledgerAccountId: contract.expenseAccountId,
+                detailedAccountId: '',
+                debit: Number(contract.monthlyAmount),
+                credit: 0,
                 description: `تعهد اجاره ماه ${checkYear}/${checkMonth}`
               },
               {
-                personId: contract.personId,
-                debtor: 0,
-                creditor: Number(contract.monthlyAmount),
+                ledgerAccountId: payableAcc.id,
+                detailedAccountId: contract.personId,
+                debit: 0,
+                credit: Number(contract.monthlyAmount),
                 description: `تعهد اجاره ماه ${checkYear}/${checkMonth}`
               }
             ]
@@ -245,6 +260,7 @@ export const testGenerateRentCommitments = async () => {
   try {
     const contracts = await getRentContracts();
     const activeContracts = contracts.filter(c => c.status === 'active');
+    const payableAcc = await ensurePayableAccount();
     
     for (const contract of activeContracts) {
       if (!contract.monthlyAmount || !contract.expenseAccountId) continue;
@@ -259,15 +275,17 @@ export const testGenerateRentCommitments = async () => {
         sourceId: tag,
         items: [
           {
-            accountId: contract.expenseAccountId,
-            debtor: Number(contract.monthlyAmount),
-            creditor: 0,
+            ledgerAccountId: contract.expenseAccountId,
+            detailedAccountId: '',
+            debit: Number(contract.monthlyAmount),
+            credit: 0,
             description: `تعهد اجاره (تستی)`
           },
           {
-            personId: contract.personId,
-            debtor: 0,
-            creditor: Number(contract.monthlyAmount),
+            ledgerAccountId: payableAcc2.id,
+            detailedAccountId: contract.personId,
+            debit: 0,
+            credit: Number(contract.monthlyAmount),
             description: `تعهد اجاره (تستی)`
           }
         ]
@@ -276,5 +294,59 @@ export const testGenerateRentCommitments = async () => {
   } catch (e) {
     console.error('Failed to test rent commitments', e);
     throw e;
+  }
+};
+
+export const getPendingRentCommitments = async () => {
+  try {
+    const contracts = await getRentContracts();
+    const docs = await getAccountingDocuments();
+    const activeContracts = contracts.filter(c => c.status === 'active');
+    
+    const now = new Date();
+    const formatter = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric', month: 'numeric', day: 'numeric' });
+    const parts = formatter.formatToParts(now);
+    const pYear = parseInt(parts.find(p => p.type === 'year')?.value || '1403', 10);
+    const pMonth = parseInt(parts.find(p => p.type === 'month')?.value || '1', 10);
+    const pDay = parseInt(parts.find(p => p.type === 'day')?.value || '1', 10);
+
+    const pending = [];
+
+    for (const contract of activeContracts) {
+      if (!contract.paymentDay || !contract.monthlyAmount || !contract.expenseAccountId) continue;
+      
+      const cDateObj = contract.startDate ? new Date(contract.startDate) : new Date();
+      const cParts = formatter.formatToParts(cDateObj);
+      const startYear = parseInt(cParts.find(p => p.type === 'year')?.value || '1403', 10);
+      const startMonth = parseInt(cParts.find(p => p.type === 'month')?.value || '1', 10);
+      
+      const paymentDay = Number(contract.paymentDay);
+      
+      let checkYear = startYear;
+      let checkMonth = startMonth;
+      
+      while(checkYear < pYear || (checkYear === pYear && checkMonth <= pMonth)) {
+        if (checkYear === pYear && checkMonth === pMonth && pDay < paymentDay) {
+           break; 
+        }
+        
+        const tag = `rent_${contract.id}_${checkYear}_${checkMonth}`;
+        const exists = (docs || []).some((d: any) => d.sourceType === 'rent_contract_auto' && d.sourceId === tag);
+        
+        if (!exists) {
+          pending.push({ contract, checkYear, checkMonth });
+        }
+        
+        checkMonth++;
+        if (checkMonth > 12) {
+          checkMonth = 1;
+          checkYear++;
+        }
+      }
+    }
+    return pending;
+  } catch(e) {
+    console.error(e);
+    return [];
   }
 };

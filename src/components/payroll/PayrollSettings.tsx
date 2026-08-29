@@ -27,6 +27,7 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateForm, setTemplateForm] = useState<any>({ name: '', items: [] });
   const [showTemplateForm, setShowTemplateForm] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [isWorkplaceModalOpen, setIsWorkplaceModalOpen] = useState(false);
 
   useEffect(() => {
@@ -43,9 +44,11 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
   };
 
   const handleSaveTemplate = async () => {
+    if (loading) return;
     if (!templateForm.name) {
       return showNotification('نام قالب الزامی است', 'error');
     }
+    setLoading(true);
     try {
       if (editingTemplateId) {
         await updateOrderTemplate(editingTemplateId, templateForm);
@@ -57,9 +60,11 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
       setEditingTemplateId(null);
       setTemplateForm({ name: '', items: [] });
       setShowTemplateForm(false);
-      fetchData();
+      await fetchData();
     } catch (e) {
       showNotification('خطا در ذخیره قالب', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 

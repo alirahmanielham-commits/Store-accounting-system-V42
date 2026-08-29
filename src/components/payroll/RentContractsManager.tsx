@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, FileText, Check, X, AlertCircle, CheckCircle, Play } from 'lucide-react';
-import { getRentContracts, addRentContract, updateRentContract, deleteRentContract, autoGenerateRentCommitments, testGenerateRentCommitments } from '../../services/hrService';
+import { getRentContracts, addRentContract, updateRentContract, deleteRentContract, autoGenerateRentCommitments, testGenerateRentCommitments, getPendingRentCommitments } from '../../services/hrService';
 import Select from 'react-select';
 import { convertToGregorian } from '../../utils/format';
 import { NumericFormat } from 'react-number-format';
@@ -9,6 +9,7 @@ import { Eye } from 'lucide-react';
 
 export default function RentContractsManager({ personsData, storeSettings, showNotification, DatePicker, persian, persian_fa }: any) {
   const [contracts, setContracts] = useState<any[]>([]);
+  const [pendingDocs, setPendingDocs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [issueDocModal, setIssueDocModal] = useState<any>(null);
   const [docForm, setDocForm] = useState({ date: new Date(), amount: '', description: '', ledgerAccountId: '' });
@@ -18,6 +19,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
   const [reportData, setReportData] = useState<any>({ docs: [], transactions: [] });
 
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
   
   const [form, setForm] = useState({
@@ -125,15 +127,17 @@ export default function RentContractsManager({ personsData, storeSettings, showN
         sourceId: issueDocModal.id,
         items: [
           {
-            accountId: docForm.ledgerAccountId,
-            debtor: Number(docForm.amount),
-            creditor: 0,
+            ledgerAccountId: docForm.ledgerAccountId,
+            detailedAccountId: '',
+            debit: Number(docForm.amount),
+            credit: 0,
             description: docForm.description
           },
           {
-            personId: issueDocModal.personId,
-            debtor: 0,
-            creditor: Number(docForm.amount),
+            ledgerAccountId: (await getLedgerAccounts()).find((a: any) => a.code === '2001' || a.title === 'حسابهای پرداختنی')?.id || docForm.ledgerAccountId,
+            detailedAccountId: issueDocModal.personId,
+            debit: 0,
+            credit: Number(docForm.amount),
             description: docForm.description
           }
         ]
@@ -162,9 +166,11 @@ export default function RentContractsManager({ personsData, storeSettings, showN
   };
 
   const handleSave = async () => {
+    if (loading) return;
     if (!form.personId) return showNotification('طرف قرارداد باید انتخاب شود', 'error');
     if (!form.monthlyAmount) return showNotification('مبلغ ماهانه الزامی است', 'error');
 
+    setLoading(true);
     try {
       const getIsoDateStr = (dateVal: any) => {
         if (!dateVal) return null;

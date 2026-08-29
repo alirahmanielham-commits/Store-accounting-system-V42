@@ -173,6 +173,8 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
   };
 
   const handleSaveContract = async () => {
+    if (loading) return;
+    setLoading(true);
     if (!contractForm.personId) return showNotification('پرسنل باید انتخاب شود', 'error');
     try {
       const getIsoDateStr = (dateVal) => {

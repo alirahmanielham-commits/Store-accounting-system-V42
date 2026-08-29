@@ -112,6 +112,8 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
   };
 
   const handleFinalize = async (id) => {
+    if (loading) return;
+    setLoading(true);
     try {
       const slip = slips.find(s => s.id === id);
       if (!slip) return;
@@ -160,14 +162,17 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
 
       await updatePayslip(id, {status: 'finalized'});
       showNotification('فیش قطعی شد و سند حسابداری آن ثبت گردید', 'success');
-      fetchPayslips();
+      await fetchPayslips();
     } catch(e) {
       console.error(e);
       showNotification('خطا در ثبت سند یا قطعی سازی', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleDeleteSlip = async (id) => {
+    if (loading) return;
     if (!window.confirm('آیا از حذف این فیش حقوقی اطمینان دارید؟')) return;
     setLoading(true);
     try {
@@ -185,6 +190,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
   };
 
   const handleRecalculateSingle = async (slipId) => {
+    if (loading) return;
     const existing = slips.find(s => s.id === slipId);
     if (!existing || existing.status === 'finalized') return showNotification('این فیش قابل محاسبه مجدد نیست', 'error');
 
@@ -238,6 +244,8 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
 
       // 1. Calculate Earnings (Custom + Defaults)
       const shortageHours = parseFloat(att.shortageHours || 0);
+      const dailyWageItem = orderItems.find(i => i.id === 'daily_wage' || i.title === 'دستمزد روزانه');
+      const dailyWageValue = dailyWageItem ? (parseFloat(dailyWageItem.amount) || 0) : 0;
       let childAllowanceVal = 0;
 
       for (const item of orderItems) {
@@ -285,7 +293,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
           pItems.push({
             id: Date.now().toString() + Math.random().toString(),
             componentId: item.id || Math.random().toString(),
-            title: item.title,
+            title: item.id === 'daily_wage' || item.title === 'دستمزد روزانه' ? `مزد مبنای ماهیانه (روزانه ${toPersianDigits(formatNumber(baseAmount))})` : item.title,
             type: 'earning',
             amount: val.toString()
           });
@@ -352,6 +360,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
              formulaStr = formulaStr.replace(/insurable_earnings/g, insurable.toString());
              formulaStr = formulaStr.replace(/taxable_earnings/g, taxable.toString());
              formulaStr = formulaStr.replace(/base_wage/g, baseWageTotal.toString());
+             formulaStr = formulaStr.replace(/daily_wage/g, dailyWageValue.toString());
              formulaStr = formulaStr.replace(/children_count/g, childrenCount.toString());
              formulaStr = formulaStr.replace(/children/g, childrenCount.toString());
              formulaStr = formulaStr.replace(/experience_years/g, experienceYears.toString());
@@ -426,7 +435,9 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
   };
 
   const handleRevert = async (id) => {
+    if (loading) return;
     if (!window.confirm('آیا از برگشت فیش به حالت پیش‌نویس اطمینان دارید؟ (سند حسابداری مرتبط حذف خواهد شد)')) return;
+    setLoading(true);
     try {
       const docs = await getAccountingDocuments();
       const slipDoc = docs.find(d => d.sourceType === 'salary' && String(d.sourceId) === String(id));
@@ -435,10 +446,12 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       }
       await updatePayslip(id, {status: 'draft'});
       showNotification('فیش به حالت پیش‌نویس بازگشت و سند حذف شد', 'success');
-      fetchPayslips();
+      await fetchPayslips();
     } catch(e) {
       console.error(e);
       showNotification('خطا در برگشت فیش', 'error');
+    } finally {
+      setLoading(false);
     }
   };
   const filteredSlips = useMemo(() => {
@@ -573,6 +586,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
              formulaStr = formulaStr.replace(/insurable_earnings/g, insurable.toString());
              formulaStr = formulaStr.replace(/taxable_earnings/g, taxable.toString());
              formulaStr = formulaStr.replace(/base_wage/g, baseWageTotal.toString());
+             formulaStr = formulaStr.replace(/daily_wage/g, dailyWageValue.toString());
              formulaStr = formulaStr.replace(/children_count/g, childrenCount.toString());
              formulaStr = formulaStr.replace(/children/g, childrenCount.toString());
              formulaStr = formulaStr.replace(/experience_years/g, experienceYears.toString());
@@ -747,6 +761,15 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
 
   return (
     <div className="min-h-full bg-slate-50/50 p-4 md:p-8 print:bg-white print:p-0" dir="rtl">
+      {loading && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-slate-900/20 backdrop-blur-sm transition-all duration-300">
+          <div className="bg-white p-6 rounded-2xl shadow-xl flex flex-col items-center gap-4 min-w-[200px] border border-slate-100">
+            <div className="w-10 h-10 border-4 border-indigo-100 border-t-indigo-600 rounded-full animate-spin"></div>
+            <span className="font-bold text-slate-700 animate-pulse">در حال پردازش...</span>
+          </div>
+        </div>
+      )}
+
       
       {/* PRINT MODAL (unchanged behavior, keeps clean printing layout) */}
       {printSlip && (
@@ -789,9 +812,34 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
                   </div>
                   <div className="flex items-center gap-2 border-b border-dashed border-slate-300 pb-2">
                     <span className="text-slate-500 text-sm">شماره پرسنلی:</span>
-                    <span className="font-bold text-slate-800">{toPersianDigits(printSlip.personId.substring(0, 6))}</span>
+                    <span className="font-bold text-slate-800">{toPersianDigits(getPersonnelCode(printSlip.personId))}</span>
                   </div>
+
                 </div>
+                
+                {(() => {
+                  const printAtt = allAttendances.find(a => a.id === printSlip.attendanceId);
+                  return printAtt ? (
+                    <div className="grid grid-cols-4 gap-4 mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm">
+                      <div className="flex flex-col">
+                        <span className="text-slate-500 mb-1">روز کارکرد</span>
+                        <span className="font-bold text-slate-800">{toPersianDigits(printAtt.workDays.toString())} روز</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-slate-500 mb-1">ساعات اضافه کار</span>
+                        <span className="font-bold text-slate-800">{toPersianDigits(printAtt.overtimeHours.toString())} ساعت</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-slate-500 mb-1">ساعات کسر کار</span>
+                        <span className="font-bold text-slate-800">{toPersianDigits((printAtt.shortageHours || 0).toString())} ساعت</span>
+                      </div>
+                      <div className="flex flex-col">
+                        <span className="text-slate-500 mb-1">مرخصی / غیبت</span>
+                        <span className="font-bold text-slate-800">{toPersianDigits((printAtt.paidLeaveDays || 0) + (printAtt.sickLeaveDays || 0) + (printAtt.unpaidLeaveDays || 0) + (printAtt.absentDays || 0))} روز</span>
+                      </div>
+                    </div>
+                  ) : null;
+                })()}
 
                 <div className="grid grid-cols-2 gap-6 mb-8">
                   <div>
@@ -992,19 +1040,19 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
                   <div className="flex flex-wrap items-center gap-3 mt-6 sm:mt-0 w-full sm:w-auto">
                     {selectedSlip.status === 'draft' ? (
                       <>
-                        <button onClick={() => handleFinalize(selectedSlip.id)} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-emerald-50 text-emerald-700 font-bold rounded-xl hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-2 shadow-sm">
-                          <CheckCircle className="w-5 h-5" /> قطعی کردن
+                        <button onClick={() => handleFinalize(selectedSlip.id)} disabled={loading} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-emerald-50 text-emerald-700 font-bold rounded-xl hover:bg-emerald-100 transition-colors border border-emerald-200 flex items-center gap-2 shadow-sm disabled:opacity-50">
+                          {loading ? <div className="w-5 h-5 border-2 border-emerald-500 border-t-transparent rounded-full animate-spin" /> : <CheckCircle className="w-5 h-5" />} قطعی کردن
                         </button>
-                        <button onClick={() => handleRecalculateSingle(selectedSlip.id)} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 flex items-center gap-2 shadow-sm">
-                          <Calculator className="w-5 h-5" /> محاسبه مجدد
+                        <button onClick={() => handleRecalculateSingle(selectedSlip.id)} disabled={loading} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-indigo-50 text-indigo-700 font-bold rounded-xl hover:bg-indigo-100 transition-colors border border-indigo-200 flex items-center gap-2 shadow-sm disabled:opacity-50">
+                          {loading ? <div className="w-5 h-5 border-2 border-indigo-500 border-t-transparent rounded-full animate-spin" /> : <Calculator className="w-5 h-5" />} محاسبه مجدد
                         </button>
-                        <button onClick={() => handleDeleteSlip(selectedSlip.id)} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-rose-50 text-rose-700 font-bold rounded-xl hover:bg-rose-100 transition-colors border border-rose-200 flex items-center gap-2 shadow-sm">
-                          <Trash2 className="w-5 h-5" /> حذف فیش
+                        <button onClick={() => handleDeleteSlip(selectedSlip.id)} disabled={loading} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-rose-50 text-rose-700 font-bold rounded-xl hover:bg-rose-100 transition-colors border border-rose-200 flex items-center gap-2 shadow-sm disabled:opacity-50">
+                          {loading ? <div className="w-5 h-5 border-2 border-rose-500 border-t-transparent rounded-full animate-spin" /> : <Trash2 className="w-5 h-5" />} حذف فیش
                         </button>
                       </>
                     ) : (
-                      <button onClick={() => handleRevert(selectedSlip.id)} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-amber-50 text-amber-700 font-bold rounded-xl hover:bg-amber-100 transition-colors border border-amber-200 flex items-center gap-2 shadow-sm">
-                        <RotateCcw className="w-5 h-5" /> ویرایش/برگشت
+                      <button onClick={() => handleRevert(selectedSlip.id)} disabled={loading} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-amber-50 text-amber-700 font-bold rounded-xl hover:bg-amber-100 transition-colors border border-amber-200 flex items-center gap-2 shadow-sm disabled:opacity-50">
+                        {loading ? <div className="w-5 h-5 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" /> : <RotateCcw className="w-5 h-5" />} ویرایش/برگشت
                       </button>
                     )}
                     <button onClick={() => handlePrint(selectedSlip)} className="flex-1 sm:flex-none justify-center px-6 py-2.5 bg-white text-slate-700 font-bold rounded-xl hover:bg-slate-50 transition-colors border border-slate-200 flex items-center gap-2 shadow-sm">
@@ -1085,7 +1133,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
                       </div>
                       
                       {isEditingAttendance && editAttendanceForm ? (
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex flex-col gap-1">
                             <span className="text-xs font-bold text-slate-500">روز کارکرد</span>
                             <input type="number" value={editAttendanceForm.workDays} onChange={e => setEditAttendanceForm({...editAttendanceForm, workDays: e.target.value})} className="w-full text-left font-mono font-bold text-lg bg-slate-50 border border-slate-200 rounded-lg px-2 py-1 outline-none focus:border-indigo-500" />
@@ -1102,9 +1150,13 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
                             <span className="text-xs font-bold text-rose-600">غیبت / بدون حقوق</span>
                             <input type="number" value={editAttendanceForm.absentDays} onChange={e => setEditAttendanceForm({...editAttendanceForm, absentDays: e.target.value})} className="w-full text-left font-mono font-bold text-lg bg-white border border-rose-200 rounded-lg px-2 py-1 outline-none focus:border-rose-500 text-rose-700" />
                           </div>
+                          <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 shadow-sm flex flex-col gap-1">
+                            <span className="text-xs font-bold text-amber-600">ساعت کسر کار</span>
+                            <input type="number" value={editAttendanceForm.shortageHours || 0} onChange={e => setEditAttendanceForm({...editAttendanceForm, shortageHours: e.target.value})} className="w-full text-left font-mono font-bold text-lg bg-white border border-amber-200 rounded-lg px-2 py-1 outline-none focus:border-amber-500 text-amber-700" />
+                          </div>
                         </div>
                       ) : (
-                        <div className="grid grid-cols-2 gap-3">
+                        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
                           <div className="bg-white p-4 rounded-xl border border-slate-200 shadow-sm flex items-center justify-between">
                             <span className="text-sm font-bold text-slate-500">روز کارکرد</span>
                             <span className="text-xl font-black text-slate-800">{toPersianDigits(selectedAttendance?.workDays || 0)}</span>
@@ -1120,6 +1172,10 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
                           <div className="bg-rose-50/50 p-4 rounded-xl border border-rose-100 shadow-sm flex items-center justify-between">
                             <span className="text-sm font-bold text-rose-600">غیبت / بدون حقوق</span>
                             <span className="text-xl font-black text-rose-700">{toPersianDigits(selectedAttendance?.absentDays || 0)}</span>
+                          </div>
+                          <div className="bg-amber-50/50 p-4 rounded-xl border border-amber-100 shadow-sm flex items-center justify-between">
+                            <span className="text-sm font-bold text-amber-600">ساعت کسر کار</span>
+                            <span className="text-xl font-black text-amber-700">{toPersianDigits(selectedAttendance?.shortageHours || 0)}</span>
                           </div>
                         </div>
                       )}

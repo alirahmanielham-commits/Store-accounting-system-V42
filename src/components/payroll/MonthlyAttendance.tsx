@@ -96,6 +96,8 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
   };
 
   const handleSave = async (targetIds?: string[]) => {
+    if (loading) return;
+    setLoading(true);
     const idsToSave = Array.isArray(targetIds) ? targetIds : (selectedPersonIds.length > 0 ? selectedPersonIds : attendances.map(a => a.personId));
     if (idsToSave.length === 0) return showNotification('پرسنلی برای ذخیره یافت نشد (لطفا چک باکس موارد دلخواه را انتخاب کنید)', 'error');
 
@@ -119,13 +121,17 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
         }
       }
       showNotification(`کارکرد ${toPersianDigits(targets.length)} نفر با موفقیت ذخیره شد`, 'success');
-      fetchAttendance();
+      await fetchAttendance();
     } catch (e) {
       showNotification('خطا در ذخیره سازی', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
   const handleCalculateFromDaily = async (targetIds?: string[]) => {
+    if (loading) return;
+    setLoading(true);
     const idsToCalc = Array.isArray(targetIds) ? targetIds : (selectedPersonIds.length > 0 ? selectedPersonIds : attendances.map(a => a.personId));
     if (idsToCalc.length === 0) return showNotification('پرسنلی برای محاسبه یافت نشد (لطفا چک باکس موارد دلخواه را انتخاب کنید)', 'error');
 
@@ -294,7 +300,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
             <p className="text-sm text-slate-500 mt-1">ورود اطلاعات حضور و غیاب جهت محاسبه حقوق</p>
           </div>
           <button onClick={() => handleSave()} className="flex items-center gap-2 px-6 py-2.5 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 shadow-sm font-bold transition-all">
-            <Save className="w-5 h-5" />
+            {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-5 h-5" />}
             ذخیره کارکرد (گروهی)
           </button>
         </div>
@@ -407,7 +413,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                               <Clock className="w-5 h-5" />
                             </button>
                             <button onClick={() => !hasPayslip && handleSave([a.personId])} disabled={hasPayslip} className={`p-1.5 rounded transition-colors ${hasPayslip ? 'text-slate-300 cursor-not-allowed' : 'text-emerald-500 hover:bg-emerald-50'}`} title={hasPayslip ? "فیش صادر شده است" : "ذخیره کارکرد شخص"}>
-                              <Save className="w-5 h-5" />
+                              {loading ? <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> : <Save className="w-5 h-5" />}
                             </button>
                             <button onClick={() => setViewDetailsPersonId(a.personId)} className="p-1.5 text-slate-500 hover:bg-slate-100 rounded transition-colors" title="مشاهده ریز کارکرد">
                               <Eye className="w-5 h-5" />

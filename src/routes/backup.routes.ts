@@ -275,9 +275,9 @@ router.get('/api/db/backups', async (req, res) => {
 router.post('/api/db/backups/restore/:filename', async (req, res) => {
      try {
          const { filename } = req.params;
-         const dir = await getBackupsDir();
-         const filePath = path.join(dir, filename);
-         if (!filePath.startsWith(dir)) return res.status(403).send('Invalid path');
+         const dir = path.resolve(await getBackupsDir());
+         const filePath = path.resolve(dir, filename);
+         if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
          
          if (filename.endsWith('.sql') && isPgActive() && getActivePgPool()) {
              const fileContent = await fsPromises.readFile(filePath, 'utf-8');
@@ -316,9 +316,9 @@ router.post('/api/db/backups/restore/:filename', async (req, res) => {
 router.get('/api/db/backups/download/:filename', async (req, res) => {
      try {
          const { filename } = req.params;
-         const dir = await getBackupsDir();
-         const filePath = path.join(dir, filename);
-         if (!filePath.startsWith(dir)) return res.status(403).send('Invalid path');
+         const dir = path.resolve(await getBackupsDir());
+         const filePath = path.resolve(dir, filename);
+         if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
          res.download(filePath);
      } catch(e) {
          res.status(500).json({ error: e.message });
@@ -328,9 +328,9 @@ router.get('/api/db/backups/download/:filename', async (req, res) => {
   router.delete('/api/db/backups/:filename', async (req, res) => {
       try {
          const { filename } = req.params;
-         const dir = await getBackupsDir();
-         const filePath = path.join(dir, filename);
-         if (!filePath.startsWith(dir)) return res.status(403).send('Invalid path');
+         const dir = path.resolve(await getBackupsDir());
+         const filePath = path.resolve(dir, filename);
+         if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
          await fsPromises.unlink(filePath);
          res.json({ success: true });
       } catch(e) {

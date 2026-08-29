@@ -163,6 +163,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
   };
 
   const handleSave = async () => {
+    if (loading) return;
+    setLoading(true);
     if (!formData.personId || !formData.contractId || !formData.templateId) {
       return showNotification('لطفا شخص، قرارداد و قالب را انتخاب کنید', 'error');
     }

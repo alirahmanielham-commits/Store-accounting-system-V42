@@ -175,6 +175,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
 
   const handleSaveAttendance = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(loading) return;
+    setLoading(true);
     if (!form.personId) return showNotification('لطفاً کارمند را انتخاب کنید', 'error');
     if (!currentDayStr) return;
 
@@ -274,6 +276,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   // --- LEAVE ---
   const handleSaveLeave = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(loading) return;
+    setLoading(true);
     if (!leaveForm.personId) return showNotification('لطفاً کارمند را انتخاب کنید', 'error');
     const tsStart = getTimestampStr(leaveForm.startDate);
     const tsEnd = getTimestampStr(leaveForm.endDate);
@@ -333,6 +337,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   // --- MISSION ---
   const handleSaveMission = async (e: React.FormEvent) => {
     e.preventDefault();
+    if(loading) return;
+    setLoading(true);
     if (!missionForm.personId) return showNotification('لطفاً کارمند را انتخاب کنید', 'error');
     const tsStart = getTimestampStr(missionForm.startDate);
     const tsEnd = getTimestampStr(missionForm.endDate);

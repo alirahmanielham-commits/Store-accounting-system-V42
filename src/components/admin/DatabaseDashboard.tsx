@@ -148,6 +148,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [restoreState, setRestoreState] = useState<'confirm' | 'progress' | 'success' | 'error'>('confirm');
+  const [restoreErrorMessage, setRestoreErrorMessage] = useState<string>('');
   const [restoreProgress, setRestoreProgress] = useState(0);
 
   const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<any>(null);
@@ -254,12 +255,16 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       
       setRestoreProgress(95);
       const res = await fetch(`/api/db/backups/restore/${filename}`, { method: 'POST' });
-      if (!res.ok) throw new Error('بازیابی ناموفق بود.');
+      if (!res.ok) {
+         const errorData = await res.json().catch(() => ({}));
+         throw new Error(errorData.error || 'بازیابی ناموفق بود.');
+      }
       
       setRestoreProgress(100);
       setRestoreState('success');
       loadBackups(); // reload list
-    } catch(e) {
+    } catch(e: any) {
+      setRestoreErrorMessage(e.message);
       setRestoreState('error');
     }
   };
@@ -1299,11 +1304,17 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                   <div>
                     <h3 className="text-xl font-black text-rose-700">خطا در عملیات بازیابی</h3>
                     <p className="text-sm font-medium text-slate-500 mt-2">متأسفانه بازیابی اطلاعات با مشکل مواجه شد. لاگ‌ها را بررسی کنید.</p>
+                    {restoreErrorMessage && (
+                      <div className="mt-4 p-3 bg-rose-50 border border-rose-200 text-rose-700 rounded-lg text-sm font-medium text-right direction-ltr overflow-auto max-h-32 whitespace-pre-wrap">
+                        {restoreErrorMessage}
+                      </div>
+                    )}
                   </div>
                   <button 
                     onClick={() => {
                       setIsRestoreModalOpen(false);
                       setRestoreState('confirm');
+                      setRestoreErrorMessage('');
                     }}
                     className="w-full py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-colors"
                   >
