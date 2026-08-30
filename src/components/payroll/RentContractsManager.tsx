@@ -2,13 +2,15 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Plus, Edit2, Trash2, FileText, Check, X, AlertCircle, CheckCircle, Play } from 'lucide-react';
 import { getRentContracts, addRentContract, updateRentContract, deleteRentContract, autoGenerateRentCommitments, testGenerateRentCommitments, getPendingRentCommitments } from '../../services/hrService';
 import Select from 'react-select';
-import { convertToGregorian } from '../../utils/format';
+import { convertToGregorian, formatDateDisplay } from '../../utils/format';
 import { NumericFormat } from 'react-number-format';
 import { getLedgerAccounts, addAccountingDocument, getAccountingDocuments, getTransactions } from '../../services/dataService';
 import { Eye, Calendar } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
+import gregorian from 'react-date-object/calendars/gregorian';
+import gregorian_en from 'react-date-object/locales/gregorian_en';
 
 export default function RentContractsManager({ personsData, storeSettings, showNotification, DatePicker: _propDatePicker, persian: _propPersian, persian_fa: _propPersianFa }: any) {
   const DatePicker = CustomDatePicker;
@@ -234,24 +236,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
 
     setLoading(true);
     try {
-      const getIsoDateStr = (dateVal: any) => {
-        if (!dateVal) return null;
-        try {
-          if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal.toISOString();
-          if (typeof dateVal.toDate === 'function') return dateVal.toDate().toISOString();
-          if (typeof dateVal === 'string') {
-            return convertToGregorian(dateVal);
-          }
-          const parsed = new Date(dateVal);
-          if (!isNaN(parsed.getTime())) return parsed.toISOString();
-          return null;
-        } catch(e) {
-          return null;
-        }
-      };
-
-      const startDateIso = getIsoDateStr(form.startDate);
-      const endDateIso = getIsoDateStr(form.endDate);
+      const startDateIso = convertToGregorian(form.startDate);
+      const endDateIso = form.endDate ? convertToGregorian(form.endDate) : null;
 
       if (!startDateIso) return showNotification('تاریخ شروع الزامی است', 'error');
 
@@ -273,15 +259,17 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       const newEnd = newEndObj ? newEndObj.getTime() : Infinity;
 
       const hasOverlap = personContracts.some(existing => {
-        const exStartObj = parseSafeDate(existing.startDate);
-        const exEndObj = parseSafeDate(existing.endDate);
-        if (!exStartObj) return false;
+        const exStartIso = convertToGregorian(existing.startDate);
+        const exEndIso = existing.endDate ? convertToGregorian(existing.endDate) : null;
+        const exStartObj = new Date(exStartIso);
+        const exEndObj = exEndIso ? new Date(exEndIso) : null;
+        if (isNaN(exStartObj.getTime())) return false;
         
         exStartObj.setHours(0,0,0,0);
         const exStart = exStartObj.getTime();
 
-        if (exEndObj) exEndObj.setHours(23,59,59,999);
-        const exEnd = exEndObj ? exEndObj.getTime() : Infinity;
+        if (exEndObj && !isNaN(exEndObj.getTime())) exEndObj.setHours(23,59,59,999);
+        const exEnd = (exEndObj && !isNaN(exEndObj.getTime())) ? exEndObj.getTime() : Infinity;
 
         return (newStart <= exEnd) && (newEnd >= exStart);
       });
@@ -409,9 +397,9 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                   <td className="p-4 font-bold text-slate-800">{getPersonName(c.personId)}</td>
                   <td className="p-4 text-slate-600">{c.contractNumber || '---'}</td>
                   <td className="p-4 text-slate-500 text-xs">
-                    {parseSafeDate(c.startDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR')}
+                    {formatDateDisplay(c.startDate, storeSettings?.calendarType)}
                     {' '}تا{' '}
-                    {c.endDate ? parseSafeDate(c.endDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR') : 'نامحدود'}
+                    {c.endDate ? formatDateDisplay(c.endDate, storeSettings?.calendarType) : 'نامحدود'}
                   </td>
                   <td className="p-4 text-center text-sm">
                     <div className="flex flex-col gap-1 items-center">
@@ -520,8 +508,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                     <DatePicker
                       value={form.startDate}
                       onChange={handleStartDateChange}
-                      calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                      locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                      calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                      locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
                       calendarPosition="bottom-right"
                       inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
                       containerClassName="w-full"
@@ -540,8 +528,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                       value={form.endDate}
                       minDate={form.startDate || undefined}
                       onChange={handleEndDateChange}
-                      calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                      locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                      calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                      locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
                       calendarPosition="bottom-right"
                       inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
                       containerClassName="w-full"
@@ -751,8 +739,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                           setDocForm(prev => ({...prev, date: d}));
                       }
                     }}
-                    calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                    locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                    calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                    locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
                     calendarPosition="bottom-right"
                     inputClass="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
                   />
@@ -824,7 +812,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                       <tbody className="divide-y divide-slate-100">
                         {reportData.docs.map((d: any) => (
                           <tr key={d.id} className="hover:bg-slate-50">
-                            <td className="p-3">{new Date(d.date).toLocaleDateString('fa-IR')}</td>
+                            <td className="p-3">{formatDateDisplay(d.date, storeSettings?.calendarType)}</td>
                             <td className="p-3 text-slate-600">{d.description}</td>
                             <td className="p-3 text-center font-bold text-emerald-600">
                               {Number(d.items?.find((i: any) => i.personId === reportModal.personId)?.creditor || 0).toLocaleString()}
@@ -854,7 +842,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                       <tbody className="divide-y divide-slate-100">
                         {reportData.transactions.filter((t: any) => t.type === 'payment').map((t: any) => (
                           <tr key={t.id} className="hover:bg-slate-50">
-                            <td className="p-3">{new Date(t.date).toLocaleDateString('fa-IR')}</td>
+                            <td className="p-3">{formatDateDisplay(t.date, storeSettings?.calendarType)}</td>
                             <td className="p-3 text-slate-600">{t.description}</td>
                             <td className="p-3 text-center font-bold text-rose-600">
                               {Number(t.amount).toLocaleString()}

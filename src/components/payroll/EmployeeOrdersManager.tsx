@@ -1,10 +1,12 @@
-import { convertToGregorian } from '../../utils/format';
+import { convertToGregorian, formatDateDisplay } from '../../utils/format';
 import React, { useState, useEffect, useMemo } from 'react';
 import { FileText, Plus, Edit2, CheckCircle, Save, XCircle, Search, Trash2, Eye, ArrowRight, AlertTriangle, Calendar } from 'lucide-react';
 import { getEmployeeOrders, addEmployeeOrder, updateEmployeeOrder, deleteEmployeeOrder, getEmployeeContracts, getOrderTemplates, getPayslips } from '../../services/hrService';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
+import gregorian from 'react-date-object/calendars/gregorian';
+import gregorian_en from 'react-date-object/locales/gregorian_en';
 
 export default function EmployeeOrdersManager({ personsData, showNotification, DatePicker: _propDatePicker, persian: _propPersian, persian_fa: _propPersianFa, storeSettings }: any) {
   const DatePicker = CustomDatePicker;
@@ -324,7 +326,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                   <div>
                     <div className="text-xs font-bold text-slate-400 mb-1">تاریخ صدور</div>
                     <div className="font-bold text-slate-700 font-mono">
-                      {viewingOrder.issueDate ? new Date(Number(viewingOrder.issueDate)).toLocaleDateString('fa-IR') : '---'}
+                      {formatDateDisplay(viewingOrder.issueDate, storeSettings?.calendarType)}
                     </div>
                   </div>
                 </div>
@@ -503,7 +505,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                           <div key={ord.id} className="flex justify-between items-center bg-white p-3 rounded-xl border border-indigo-50">
                             <div>
                               <div className="font-bold text-sm text-slate-800">{ord.name || 'حکم بدون نام'}</div>
-                              <div className="text-xs text-slate-500 mt-1">تاریخ صدور: {ord.issueDate ? new Date(Number(ord.issueDate)).toLocaleDateString('fa-IR') : '---'}</div>
+                              <div className="text-xs text-slate-500 mt-1">تاریخ صدور: {formatDateDisplay(ord.issueDate, storeSettings?.calendarType)}</div>
                             </div>
                             <div>
                               {ord.status === 'active' ? (
@@ -599,8 +601,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                       </label>
                       <div className="relative">
                         <DatePicker
-                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                          calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                          locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
                           value={formData.issueDate}
                           onChange={(date: any) => setFormData(prev => ({ ...prev, issueDate: date }))}
                           calendarPosition="bottom-right"
@@ -618,8 +620,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                       </label>
                       <div className="relative">
                         <DatePicker
-                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                          calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                          locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
                           value={formData.executionDate}
                           onChange={(date: any) => setFormData(prev => ({ ...prev, executionDate: date }))}
                           calendarPosition="bottom-right"
@@ -788,7 +790,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                           )}
                         </td>
                         <td className="p-4 text-center text-slate-500 font-mono">
-                          {order.issueDate ? new Date(Number(order.issueDate)).toLocaleDateString('fa-IR') : '---'}
+                          {formatDateDisplay(order.issueDate, storeSettings?.calendarType)}
                         </td>
                         <td className="p-4 text-center">
                           <div className="flex items-center justify-center gap-2">

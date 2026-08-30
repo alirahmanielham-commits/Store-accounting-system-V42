@@ -3,10 +3,12 @@ import { Plus, Edit2, Trash2, Users, FileText, Settings, XCircle, Search, Calend
 import { getSalaryComponents, getContractComponents,  getEmployeeContracts, addEmployeeContract, updateEmployeeContract, deleteEmployeeContract,     deleteContractComponent, getEmployeeProfiles, getWorkplaces, getEmployeeOrders, getPayslips } from '../../services/hrService';
 import Select from 'react-select';
 import RentContractsManager from './RentContractsManager';
-import { convertToGregorian } from '../../utils/format';
+import { convertToGregorian, formatDateDisplay } from '../../utils/format';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
+import gregorian from 'react-date-object/calendars/gregorian';
+import gregorian_en from 'react-date-object/locales/gregorian_en';
 
 function EmploymentContracts({ personsData, personGroups, storeSettings, showNotification, DatePicker: _propDatePicker, persian: _propPersian, persian_fa: _propPersianFa }: any) {
   const DatePicker = CustomDatePicker;
@@ -214,17 +216,7 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
     try {
       const c = contracts.find(x => x.id === terminateContractId);
       if(!c) return;
-      const getIsoDateStr = (dateVal) => {
-        if (!dateVal) return null;
-        try {
-          if (dateVal instanceof Date) return dateVal.toISOString();
-          if (typeof dateVal.toDate === 'function') return dateVal.toDate().toISOString();
-          const parsed = new Date(dateVal);
-          if (!isNaN(parsed.getTime())) return parsed.toISOString();
-          return null;
-        } catch(e) { return null; }
-      };
-      const termIso = getIsoDateStr(terminateDate);
+      const termIso = convertToGregorian(terminateDate);
       await updateEmployeeContract(c.id, { ...c, status: 'terminated', terminationDate: termIso });
       showNotification('ترک کار با موفقیت ثبت شد', 'success');
       setTerminateContractId(null);
@@ -239,24 +231,8 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
     setLoading(true);
     if (!contractForm.personId) return showNotification('پرسنل باید انتخاب شود', 'error');
     try {
-      const getIsoDateStr = (dateVal: any) => {
-        if (!dateVal) return null;
-        try {
-          if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal.toISOString();
-          if (typeof dateVal.toDate === 'function') return dateVal.toDate().toISOString();
-          if (typeof dateVal === 'string') {
-            return convertToGregorian(dateVal);
-          }
-          const parsed = new Date(dateVal);
-          if (!isNaN(parsed.getTime())) return parsed.toISOString();
-          return null;
-        } catch(e) {
-          return null;
-        }
-      };
-      
-      const startDateIso = getIsoDateStr(contractForm.startDate);
-      const endDateIso = getIsoDateStr(contractForm.endDate);
+      const startDateIso = convertToGregorian(contractForm.startDate);
+      const endDateIso = contractForm.endDate ? convertToGregorian(contractForm.endDate) : null;
 
       if (!startDateIso) return showNotification('تاریخ شروع قرارداد الزامی است', 'error');
 
@@ -283,17 +259,19 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
         const effectiveEnd = (existing.status === 'terminated' && existing.terminationDate) 
                               ? existing.terminationDate 
                               : existing.endDate;
-        const exStartObj = parseSafeDate(existing.startDate);
-        const exEndObj = parseSafeDate(effectiveEnd);
+        const exStartIso = convertToGregorian(existing.startDate);
+        const exEndIso = effectiveEnd ? convertToGregorian(effectiveEnd) : null;
+        const exStartObj = new Date(exStartIso);
+        const exEndObj = exEndIso ? new Date(exEndIso) : null;
         
         // Exclude contracts that don't have a valid start date
-        if (!exStartObj) return false;
+        if (isNaN(exStartObj.getTime())) return false;
         
         exStartObj.setHours(0,0,0,0);
         const exStart = exStartObj.getTime();
 
-        if (exEndObj) exEndObj.setHours(23,59,59,999);
-        const exEnd = exEndObj ? exEndObj.getTime() : Infinity;
+        if (exEndObj && !isNaN(exEndObj.getTime())) exEndObj.setHours(23,59,59,999);
+        const exEnd = (exEndObj && !isNaN(exEndObj.getTime())) ? exEndObj.getTime() : Infinity;
         
         // Strict overlap: one starts BEFORE the other ends, AND one ends AFTER the other starts
         return (newStart <= exEnd) && (newEnd >= exStart);
@@ -304,7 +282,6 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
       }
 
       const payloadBase = {
-        
         contractNumber: contractForm.contractNumber,
         workplaceId: contractForm.workplaceId,
         startDate: startDateIso,
@@ -316,11 +293,11 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
       if (editingContractId) {
         // Editing a single existing contract
         await updateEmployeeContract(editingContractId, { ...payloadBase, personId: contractForm.personId.value });
-        } else {
+      } else {
         // Bulk or single new contract assignment
         const contractId = Date.now().toString() + Math.random().toString().substring(2,8);
         await addEmployeeContract({ id: contractId, personId: contractForm.personId.value, ...payloadBase });
-        }
+      }
 
       showNotification('قرارداد(ها) با موفقیت ذخیره شد', 'success');
       setIsContractModalOpen(false);
@@ -455,8 +432,8 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                           </div>
                         </td>
                         <td className="p-4 text-slate-600">{c.contractNumber || '---'}</td>
-                        <td className="p-4 text-slate-500 text-xs">{parseSafeDate(c.startDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR')}</td>
-                        <td className="p-4 text-slate-500 text-xs">{c.endDate ? parseSafeDate(c.endDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR') : 'نامحدود'}</td>
+                        <td className="p-4 text-slate-500 text-xs">{formatDateDisplay(c.startDate, storeSettings?.calendarType)}</td>
+                        <td className="p-4 text-slate-500 text-xs">{c.endDate ? formatDateDisplay(c.endDate, storeSettings?.calendarType) : 'نامحدود'}</td>
                         <td className="p-4 text-center">
                           <span className={`inline-flex px-3 py-1 rounded-lg text-xs font-bold border ${
                             c.status==='active'?'bg-emerald-50 text-emerald-700 border-emerald-200':
@@ -489,8 +466,8 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                                 personId: { value: c.personId, label: getPersonName(c.personId) },
                                 contractNumber: c.contractNumber || '',
                                 workplaceId: c.workplaceId || '',
-                                startDate: parseSafeDate(c.startDate),
-                                endDate: c.endDate ? parseSafeDate(c.endDate) : new Date(),
+                                startDate: c.startDate ? new Date(convertToGregorian(c.startDate)) : new Date(),
+                                endDate: c.endDate ? new Date(convertToGregorian(c.endDate)) : new Date(),
                                 location: c.location || '',
                                 status: c.status || 'draft',
                               });
@@ -569,16 +546,16 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
                   <span className="text-slate-500 text-sm">تاریخ شروع:</span>
-                  <span className="font-bold text-slate-800">{parseSafeDate(c.startDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR')}</span>
+                  <span className="font-bold text-slate-800">{formatDateDisplay(c.startDate, storeSettings?.calendarType)}</span>
                 </div>
                 <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
                   <span className="text-slate-500 text-sm">تاریخ پایان:</span>
-                  <span className="font-bold text-slate-800">{c.endDate ? parseSafeDate(c.endDate)?.toLocaleDateString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR') : 'نامحدود'}</span>
+                  <span className="font-bold text-slate-800">{c.endDate ? formatDateDisplay(c.endDate, storeSettings?.calendarType) : 'نامحدود'}</span>
                 </div>
                 {c.terminationDate && (
                   <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
                     <span className="text-slate-500 text-sm">تاریخ ترک کار:</span>
-                    <span className="font-bold text-rose-600">{parseSafeDate(c.terminationDate)?.toLocaleDateString('fa-IR')}</span>
+                    <span className="font-bold text-rose-600">{formatDateDisplay(c.terminationDate, storeSettings?.calendarType)}</span>
                   </div>
                 )}
                 <div className="flex justify-between items-center pb-3 border-b border-slate-200/60">
@@ -610,7 +587,7 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                               <div>
                                 <div className="font-bold text-slate-700 text-sm">{order.name || 'حکم بدون نام'}</div>
                                 <div className="text-xs text-slate-500 mt-1">
-                                  تاریخ: {order.issueDate ? new Date(Number(order.issueDate)).toLocaleDateString('fa-IR') : '---'}
+                                  تاریخ: {order.issueDate ? formatDateDisplay(new Date(Number(order.issueDate)), storeSettings?.calendarType) : '---'}
                                 </div>
                               </div>
                               <span className={`px-2 py-1 rounded-lg text-xs font-bold ${order.status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-200 text-slate-700'}`}>
@@ -670,8 +647,8 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                 </label>
                 <div className="relative">
                   <DatePicker
-                    calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                    locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                    calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                    locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
                     value={terminateDate}
                     onChange={(date: any) => {
                       if (!date) {
@@ -754,8 +731,8 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                    </label>
                    <div className="relative">
                      <DatePicker
-                       calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                       locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                       calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                       locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
                        value={contractForm.startDate}
                        onChange={handleStartDateChange}
                        calendarPosition="bottom-right"
@@ -774,8 +751,8 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                    </label>
                    <div className="relative">
                      <DatePicker
-                       calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                       locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                       calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                       locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
                        value={contractForm.endDate}
                        minDate={contractForm.startDate || undefined}
                        onChange={handleEndDateChange}

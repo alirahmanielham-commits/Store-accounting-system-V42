@@ -117,7 +117,7 @@ export function toPersianDigits(str: string | number | undefined | null): string
   });
 }
 
-export function formatDateDisplay(dateInput: string | Date | undefined | null, calendarType?: string): string {
+export function formatDateDisplay(dateInput: string | Date | number | undefined | null, calendarType?: string): string {
   if (!dateInput || dateInput === "-") return "-";
   try {
     if (calendarType === 'gregorian' || calendarType === 'jalali') {
@@ -146,54 +146,76 @@ export function formatDateDisplay(dateInput: string | Date | undefined | null, c
   }
 }
 
+export function convertToGregorian(dateInput: string | Date | number | any): string {
+  if (!dateInput) return new Date().toISOString();
+  if (dateInput instanceof Date) {
+    return isNaN(dateInput.getTime()) ? new Date().toISOString() : dateInput.toISOString();
+  }
+  if (typeof dateInput === 'number') {
+    const d = new Date(dateInput);
+    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  }
+  if (typeof dateInput?.toDate === 'function') {
+    const d = dateInput.toDate();
+    return isNaN(d.getTime()) ? new Date().toISOString() : d.toISOString();
+  }
+  if (typeof dateInput === 'string') {
+    let str = dateInput.trim();
+    if (!str) return new Date().toISOString();
+    
+    // Normalize Persian and Arabic digits to Latin digits
+    str = str.replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
+             .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
 
-export function convertToGregorian(dateInput: string | Date | null | undefined): string {
-    if (!dateInput) return new Date().toISOString();
-    if (typeof (dateInput as any).toDate === 'function') {
-        return (dateInput as any).toDate().toISOString();
+    // Check if already an ISO date string
+    if (str.includes('T') && !str.includes('/')) {
+      const hasZ = str.endsWith('Z');
+      const d = new Date(hasZ ? str : str + 'Z');
+      if (!isNaN(d.getTime())) return d.toISOString();
+      const d2 = new Date(str);
+      if (!isNaN(d2.getTime())) return d2.toISOString();
     }
-    if (typeof dateInput === 'string') {
-        if (dateInput.includes('T')) return dateInput; // Already ISO
+
+    const normalizedSlash = str.replace(/-/g, '/');
+    if (normalizedSlash.includes('/')) {
+      try {
+        const parts = normalizedSlash.split(/[\s/:]+/);
+        const firstNum = parseInt(parts[0], 10);
         
-        let normalizedInput = dateInput;
-        if (normalizedInput.includes('-') && !normalizedInput.includes('T')) {
-            normalizedInput = normalizedInput.replace(/-/g, '/');
-        }
-
-        if (normalizedInput.includes('/')) {
-            try {
-                const englishStr = normalizedInput.replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString());
-                const year = parseInt(englishStr.split('/')[0], 10);
-                if (year < 1500) {
-                     let format = "YYYY/MM/DD";
-                     if (englishStr.includes(':')) {
-                         if (englishStr.includes('am') || englishStr.includes('pm')) {
-                             format = "YYYY/MM/DD hh:mm a";
-                         } else {
-                             format = englishStr.split(':').length === 3 ? "YYYY/MM/DD HH:mm:ss" : "YYYY/MM/DD HH:mm";
-                         }
-                     }
-                     const d = new DateObject({ date: englishStr, format: format, calendar: persian, locale: persian_fa });
-                     // To avoid timezone shift when using toISOString, we get the local ISO
-                     const tzOffset = d.toDate().getTimezoneOffset() * 60000;
-                     const localISOTime = (new Date(d.toDate().getTime() - tzOffset)).toISOString().slice(0, -1);
-                     return localISOTime;
-                } else {
-                     const d = new Date(englishStr);
-                     if (!isNaN(d.getTime())) return d.toISOString();
-                }
-            } catch (e) {
-                console.log(e);
+        if (firstNum < 1700 && firstNum > 1200) {
+          // Jalali / Persian date
+          let format = "YYYY/MM/DD";
+          if (normalizedSlash.includes(':')) {
+            if (normalizedSlash.toLowerCase().includes('am') || normalizedSlash.toLowerCase().includes('pm')) {
+              format = "YYYY/MM/DD hh:mm a";
+            } else {
+              const colons = (normalizedSlash.match(/:/g) || []).length;
+              format = colons >= 2 ? "YYYY/MM/DD HH:mm:ss" : "YYYY/MM/DD HH:mm";
             }
+          }
+          const d = new DateObject({ date: normalizedSlash, format, calendar: persian, locale: persian_fa });
+          const jsDate = d.toDate();
+          if (!isNaN(jsDate.getTime())) {
+            return jsDate.toISOString();
+          }
+        } else {
+          // Gregorian date (e.g. 2024/08/29 or 2024-08-29)
+          const d = new Date(str.replace(/\//g, '-'));
+          if (!isNaN(d.getTime())) return d.toISOString();
         }
-        const d2 = new Date(dateInput);
-        if (!isNaN(d2.getTime())) return d2.toISOString();
-        return new Date().toISOString();
+      } catch (e) {
+        console.error("Error in convertToGregorian parsing slash date:", e);
+      }
     }
-    if (dateInput instanceof Date) {
-        if (!isNaN(dateInput.getTime())) return dateInput.toISOString();
+    const num = Number(str);
+    if (!isNaN(num) && num > 1000000) {
+      const d = new Date(num);
+      if (!isNaN(d.getTime())) return d.toISOString();
     }
-    return new Date().toISOString();
+    const d2 = new Date(str);
+    if (!isNaN(d2.getTime())) return d2.toISOString();
+  }
+  return new Date().toISOString();
 }
 
 export const customPersonFilter = (option: any, inputValue: string) => {
