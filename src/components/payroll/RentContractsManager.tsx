@@ -55,6 +55,62 @@ export default function RentContractsManager({ personsData, storeSettings, showN
     }
   };
 
+  const toDateObj = (dateVal: any): Date | null => {
+    if (!dateVal) return null;
+    try {
+      if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal;
+      if (typeof dateVal.toDate === 'function') {
+        const d = dateVal.toDate();
+        return isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof dateVal === 'string') {
+        const gregorian = convertToGregorian(dateVal);
+        const d = new Date(gregorian);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      const num = Number(dateVal);
+      if (!isNaN(num) && num > 0) {
+        const d = new Date(num);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      const d = new Date(dateVal);
+      return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const handleStartDateChange = (newStartDate: any) => {
+    setForm(prev => {
+      let nextEndDate = prev.endDate;
+      const startD = toDateObj(newStartDate);
+      const endD = toDateObj(prev.endDate);
+
+      if (startD && endD && endD < startD) {
+        // Automatically validate and update the end date so it doesn't precede the start date
+        nextEndDate = newStartDate;
+      }
+
+      return {
+        ...prev,
+        startDate: newStartDate,
+        endDate: nextEndDate
+      };
+    });
+  };
+
+  const handleEndDateChange = (newEndDate: any) => {
+    if (newEndDate) {
+      const startD = toDateObj(form.startDate);
+      const endD = toDateObj(newEndDate);
+      if (startD && endD && endD < startD) {
+        showNotification('تاریخ پایان نمی‌تواند قبل از تاریخ شروع قرارداد باشد', 'warning');
+        return;
+      }
+    }
+    setForm(prev => ({ ...prev, endDate: newEndDate }));
+  };
+
   useEffect(() => {
     if (!editingId && form.personId && form.startDate && form.endDate) {
       const generated = autoGenerateContractNumber(form.personId.value, form.startDate, form.endDate);
@@ -198,6 +254,14 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       const endDateIso = getIsoDateStr(form.endDate);
 
       if (!startDateIso) return showNotification('تاریخ شروع الزامی است', 'error');
+
+      if (startDateIso && endDateIso) {
+        const startObj = new Date(startDateIso);
+        const endObj = new Date(endDateIso);
+        if (endObj < startObj) {
+          return showNotification('تاریخ پایان قرارداد نمی‌تواند قبل از تاریخ شروع باشد', 'error');
+        }
+      }
 
       const personContracts = contracts.filter(c => c.personId === form.personId.value && c.id !== editingId && c.status === 'active');
       const newStartObj = new Date(startDateIso);
@@ -455,7 +519,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                   <div className="relative">
                     <DatePicker
                       value={form.startDate}
-                      onChange={(date: any) => setForm(prev => ({ ...prev, startDate: date }))}
+                      onChange={handleStartDateChange}
                       calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                       locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                       calendarPosition="bottom-right"
@@ -474,7 +538,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                   <div className="relative">
                     <DatePicker
                       value={form.endDate}
-                      onChange={(date: any) => setForm(prev => ({ ...prev, endDate: date }))}
+                      minDate={form.startDate || undefined}
+                      onChange={handleEndDateChange}
                       calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                       locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                       calendarPosition="bottom-right"

@@ -214,7 +214,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
         experienceYears: formData.experienceYears,
         items: formData.items,
         issueDate: issueDateStr,
-        executionDate: formData.executionDate.getTime().toString(),
+        executionDate: executionDateStr,
         status: formData.status
       };
 

@@ -64,13 +64,31 @@ export default function CustomDatePicker(props: any) {
     });
   }
 
+  let parsedMinDate = props.minDate;
+  if (typeof props.minDate === 'string' && props.minDate) {
+    if (props.minDate.includes('T') || props.minDate.startsWith('20') || props.minDate.startsWith('19')) {
+      parsedMinDate = new Date(convertToGregorian(props.minDate));
+    }
+  }
+
+  let parsedMaxDate = props.maxDate;
+  if (typeof props.maxDate === 'string' && props.maxDate) {
+    if (props.maxDate.includes('T') || props.maxDate.startsWith('20') || props.maxDate.startsWith('19')) {
+      parsedMaxDate = new Date(convertToGregorian(props.maxDate));
+    }
+  }
+
   return (
     <DatePicker
+      portal={props.portal !== undefined ? props.portal : true}
+      zIndex={props.zIndex !== undefined ? props.zIndex : 100050}
       {...props}
       calendar={props.calendar !== undefined ? props.calendar : globalProps.calendar}
       locale={props.locale !== undefined ? props.locale : globalProps.locale}
       format={props.format || globalProps.format}
       value={parsedValue}
+      minDate={parsedMinDate}
+      maxDate={parsedMaxDate}
       onChange={(date: any) => {
          let valueToPass = date;
          if (date && typeof date.format === 'function') {

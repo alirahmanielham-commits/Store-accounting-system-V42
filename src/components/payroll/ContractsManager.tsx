@@ -69,6 +69,62 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
     }
   };
 
+  const toDateObj = (dateVal: any): Date | null => {
+    if (!dateVal) return null;
+    try {
+      if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal;
+      if (typeof dateVal.toDate === 'function') {
+        const d = dateVal.toDate();
+        return isNaN(d.getTime()) ? null : d;
+      }
+      if (typeof dateVal === 'string') {
+        const gregorian = convertToGregorian(dateVal);
+        const d = new Date(gregorian);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      const num = Number(dateVal);
+      if (!isNaN(num) && num > 0) {
+        const d = new Date(num);
+        return isNaN(d.getTime()) ? null : d;
+      }
+      const d = new Date(dateVal);
+      return isNaN(d.getTime()) ? null : d;
+    } catch (e) {
+      return null;
+    }
+  };
+
+  const handleStartDateChange = (newStartDate: any) => {
+    setContractForm(prev => {
+      let nextEndDate = prev.endDate;
+      const startD = toDateObj(newStartDate);
+      const endD = toDateObj(prev.endDate);
+
+      if (startD && endD && endD < startD) {
+        // Automatically validate and update the end date so it doesn't precede the start date
+        nextEndDate = newStartDate;
+      }
+
+      return {
+        ...prev,
+        startDate: newStartDate,
+        endDate: nextEndDate
+      };
+    });
+  };
+
+  const handleEndDateChange = (newEndDate: any) => {
+    if (newEndDate) {
+      const startD = toDateObj(contractForm.startDate);
+      const endD = toDateObj(newEndDate);
+      if (startD && endD && endD < startD) {
+        showNotification('تاریخ پایان نمی‌تواند قبل از تاریخ شروع قرارداد باشد', 'warning');
+        return;
+      }
+    }
+    setContractForm(prev => ({ ...prev, endDate: newEndDate }));
+  };
+
   useEffect(() => {
     if (!editingContractId && contractForm.personId && contractForm.startDate && contractForm.endDate) {
       const generated = autoGenerateContractNumber(contractForm.personId.value, contractForm.startDate, contractForm.endDate);
@@ -203,6 +259,14 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
       const endDateIso = getIsoDateStr(contractForm.endDate);
 
       if (!startDateIso) return showNotification('تاریخ شروع قرارداد الزامی است', 'error');
+
+      if (startDateIso && endDateIso) {
+        const startObj = new Date(startDateIso);
+        const endObj = new Date(endDateIso);
+        if (endObj < startObj) {
+          return showNotification('تاریخ پایان قرارداد نمی‌تواند قبل از تاریخ شروع باشد', 'error');
+        }
+      }
 
       // Overlap validation
       const personContracts = contracts.filter(c => c.personId === contractForm.personId.value && c.id !== editingContractId && c.status === 'active');
@@ -601,30 +665,31 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
             <div className="p-6 bg-slate-50/50 space-y-4">
               <p className="text-sm text-slate-600 mb-4">لطفاً تاریخ دقیق ترک کار پرسنل را انتخاب کنید.</p>
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ ترک کار</label>
-                <DatePicker
+                <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                  <Calendar className="w-4 h-4 text-amber-600" /> تاریخ ترک کار
+                </label>
+                <div className="relative">
+                  <DatePicker
                     calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                     locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                     value={terminateDate}
-                    onChange={(date) => {
+                    onChange={(date: any) => {
                       if (!date) {
-                          setTerminateDate(null);
-                          return;
+                        setTerminateDate(null);
+                        return;
                       }
-                      let d;
-                      if (typeof date === 'string') {
-                          d = new Date(convertToGregorian(date));
-                      } else {
-                          d = date?.toDate?.() || new Date(date);
-                      }
-                      if (d && !isNaN(d.getTime())) {
-                          d.setHours(0,0,0,0);
-                          setTerminateDate(d);
-                      }
+                      const d = toDateObj(date);
+                      if (d) d.setHours(0,0,0,0);
+                      setTerminateDate(d);
                     }}
                     calendarPosition="bottom-right"
-                    inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-white"
-                />
+                    inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-amber-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
+                    containerClassName="w-full"
+                  />
+                  <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-amber-600">
+                    <Calendar className="w-5 h-5" />
+                  </div>
+                </div>
               </div>
             </div>
             <div className="p-5 border-t border-slate-200 flex justify-end gap-3 bg-white">
@@ -692,7 +757,7 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                        calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                        locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                        value={contractForm.startDate}
-                       onChange={(date: any) => setContractForm(prev => ({ ...prev, startDate: date }))}
+                       onChange={handleStartDateChange}
                        calendarPosition="bottom-right"
                        inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
                        containerClassName="w-full"
@@ -712,7 +777,8 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                        calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
                        locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
                        value={contractForm.endDate}
-                       onChange={(date: any) => setContractForm(prev => ({ ...prev, endDate: date }))}
+                       minDate={contractForm.startDate || undefined}
+                       onChange={handleEndDateChange}
                        calendarPosition="bottom-right"
                        inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
                        containerClassName="w-full"
