@@ -1,9 +1,13 @@
 import { convertToGregorian } from '../../utils/format';
 import React, { useState, useEffect, useMemo } from 'react';
-import { FileText, Plus, Edit2, CheckCircle, Save, XCircle, Search, Trash2, Eye, ArrowRight, AlertTriangle } from 'lucide-react';
+import { FileText, Plus, Edit2, CheckCircle, Save, XCircle, Search, Trash2, Eye, ArrowRight, AlertTriangle, Calendar } from 'lucide-react';
 import { getEmployeeOrders, addEmployeeOrder, updateEmployeeOrder, deleteEmployeeOrder, getEmployeeContracts, getOrderTemplates, getPayslips } from '../../services/hrService';
+import CustomDatePicker from '../ui/CustomDatePicker';
+import persian from 'react-date-object/calendars/persian';
+import persian_fa from 'react-date-object/locales/persian_fa';
 
-export default function EmployeeOrdersManager({ personsData, showNotification, DatePicker, persian, persian_fa, storeSettings }: any) {
+export default function EmployeeOrdersManager({ personsData, showNotification, DatePicker: _propDatePicker, persian: _propPersian, persian_fa: _propPersianFa, storeSettings }: any) {
+  const DatePicker = CustomDatePicker;
   const [orders, setOrders] = useState<any[]>([]);
   const [contracts, setContracts] = useState<any[]>([]);
   const [templates, setTemplates] = useState<any[]>([]);
@@ -76,8 +80,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
         childrenCount: order.childrenCount !== undefined ? order.childrenCount : '',
         experienceYears: order.experienceYears !== undefined ? order.experienceYears : '',
         items: order.items || [],
-        issueDate: order.issueDate ? new Date(Number(order.issueDate)) : new Date(),
-        executionDate: order.executionDate ? new Date(Number(order.executionDate)) : new Date(),
+        issueDate: order.issueDate ? (isNaN(Number(order.issueDate)) ? order.issueDate : new Date(Number(order.issueDate))) : new Date(),
+        executionDate: order.executionDate ? (isNaN(Number(order.executionDate)) ? order.executionDate : new Date(Number(order.executionDate))) : new Date(),
         status: order.status || 'draft'
       });
     } else {
@@ -170,7 +174,27 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
       return showNotification('لطفا شخص، قرارداد و قالب را انتخاب کنید', 'error');
     }
 
-    const issueDateStr = formData.issueDate ? formData.issueDate.getTime().toString() : Date.now().toString();
+    const getTimestampStr = (dateVal: any) => {
+      if (!dateVal) return Date.now().toString();
+      try {
+        if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? Date.now().toString() : dateVal.getTime().toString();
+        if (typeof dateVal.toDate === 'function') return dateVal.toDate().getTime().toString();
+        if (typeof dateVal === 'string') {
+          const iso = convertToGregorian(dateVal);
+          const d = new Date(iso);
+          return isNaN(d.getTime()) ? Date.now().toString() : d.getTime().toString();
+        }
+        const num = Number(dateVal);
+        if (!isNaN(num) && num > 1000000) return num.toString();
+        const d = new Date(dateVal);
+        return isNaN(d.getTime()) ? Date.now().toString() : d.getTime().toString();
+      } catch (e) {
+        return Date.now().toString();
+      }
+    };
+
+    const issueDateStr = getTimestampStr(formData.issueDate);
+    const executionDateStr = getTimestampStr(formData.executionDate);
 
     try {
       if (formData.status === 'active') {
@@ -568,28 +592,44 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
                       className="w-full border border-slate-200 bg-slate-50 rounded-xl p-[14px] outline-none focus:bg-white focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 font-bold transition-all"
                     />
                   </div>
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ صدور</label>
-                      <DatePicker
-                        calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                        locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
-                        value={formData.issueDate}
-                        onChange={(date: any) => setFormData({...formData, issueDate: typeof date === 'string' ? new Date(convertToGregorian(date)) : (date?.toDate?.() || new Date(date))})}
-                        calendarPosition="bottom-right"
-                        inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
-                      />
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-indigo-600" /> تاریخ صدور
+                      </label>
+                      <div className="relative">
+                        <DatePicker
+                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                          value={formData.issueDate}
+                          onChange={(date: any) => setFormData(prev => ({ ...prev, issueDate: date }))}
+                          calendarPosition="bottom-right"
+                          inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
+                          containerClassName="w-full"
+                        />
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-600">
+                          <Calendar className="w-5 h-5" />
+                        </div>
+                      </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ اجرا</label>
-                      <DatePicker
-                        calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                        locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
-                        value={formData.executionDate}
-                        onChange={(date: any) => setFormData({...formData, executionDate: typeof date === 'string' ? new Date(convertToGregorian(date)) : (date?.toDate?.() || new Date(date))})}
-                        calendarPosition="bottom-right"
-                        inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-slate-50"
-                      />
+                      <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-indigo-600" /> تاریخ اجرا
+                      </label>
+                      <div className="relative">
+                        <DatePicker
+                          calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                          locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                          value={formData.executionDate}
+                          onChange={(date: any) => setFormData(prev => ({ ...prev, executionDate: date }))}
+                          calendarPosition="bottom-right"
+                          inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
+                          containerClassName="w-full"
+                        />
+                        <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-600">
+                          <Calendar className="w-5 h-5" />
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>

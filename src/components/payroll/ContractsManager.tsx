@@ -4,9 +4,12 @@ import { getSalaryComponents, getContractComponents,  getEmployeeContracts, addE
 import Select from 'react-select';
 import RentContractsManager from './RentContractsManager';
 import { convertToGregorian } from '../../utils/format';
+import CustomDatePicker from '../ui/CustomDatePicker';
+import persian from 'react-date-object/calendars/persian';
+import persian_fa from 'react-date-object/locales/persian_fa';
 
-
-function EmploymentContracts({ personsData, personGroups, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
+function EmploymentContracts({ personsData, personGroups, storeSettings, showNotification, DatePicker: _propDatePicker, persian: _propPersian, persian_fa: _propPersianFa }: any) {
+  const DatePicker = CustomDatePicker;
    
   
   const [contracts, setContracts] = useState([]);
@@ -56,8 +59,10 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
     if (!person) return '';
     const code = person.personCode || person.id;
     try {
-      const sYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(sDate);
-      const eYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(eDate);
+      const sDateObj = sDate instanceof Date ? sDate : new Date(convertToGregorian(sDate));
+      const eDateObj = eDate instanceof Date ? eDate : new Date(convertToGregorian(eDate));
+      const sYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(sDateObj);
+      const eYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(eDateObj);
       return `${code}${sYear}${eYear}`;
     } catch(e) {
       return '';
@@ -178,11 +183,14 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
     setLoading(true);
     if (!contractForm.personId) return showNotification('پرسنل باید انتخاب شود', 'error');
     try {
-      const getIsoDateStr = (dateVal) => {
+      const getIsoDateStr = (dateVal: any) => {
         if (!dateVal) return null;
         try {
-          if (dateVal instanceof Date) return dateVal.toISOString();
+          if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal.toISOString();
           if (typeof dateVal.toDate === 'function') return dateVal.toDate().toISOString();
+          if (typeof dateVal === 'string') {
+            return convertToGregorian(dateVal);
+          }
           const parsed = new Date(dateVal);
           if (!isNaN(parsed.getTime())) return parsed.toISOString();
           return null;
@@ -676,57 +684,43 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                  </div>
 
                  <div>
-                   <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ شروع قرارداد</label>
-                   <DatePicker
-                     calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                     locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
-                     value={contractForm.startDate}
-                     onChange={(date) => {
-                      if (!date) {
-                          setContractForm(prev => ({...prev, startDate: null}));
-                          return;
-                      }
-                      let d;
-                      if (typeof date === 'string') {
-                          d = new Date(convertToGregorian(date));
-                      } else {
-                          d = date?.toDate?.() || new Date(date);
-                      }
-                      if (d && !isNaN(d.getTime())) {
-                          d.setHours(0,0,0,0);
-                          setContractForm(prev => ({...prev, startDate: d}));
-                      }
-                    }}
-                     calendarPosition="bottom-right"
-                     inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-white"
-                   />
+                   <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                     <Calendar className="w-4 h-4 text-indigo-600" /> تاریخ شروع قرارداد
+                   </label>
+                   <div className="relative">
+                     <DatePicker
+                       calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                       locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                       value={contractForm.startDate}
+                       onChange={(date: any) => setContractForm(prev => ({ ...prev, startDate: date }))}
+                       calendarPosition="bottom-right"
+                       inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
+                       containerClassName="w-full"
+                     />
+                     <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-600">
+                       <Calendar className="w-5 h-5" />
+                     </div>
+                   </div>
                  </div>
                  
                  <div>
-                   <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ پایان قرارداد</label>
-                   <DatePicker
-                     calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                     locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
-                     value={contractForm.endDate}
-                     onChange={(date) => {
-                      if (!date) {
-                          setContractForm(prev => ({...prev, endDate: null}));
-                          return;
-                      }
-                      let d;
-                      if (typeof date === 'string') {
-                          d = new Date(convertToGregorian(date));
-                      } else {
-                          d = date?.toDate?.() || new Date(date);
-                      }
-                      if (d && !isNaN(d.getTime())) {
-                          d.setHours(0,0,0,0);
-                          setContractForm(prev => ({...prev, endDate: d}));
-                      }
-                    }}
-                     calendarPosition="bottom-right"
-                     inputClass="w-full border border-slate-200 rounded-xl p-[14px] text-center font-bold text-slate-700 outline-none focus:border-indigo-500 focus:ring-4 focus:ring-indigo-500/10 transition-all bg-white"
-                   />
+                   <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                     <Calendar className="w-4 h-4 text-indigo-600" /> تاریخ پایان قرارداد
+                   </label>
+                   <div className="relative">
+                     <DatePicker
+                       calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                       locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                       value={contractForm.endDate}
+                       onChange={(date: any) => setContractForm(prev => ({ ...prev, endDate: date }))}
+                       calendarPosition="bottom-right"
+                       inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
+                       containerClassName="w-full"
+                     />
+                     <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-600">
+                       <Calendar className="w-5 h-5" />
+                     </div>
+                   </div>
                  </div>
 
                  <div className="md:col-span-2">

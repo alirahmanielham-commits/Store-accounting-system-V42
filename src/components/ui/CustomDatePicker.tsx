@@ -67,8 +67,8 @@ export default function CustomDatePicker(props: any) {
   return (
     <DatePicker
       {...props}
-      calendar={globalProps.calendar}
-      locale={globalProps.locale}
+      calendar={props.calendar !== undefined ? props.calendar : globalProps.calendar}
+      locale={props.locale !== undefined ? props.locale : globalProps.locale}
       format={props.format || globalProps.format}
       value={parsedValue}
       onChange={(date: any) => {

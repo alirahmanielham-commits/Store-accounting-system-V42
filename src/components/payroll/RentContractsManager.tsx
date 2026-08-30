@@ -5,9 +5,13 @@ import Select from 'react-select';
 import { convertToGregorian } from '../../utils/format';
 import { NumericFormat } from 'react-number-format';
 import { getLedgerAccounts, addAccountingDocument, getAccountingDocuments, getTransactions } from '../../services/dataService';
-import { Eye } from 'lucide-react';
+import { Eye, Calendar } from 'lucide-react';
+import CustomDatePicker from '../ui/CustomDatePicker';
+import persian from 'react-date-object/calendars/persian';
+import persian_fa from 'react-date-object/locales/persian_fa';
 
-export default function RentContractsManager({ personsData, storeSettings, showNotification, DatePicker, persian, persian_fa }: any) {
+export default function RentContractsManager({ personsData, storeSettings, showNotification, DatePicker: _propDatePicker, persian: _propPersian, persian_fa: _propPersianFa }: any) {
+  const DatePicker = CustomDatePicker;
   const [contracts, setContracts] = useState<any[]>([]);
   const [pendingDocs, setPendingDocs] = useState<any[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -41,8 +45,10 @@ export default function RentContractsManager({ personsData, storeSettings, showN
     if (!person) return '';
     const code = person.personCode || person.id;
     try {
-      const sYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(sDate);
-      const eYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(eDate);
+      const sDateObj = sDate instanceof Date ? sDate : new Date(convertToGregorian(sDate));
+      const eDateObj = eDate instanceof Date ? eDate : new Date(convertToGregorian(eDate));
+      const sYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(sDateObj);
+      const eYear = new Intl.DateTimeFormat('fa-IR-u-nu-latn', { year: 'numeric' }).format(eDateObj);
       return `${code}${sYear}${eYear}`;
     } catch(e) {
       return '';
@@ -174,11 +180,18 @@ export default function RentContractsManager({ personsData, storeSettings, showN
     try {
       const getIsoDateStr = (dateVal: any) => {
         if (!dateVal) return null;
-        if (dateVal instanceof Date) return dateVal.toISOString();
-        if (typeof dateVal.toDate === 'function') return dateVal.toDate().toISOString();
-        const parsed = new Date(dateVal);
-        if (!isNaN(parsed.getTime())) return parsed.toISOString();
-        return null;
+        try {
+          if (dateVal instanceof Date) return isNaN(dateVal.getTime()) ? null : dateVal.toISOString();
+          if (typeof dateVal.toDate === 'function') return dateVal.toDate().toISOString();
+          if (typeof dateVal === 'string') {
+            return convertToGregorian(dateVal);
+          }
+          const parsed = new Date(dateVal);
+          if (!isNaN(parsed.getTime())) return parsed.toISOString();
+          return null;
+        } catch(e) {
+          return null;
+        }
       };
 
       const startDateIso = getIsoDateStr(form.startDate);
@@ -436,56 +449,42 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ شروع <span className="text-rose-500">*</span></label>
-                  <DatePicker
-                    value={form.startDate}
-                    onChange={(date: any) => {
-                      if (!date) {
-                          setForm(prev => ({...prev, startDate: null as any}));
-                          return;
-                      }
-                      let d;
-                      if (typeof date === 'string') {
-                          d = new Date(convertToGregorian(date));
-                      } else {
-                          d = date?.toDate?.() || new Date(date);
-                      }
-                      if (d && !isNaN(d.getTime())) {
-                          d.setHours(0,0,0,0);
-                          setForm(prev => ({...prev, startDate: d}));
-                      }
-                    }}
-                    calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                    locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
-                    calendarPosition="bottom-right"
-                    inputClass="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
-                  />
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-indigo-600" /> تاریخ شروع <span className="text-rose-500">*</span>
+                  </label>
+                  <div className="relative">
+                    <DatePicker
+                      value={form.startDate}
+                      onChange={(date: any) => setForm(prev => ({ ...prev, startDate: date }))}
+                      calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                      locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                      calendarPosition="bottom-right"
+                      inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
+                      containerClassName="w-full"
+                    />
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-600">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                  </div>
                 </div>
                 <div>
-                  <label className="block text-sm font-bold text-slate-700 mb-2">تاریخ پایان</label>
-                  <DatePicker
-                    value={form.endDate}
-                    onChange={(date: any) => {
-                      if (!date) {
-                          setForm(prev => ({...prev, endDate: null as any}));
-                          return;
-                      }
-                      let d;
-                      if (typeof date === 'string') {
-                          d = new Date(convertToGregorian(date));
-                      } else {
-                          d = date?.toDate?.() || new Date(date);
-                      }
-                      if (d && !isNaN(d.getTime())) {
-                          d.setHours(0,0,0,0);
-                          setForm(prev => ({...prev, endDate: d}));
-                      }
-                    }}
-                    calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
-                    locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
-                    calendarPosition="bottom-right"
-                    inputClass="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
-                  />
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-4 h-4 text-indigo-600" /> تاریخ پایان
+                  </label>
+                  <div className="relative">
+                    <DatePicker
+                      value={form.endDate}
+                      onChange={(date: any) => setForm(prev => ({ ...prev, endDate: date }))}
+                      calendar={storeSettings?.calendarType === 'gregorian' ? undefined : persian}
+                      locale={storeSettings?.calendarType === 'gregorian' ? undefined : persian_fa}
+                      calendarPosition="bottom-right"
+                      inputClass="w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 outline-none font-sans font-bold text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base"
+                      containerClassName="w-full"
+                    />
+                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-600">
+                      <Calendar className="w-5 h-5" />
+                    </div>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">مبلغ ماهانه تعهد ({storeSettings?.currency || 'ریال'}) <span className="text-rose-500">*</span></label>
