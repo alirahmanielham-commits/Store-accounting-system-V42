@@ -49,7 +49,7 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
     personId: null,
     contractNumber: '',
     startDate: new Date(new Date().setHours(0,0,0,0)),
-    endDate: new Date(new Date(new Date().setFullYear(new Date().getFullYear() + 1)).setHours(0,0,0,0)),
+    endDate: null,
     location: '',
     workplaceId: '',
     status: 'draft'
@@ -397,7 +397,7 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
               <button onClick={() => {
                 setEditingContractId(null);
                 setWizardStep(1);
-                setContractForm({ personId: null, contractNumber: '', startDate: new Date(new Date().setHours(0,0,0,0)), endDate: new Date(new Date().setHours(0,0,0,0)), location: '', workplaceId: '', status: 'draft' });
+                setContractForm({ personId: null, contractNumber: '', startDate: new Date(new Date().setHours(0,0,0,0)), endDate: null, location: '', workplaceId: '', status: 'draft' });
                 setIsContractModalOpen(true);
               }} className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-sm font-bold flex items-center justify-center gap-2 transition-colors whitespace-nowrap">
                 <Plus className="w-4 h-4"/> ثبت قرارداد جدید
@@ -467,7 +467,7 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
                                 contractNumber: c.contractNumber || '',
                                 workplaceId: c.workplaceId || '',
                                 startDate: c.startDate ? new Date(convertToGregorian(c.startDate)) : new Date(),
-                                endDate: c.endDate ? new Date(convertToGregorian(c.endDate)) : new Date(),
+                                endDate: c.endDate ? new Date(convertToGregorian(c.endDate)) : null,
                                 location: c.location || '',
                                 status: c.status || 'draft',
                               });
