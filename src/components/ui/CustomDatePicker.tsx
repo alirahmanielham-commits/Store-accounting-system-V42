@@ -23,9 +23,9 @@ const TodayButton = (props: any) => {
             today.setHours(0, 0, 0, 0);
             const endToday = new Date();
             endToday.setHours(23, 59, 59, 999);
-            newValue = [today, endToday];
+            newValue = [today.toISOString(), endToday.toISOString()];
           } else {
-            newValue = new Date();
+            newValue = new Date().toISOString();
           }
           if (typeof setValue === 'function') setValue(newValue);
           else if (typeof handleChange === 'function') handleChange(newValue);
@@ -91,10 +91,19 @@ export default function CustomDatePicker(props: any) {
       maxDate={parsedMaxDate}
       onChange={(date: any) => {
          let valueToPass = date;
-         if (date && typeof date.format === 'function') {
-           valueToPass = date.format(props.format || globalProps.format);
+         if (date && typeof date.toDate === 'function') {
+           const jsDate = date.toDate();
+           if (!isNaN(jsDate.getTime())) {
+             valueToPass = jsDate.toISOString();
+           }
          } else if (Array.isArray(date)) {
-           valueToPass = date.map((d: any) => d && typeof d.format === 'function' ? d.format(props.format || globalProps.format) : d);
+           valueToPass = date.map((d: any) => {
+             if (d && typeof d.toDate === 'function') {
+               const jsDate = d.toDate();
+               return !isNaN(jsDate.getTime()) ? jsDate.toISOString() : d;
+             }
+             return d;
+           });
          }
          // if component has its own onChange, call it
          if (props.onChange) props.onChange(valueToPass);

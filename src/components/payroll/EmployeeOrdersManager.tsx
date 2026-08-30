@@ -173,6 +173,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
     if (loading) return;
     setLoading(true);
     if (!formData.personId || !formData.contractId || !formData.templateId) {
+      setLoading(false);
       return showNotification('لطفا شخص، قرارداد و قالب را انتخاب کنید', 'error');
     }
 
@@ -202,6 +203,13 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
       if (formData.status === 'active') {
         // Find all other active orders for this contract and deactivate them
         const otherOrders = orders.filter(o => o.contractId === formData.contractId && o.id !== editingId && o.status === 'active');
+        if (otherOrders.length > 0) {
+          const confirmed = window.confirm('این شخص دارای حکم فعال دیگری است که با تاریخ این حکم هم‌پوشانی دارد. آیا از ثبت حکم جدید و غیرفعال کردن حکم قبلی اطمینان دارید؟');
+          if (!confirmed) {
+            setLoading(false);
+            return;
+          }
+        }
         for (const ord of otherOrders) {
           await updateEmployeeOrder(ord.id, { ...ord, status: 'inactive' });
         }
@@ -235,6 +243,8 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
     } catch (e) {
       console.error(e);
       showNotification('خطا در ثبت حکم', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
