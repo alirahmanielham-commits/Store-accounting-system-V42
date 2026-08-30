@@ -249,7 +249,8 @@ const DebtorsNotification = React.lazy(() => import('./components/DebtorsNotific
 const BeautifulLoading = React.lazy(() => import('./components/BeautifulLoading'));
 const DataReconciliation = React.lazy(() => import('./components/DataReconciliation'));
 
-const PayrollSettings = React.lazy(() => import('./components/payroll/PayrollSettings'));
+const OrderTemplatesManager = React.lazy(() => import('./components/payroll/OrderTemplatesManager'));
+const WorkplacesManager = React.lazy(() => import('./components/payroll/WorkplacesManager'));
 
 const EmployeeProfilesManager = React.lazy(() => import("./components/payroll/EmployeeProfilesManager"));
 const ContractsManager = React.lazy(() => import('./components/payroll/ContractsManager'));
@@ -1145,7 +1146,8 @@ export default function App() {
                           setActiveTab("accounting_docs_list");
                         }} />} />
 
-<Route path="/payroll_settings" element={<PayrollSettings showNotification={showNotification} storeSettings={storeSettings} />} />
+<Route path="/order_templates" element={<OrderTemplatesManager showNotification={showNotification} storeSettings={storeSettings} />} />
+                          <Route path="/workplaces" element={<WorkplacesManager showNotification={showNotification} storeSettings={storeSettings} />} />
 
 <Route path="/employee_profiles" element={<EmployeeProfilesManager personsData={persons} fetchPersons={fetchPersons} showNotification={showNotification} />} />
 <Route path="/employee_contracts" element={<ContractsManager personsData={persons} personGroups={personGroups} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />

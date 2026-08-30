@@ -4,6 +4,7 @@ import { updatePerson } from '../../services/personService';
 
 export default function EmployeeProfilesManager({ personsData, fetchPersons, showNotification }: any) {
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
   const [editingPersonId, setEditingPersonId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'all' | 'incomplete'>('all');
   

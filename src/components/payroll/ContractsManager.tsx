@@ -15,6 +15,7 @@ function EmploymentContracts({ personsData, personGroups, storeSettings, showNot
   const [employeeProfiles, setEmployeeProfiles] = useState([]);
   const [workplaces, setWorkplaces] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
 
   const parseSafeDate = (val) => {
     if (!val) return null;

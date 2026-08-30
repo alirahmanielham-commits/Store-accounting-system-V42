@@ -240,12 +240,13 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       let taxAmount = 0;
       let insAmount = 0;
 
+      const dailyWageItem = orderItems.find(i => i.id === 'daily_wage' || i.title === 'دستمزد روزانه');
+      const dailyWageValue = dailyWageItem ? (parseFloat(dailyWageItem.amount) || 0) : 0;
+
       const pItems = [];
 
       // 1. Calculate Earnings (Custom + Defaults)
       const shortageHours = parseFloat(att.shortageHours || 0);
-      const dailyWageItem = orderItems.find(i => i.id === 'daily_wage' || i.title === 'دستمزد روزانه');
-      const dailyWageValue = dailyWageItem ? (parseFloat(dailyWageItem.amount) || 0) : 0;
       let childAllowanceVal = 0;
 
       for (const item of orderItems) {
@@ -517,6 +518,9 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       let baseWageTotal = 0;
       let taxAmount = 0;
       let insAmount = 0;
+
+      const dailyWageItem = orderItems.find(i => i.id === 'daily_wage' || i.title === 'دستمزد روزانه');
+      const dailyWageValue = dailyWageItem ? (parseFloat(dailyWageItem.amount) || 0) : 0;
 
       const pItems = [];
 

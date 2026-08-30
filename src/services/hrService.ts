@@ -282,7 +282,7 @@ export const testGenerateRentCommitments = async () => {
             description: `تعهد اجاره (تستی)`
           },
           {
-            ledgerAccountId: payableAcc2.id,
+            ledgerAccountId: payableAcc.id,
             detailedAccountId: contract.personId,
             debit: 0,
             credit: Number(contract.monthlyAmount),

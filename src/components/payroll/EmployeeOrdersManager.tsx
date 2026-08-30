@@ -9,6 +9,7 @@ export default function EmployeeOrdersManager({ personsData, showNotification, D
   const [templates, setTemplates] = useState<any[]>([]);
   
   const [searchQuery, setSearchQuery] = useState('');
+  const [loading, setLoading] = useState(false);
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [viewingOrder, setViewingOrder] = useState<any>(null);
   const [editingId, setEditingId] = useState<string | null>(null);

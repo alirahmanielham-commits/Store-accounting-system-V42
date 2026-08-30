@@ -2,7 +2,6 @@ import React, { useState, useEffect } from 'react';
 import { FileText, Plus, Edit2, Trash2, Save, CheckCircle, Settings, Building2 } from 'lucide-react';
 import { getOrderTemplates, addOrderTemplate, updateOrderTemplate, deleteOrderTemplate, getEmployeeOrders } from '../../services/hrService';
 import { generateId } from '../../services/dataService';
-import WorkplaceManagerModal from './WorkplaceManagerModal';
 
 const REQUIRED_DEFAULTS = [
   { id: 'daily_wage', title: 'دستمزد روزانه', type: 'earning', amount: '', isTaxExempt: false, isInsuranceExempt: false, isBaseWage: true, nature: 'continuous' },
@@ -21,14 +20,13 @@ const DEFAULT_COMPONENTS = [
 const DEFAULT_IDS = ['daily_wage', 'housing', 'marriage', 'grocery', 'child'];
 
 
-export default function PayrollSettings({ showNotification, storeSettings }: any) {
+export default function OrderTemplatesManager({ showNotification, storeSettings }: any) {
   const [orderTemplates, setOrderTemplates] = useState<any[]>([]);
   
   const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
   const [templateForm, setTemplateForm] = useState<any>({ name: '', items: [] });
   const [showTemplateForm, setShowTemplateForm] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [isWorkplaceModalOpen, setIsWorkplaceModalOpen] = useState(false);
 
   useEffect(() => {
     fetchData();
@@ -149,12 +147,11 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
 
   return (
     <div className="h-full bg-slate-50 flex flex-col relative overflow-hidden" dir="rtl">
-      <div className="p-6 pb-2 w-full mx-auto flex items-center justify-between">
-        <h1 className="text-2xl font-black text-slate-800">مدیریت قالب‌های حکم کارگزینی</h1>
-        <button onClick={() => setIsWorkplaceModalOpen(true)} className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 rounded-xl font-bold hover:bg-slate-50 transition-all shadow-sm flex items-center gap-2">
-          <Building2 className="w-5 h-5 text-indigo-600" />
-          مدیریت کارگاه‌ها
-        </button>
+      <div className="p-6 pb-2 w-full mx-auto flex items-center justify-between border-b border-slate-200 bg-white">
+        <div>
+          <h1 className="text-2xl font-black text-slate-800">مدیریت قالب‌های حکم کارگزینی</h1>
+          <p className="text-sm text-slate-500 font-bold mt-1">تعریف و تنظیم قالب‌های آماده برای صدور احکام</p>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto p-6 pt-4 w-full mx-auto">
@@ -330,12 +327,6 @@ export default function PayrollSettings({ showNotification, storeSettings }: any
         </div>
       </div>
       
-      <WorkplaceManagerModal 
-        isOpen={isWorkplaceModalOpen} 
-        onClose={() => setIsWorkplaceModalOpen(false)} 
-        showNotification={showNotification}
-        storeSettings={storeSettings}
-      />
     </div>
   );
 }
