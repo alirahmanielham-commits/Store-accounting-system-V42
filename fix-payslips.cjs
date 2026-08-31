@@ -1,27 +1,35 @@
 const fs = require('fs');
 let code = fs.readFileSync('src/components/payroll/PayslipsManager.tsx', 'utf8');
 
-const calcLogicMatch = code.match(/const orderItems = order\.items \|\| \[\];([\s\S]*?)const netPayable = totalEarnings - totalDeductions;/);
+const MONTH_NAMES = [
+  'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+  'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+];
 
-if (!calcLogicMatch) {
-  console.log("Could not find calc logic");
-  process.exit(1);
-}
+// In the code, month and year are available inside the component as `month` and `year`.
+// Wait, `handleFinalizeSlip` is inside the component? Yes.
+// Let's replace the addAccountingDocument block.
 
-const calcBody = calcLogicMatch[1] + "const netPayable = totalEarnings - totalDeductions;\n      return { pItems, totalEarnings, totalDeductions, taxable, insurable, taxAmount, insAmount, netPayable };";
+const oldBlock = `      await addAccountingDocument({
+         date: Date.now(),
+         description: \`صدور فیش حقوقی شماره \${slip.id} - \${getPersonName(slip.personId)}\`,
+         sourceType: 'salary',
+         sourceId: slip.id,
+         items: docItems
+      });`;
 
-const calculateFunction = `
-export const calculatePayslipDetails = (att: any, order: any, person: any) => {
-      const orderItems = order.items || [];
-${calcBody}
-};
-`;
+const newBlock = `      const monthNames = ['فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور', 'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'];
+      const monthName = monthNames[slip.periodMonth - 1] || slip.periodMonth;
+      await addAccountingDocument({
+         date: Date.now(),
+         description: \`صدور فیش حقوقی \${monthName} \${slip.periodYear} - \${getPersonName(slip.personId)}\`,
+         sourceType: 'salary',
+         sourceId: slip.id,
+         items: docItems,
+         status: 'finalized'
+      });`;
 
-code = code.replace(/export default function PayslipsManager/, calculateFunction + '\nexport default function PayslipsManager');
-
-const replacementRecalculate = `const { pItems, totalEarnings, totalDeductions, taxable, insurable, taxAmount, insAmount, netPayable } = calculatePayslipDetails(att, order, person);`;
-
-code = code.replace(/const orderItems = order\.items \|\| \[\];[\s\S]*?const netPayable = totalEarnings - totalDeductions;/g, replacementRecalculate);
+code = code.replace(oldBlock, newBlock);
 
 fs.writeFileSync('src/components/payroll/PayslipsManager.tsx', code);
-console.log("Done");
+console.log('done payslips');

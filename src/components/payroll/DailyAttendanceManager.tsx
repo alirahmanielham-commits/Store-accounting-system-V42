@@ -9,8 +9,8 @@ const DateObject = (DateObjectModule as any).default || DateObjectModule;
 export default function DailyAttendanceManager({ personsData, storeSettings, showNotification, DatePicker, persian, persian_fa }) {
   const [activeTab, setActiveTab] = useState<'attendance' | 'leave' | 'mission' | 'calendar'>('attendance');
   const [calPersonId, setCalPersonId] = useState('');
-  const [calYear, setCalYear] = useState(1403);
-  const [calMonth, setCalMonth] = useState(1);
+  const [filterYear, setCalYear] = useState(1403);
+  const [filterMonth, setCalMonth] = useState(1);
 
   useEffect(() => {
     try {
@@ -258,12 +258,41 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   const filteredAttendances = useMemo(() => {
     return attendances.filter(a => {
       const aDate = getTimestampStr(a.date);
-      if (!aDate || !currentDayStr) return false;
-      const d1 = new Date(parseInt(aDate));
-      const d2 = new Date(parseInt(currentDayStr));
-      return d1.getFullYear() === d2.getFullYear() && d1.getMonth() === d2.getMonth() && d1.getDate() === d2.getDate();
+      if (!aDate) return false;
+      try {
+        const dObj = new DateObject({ date: new Date(parseInt(aDate)), calendar: persian });
+        return dObj.year === filterYear && dObj.month.number === filterMonth;
+      } catch (e) {
+        return false;
+      }
     });
-  }, [attendances, currentDayStr]);
+  }, [attendances, filterYear, filterMonth]);
+
+  const filteredLeaves = useMemo(() => {
+    return leaves.filter(l => {
+      const ts = getTimestampStr(l.startDate);
+      if (!ts) return false;
+      try {
+        const dObj = new DateObject({ date: new Date(parseInt(ts)), calendar: persian });
+        return dObj.year === filterYear && dObj.month.number === filterMonth;
+      } catch (e) {
+        return false;
+      }
+    }).sort((a,b) => parseInt(b.createdAt || '0') - parseInt(a.createdAt || '0'));
+  }, [leaves, filterYear, filterMonth]);
+  
+  const filteredMissions = useMemo(() => {
+    return missions.filter(m => {
+      const ts = getTimestampStr(m.startDate);
+      if (!ts) return false;
+      try {
+        const dObj = new DateObject({ date: new Date(parseInt(ts)), calendar: persian });
+        return dObj.year === filterYear && dObj.month.number === filterMonth;
+      } catch (e) {
+        return false;
+      }
+    }).sort((a,b) => parseInt(b.createdAt || '0') - parseInt(a.createdAt || '0'));
+  }, [missions, filterYear, filterMonth]);
 
   const calculateHours = (inTime: string, outTime: string) => {
     if (!inTime || !outTime) return '-';
@@ -402,7 +431,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
         <div className="bg-white rounded-2xl shadow-sm border border-slate-100 overflow-hidden">
           <div className="p-5 border-b border-slate-100 bg-slate-50/50 flex justify-between items-center">
             <div className="flex items-center gap-4">
-              <h3 className="font-bold text-slate-700">تردد‌های ثبت شده در این روز</h3>
+              <h3 className="font-bold text-slate-700">تردد‌های ثبت شده در این ماه</h3>
               <button 
                 onClick={() => setIsAttendanceModalOpen(true)}
                 className="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg text-sm font-bold flex items-center gap-1 transition-colors"
@@ -419,6 +448,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
             <table className="w-full text-right text-sm">
               <thead className="bg-white text-slate-500 border-b border-slate-100">
                 <tr>
+                  <th className="p-4 font-bold">تاریخ</th>
                   <th className="p-4 font-bold">کارمند</th>
                   <th className="p-4 font-bold">نوع</th>
                   <th className="p-4 font-bold text-center">ورود</th>
@@ -430,6 +460,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
               <tbody className="divide-y divide-slate-100">
                 {filteredAttendances.map(a => (
                   <tr key={a.id} className="hover:bg-slate-50/70">
+                    <td className="p-4 font-bold text-slate-800 font-mono text-sm">{a.date ? new Date(parseInt(getTimestampStr(a.date))).toLocaleDateString('fa-IR') : '-'}</td>
                     <td className="p-4 font-bold text-slate-800">{getPersonName(a.personId)}</td>
                     <td className="p-4 text-xs font-bold text-slate-600 bg-slate-50/50 rounded-lg">
                       {RECORD_TYPES[a.recordType as keyof typeof RECORD_TYPES] || 'کارکرد عادی'}
@@ -451,7 +482,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                 ))}
                 {filteredAttendances.length === 0 && (
                   <tr>
-                    <td colSpan={6} className="p-12 text-center text-slate-400 font-medium">
+                    <td colSpan={7} className="p-12 text-center text-slate-400 font-medium">
                       در این روز ترددی ثبت نشده است
                     </td>
                   </tr>
@@ -470,8 +501,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
     
     try {
       const calDate = new DateObject({ calendar: persian, locale: persian_fa });
-      calDate.year = calYear;
-      calDate.month = calMonth;
+      calDate.year = filterYear;
+      calDate.month = filterMonth;
       calDate.day = 1;
       daysInMonth = calDate.month.length;
       startWeekDay = calDate.weekDay.index; 
@@ -481,7 +512,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
         if (a.personId !== calPersonId) return false;
         try {
             const d = new DateObject({ date: new Date(Number(a.date)), calendar: persian, locale: persian_fa });
-            return d.year === calYear && d.month.number === calMonth;
+            return d.year === filterYear && d.month.number === filterMonth;
         } catch(e) { return false; }
     });
     
@@ -518,7 +549,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
               <label className="block text-sm font-bold text-slate-700 mb-1">سال</label>
               <input 
                 type="number" 
-                value={calYear} 
+                value={filterYear} 
                 onChange={e => setCalYear(Number(e.target.value))}
                 className="w-24 border border-slate-200 p-2.5 rounded-xl font-bold text-center bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2"
               />
@@ -526,7 +557,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
             <div>
               <label className="block text-sm font-bold text-slate-700 mb-1">ماه</label>
               <select 
-                value={calMonth} 
+                value={filterMonth} 
                 onChange={e => setCalMonth(Number(e.target.value))}
                 className="w-32 border border-slate-200 p-2.5 rounded-xl font-bold bg-slate-50 outline-none focus:border-indigo-500 focus:ring-2"
               >
@@ -556,8 +587,8 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                      
                      try {
                          dObj = new DateObject({ calendar: persian, locale: persian_fa });
-                         dObj.year = calYear;
-                         dObj.month = calMonth;
+                         dObj.year = filterYear;
+                         dObj.month = filterMonth;
                          dObj.day = day;
                          
                          todayAtt = personAttendances.filter(a => {
@@ -666,7 +697,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {leaves.sort((a,b)=> parseInt(b.createdAt) - parseInt(a.createdAt)).map(l => (
+                {filteredLeaves.map(l => (
                   <tr key={l.id} className="hover:bg-slate-50/70">
                     <td className="p-4 font-bold text-slate-800">{getPersonName(l.personId)}</td>
                     <td className="p-4 text-xs font-bold text-slate-600">
@@ -685,7 +716,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                     </td>
                   </tr>
                 ))}
-                {leaves.length === 0 && (
+                {filteredLeaves.length === 0 && (
                   <tr>
                     <td colSpan={6} className="p-12 text-center text-slate-400 font-medium">
                       رکوردی ثبت نشده است
@@ -730,7 +761,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
-                {missions.sort((a,b)=> parseInt(b.createdAt) - parseInt(a.createdAt)).map(m => (
+                {filteredMissions.map(m => (
                   <tr key={m.id} className="hover:bg-slate-50/70">
                     <td className="p-4 font-bold text-slate-800">{getPersonName(m.personId)}</td>
                     <td className="p-4 font-bold text-indigo-600">{m.destination}</td>
@@ -747,7 +778,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
                     </td>
                   </tr>
                 ))}
-                {missions.length === 0 && (
+                {filteredMissions.length === 0 && (
                   <tr>
                     <td colSpan={6} className="p-12 text-center text-slate-400 font-medium">
                       ماموریتی ثبت نشده است
@@ -764,6 +795,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
   return (
     <div className="min-h-full bg-slate-50/50 p-4 md:p-8" dir="rtl">
       <div className="w-full mx-auto">
+        
         <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-8">
           <div>
             <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
@@ -772,7 +804,32 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
             </h1>
             <p className="text-sm text-slate-500 mt-2 font-medium">مدیریت ورود و خروج، مرخصی، غیبت و ماموریت کارمندان</p>
           </div>
+          
+          <div className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
+            <select
+              value={filterYear}
+              onChange={(e) => setFilterYear(Number(e.target.value))}
+              className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-24 p-2.5 font-bold outline-none"
+            >
+              {[1401, 1402, 1403, 1404, 1405].map(y => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <select
+              value={filterMonth}
+              onChange={(e) => setFilterMonth(Number(e.target.value))}
+              className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-32 p-2.5 font-bold outline-none"
+            >
+              {[
+                'فروردین', 'اردیبهشت', 'خرداد', 'تیر', 'مرداد', 'شهریور',
+                'مهر', 'آبان', 'آذر', 'دی', 'بهمن', 'اسفند'
+              ].map((m, i) => (
+                <option key={i+1} value={i+1}>{m}</option>
+              ))}
+            </select>
+          </div>
         </div>
+
 
         {/* Tabs */}
         <div className="flex items-center gap-2 mb-8 bg-white p-2 rounded-2xl shadow-sm border border-slate-100 overflow-x-auto">

@@ -148,9 +148,14 @@ export default function OrderTemplatesManager({ showNotification, storeSettings 
   return (
     <div className="h-full bg-slate-50 flex flex-col relative overflow-hidden" dir="rtl">
       <div className="p-6 pb-2 w-full mx-auto flex items-center justify-between border-b border-slate-200 bg-white">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800">مدیریت قالب‌های حکم کارگزینی</h1>
+        <div className="flex items-center gap-3">
+          <div className="w-12 h-12 bg-indigo-50 text-indigo-600 rounded-2xl flex items-center justify-center">
+            <FileText className="w-6 h-6" />
+          </div>
+          <div>
+            <h1 className="text-2xl font-black text-slate-800">مدیریت قالب‌های حکم کارگزینی</h1>
           <p className="text-sm text-slate-500 font-bold mt-1">تعریف و تنظیم قالب‌های آماده برای صدور احکام</p>
+          </div>
         </div>
       </div>
 

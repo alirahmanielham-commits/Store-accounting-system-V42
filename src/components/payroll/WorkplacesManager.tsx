@@ -122,17 +122,20 @@ export default function WorkplacesManager({ showNotification, storeSettings }: a
       </div>
 
       <div className="flex-1 overflow-auto p-6 pt-4 w-full mx-auto">
-        <div className="flex flex-col md:flex-row gap-6">
-          {/* List of workplaces */}
-          <div className="flex-1 space-y-4">
-            <div className="flex items-center justify-between mb-2">
-              <h3 className="font-bold text-slate-700">لیست کارگاه‌ها</h3>
-              {!editingWorkplaceId && (
-                <button onClick={() => { resetForm(); setEditingWorkplaceId(null); }} className="text-sm font-bold text-indigo-600 hover:text-indigo-700 flex items-center gap-1">
-                  <Plus className="w-4 h-4" /> کارگاه جدید
-                </button>
-              )}
-            </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-1">
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200 sticky top-6">
+              <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                <h2 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                  <Building2 className="w-6 h-6 text-indigo-600" />
+                  لیست کارگاه‌ها
+                </h2>
+                {!editingWorkplaceId && (
+                  <button onClick={() => { resetForm(); setEditingWorkplaceId(null); }} className="p-2 bg-indigo-50 text-indigo-600 rounded-xl hover:bg-indigo-100 transition-colors" title="کارگاه جدید">
+                    <Plus className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
             
             {loading ? (
               <div className="p-8 text-center text-slate-400">در حال بارگذاری...</div>
@@ -169,18 +172,20 @@ export default function WorkplacesManager({ showNotification, storeSettings }: a
             )}
           </div>
 
+          </div>
           {/* Form */}
-          <div className="flex-1 bg-slate-50 rounded-3xl p-6 border border-slate-200 h-fit sticky top-6">
-            <div className="flex items-center justify-between mb-6 border-b border-slate-200 pb-4">
-              <h3 className="font-black text-slate-800 flex items-center gap-2">
-                {editingWorkplaceId ? 'ویرایش کارگاه' : 'تعریف کارگاه جدید'}
-              </h3>
-              {editingWorkplaceId && (
-                <button onClick={() => { setEditingWorkplaceId(null); resetForm(); }} className="text-sm font-bold text-slate-500 hover:text-slate-700 bg-white px-3 py-1.5 rounded-lg border border-slate-200 transition-colors">
-                  انصراف
-                </button>
-              )}
-            </div>
+          <div className="lg:col-span-2">
+            <div className="bg-white rounded-3xl p-6 shadow-sm border border-slate-200">
+              <div className="flex justify-between items-center mb-6 border-b border-slate-100 pb-4">
+                <h2 className="text-lg font-black text-slate-800">
+                  {editingWorkplaceId ? 'ویرایش کارگاه' : 'ثبت کارگاه جدید'}
+                </h2>
+                {editingWorkplaceId && (
+                  <button onClick={() => { setEditingWorkplaceId(null); resetForm(); }} className="px-4 py-2 bg-slate-100 text-slate-600 rounded-xl font-bold hover:bg-slate-200 transition-all text-sm">
+                    انصراف
+                  </button>
+                )}
+              </div>
             
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
@@ -230,5 +235,6 @@ export default function WorkplacesManager({ showNotification, storeSettings }: a
         </div>
       </div>
     </div>
+      </div>
   );
 }
