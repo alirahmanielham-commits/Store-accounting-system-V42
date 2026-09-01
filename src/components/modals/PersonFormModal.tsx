@@ -430,8 +430,7 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
 
       let addedPerson;
       
-      setSubmitStatus("ثبت اولیه در جدول اشخاص...");
-      await new Promise(r => setTimeout(r, 600));
+      setSubmitStatus("ثبت اطلاعات شخص...");
 
       if (isEdit) {
         const originalPerson = persons.find((p) => p.id === editingPersonId);
@@ -454,17 +453,7 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
         });
       }
 
-      setSubmitStatus("ایجاد رکورد در جدول حساب‌ها...");
-      await new Promise(r => setTimeout(r, 600));
-      
-      setSubmitStatus("ثبت لاگ عملیات...");
-      await new Promise(r => setTimeout(r, 500));
-      
-      setSubmitStatus("بروزرسانی کش اطلاعات...");
-      await new Promise(r => setTimeout(r, 400));
-      
       setSubmitStatus("عملیات با موفقیت انجام شد");
-      await new Promise(r => setTimeout(r, 300));
 
       // Auto-select the newly created person in active creation forms
       if (!isEdit && addedPerson?.id) {

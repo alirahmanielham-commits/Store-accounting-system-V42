@@ -111,7 +111,7 @@ export default function PersonsManager(props: any) {
   // Table Enhancements
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>(() => {
     const saved = sessionStorage.getItem('personSortConfig');
-    return saved ? JSON.parse(saved) : {key: 'name', direction: 'asc'};
+    return saved ? JSON.parse(saved) : {key: 'code', direction: 'desc'};
   });
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [localSearchTerm, setLocalSearchTerm] = useState(personSearchTerm || "");
@@ -803,6 +803,9 @@ export default function PersonsManager(props: any) {
                     <th className="px-4 py-4 w-10 text-center">
                       <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={selectedIds.length === paginatedPersons.length && paginatedPersons.length > 0} onChange={selectAll} />
                     </th>
+                    <th className="px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors w-24 text-center" onClick={() => handleSort('code')}>
+                      کد <SortIcon columnKey="code" />
+                    </th>
                     <th className="px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('name')}>
                       شخص / شرکت <SortIcon columnKey="name" />
                     </th>
@@ -839,6 +842,11 @@ export default function PersonsManager(props: any) {
                         <td className="px-4 py-3 text-center">
                           <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={isSelected} onChange={() => toggleSelection(p.id)} />
                         </td>
+                        <td className="px-4 py-3 text-center">
+                          <span className="text-xs font-bold text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">
+                            {toPersianDigits(p.accountingCode || p.personCode || p.id)}
+                          </span>
+                        </td>
                         <td className="px-4 py-3 cursor-pointer" onClick={() => { setProfilePersonId(p.id); setActiveTab("person_profile"); }}>
                           <div className="flex items-center gap-3">
                             {p.imageUrl ? (
@@ -854,7 +862,6 @@ export default function PersonsManager(props: any) {
                                 {p.isActive === false && <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded no-underline">مسدود</span>}
                               </div>
                               <div className="text-[10px] text-slate-400 font-bold font-mono mt-0.5 flex items-center gap-1">
-                                <span className="bg-slate-100 px-1 rounded">{p.accountingCode ? `ACC: ${toPersianDigits(p.accountingCode)}` : `ID: ${toPersianDigits(p.personCode || p.id)}`}</span>
                                 {p.personType === 'legal' ? <Building className="w-3 h-3 text-slate-300" /> : <User className="w-3 h-3 text-slate-300" />}
                               </div>
                             </div>
