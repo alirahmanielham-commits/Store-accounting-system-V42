@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
-import { Settings, Users, MonitorPlay, Maximize2, X, Phone, UserCircle, HandCoins } from 'lucide-react';
+import { Settings, Users, MonitorPlay, Maximize2, X, Phone, UserCircle, HandCoins, CalendarClock, TrendingDown } from 'lucide-react';
 import { Person } from '../../types';
+import { globalDateFormatter } from '../../utils/dateFormatter';
 
 interface DebtorsShowcaseProps {
   persons: Person[];
@@ -50,17 +51,25 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDo
   const debtors = useMemo(() => {
     return persons.map(person => {
       let balance = 0;
+      let lastActivityDate: string | null = null;
       (accountingDocuments || []).forEach(doc => {
         if (doc.status === 'draft' || doc.isDeleted) return;
         if (doc.items && Array.isArray(doc.items)) {
+          let hasActivity = false;
           doc.items.forEach((item: any) => {
             if (item.detailedAccountId?.toString() === person.id.toString()) {
               balance += (Number(item.debit) || 0) - (Number(item.credit) || 0);
+              hasActivity = true;
             }
           });
+          if (hasActivity && doc.date) {
+             if (!lastActivityDate || new Date(doc.date) > new Date(lastActivityDate)) {
+                 lastActivityDate = doc.date;
+             }
+          }
         }
       });
-      return { ...person, debtAmount: balance };
+      return { ...person, debtAmount: balance, lastActivityDate };
     }).filter(p => p.debtAmount > 0)
       .sort(() => Math.random() - 0.5); // Randomize order
   }, [persons, accountingDocuments]);
@@ -195,33 +204,47 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDo
               <motion.div
                 key={`${person.id}-${idx}`}
                 {...getAnimationProps()}
-                className={`mx-auto w-full bg-gradient-to-br from-white to-rose-50 rounded-3xl shadow-[0_8px_30px_rgb(0,0,0,0.08)] border border-rose-100/50 flex flex-col items-center text-center relative overflow-hidden ${getCardSizeClasses()}`}
+                className={`mx-auto w-full bg-gradient-to-br from-white to-rose-50/50 backdrop-blur-lg rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-rose-100 flex flex-col relative overflow-hidden ${getCardSizeClasses()}`}
               >
-                <div className="absolute top-0 right-0 w-full h-2 bg-gradient-to-r from-rose-400 to-rose-600"></div>
-                <div className="w-24 h-24 bg-rose-100 rounded-full flex items-center justify-center mb-6 shadow-inner">
-                   <UserCircle className="w-12 h-12 text-rose-500" />
-                </div>
+                {/* Decorative Background Elements */}
+                <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-r from-rose-400 via-red-500 to-rose-600"></div>
+                <div className="absolute -top-24 -right-24 w-48 h-48 bg-rose-200 rounded-full blur-3xl opacity-40"></div>
+                <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-red-200 rounded-full blur-3xl opacity-40"></div>
                 
-                <h3 className="font-black text-slate-800 mb-2 truncate w-full" style={{ fontSize: cardSize === 'xl' ? '2.5rem' : cardSize === 'lg' ? '1.8rem' : '1.25rem' }}>
-                  {person.name}
-                </h3>
-                
-                {person.phone && (
-                  <div className="flex items-center gap-2 text-gray-500 mt-2 font-bold bg-white/50 px-4 py-2 rounded-full">
-                    <Phone className="w-4 h-4" />
-                    <span dir="ltr">{person.phone}</span>
+                <div className="relative z-10 flex flex-col items-center text-center">
+                  <div className="w-28 h-28 bg-gradient-to-br from-rose-100 to-white rounded-full flex items-center justify-center mb-6 shadow-[0_8px_16px_rgba(225,29,72,0.1)] border border-white">
+                     <UserCircle className="w-14 h-14 text-rose-500" strokeWidth={1.5} />
                   </div>
-                )}
-                
-                <div className="mt-8 w-full">
-                  <div className="text-sm font-bold text-gray-500 mb-2 flex items-center justify-center gap-1">
-                    <HandCoins className="w-4 h-4" />
-                    مبلغ بدهی
+                  
+                  <h3 className="font-black text-slate-800 mb-3 truncate w-full tracking-tight" style={{ fontSize: cardSize === 'xl' ? '3rem' : cardSize === 'lg' ? '2.2rem' : '1.5rem' }}>
+                    {person.name}
+                  </h3>
+                  
+                  {person.phone && (
+                    <div className="flex items-center gap-2 text-slate-600 mt-2 font-bold bg-white/80 backdrop-blur-md px-5 py-2.5 rounded-2xl shadow-sm border border-slate-100">
+                      <Phone className="w-4 h-4 text-slate-400" />
+                      <span dir="ltr" className="tracking-wider">{person.phone}</span>
+                    </div>
+                  )}
+                  
+                  <div className="mt-10 w-full bg-white/60 backdrop-blur-md rounded-3xl p-6 border border-white shadow-sm flex flex-col items-center justify-center">
+                    <div className="text-sm font-bold text-slate-500 mb-2 flex items-center justify-center gap-2">
+                      <TrendingDown className="w-5 h-5 text-rose-500" />
+                      مانده بدهی
+                    </div>
+                    <div className="font-black text-rose-600 tracking-tight truncate drop-shadow-sm" style={{ fontSize: cardSize === 'xl' ? '3.5rem' : cardSize === 'lg' ? '2.8rem' : '2rem' }}>
+                      {formatNumber(person.debtAmount)}
+                    </div>
+                    <div className="text-lg font-bold text-rose-400 mt-2">{storeSettings?.currency}</div>
                   </div>
-                  <div className="font-black text-rose-600 drop-shadow-sm truncate" style={{ fontSize: cardSize === 'xl' ? '3.5rem' : cardSize === 'lg' ? '2.5rem' : '1.5rem' }}>
-                    {formatNumber(person.debtAmount)}
-                  </div>
-                  <div className="text-sm font-bold text-rose-400 mt-1">{storeSettings?.currency}</div>
+
+                  {(person as any).lastActivityDate && (
+                    <div className="mt-6 flex items-center justify-center gap-2 text-sm font-bold text-slate-500 bg-white/50 px-4 py-2.5 rounded-xl border border-slate-100/50">
+                      <CalendarClock className="w-5 h-5 text-slate-400" />
+                      <span>آخرین فعالیت مالی:</span>
+                      <span className="text-slate-800 font-black">{globalDateFormatter.formatDateOnly((person as any).lastActivityDate)}</span>
+                    </div>
+                  )}
                 </div>
               </motion.div>
             ))}
