@@ -765,8 +765,17 @@ export default function PersonsManager(props: any) {
                         <h3 className="text-sm font-black text-slate-800 truncate" title={getPersonDisplayName(p)}>{getPersonDisplayName(p)}</h3>
                         {p.isActive === false && <span className="text-[8px] font-bold bg-rose-50 text-rose-600 px-1 py-0.5 rounded mr-1">غیرفعال</span>}
                       </div>
-                      <div className="text-[10px] text-slate-400 font-bold font-mono mt-1 flex items-center gap-1">
-                        <span className="bg-slate-100 px-1.5 py-0.5 rounded">{p.accountingCode ? `ACC: ${toPersianDigits(p.accountingCode)}` : `ID: ${toPersianDigits(p.personCode || p.id)}`}</span>
+                      <div className="text-[10px] font-bold font-mono mt-1 flex flex-wrap items-center gap-1.5">
+                        <span className="bg-slate-100/80 border border-slate-200/50 px-1.5 py-0.5 rounded flex items-center gap-1" title="کد شخص">
+                          <span className="text-[9px] text-slate-400 font-sans">کد:</span>
+                          <span className="text-slate-700">{toPersianDigits(p.personCode || p.id)}</span>
+                        </span>
+                        {p.accountingCode && (
+                          <span className="bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-1" title="کد حسابداری">
+                            <span className="text-[9px] text-indigo-400 font-sans">حسابداری:</span>
+                            <span className="text-indigo-600">{toPersianDigits(p.accountingCode)}</span>
+                          </span>
+                        )}
                       </div>
                       <div className="flex flex-wrap items-center gap-1 mt-1.5">
                         <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${getRoleBadgeClasses(p.role)}`}>{getRoleName(p.role)}</span>
@@ -842,10 +851,19 @@ export default function PersonsManager(props: any) {
                         <td className="px-4 py-3 text-center">
                           <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={isSelected} onChange={() => toggleSelection(p.id)} />
                         </td>
-                        <td className="px-4 py-3 text-center">
-                          <span className="text-xs font-bold text-slate-500 font-mono bg-slate-100 px-2 py-1 rounded">
-                            {toPersianDigits(p.accountingCode || p.personCode || p.id)}
-                          </span>
+                        <td className="px-4 py-3 align-middle w-32">
+                          <div className="flex flex-col gap-1.5 justify-center items-center">
+                            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-xs font-mono font-bold text-slate-700 shadow-sm w-full justify-center" title="کد شخص">
+                              <span className="text-[10px] text-slate-400 font-sans select-none">کد:</span>
+                              <span className="tracking-wider">{toPersianDigits(p.personCode || p.id)}</span>
+                            </div>
+                            {p.accountingCode && (
+                              <div className="flex items-center gap-1.5 bg-indigo-50/50 border border-indigo-100/50 px-2 py-0.5 rounded-md text-xs font-mono font-bold text-indigo-700 shadow-sm w-full justify-center" title="کد حسابداری">
+                                <span className="text-[10px] text-indigo-400 font-sans select-none">حسابداری:</span>
+                                <span className="tracking-wider">{toPersianDigits(p.accountingCode)}</span>
+                              </div>
+                            )}
+                          </div>
                         </td>
                         <td className="px-4 py-3 cursor-pointer" onClick={() => { setProfilePersonId(p.id); setActiveTab("person_profile"); }}>
                           <div className="flex items-center gap-3">
