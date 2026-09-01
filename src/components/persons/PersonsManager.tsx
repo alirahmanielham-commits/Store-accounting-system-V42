@@ -111,7 +111,7 @@ export default function PersonsManager(props: any) {
   // Table Enhancements
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>(() => {
     const saved = sessionStorage.getItem('personSortConfig');
-    return saved ? JSON.parse(saved) : {key: 'code', direction: 'desc'};
+    return saved ? JSON.parse(saved) : {key: 'createdAt', direction: 'desc'};
   });
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [localSearchTerm, setLocalSearchTerm] = useState(personSearchTerm || "");
@@ -206,12 +206,18 @@ export default function PersonsManager(props: any) {
          if (sortConfig.key === 'name') {
            aValue = getPersonDisplayName(a) || '';
            bValue = getPersonDisplayName(b) || '';
+         } else if (sortConfig.key === 'createdAt') {
+           aValue = new Date(a.createdAt || a.registrationDate || 0).getTime();
+           bValue = new Date(b.createdAt || b.registrationDate || 0).getTime();
          } else if (sortConfig.key === 'balance') {
            aValue = a.calculatedBalance;
            bValue = b.calculatedBalance;
          } else if (sortConfig.key === 'code') {
-           aValue = a.accountingCode || a.personCode || '';
-           bValue = b.accountingCode || b.personCode || '';
+           aValue = a.personCode || a.id || '';
+           bValue = b.personCode || b.id || '';
+         } else if (sortConfig.key === 'accountingCode') {
+           aValue = a.accountingCode || '';
+           bValue = b.accountingCode || '';
          } else if (sortConfig.key === 'contact') {
            aValue = a.phone || a.mobile || '';
            bValue = b.phone || b.mobile || '';
@@ -765,15 +771,15 @@ export default function PersonsManager(props: any) {
                         <h3 className="text-sm font-black text-slate-800 truncate" title={getPersonDisplayName(p)}>{getPersonDisplayName(p)}</h3>
                         {p.isActive === false && <span className="text-[8px] font-bold bg-rose-50 text-rose-600 px-1 py-0.5 rounded mr-1">غیرفعال</span>}
                       </div>
-                      <div className="text-[10px] font-bold font-mono mt-1 flex flex-wrap items-center gap-1.5">
-                        <span className="bg-slate-100/80 border border-slate-200/50 px-1.5 py-0.5 rounded flex items-center gap-1" title="کد شخص">
-                          <span className="text-[9px] text-slate-400 font-sans">کد:</span>
-                          <span className="text-slate-700">{toPersianDigits(p.personCode || p.id)}</span>
+                      <div className="text-[10px] font-black font-sans tabular-nums mt-1.5 flex flex-wrap items-center gap-1.5">
+                        <span className="bg-slate-50 border border-slate-200 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm" title="کد شخص">
+                          <span className="text-[9px] text-slate-400 font-bold font-sans">کد:</span>
+                          <span className="text-slate-700 tracking-wider">{toPersianDigits(p.personCode || p.id)}</span>
                         </span>
                         {p.accountingCode && (
-                          <span className="bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-1" title="کد حسابداری">
-                            <span className="text-[9px] text-indigo-400 font-sans">حسابداری:</span>
-                            <span className="text-indigo-600">{toPersianDigits(p.accountingCode)}</span>
+                          <span className="bg-indigo-50 border border-indigo-100 px-1.5 py-0.5 rounded flex items-center gap-1 shadow-sm" title="کد حسابداری">
+                            <span className="text-[9px] text-indigo-400 font-bold font-sans">حسابداری:</span>
+                            <span className="text-indigo-700 tracking-wider">{toPersianDigits(p.accountingCode)}</span>
                           </span>
                         )}
                       </div>
@@ -794,7 +800,7 @@ export default function PersonsManager(props: any) {
                     </div>
                     <div className="text-left">
                       <div className={`text-[9px] font-black mb-0.5 ${isDebtor ? "text-rose-500" : isCreditor ? "text-emerald-500" : "text-slate-400"}`}>وضعیت مانده</div>
-                      <div className={`font-black font-sans text-xs truncate ${isDebtor ? "text-rose-700" : isCreditor ? "text-emerald-700" : "text-slate-600"}`} dir="ltr">
+                      <div className={`font-black font-sans tabular-nums text-xs truncate ${isDebtor ? "text-rose-700" : isCreditor ? "text-emerald-700" : "text-slate-600"}`} dir="ltr">
                         {bal === 0 ? "تسویه (۰)" : toPersianDigits(formatNumber(Math.abs(bal)))}
                       </div>
                     </div>
@@ -812,8 +818,11 @@ export default function PersonsManager(props: any) {
                     <th className="px-4 py-4 w-10 text-center">
                       <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={selectedIds.length === paginatedPersons.length && paginatedPersons.length > 0} onChange={selectAll} />
                     </th>
-                    <th className="px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors w-24 text-center" onClick={() => handleSort('code')}>
-                      کد <SortIcon columnKey="code" />
+                    <th className="px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors w-20 text-center" onClick={() => handleSort('code')}>
+                      کد مشتری <SortIcon columnKey="code" />
+                    </th>
+                    <th className="px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors w-24 text-center" onClick={() => handleSort('accountingCode')}>
+                      کد حسابداری <SortIcon columnKey="accountingCode" />
                     </th>
                     <th className="px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('name')}>
                       شخص / شرکت <SortIcon columnKey="name" />
@@ -843,7 +852,7 @@ export default function PersonsManager(props: any) {
                         
                         {/* Row Loading Overlay */}
                         {isRowLoading && (
-                          <td colSpan={6} className="absolute inset-0 bg-white/70 backdrop-blur-[1px] z-10 flex items-center justify-center">
+                          <td colSpan={8} className="absolute inset-0 bg-white/70 backdrop-blur-[1px] z-10 flex items-center justify-center">
                              <RefreshCw className="w-5 h-5 text-indigo-500 animate-spin" />
                           </td>
                         )}
@@ -851,19 +860,19 @@ export default function PersonsManager(props: any) {
                         <td className="px-4 py-3 text-center">
                           <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={isSelected} onChange={() => toggleSelection(p.id)} />
                         </td>
-                        <td className="px-4 py-3 align-middle w-32">
-                          <div className="flex flex-col gap-1.5 justify-center items-center">
-                            <div className="flex items-center gap-1.5 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md text-xs font-mono font-bold text-slate-700 shadow-sm w-full justify-center" title="کد شخص">
-                              <span className="text-[10px] text-slate-400 font-sans select-none">کد:</span>
-                              <span className="tracking-wider">{toPersianDigits(p.personCode || p.id)}</span>
-                            </div>
-                            {p.accountingCode && (
-                              <div className="flex items-center gap-1.5 bg-indigo-50/50 border border-indigo-100/50 px-2 py-0.5 rounded-md text-xs font-mono font-bold text-indigo-700 shadow-sm w-full justify-center" title="کد حسابداری">
-                                <span className="text-[10px] text-indigo-400 font-sans select-none">حسابداری:</span>
-                                <span className="tracking-wider">{toPersianDigits(p.accountingCode)}</span>
-                              </div>
-                            )}
+                        <td className="px-4 py-3 align-middle text-center w-20">
+                          <div className="inline-flex items-center bg-slate-50 border border-slate-200 px-2 py-1.5 rounded-lg text-xs font-sans tabular-nums font-black text-slate-700 shadow-sm" title="کد شخص">
+                            <span className="tracking-wider">{toPersianDigits(p.personCode || p.id)}</span>
                           </div>
+                        </td>
+                        <td className="px-4 py-3 align-middle text-center w-24">
+                          {p.accountingCode ? (
+                            <div className="inline-flex items-center bg-indigo-50/70 border border-indigo-100 px-2 py-1.5 rounded-lg text-xs font-sans tabular-nums font-black text-indigo-700 shadow-sm" title="کد حسابداری">
+                              <span className="tracking-wider">{toPersianDigits(p.accountingCode)}</span>
+                            </div>
+                          ) : (
+                            <span className="text-slate-300 text-xs">-</span>
+                          )}
                         </td>
                         <td className="px-4 py-3 cursor-pointer" onClick={() => { setProfilePersonId(p.id); setActiveTab("person_profile"); }}>
                           <div className="flex items-center gap-3">
@@ -879,7 +888,7 @@ export default function PersonsManager(props: any) {
                                 {getPersonDisplayName(p)}
                                 {p.isActive === false && <span className="text-[9px] bg-rose-100 text-rose-700 px-1.5 py-0.5 rounded no-underline">مسدود</span>}
                               </div>
-                              <div className="text-[10px] text-slate-400 font-bold font-mono mt-0.5 flex items-center gap-1">
+                              <div className="text-[10px] text-slate-400 font-bold mt-0.5 flex items-center gap-1">
                                 {p.personType === 'legal' ? <Building className="w-3 h-3 text-slate-300" /> : <User className="w-3 h-3 text-slate-300" />}
                               </div>
                             </div>
@@ -896,13 +905,13 @@ export default function PersonsManager(props: any) {
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1">
-                            <div className="font-mono text-xs font-bold text-slate-700 flex items-center gap-1.5" dir="ltr">
+                            <div className="font-sans tabular-nums font-black text-xs text-slate-700 flex items-center gap-1.5" dir="ltr">
                               <Phone className="w-3 h-3 text-slate-400" /> {p.phone ? toPersianDigits(p.phone) : "-"}
                             </div>
                           </div>
                         </td>
                         <td className="px-4 py-3" dir="ltr">
-                          <div className={`font-sans font-black text-sm ${isDebtor ? 'text-rose-600' : isCreditor ? 'text-emerald-600' : 'text-slate-500'}`}>
+                          <div className={`font-sans tabular-nums font-black text-sm ${isDebtor ? 'text-rose-600' : isCreditor ? 'text-emerald-600' : 'text-slate-500'}`}>
                             {bal === 0 ? "۰" : toPersianDigits(formatNumber(Math.abs(bal)))}
                           </div>
                           <div className={`text-[10px] font-bold mt-0.5 text-right ${isDebtor ? 'text-rose-400' : isCreditor ? 'text-emerald-400' : 'text-slate-400'}`}>
