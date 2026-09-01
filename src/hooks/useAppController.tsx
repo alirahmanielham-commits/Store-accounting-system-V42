@@ -2713,12 +2713,10 @@ description: receiptDescription,
         ? (isReceive ? "شروع فرآیند دریافت چک..." : "شروع فرآیند پرداخت چک...")
         : (isReceive ? "شروع فرآیند ثبت رسید دریافت..." : "شروع فرآیند ثبت رسید پرداخت...")
     );
-    await new Promise(r => setTimeout(r, 300));
 
     const rollbackActions: (() => Promise<void>)[] = [];
     try {
       updateAppProcessing("مرحله ۱ از ۳: اعتبارسنجی اطلاعات مالی و طرف‌حساب...");
-      await new Promise(r => setTimeout(r, 400));
 
       const txPayload = {
         ...payload,
@@ -2733,7 +2731,6 @@ description: receiptDescription,
             ? "مرحله ۲ از ۳: ثبت چک در دفتر چک‌های دریافتی..."
             : "مرحله ۲ از ۳: ثبت و تخصیص چک در دفتر چک‌های پرداختی..."
         );
-        await new Promise(r => setTimeout(r, 400));
 
         if (payload.type === "receive") {
           const savedCheck = await addReceivedCheck({
@@ -2798,7 +2795,6 @@ description: receiptDescription,
         });
       } else {
         updateAppProcessing("مرحله ۲ از ۳: ثبت تراکنش و به‌روزرسانی نقد/بانک...");
-        await new Promise(r => setTimeout(r, 400));
 
         const savedTx = await addTransaction(txPayload as any);
         createdReceiptObj = savedTx;
@@ -2809,7 +2805,6 @@ description: receiptDescription,
       }
 
       updateAppProcessing("مرحله ۳ از ۳: تسویه فاکتورهای مرتبط و به‌روزرسانی مانده حساب...");
-      await new Promise(r => setTimeout(r, 400));
 
       // Update actual invoices payment status and paid amount out of linkedInvoices
       for (const [invId, amount] of Object.entries(receiptLinkedInvoices)) {
@@ -2895,6 +2890,10 @@ description: receiptDescription,
       }
 
       await checkDebtThreshold(payload.personId);
+      
+      updateAppProcessing("عملیات با موفقیت انجام شد...");
+      await new Promise(resolve => setTimeout(resolve, 800));
+      
     } catch (err: any) {
       console.error("Error submitting receipt, rolling back operations...", err);
       // Run rollback operations in reverse order

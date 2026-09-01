@@ -452,8 +452,9 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
           }
         });
       }
-
-      setSubmitStatus("عملیات با موفقیت انجام شد");
+      
+      setSubmitStatus("عملیات با موفقیت انجام شد...");
+      await new Promise(resolve => setTimeout(resolve, 800));
 
       // Auto-select the newly created person in active creation forms
       if (!isEdit && addedPerson?.id) {
@@ -534,37 +535,37 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
 
   return (
     <>
-      {submittingPerson && (
-        <div className="fixed bottom-6 right-6 bg-slate-900 shadow-2xl z-[10000000] flex flex-col items-start justify-center p-6 rounded-2xl cursor-wait select-none transition-all duration-300 w-80 border border-slate-700">
-          <div className="flex items-center gap-4 mb-4">
-            <motion.div 
-              initial={{ opacity: 0, scale: 0.8 }}
-              animate={{ opacity: 1, scale: 1 }}
-              className="w-10 h-10 relative flex items-center justify-center shrink-0"
-            >
-              <div className="absolute inset-0 rounded-full border-2 border-indigo-500/20"></div>
-              <div className="absolute inset-0 rounded-full border-2 border-t-indigo-500 animate-spin"></div>
-              <RefreshCw className="w-4 h-4 text-indigo-400 animate-pulse" />
-            </motion.div>
-            
-            <motion.h3 
-              key={submitStatus}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              className="text-sm font-black text-white"
-            >
-              {submitStatus || "در حال پردازش..."}
-            </motion.h3>
-          </div>
-          <p className="text-slate-400 text-xs leading-relaxed mb-4 font-bold text-right">
-            لطفاً منتظر بمانید. اطلاعات به صورت یکپارچه و امن در حال ثبت است.
-          </p>
-
-          <div className="w-full h-1.5 bg-slate-800 rounded-full overflow-hidden relative">
-            <div className="absolute h-full bg-indigo-500 rounded-full animate-loading-bar w-1/2"></div>
-          </div>
-        </div>
-      )}
+      <AnimatePresence>
+        {submittingPerson && (
+          <motion.div
+            initial={{ opacity: 0, y: -50, scale: 0.9 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: -20, scale: 0.9 }}
+            className="fixed top-6 left-1/2 -translate-x-1/2 bg-white/95 backdrop-blur-md shadow-2xl z-[10000000] flex items-center justify-center py-4 px-6 rounded-full cursor-wait select-none border border-slate-200/50 min-w-[320px]"
+          >
+            <div className="flex items-center gap-4">
+              <motion.div 
+                initial={{ opacity: 0, scale: 0.8 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="w-10 h-10 relative flex items-center justify-center shrink-0"
+              >
+                <div className="absolute inset-0 rounded-full border-[3px] border-indigo-100"></div>
+                <div className="absolute inset-0 rounded-full border-[3px] border-t-indigo-600 animate-spin"></div>
+                <RefreshCw className="w-4 h-4 text-indigo-600 animate-pulse" />
+              </motion.div>
+              
+              <motion.h3 
+                key={submitStatus}
+                initial={{ opacity: 0, x: -10 }}
+                animate={{ opacity: 1, x: 0 }}
+                className="text-sm font-black text-slate-700 font-sans tracking-wide"
+              >
+                {submitStatus || "در حال پردازش..."}
+              </motion.h3>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
       <div key="isPersonModalOpen-modal"
         className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
         dir="rtl"
