@@ -8,9 +8,11 @@ interface DebtorsShowcaseProps {
   accountingDocuments: any[];
   storeSettings: any;
   formatNumber: (num: number) => string;
+  isScreensaverMode?: boolean;
+  onCloseScreensaver?: () => void;
 }
 
-const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDocuments, storeSettings, formatNumber }) => {
+const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDocuments, storeSettings, formatNumber, isScreensaverMode, onCloseScreensaver }) => {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   
@@ -19,7 +21,30 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDo
   const [displayType, setDisplayType] = useState<'fade' | 'slide' | 'zoom'>('fade');
   const [cardSize, setCardSize] = useState<'sm' | 'md' | 'lg' | 'xl'>('lg');
   const [simultaneousCount, setSimultaneousCount] = useState<number>(1);
+  const [idleTimeout, setIdleTimeout] = useState<number>(60); // seconds, 0 = disabled
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  // Load settings
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('debtors_showcase_settings');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.duration) setDuration(parsed.duration);
+        if (parsed.displayType) setDisplayType(parsed.displayType);
+        if (parsed.cardSize) setCardSize(parsed.cardSize);
+        if (parsed.simultaneousCount) setSimultaneousCount(parsed.simultaneousCount);
+        if (parsed.idleTimeout !== undefined) setIdleTimeout(parsed.idleTimeout);
+      }
+    } catch (e) {}
+  }, []);
+
+  const saveSettings = () => {
+    const settings = { duration, displayType, cardSize, simultaneousCount, idleTimeout };
+    localStorage.setItem('debtors_showcase_settings', JSON.stringify(settings));
+    window.dispatchEvent(new CustomEvent('debtors_settings_updated', { detail: settings }));
+    setIsSettingsOpen(false);
+  };
 
   // Calculate balances
   const debtors = useMemo(() => {
@@ -128,9 +153,9 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDo
   }
 
   return (
-    <div className={`relative flex flex-col font-sans ${isFullscreen ? 'fixed inset-0 z-50 bg-slate-900 h-screen w-screen p-8' : 'h-full p-4'}`} dir="rtl">
+    <div className={`relative flex flex-col font-sans ${isFullscreen || isScreensaverMode ? 'fixed inset-0 z-50 bg-slate-900 h-screen w-screen p-8' : 'h-full p-4'}`} dir="rtl">
       {/* Controls */}
-      <div className={`flex justify-between items-center mb-8 ${isFullscreen ? 'text-white/50 hover:text-white transition-colors' : 'text-slate-800'}`}>
+      <div className={`flex justify-between items-center mb-8 ${isFullscreen || isScreensaverMode ? 'text-white/50 hover:text-white transition-colors' : 'text-slate-800'}`}>
         <div className="flex items-center gap-3">
           <MonitorPlay className="w-8 h-8" />
           <div>
@@ -139,17 +164,19 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDo
           </div>
         </div>
         <div className="flex gap-2">
+          {!isScreensaverMode && (
+            <button
+              onClick={() => setIsSettingsOpen(true)}
+              className={`p-3 rounded-xl transition-all ${isFullscreen ? 'bg-white/10 hover:bg-white/20' : 'bg-white shadow-sm border border-gray-100 hover:bg-gray-50'}`}
+            >
+              <Settings className="w-5 h-5" />
+            </button>
+          )}
           <button
-            onClick={() => setIsSettingsOpen(true)}
-            className={`p-3 rounded-xl transition-all ${isFullscreen ? 'bg-white/10 hover:bg-white/20' : 'bg-white shadow-sm border border-gray-100 hover:bg-gray-50'}`}
+            onClick={isScreensaverMode ? onCloseScreensaver : toggleFullscreen}
+            className={`p-3 rounded-xl transition-all ${isFullscreen || isScreensaverMode ? 'bg-white/10 hover:bg-white/20' : 'bg-white shadow-sm border border-gray-100 hover:bg-gray-50'}`}
           >
-            <Settings className="w-5 h-5" />
-          </button>
-          <button
-            onClick={toggleFullscreen}
-            className={`p-3 rounded-xl transition-all ${isFullscreen ? 'bg-white/10 hover:bg-white/20' : 'bg-white shadow-sm border border-gray-100 hover:bg-gray-50'}`}
-          >
-            {isFullscreen ? <X className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
+            {isFullscreen || isScreensaverMode ? <X className="w-5 h-5" /> : <Maximize2 className="w-5 h-5" />}
           </button>
         </div>
       </div>
@@ -228,9 +255,25 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDo
                 </button>
               </div>
 
-              <div className="space-y-6">
+              <div className="space-y-6 max-h-[60vh] overflow-y-auto pl-2">
                 <div>
-                  <label className="block text-sm font-bold text-gray-700 mb-2">مدت زمان نمایش (ثانیه)</label>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">زمان فعال‌سازی خودکار اسکرین‌سیور (ثانیه)</label>
+                  <input
+                    type="range"
+                    min="0"
+                    max="300"
+                    step="10"
+                    value={idleTimeout}
+                    onChange={(e) => setIdleTimeout(Number(e.target.value))}
+                    className="w-full accent-indigo-600"
+                  />
+                  <div className="text-center font-bold text-indigo-600 mt-2">
+                    {idleTimeout === 0 ? 'غیرفعال' : `${idleTimeout} ثانیه`}
+                  </div>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-gray-700 mb-2">مدت زمان نمایش هر کارت (ثانیه)</label>
                   <input
                     type="range"
                     min="2"
@@ -290,7 +333,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({ persons, accountingDo
 
               <div className="mt-8 pt-4 border-t border-gray-100">
                 <button
-                  onClick={() => setIsSettingsOpen(false)}
+                  onClick={saveSettings}
                   className="w-full py-4 bg-slate-800 text-white font-bold rounded-xl hover:bg-slate-700 transition-colors"
                 >
                   تایید و اعمال

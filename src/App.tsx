@@ -336,7 +336,9 @@ const AnalyticalDashboard = React.lazy(() => import('./components/reports/Analyt
 const FinancialDashboard = React.lazy(() => import('./components/reports/FinancialDashboard'));
 const AccountLedgerReport = React.lazy(() => import('./components/accounting/AccountLedgerReport'));
 const DebtsCreditsReport = React.lazy(() => import('./components/reports/DebtsCreditsReport'));
+import DebtorsShowcaseComponent from "./components/crm/DebtorsShowcase";
 const DebtorsShowcase = React.lazy(() => import('./components/crm/DebtorsShowcase'));
+const ScreensaverManager = React.lazy(() => import('./components/crm/ScreensaverManager'));
 const LoansManager = React.lazy(() => import('./components/loans/LoansManager'));
 const LoanCardPage = React.lazy(() => import('./pages/loans/LoanCardPage'));
 const ChartOfAccounts = React.lazy(() => import('./components/accounting/ChartOfAccounts'));
@@ -2369,6 +2371,15 @@ return (
           {isProfileModalOpen && (
             <ProfileModal onClose={() => setIsProfileModalOpen(false)} />
           )}
+
+          <Suspense fallback={null}>
+            <ScreensaverManager
+              persons={persons}
+              accountingDocuments={accountingDocuments}
+              storeSettings={storeSettings}
+              formatNumber={formatNumber}
+            />
+          </Suspense>
           {submitting && !previewInvoiceData && (
             <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center p-8 text-center cursor-wait select-none" dir="rtl">
               <div className="w-16 h-16 relative flex items-center justify-center mb-6">
