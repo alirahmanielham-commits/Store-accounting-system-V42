@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { motion } from "motion/react";
+import { motion, AnimatePresence } from "motion/react";
 import { User, X, Check, Plus, RefreshCw, Search, CreditCard, Building, MapPin, Tag } from "lucide-react";
 import DateObject from "react-date-object";
 import persian from "react-date-object/calendars/persian";

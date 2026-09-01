@@ -808,7 +808,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
           <div className="flex items-center gap-3 bg-white p-3 rounded-2xl shadow-sm border border-slate-100">
             <select
               value={filterYear}
-              onChange={(e) => setFilterYear(Number(e.target.value))}
+              onChange={(e) => setCalYear(Number(e.target.value))}
               className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-24 p-2.5 font-bold outline-none"
             >
               {[1401, 1402, 1403, 1404, 1405].map(y => (
@@ -817,7 +817,7 @@ export default function DailyAttendanceManager({ personsData, storeSettings, sho
             </select>
             <select
               value={filterMonth}
-              onChange={(e) => setFilterMonth(Number(e.target.value))}
+              onChange={(e) => setCalMonth(Number(e.target.value))}
               className="bg-slate-50 border border-slate-200 text-slate-700 text-sm rounded-xl focus:ring-indigo-500 focus:border-indigo-500 block w-32 p-2.5 font-bold outline-none"
             >
               {[
