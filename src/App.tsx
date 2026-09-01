@@ -336,6 +336,7 @@ const AnalyticalDashboard = React.lazy(() => import('./components/reports/Analyt
 const FinancialDashboard = React.lazy(() => import('./components/reports/FinancialDashboard'));
 const AccountLedgerReport = React.lazy(() => import('./components/accounting/AccountLedgerReport'));
 const DebtsCreditsReport = React.lazy(() => import('./components/reports/DebtsCreditsReport'));
+const DebtorsShowcase = React.lazy(() => import('./components/crm/DebtorsShowcase'));
 const LoansManager = React.lazy(() => import('./components/loans/LoansManager'));
 const LoanCardPage = React.lazy(() => import('./pages/loans/LoanCardPage'));
 const ChartOfAccounts = React.lazy(() => import('./components/accounting/ChartOfAccounts'));
@@ -914,6 +915,7 @@ export default function App() {
                         user={user}
                         PersonLedgerActionsDropdown={PersonLedgerActionsDropdown} ledgerPersonId={ledgerPersonId} setActiveTab={setActiveTab} setCustomerId={setCustomerId} setReceiptPersonId={setReceiptPersonId} handleEditPerson={handleEditPerson} setIsPersonModalOpen={setIsPersonModalOpen} sendNotification={sendNotification} setPrintingPersonLedger={setPrintingPersonLedger} fetchInvoices={fetchInvoices} fetchTransactions={fetchTransactions} fetchAccountingDocuments={fetchAccountingDocuments} User={User} Select={Select} mapPersonToOption={mapPersonToOption} setLedgerPersonId={setLedgerPersonId} customPersonFilter={customPersonFilter} accountingDocuments={accountingDocuments} payslips={payslips} invoices={invoices} convertToGregorian={convertToGregorian} printingPersonLedger={printingPersonLedger} getPersonDisplayName={getPersonDisplayName} formatNumber={formatNumber} formatDateDisplay={formatDateDisplay} getRoleBadgeClasses={getRoleBadgeClasses} getRoleName={getRoleName} setLedgerTab={setLedgerTab} ledgerTab={ledgerTab} PersonNotesAndAttachments={PersonNotesAndAttachments} List={List} setViewingInvoice={setViewingInvoice} transactions={transactions} setViewingPayslip={setViewingPayslip} setPreviewReceiptData={setPreviewReceiptData} setPrintingTransaction={setPrintingTransaction} issuedChecks={issuedChecks} setViewingCheck={setViewingCheck} receivedChecks={receivedChecks} Calendar={Calendar} Tag={Tag} />} />
 <Route path="/debts_credits" element={<DebtsCreditsReport showNotification={showNotification} />} />
+<Route path="/debtors_showcase" element={<DebtorsShowcase persons={persons} accountingDocuments={accountingDocuments} storeSettings={storeSettings} formatNumber={formatNumber} />} />
 <Route path="/transfer" element={<motion.div
                         initial={{ opacity: 0, y: 10 }}
                         animate={{ opacity: 1, y: 0 }}

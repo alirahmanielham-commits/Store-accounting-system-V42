@@ -105,6 +105,7 @@ export const allSidebarGroups: SidebarGroup[] = [
       { id: "person_opening_balances", label: "مانده اول دوره اشخاص", roles: ["admin", "accountant"] },
       { id: "person_ledger", label: "دفتر کل اشخاص", roles: ["admin", "accountant", "viewer"] },
       { id: "debts_credits", label: "گزارش بدهکاران و بستانکاران", roles: ["admin", "accountant", "viewer"] },
+      { id: "debtors_showcase", label: "نمایشگر بدهکاران (ویترین)", roles: ["admin", "accountant", "viewer"] },
       { id: "crm_dashboard", label: "داشبورد CRM", roles: ["admin", "viewer"] },
     ],
   },
