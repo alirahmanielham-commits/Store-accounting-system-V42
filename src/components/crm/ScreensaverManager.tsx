@@ -19,16 +19,16 @@ const ScreensaverManager: React.FC<ScreensaverManagerProps> = (props) => {
       const savedSettings = localStorage.getItem('debtors_showcase_settings');
       if (savedSettings) {
         const parsed = JSON.parse(savedSettings);
-        if (parsed.idleTimeout) {
-          setIdleTimeout(parsed.idleTimeout);
+        if (parsed.idleTimeout !== undefined) {
+          setIdleTimeout(Number(parsed.idleTimeout));
         }
       }
     } catch (e) {}
     
     // Listen for custom event to update timeout
     const handleUpdate = (e: any) => {
-      if (e.detail && e.detail.idleTimeout) {
-        setIdleTimeout(e.detail.idleTimeout);
+      if (e.detail && e.detail.idleTimeout !== undefined) {
+        setIdleTimeout(Number(e.detail.idleTimeout));
       }
     };
     window.addEventListener('debtors_settings_updated', handleUpdate);
