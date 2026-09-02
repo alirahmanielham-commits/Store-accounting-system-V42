@@ -942,6 +942,7 @@ useEffect(() => {
               { cache: "no-store" },
             ),
           ]);
+    
           let fetchedVer = "Build 2.9.0";
 
           if (resVer.ok) {
@@ -1986,7 +1987,7 @@ const handleImportProductsData = () => {
               successCount++;
             }
           }
-          await fetchDataSilent();
+          
           setSubmittingProduct(false);
       stopAppProcessing();
           let finalMsg = `${successCount} کالا با موفقیت درون‌ریزی شد.`;
@@ -2077,7 +2078,7 @@ const handleGenerateDemoData = async () => {
         unitRatio: 10,
       });
 
-      await fetchDataSilent();
+      
     } catch (err) {
       console.error("Error generating demo data", err);
       customAlert("خطا در ایجاد دیتای نمونه");
@@ -2104,7 +2105,7 @@ const handleFastSaveProduct = async (productData: any): Promise<boolean> => {
         setTimeout(() => setNotification(null), 3000);
       }
 
-      await fetchDataSilent();
+      
       return true;
     } catch (error) {
       console.error("Error fast saving product", error);
@@ -2184,7 +2185,7 @@ const handleDeleteProduct = async (id: number | string) => {
     if (!confirm("آیا از حذف این کالا اطمینان دارید؟")) return;
     try {
       await deleteProduct(id.toString());
-      await fetchDataSilent();
+      
     } catch (error) {
       console.error("Error deleting product", error);
     }
@@ -2202,7 +2203,7 @@ const handleDeleteProduct = async (id: number | string) => {
       showNotification(`قیمت ${items.length} کالا با موفقیت بروزرسانی شد`, "success");
       setIsGroupPriceModalOpen(false);
       setSelectedProductIds([]);
-      await fetchDataSilent();
+      
     } catch (e) {
       console.error(e);
       showNotification("خطا در بروزرسانی گروهی قیمت", "error");
@@ -2359,7 +2360,7 @@ const handleDeletePerson = async (id: number | string) => {
     if (!confirm("آیا از حذف این شخص اطمینان دارید؟")) return;
     try {
       await deletePerson(id.toString());
-      await fetchDataSilent();
+      
     } catch (error) {
       console.error("Error deleting person", error);
     }
@@ -2386,7 +2387,7 @@ const handleGenerateMissingAccountingCodes = async () => {
       }
 
       setSuccessMsg(`کد حسابداری برای ${generated} شخص با موفقیت صادر شد.`);
-      await fetchDataSilent();
+      
     } catch (error) {
       console.error(error);
       customAlert("خطا در صدور کدهای حسابداری");
@@ -2476,6 +2477,7 @@ const checkDebtThreshold = async (personId: string | number) => {
         getIssuedChecks(),
         getReceivedChecks(),
       ]);
+
 
       const person = allPersons.find(
         (p: any) => p.id.toString() === personId.toString(),
@@ -2847,17 +2849,6 @@ description: receiptDescription,
       localStorage.removeItem("receipt_draft");
       setReceiptHasDraft(false);
 
-      await Promise.all([
-        fetchTransactions(),
-        fetchLoansAndInstallments(),
-        fetchInvoices(),
-        fetchAccountingDocuments(),
-        fetchPersons(),
-        fetchAccounts(),
-        fetchCashboxes(),
-        fetchChecks(),
-      ]);
-
       setLastCreatedReceipt(createdReceiptObj);
       setReceiptSuccessMsg(
         typeTmp === "receive"
@@ -2889,7 +2880,7 @@ description: receiptDescription,
         }
       }
 
-      await checkDebtThreshold(payload.personId);
+      checkDebtThreshold(payload.personId).catch(console.error);
       
       updateAppProcessing("عملیات با موفقیت انجام شد...");
       await new Promise(resolve => setTimeout(resolve, 800));
@@ -2976,19 +2967,11 @@ const handleSaveReceipt = async (updatedFields: any) => {
         }
       }
 
-      await Promise.all([
-        fetchDataSilent(),
-        fetchAccountingDocuments(),
-        fetchPersons(),
-        fetchAccounts(),
-        fetchCashboxes(),
-        fetchChecks(),
-      ]);
       showNotification(
         "تغییرات با موفقیت روی رسید ذخیره گردید و اسناد مربوطه بروز شدند.",
         "success",
       );
-      await checkDebtThreshold(editingReceipt.personId);
+      checkDebtThreshold(editingReceipt.personId).catch(console.error);
     } catch (err) {
       console.error(err);
       customAlert("خطا در بروزرسانی سند رسید.");
@@ -3145,11 +3128,6 @@ const handleSubmitSalary = async (e: React.FormEvent) => {
       setSalaryPeriodYear("1403");
       setSalaryResourceId("");
 
-      await Promise.all([
-        fetchDataSilent(),
-        fetchAccounts(),
-        fetchCashboxes(),
-      ]);
     } catch (error: any) {
       console.error("Error submitting salary", error);
       customAlert(error.message || "خطای سیستمی رخ داد");
@@ -3204,12 +3182,6 @@ const handleDeleteTransaction = async (id: number | string) => {
             }
           }
           await deleteTransaction(id.toString());
-          await Promise.all([
-            fetchTransactions(),
-            fetchAccounts(),
-            fetchCashboxes(),
-            fetchChecks(),
-          ]);
         } catch (error) {
           console.error("Error deleting transaction", error);
         }
@@ -3272,7 +3244,7 @@ const handleEditWarehouse = (w: Warehouse) => {
 const handleToggleProductActive = async (productId: string | number, currentActiveState: boolean) => {
     try {
       await updateProduct(productId.toString(), { isActive: !currentActiveState });
-      await fetchDataSilent();
+      
       showNotification(
         `وضعیت کالا به ${!currentActiveState ? "فعال" : "غیرفعال"} تغییر یافت.`,
         "success"
@@ -3319,7 +3291,7 @@ const handleAIProductsAdd = async (
         isSuccess = true;
       }
       if (isSuccess) {
-        await fetchDataSilent();
+        
         setSuccessMsg("کالاهای انتخاب شده با موفقیت افزوده شدند.");
       }
     } catch (e: any) {
@@ -3408,7 +3380,7 @@ const handleDeletePersonGroup = async (id: string) => {
           }
 
           await fetchPersonGroups();
-          await fetchDataSilent();
+          
         } catch (e) {
           console.error("Error deleting group", e);
         }
@@ -3754,6 +3726,7 @@ const fetchSmsMessages = async () => {
         fetchFinancialYearInfo(),
         fetchLoansAndInstallments(),
       ]);
+
       await fetchInvoices();
       await autoGenerateRentCommitments();
     } catch (error) {
@@ -3781,7 +3754,8 @@ const fetchData = async () => {
         fetchFinancialYearInfo(),
         fetchLoansAndInstallments(),
       ]);
-      await fetchDataSilent();
+
+      
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -5366,8 +5340,8 @@ const getInvoiceNumber = (typeOverride?: string) => {
           sendNotification(msg, person.phone, storeSettings?.notify_method);
         }
       }
-      await fetchDataSilent();
-      await checkDebtThreshold(payload.customerId);
+      
+      checkDebtThreshold(payload.customerId).catch(console.error);
 
       // Reset form after short delay
       clearDraft();
@@ -5682,7 +5656,7 @@ const handleExecuteTransferAndSubmit = async () => {
         }
       }
 
-      await fetchDataSilent();
+      
       clearDraft();
 
       setTimeout(() => {
