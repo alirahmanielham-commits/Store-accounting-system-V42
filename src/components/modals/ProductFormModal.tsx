@@ -16,6 +16,7 @@ interface ProductFormModalProps {
   isOpen: boolean;
   onClose: () => void;
   editingProductId: any;
+  duplicateProductId?: any;
   products: any[];
   productCategories: any[];
   warehouses: any[];
@@ -31,6 +32,7 @@ export default function ProductFormModal({
   isOpen,
   onClose,
   editingProductId,
+  duplicateProductId,
   products,
   productCategories,
   warehouses,
@@ -94,6 +96,28 @@ export default function ProductFormModal({
             getProductPriceHistory(product.id.toString()).then(setCurrentProductPriceHistory).catch(console.error);
           }
         }
+      } else if (duplicateProductId) {
+        const product = products.find(p => p.id === duplicateProductId);
+        if (product) {
+          setNewProductName(product.name || "");
+          setNewProductType(product.type || "product");
+          setNewProductCategoryId(product.categoryId || "");
+          setNewProductUnit(product.unit || "");
+          setNewProductSecondaryUnit(product.secondaryUnit || "");
+          setNewProductUnitRatio(product.unitRatio ? String(product.unitRatio) : "");
+          // Clear everything else
+          setNewProductPrice("");
+          setNewProductCode("");
+          setNewProductBarcode("");
+          setNewProductPurchasePrice("");
+          setNewProductWarehouseId("");
+          setNewProductStock("");
+          setNewProductMinStock("");
+          setNewProductDesc("");
+          setNewProductImageUrl("");
+          setNewProductIsActive(true);
+          setCurrentProductPriceHistory([]);
+        }
       } else {
         setNewProductName("");
         setNewProductPrice("");
@@ -115,7 +139,7 @@ export default function ProductFormModal({
       }
       setProductFormTab("general");
     }
-  }, [isOpen, editingProductId, products]);
+  }, [isOpen, editingProductId, duplicateProductId, products]);
 
 const handleSubmitProduct = async (e?: React.FormEvent) => {
     if (e && typeof e.preventDefault === "function") {

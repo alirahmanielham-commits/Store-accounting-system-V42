@@ -2474,8 +2474,10 @@ return (
               onClose={() => {
                 setIsProductModalOpen(false);
                 setEditingProductId(null);
+                appState.setDuplicateProductId(null);
               }}
               editingProductId={editingProductId}
+              duplicateProductId={appState.duplicateProductId}
               products={products}
               productCategories={productCategories}
               warehouses={warehouses}
@@ -2485,6 +2487,7 @@ return (
                 showNotification('اطلاعات کالا با موفقیت ثبت شد', 'success');
                 setIsProductModalOpen(false);
                 setEditingProductId(null);
+                appState.setDuplicateProductId(null);
               }}
               showNotification={showNotification}
               confirmAction={confirmAction}

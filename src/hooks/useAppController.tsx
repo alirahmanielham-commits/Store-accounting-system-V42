@@ -1704,6 +1704,7 @@ const [isWarehouseModalOpen, setIsWarehouseModalOpen] = useState(false);
 
 const [viewingProduct, setViewingProduct] = useState<any>(null);
 
+const [duplicateProductId, setDuplicateProductId] = useState<string | number | null>(null);
 const [editingProductId,
     setEditingProductId] = useState<
     string | number | null
@@ -3262,6 +3263,7 @@ const handleEditProduct = (p: Product | any) => {
 
 const handleDuplicateProduct = (p: Product | any) => {
     setEditingProductId(null);
+    setDuplicateProductId(p.id);
     setIsProductModalOpen(true);
   };
 
@@ -6665,6 +6667,8 @@ const renderTabContent = () => {
     setIsWarehouseModalOpen,
     viewingProduct,
     setViewingProduct,
+    duplicateProductId,
+    setDuplicateProductId,
     editingProductId,
     setEditingProductId,
     editingPersonId,
