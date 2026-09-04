@@ -547,6 +547,7 @@ export default function PersonProfileView({
         onClose={() => setIsMessageModalOpen(false)}
         person={person}
         showNotification={showNotification || (() => {})}
+        calculatePersonBalance={calculatePersonBalance}
       />
     </motion.div>
   );

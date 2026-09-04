@@ -319,9 +319,15 @@ export default function SmsTemplatesView({ showNotification }: any) {
                     placeholder="متن پیام را وارد کنید. مثال: سلام {name} عزیز..."
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl p-3 text-sm focus:ring-2 focus:ring-indigo-500 outline-none min-h-[150px] resize-none leading-relaxed"
                   />
-                  <div className="flex items-center justify-between text-xs text-slate-500">
+                  <div className="bg-blue-50 text-blue-800 text-xs p-3 rounded-lg border border-blue-100 leading-relaxed">
+                    <strong>متغیرهای سیستمی پرکاربرد:</strong><br />
+                    <span className="inline-block mt-1 bg-white px-2 py-1 rounded shadow-sm">{"{name}"} : نام شخص</span>
+                    <span className="inline-block mt-1 mr-2 bg-white px-2 py-1 rounded shadow-sm">{"{balance}"} : مانده حساب شخص</span>
+                    <span className="inline-block mt-1 mr-2 bg-white px-2 py-1 rounded shadow-sm">{"{balance_status}"} : وضعیت حساب (بدهکار/بستانکار/تسویه)</span>
+                  </div>
+                  <div className="flex items-center justify-between text-xs text-slate-500 mt-2">
                     <div>
-                      متغیرهای شناسایی شده: 
+                      متغیرهای استفاده شده: 
                       {extractVariables(body).length > 0 ? (
                         <span className="font-bold text-indigo-600 mr-2">{extractVariables(body).join(', ')}</span>
                       ) : (

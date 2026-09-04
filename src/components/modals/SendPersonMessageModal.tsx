@@ -2,12 +2,14 @@ import React, { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { X, Send, MessageSquare, AlertCircle } from "lucide-react";
 import { addDatabaseLog } from "../../services/coreService";
+import { addCommas } from "../../utils/format";
 
 interface SendPersonMessageModalProps {
   isOpen: boolean;
   onClose: () => void;
   person: any;
   showNotification: (msg: string, type: "success" | "error") => void;
+  calculatePersonBalance?: (id: string | number) => { amount: number, status: string, color?: string, bg?: string };
 }
 
 export default function SendPersonMessageModal({
@@ -15,6 +17,7 @@ export default function SendPersonMessageModal({
   onClose,
   person,
   showNotification,
+  calculatePersonBalance
 }: SendPersonMessageModalProps) {
   const [message, setMessage] = useState("");
   const [templates, setTemplates] = useState<any[]>([]);
@@ -36,9 +39,20 @@ export default function SendPersonMessageModal({
 
   const handleTemplateSelect = (templateText: string) => {
     const name = person.firstName || person.lastName ? `${person.firstName || ''} ${person.lastName || ''}`.trim() : (person.companyName || person.alias || 'نامشخص');
-    const msg = templateText
-      .replace(/{name}/g, name)
-      // replace other vars if needed
+    let msg = templateText.replace(/{name}/g, name);
+    
+    // Replace {balance} placeholder if it exists and calculatePersonBalance is provided
+    if (msg.includes('{balance}') && calculatePersonBalance) {
+      const balanceObj = calculatePersonBalance(person.id);
+      msg = msg.replace(/{balance}/g, addCommas(balanceObj.amount));
+    }
+
+    // Replace {balance_status} placeholder if it exists and calculatePersonBalance is provided
+    if (msg.includes('{balance_status}') && calculatePersonBalance) {
+      const balanceObj = calculatePersonBalance(person.id);
+      msg = msg.replace(/{balance_status}/g, balanceObj.status === 'debtor' ? 'بدهکار' : balanceObj.status === 'creditor' ? 'بستانکار' : 'تسویه');
+    }
+
     setMessage(msg);
   };
 
