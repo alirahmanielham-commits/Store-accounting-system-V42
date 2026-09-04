@@ -848,6 +848,7 @@ export default function App() {
                         cashboxes={cashboxes}
                         transactions={transactions}
                         calculatePersonBalance={calculatePersonBalance}
+                        showNotification={showNotification}
                         getPersonDisplayName={getPersonDisplayName}
                         formatNumber={formatNumber}
                         setActiveTab={setActiveTab}
@@ -865,6 +866,7 @@ export default function App() {
                         accountingDocuments={accountingDocuments}
                         storeSettings={storeSettings}
                         calculatePersonBalance={calculatePersonBalance}
+                        showNotification={showNotification}
                         onBack={() => setActiveTab("persons")}
                         onEdit={handleEditPerson}
                         onViewExtraInfo={(p: any) => {

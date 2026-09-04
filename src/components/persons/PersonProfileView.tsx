@@ -2,9 +2,10 @@ import { convertToGregorian } from '../../utils/format';
 import BeautifulLoading from '../BeautifulLoading';
 import React, { useMemo, useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { User, Phone, MapPin, Receipt, Wallet, FileText, ArrowRight, Building2, Calendar, Edit2, ShoppingCart, Truck, CheckCircle, Clock } from "lucide-react";
+import { User, Phone, MessageSquare, MapPin, Receipt, Wallet, FileText, ArrowRight, Building2, Calendar, Edit2, ShoppingCart, Truck, CheckCircle, Clock } from "lucide-react";
 import { PersonCheckHistory } from './PersonCheckHistory';
 import { getPersonFollowUps } from "../../services/dataService";
+import SendPersonMessageModal from "../modals/SendPersonMessageModal";
 
 interface PersonProfileViewProps {
   personId: string | number;
@@ -29,6 +30,7 @@ interface PersonProfileViewProps {
   getRoleBadgeClasses: (roleId?: string) => string;
   formatCurrency: (amount: number) => string;
   toPersianDigits: (str: string | number) => string;
+  showNotification?: (msg: string, type: "success" | "error") => void;
   formatDateDisplay: (date: any) => string;
 }
 
@@ -55,6 +57,7 @@ export default function PersonProfileView({
   getRoleBadgeClasses,
   formatCurrency,
   toPersianDigits,
+  showNotification,
   formatDateDisplay
 }: PersonProfileViewProps) {
   const person = persons.find(p => p.id.toString() === personId.toString());
@@ -64,6 +67,7 @@ export default function PersonProfileView({
   }
   
   const [followUps, setFollowUps] = useState<any[]>([]);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   
   useEffect(() => {
     const loadFollowUps = async () => {
@@ -284,7 +288,7 @@ export default function PersonProfileView({
               <ShoppingCart className="w-5 h-5 text-indigo-600" />
               عملیات سریع
             </h3>
-            <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
               <button 
                 onClick={() => onCreateSale(personId)}
                 className="p-3 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-2xl font-bold text-sm transition-colors flex flex-col items-center gap-2 border border-blue-100"
@@ -312,6 +316,13 @@ export default function PersonProfileView({
               >
                 <div className="p-2 bg-white rounded-xl shadow-sm"><Wallet className="w-5 h-5 text-rose-600" /></div>
                 پرداخت وجه
+              </button>
+              <button 
+                onClick={() => setIsMessageModalOpen(true)}
+                className="p-3 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-2xl font-bold text-sm transition-colors flex flex-col items-center gap-2 border border-amber-100"
+              >
+                <div className="p-2 bg-white rounded-xl shadow-sm"><MessageSquare className="w-5 h-5 text-amber-600" /></div>
+                ارسال پیام
               </button>
             </div>
           </div>
@@ -531,6 +542,12 @@ export default function PersonProfileView({
           </div>
         </div>
       </div>
+      <SendPersonMessageModal
+        isOpen={isMessageModalOpen}
+        onClose={() => setIsMessageModalOpen(false)}
+        person={person}
+        showNotification={showNotification || (() => {})}
+      />
     </motion.div>
   );
 }
