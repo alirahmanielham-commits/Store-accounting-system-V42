@@ -241,47 +241,62 @@ export const deleteProductToServer = async (id: string) => {
   await saveLocalData('products', products.filter((p: any) => String(p.id) !== String(id)));
 };
 
-export const syncProductLatestPrices = async (productId: string) => {
+export const syncProductsLatestPrices = async (productIds: (string | number)[]) => {
+  if (!productIds || productIds.length === 0) return;
+  const uniqueIds = Array.from(new Set(productIds.map(id => String(id))));
+
   const history = await getLocalData<any[]>('product_price_history', []);
-  const productHistory = history.filter((h: any) => String(h.productId) === String(productId));
-
-  if (productHistory.length === 0) return;
-
-  // Sort by date descending (latest first)
-  // Store original insertion index to use as secondary sort (higher index = newer)
-  productHistory.forEach((h: any, i: number) => h._index = i);
-  
-  // Sort by date descending, then by insertion index descending
-  productHistory.sort((a: any, b: any) => {
-      const timeDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
-      if (timeDiff !== 0) return timeDiff;
-      return (b._index || 0) - (a._index || 0);
-  });
-
-  const latestPurchase = productHistory.find((h: any) => h.type === 'purchase')?.price || 0;
-  const latestSale = productHistory.find((h: any) => h.type === 'sale')?.price || 0;
-
   const products = await getLocalData<any[]>('products', []);
-  const index = products.findIndex((p: any) => String(p.id) === String(productId));
-  if (index !== -1) {
-    const product = products[index];
-    const updatePayload: any = {};
-    let shouldUpdate = false;
-    
-    if (latestPurchase > 0 && product.purchasePrice !== latestPurchase) {
-      updatePayload.purchasePrice = latestPurchase;
-      shouldUpdate = true;
-    }
-    if (latestSale > 0 && product.price !== latestSale) {
-      updatePayload.price = latestSale;
-      shouldUpdate = true;
-    }
+  let hasChanges = false;
+  const updatedProducts = [...products];
 
-    if (shouldUpdate) {
-      const newProduct = { ...product, ...updatePayload, updatedAt: Date.now() };
-      await updateLocalData('products', product.id, newProduct);
+  for (const productId of uniqueIds) {
+    const productHistory = history.filter((h: any) => String(h.productId) === productId);
+    if (productHistory.length === 0) continue;
+
+    // Sort by date descending (latest first)
+    // Store original insertion index to use as secondary sort (higher index = newer)
+    productHistory.forEach((h: any, i: number) => h._index = i);
+    
+    // Sort by date descending, then by insertion index descending
+    productHistory.sort((a: any, b: any) => {
+        const timeDiff = new Date(b.date).getTime() - new Date(a.date).getTime();
+        if (timeDiff !== 0) return timeDiff;
+        return (b._index || 0) - (a._index || 0);
+    });
+
+    const latestPurchase = productHistory.find((h: any) => h.type === 'purchase')?.price || 0;
+    const latestSale = productHistory.find((h: any) => h.type === 'sale')?.price || 0;
+
+    const index = updatedProducts.findIndex((p: any) => String(p.id) === productId);
+    if (index !== -1) {
+      const product = updatedProducts[index];
+      const updatePayload: any = {};
+      let shouldUpdate = false;
+      
+      if (latestPurchase > 0 && product.purchasePrice !== latestPurchase) {
+        updatePayload.purchasePrice = latestPurchase;
+        shouldUpdate = true;
+      }
+      if (latestSale > 0 && product.price !== latestSale) {
+        updatePayload.price = latestSale;
+        shouldUpdate = true;
+      }
+
+      if (shouldUpdate) {
+        updatedProducts[index] = { ...product, ...updatePayload, updatedAt: Date.now() };
+        hasChanges = true;
+      }
     }
   }
+
+  if (hasChanges) {
+    await saveLocalData('products', updatedProducts);
+  }
+};
+
+export const syncProductLatestPrices = async (productId: string) => {
+  return await syncProductsLatestPrices([productId]);
 };
 
 export const getProductPriceHistory = async (productId: string) => {

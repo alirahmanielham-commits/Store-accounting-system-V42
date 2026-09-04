@@ -4439,7 +4439,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
     setSubmitting(true);
     setSuccessMsg("");
     startAppProcessing('شروع فرآیند ثبت فاکتور...');
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 20));
 
     const isDraft =
       isDraftOverride ||
@@ -4527,7 +4527,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
     // ---- Sale Invoice Validation Gates ----
     if (!isDraft && actualType === "sale") {
       updateAppProcessing('بررسی گیت‌های ۷ گانه اعتبارسنجی فاکتور فروش...');
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 20));
       const validationErrors: string[] = [];
 
       // 1. فعال و معتبر بودن مشتری
@@ -4803,11 +4803,11 @@ const getInvoiceNumber = (typeOverride?: string) => {
       }
       
       updateAppProcessing('تمامی ۵ گیت اعتبارسنجی تایید شدند. شروع تراکنش (BEGIN TRANSACTION)...');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 20));
     }
 
     updateAppProcessing('آماده‌سازی اطلاعات فاکتور...');
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 20));
     const payload = customPayload
       ? {
           ...customPayload,
@@ -4983,16 +4983,19 @@ const getInvoiceNumber = (typeOverride?: string) => {
       let addedInvoice: any = null;
       
       if (!isDraft && payload.type === "purchase") {
-        // Step 1: ثبت هدر فاکتور
-        updateAppProcessing("مرحله ۱ از ۶ (BEGIN TRANSACTION): ثبت هدر فاکتور خرید...");
-        await new Promise(r => setTimeout(r, 400));
+        updateAppProcessing("مرحله ۱ از ۳: ثبت فاکتور خرید و کاردکس کالا...");
+        await new Promise(r => setTimeout(r, 20));
 
-        const headerPayload = { ...payload, status: 'processing' };
+        const finalPayload = { ...payload, status: 'final', isDraft: false };
         if (editingInvoiceId) {
           const originalInvoice = invoices.find((i) => i.id?.toString() === editingInvoiceId.toString());
           const originalInvoiceCopy = originalInvoice ? JSON.parse(JSON.stringify(originalInvoice)) : null;
 
-          addedInvoice = await updateInvoice(editingInvoiceId, headerPayload as any, true);
+          addedInvoice = await updateInvoice(editingInvoiceId, finalPayload as any, true);
+          if (!isDraftOverride) {
+            setEditingInvoiceId(null);
+          }
+
           rollbackActions.push(async () => {
             if (originalInvoiceCopy) {
               await updateInvoice(editingInvoiceId, originalInvoiceCopy, true);
@@ -5012,7 +5015,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
               }
             });
           }
-          addedInvoice = await addInvoice(headerPayload as any, true);
+          addedInvoice = await addInvoice(finalPayload as any, true);
           rollbackActions.push(async () => {
             if (addedInvoice?.id) {
               await deleteInvoice(addedInvoice.id.toString(), true, true);
@@ -5022,11 +5025,6 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
         const invId = addedInvoice?.id || editingInvoiceId;
 
-        // Step 2: ثبت آیتم‌های فاکتور
-        updateAppProcessing("مرحله ۲ از ۶: ثبت آیتم‌های فاکتور و کاردکس کالا...");
-        await new Promise(r => setTimeout(r, 400));
-        await updateInvoice(invId, { ...payload, id: invId, status: 'processing' }, false);
-
         // Handle cash payment receipt if specified
         const invoiceTotalAmt = Number(payload.totalAmount) || 0;
         const supplierObj = persons.find((p) => p.id?.toString() === payload.customerId?.toString());
@@ -5035,8 +5033,8 @@ const getInvoiceNumber = (typeOverride?: string) => {
           const paymentAccount = accounts.find((a: any) => a.id === invoicePaymentAccountId);
           
           if (paymentAccount) {
-            updateAppProcessing("مرحله ۳ از ۶: ثبت رسید پرداخت نقدی فاکتور...");
-            await new Promise(r => setTimeout(r, 400));
+            updateAppProcessing("مرحله ۲ از ۳: ثبت رسید پرداخت نقدی فاکتور...");
+            await new Promise(r => setTimeout(r, 20));
             
             const payTxPayload = {
               type: 'pay',
@@ -5059,24 +5057,13 @@ const getInvoiceNumber = (typeOverride?: string) => {
           }
         }
 
-        // Step 5: ثبت گزارش تغییرات
-        updateAppProcessing("مرحله ۵ از ۶: ثبت گزارش تغییرات و لاگ سیستم...");
-        await new Promise(r => setTimeout(r, 400));
         if (typeof addSystemLog !== 'undefined') {
           await addSystemLog(
             'REGISTER_PURCHASE_INVOICE_TRANSACTION',
-            `ثبت تراکنشی ۶ مرحله‌ای فاکتور خرید شماره ${payload.invoiceNumber || invId} به مبلغ ${invoiceTotalAmt} برای ${supplierObj?.name || ''}`,
+            `ثبت فاکتور خرید شماره ${payload.invoiceNumber || invId} به مبلغ ${invoiceTotalAmt} برای ${supplierObj?.name || ''}`,
             'Invoice',
             invId
           );
-        }
-
-        // Step 6: تثبیت نهایی و تغییر وضعیت فاکتور
-        updateAppProcessing("مرحله ۶ از ۶: تثبیت نهایی و تغییر وضعیت فاکتور (COMMIT)...");
-        await new Promise(r => setTimeout(r, 400));
-        addedInvoice = await updateInvoice(invId, { ...payload, id: invId, status: 'final', isDraft: false }, true);
-        if (!isDraftOverride) {
-          setEditingInvoiceId(null);
         }
       } else {
         const typeTitles: Record<string, string> = {
@@ -5091,22 +5078,22 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
         if (payload.type === "sale") {
           updateAppProcessing("مرحله ۱ از ۷ (BEGIN TRANSACTION): ثبت هدر فاکتور فروش...");
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r => setTimeout(r, 20));
           updateAppProcessing("مرحله ۲ از ۷: ثبت آیتم‌های فاکتور...");
-          await new Promise(r => setTimeout(r, 200));
+          await new Promise(r => setTimeout(r, 20));
         } else if (payload.type === "warehouse_receipt") {
           updateAppProcessing("مرحله ۱ از ۶: هدر سند موجودی StockDocument و آیتم‌های سند موجودی StockDocumentItem ثبت شد...");
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 20));
         } else if (payload.type === "warehouse_remittance") {
           updateAppProcessing("مرحله ۱ از ۸: بررسی گیت انبار (آیا موجودی کافی است؟)...");
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 20));
           updateAppProcessing("مرحله ۲ از ۸: ثبت هدر سند و ثبت ردیف سند حواله...");
-          await new Promise(r => setTimeout(r, 300));
+          await new Promise(r => setTimeout(r, 20));
         } else {
           updateAppProcessing(`مرحله ۱ از ۴: ثبت اولیه ${titleName}...`);
-          await new Promise(r => setTimeout(r, 400));
+          await new Promise(r => setTimeout(r, 20));
         }
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 20));
 
         if (editingInvoiceId) {
           const originalInvoice = invoices.find((i) => i.id?.toString() === editingInvoiceId.toString());
@@ -5153,7 +5140,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
       // Auto-create warehouse remittance for purchase return
       if (!editingInvoiceId && payload.type === "purchase_return" && !isDraft) {
         updateAppProcessing("مرحله ۲ از ۴: صدور خودکار حواله مرجوعی انبار...");
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 20));
         const startNum = parseInt(
           storeSettings.invoiceStartNumber || "1000",
           10,
@@ -5212,7 +5199,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
         } else {
           updateAppProcessing("مرحله ۲ از ۴: صدور خودکار حواله خروج از انبار برای فروش...");
         }
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 20));
         const startNum = parseInt(
           storeSettings.invoiceStartNumber || "1000",
           10,
@@ -5263,30 +5250,30 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
       if (payload.type === "sale") {
         updateAppProcessing("مرحله ۴ از ۷: ثبت سند حسابداری (بدهکار مشتری - بستانکار فروش)...");
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۵ از ۷: به‌روزرسانی کاردکس شخص (مشتری)...");
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۶ از ۷: ثبت گزارش تغییرات (لاگ)...");
       } else if (payload.type === "warehouse_receipt") {
         updateAppProcessing("مرحله ۲ از ۶: محاسبه میانگین موزون جدید...");
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۳ از ۶: Insert در ItemLedger (کاردکس — فقط رکورد جدید اضافه می‌شود)...");
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۴ از ۶: Update در StockBalance (جدول موجودی لحظه‌ای)...");
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 20));
       } else if (payload.type === "warehouse_remittance") {
         updateAppProcessing("مرحله ۳ از ۸: محاسبه بهای تمام‌شده خروجی (طبق میانگین موزون لحظه‌ای)...");
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۴ از ۸: Insert در ItemLedger (کاردکس)...");
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۵ از ۸: Update در StockBalance (جدول موجودی لحظه‌ای)...");
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۶ از ۸: آزادسازی رزرو...");
-        await new Promise(r => setTimeout(r, 200));
+        await new Promise(r => setTimeout(r, 20));
       } else {
         updateAppProcessing("مرحله ۳ از ۴: محاسبه کاردکس کالا و به‌روزرسانی انبارها...");
       }
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 20));
       await recalculateAllWarehouseStocks();
       await fetchWarehouses();
 
@@ -5294,16 +5281,16 @@ const getInvoiceNumber = (typeOverride?: string) => {
         updateAppProcessing("مرحله ۷ از ۷: تثبیت نهایی و تغییر وضعیت فاکتور (COMMIT)...");
       } else if (payload.type === "warehouse_receipt") {
         updateAppProcessing("مرحله ۵ از ۶: ثبت سند حسابداری...");
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۶ از ۶: ثبت لاگ تغییرات (Audit Log)...");
       } else if (payload.type === "warehouse_remittance") {
         updateAppProcessing("مرحله ۷ از ۸: ثبت سند حسابداری...");
-        await new Promise(r => setTimeout(r, 300));
+        await new Promise(r => setTimeout(r, 20));
         updateAppProcessing("مرحله ۸ از ۸: ثبت لاگ تغییرات و COMMIT...");
       } else {
         updateAppProcessing("مرحله ۴ از ۴: تثبیت نهایی عملیات...");
       }
-      await new Promise(r => setTimeout(r, 300));
+      await new Promise(r => setTimeout(r, 20));
 
       const successTypeName =
         payload.type === "warehouse_receipt"

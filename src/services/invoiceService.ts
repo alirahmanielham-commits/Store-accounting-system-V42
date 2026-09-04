@@ -1,7 +1,7 @@
 import { checkFinancialYear, getStoreSettings } from './settingsService';
 import { mapTransactionTypeToTable, mapInvoiceTypeToTable } from './coreService';
 import { getLedgerAccounts, addLedgerAccount, addAccountingDocument, getAccountingDocuments, updateAccountingDocument } from './accountingService';
-import { syncProductLatestPrices } from './productService';
+import { syncProductLatestPrices, syncProductsLatestPrices } from './productService';
 import { recalculateAllWarehouseStocks } from './inventoryService';
 
 import { 
@@ -762,10 +762,11 @@ export const addInvoice = async (invoice: any, skipRecalc: boolean = false) => {
   // Generate price history for invoice items
   if (newInvoice.type === 'purchase' || newInvoice.type === 'sale') {
      const affectedProducts = new Set<string>();
-          if (newInvoice.items && Array.isArray(newInvoice.items)) {
+     if (newInvoice.items && Array.isArray(newInvoice.items)) {
+         const historyItems: any[] = [];
          for (const item of newInvoice.items) {
              if (item.productId && Number(item.unitPrice) > 0) {
-                 await appendLocalData('product_price_history', {
+                 historyItems.push({
                      id: generateId(),
                      productId: item.productId,
                      date: newInvoice.date || new Date().toISOString().split('T')[0],
@@ -778,8 +779,11 @@ export const addInvoice = async (invoice: any, skipRecalc: boolean = false) => {
                  affectedProducts.add(String(item.productId));
              }
          }
-         for (const pId of Array.from(affectedProducts)) {
-             await syncProductLatestPrices(pId);
+         if (historyItems.length > 0) {
+             await Promise.all(historyItems.map(h => appendLocalData('product_price_history', h)));
+         }
+         if (affectedProducts.size > 0) {
+             await syncProductsLatestPrices(Array.from(affectedProducts));
          }
      }
   }
@@ -874,7 +878,7 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
           
           const affectedProducts = new Set<string>();
           if (newInvoice.items && Array.isArray(newInvoice.items)) {
-         for (const item of newInvoice.items) {
+              for (const item of newInvoice.items) {
                   if (item.productId && Number(item.unitPrice) > 0) {
                       filteredHistories.push({
                           id: generateId(),
@@ -891,8 +895,8 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
               }
           }
           await saveLocalData('product_price_history', filteredHistories);
-          for (const pId of Array.from(affectedProducts)) {
-              await syncProductLatestPrices(pId);
+          if (affectedProducts.size > 0) {
+              await syncProductsLatestPrices(Array.from(affectedProducts));
           }
       } catch (e) {
           console.error(e);
@@ -1024,9 +1028,7 @@ export const voidInvoice = async (id: string | number) => {
     
     if (affectedProductsForVoid.size > 0) {
         await saveLocalData('product_price_history', filteredHistories);
-        for (const pId of Array.from(affectedProductsForVoid)) {
-            await syncProductLatestPrices(pId);
-        }
+        await syncProductsLatestPrices(Array.from(affectedProductsForVoid));
     }
 
     // void related accounting docs
@@ -1084,9 +1086,7 @@ export const deleteInvoice = async (id: string, forceDelete: boolean = false, sk
     
     if (affectedProductsForDelete.size > 0) {
         await saveLocalData('product_price_history', filteredHistories);
-        for (const pId of Array.from(affectedProductsForDelete)) {
-            await syncProductLatestPrices(pId);
-        }
+        await syncProductsLatestPrices(Array.from(affectedProductsForDelete));
     }
 
     // delete related accounting docs
