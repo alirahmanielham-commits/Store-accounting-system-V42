@@ -189,13 +189,13 @@ export default function PersonOpeningBalances(props: any) {
                               <tbody className="divide-y divide-slate-50">
                                 {personOpeningBalances
                                   .filter((ob: any) => {
-                                    const pObj = persons.find(
-                                      (p) =>
-                                        String(p.id) === String(ob.personId),
+                                    const pObj = (persons || []).find(
+                                      (p: any) =>
+                                        String(p?.id) === String(ob.personId),
                                     );
                                     if (!pObj) return false;
                                     const matchSearch =
-                                      pObj.name
+                                      (pObj.name || "")
                                         .toLowerCase()
                                         .includes(
                                           openingBalanceSearch.toLowerCase(),
@@ -208,9 +208,9 @@ export default function PersonOpeningBalances(props: any) {
                                     return matchSearch;
                                   })
                                   .map((ob: any, idx: number) => {
-                                    const pObj = persons.find(
-                                      (p) =>
-                                        String(p.id) === String(ob.personId),
+                                    const pObj = (persons || []).find(
+                                      (p: any) =>
+                                        String(p?.id) === String(ob.personId),
                                     );
                                     const isDebtor =
                                       ob.balanceType === "debtor";
@@ -524,9 +524,9 @@ export default function PersonOpeningBalances(props: any) {
                                       ? {
                                           value: selectedOpeningBalancePersonId,
                                           label: (() => {
-                                            const p = persons.find(
-                                              (x) =>
-                                                String(x.id) ===
+                                            const p = (persons || []).find(
+                                              (x: any) =>
+                                                String(x?.id) ===
                                                 String(
                                                   selectedOpeningBalancePersonId,
                                                 ),
@@ -535,9 +535,9 @@ export default function PersonOpeningBalances(props: any) {
                                               ? `${p.title ? p.title + " " : ""}${p.name} (${p.role === "supplier" ? "تامین‌کننده" : p.role === "employee" ? "کارمند" : "مشتری"})${p.personCode ? ` - کد: ${p.personCode}` : ""}`
                                               : "";
                                           })(),
-                                          data: persons.find(
-                                            (x) =>
-                                              String(x.id) ===
+                                          data: (persons || []).find(
+                                            (x: any) =>
+                                              String(x?.id) ===
                                               String(
                                                 selectedOpeningBalancePersonId,
                                               ),

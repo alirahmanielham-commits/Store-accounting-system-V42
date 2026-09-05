@@ -1,10 +1,11 @@
 import React, { useState, useEffect } from 'react';
 import BeautifulLoading from '../BeautifulLoading';
-import { Users, Search, Filter, Printer, RefreshCw, HandCoins, UserX, UserCheck, Calculator } from 'lucide-react';
+import { Users, Search, Filter, Printer, RefreshCw, HandCoins, UserX, UserCheck, Calculator, MessageSquare } from 'lucide-react';
 import { motion } from 'motion/react';
 import { getPersons, getInvoices, getTransactions, getIssuedChecks, getReceivedChecks, getStoreSettings, getPersonGroups, getAccountingDocuments } from '../../services/dataService';
 import { Person, PersonGroup } from '../../types';
 import { getDefaultExchangeRate, formatDateDisplay } from '../../utils/format';
+import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 
 const formatNumber = (num: number) => new Intl.NumberFormat('fa-IR').format(num);
 
@@ -26,6 +27,16 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('all');
   const [filterType, setFilterType] = useState<'all' | 'debtor' | 'creditor' | 'settled'>('all');
+
+  // Message modal state
+  const [messagePerson, setMessagePerson] = useState<any | null>(null);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+
+  const handleOpenMessage = (row: any) => {
+    const fullPerson = (persons || []).find(p => String(p?.id) === String(row?.id)) || row;
+    setMessagePerson(fullPerson);
+    setIsMessageModalOpen(true);
+  };
 
   useEffect(() => {
     fetchData();
@@ -51,7 +62,7 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
   };
 
   const calculatePersonBalance = (personId: string | number) => {
-    const person = persons.find(p => p.id.toString() === personId.toString());
+    const person = (persons || []).find(p => p?.id?.toString() === personId?.toString());
     if (!person) return { amount: 0, status: 'بی‌حساب', value: 0 };
 
     let balance = 0;
@@ -75,7 +86,7 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
   const getReportData = () => {
     let rows = (persons || []).map(p => {
         const balanceInfo = calculatePersonBalance(p.id);
-        const groupObj = groups.find(g => g.id.toString() === p.group?.toString());
+        const groupObj = (groups || []).find(g => g?.id?.toString() === p.group?.toString());
         return {
             ...p,
             groupName: groupObj?.name || 'بدون گروه',
@@ -216,7 +227,7 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
                گزارش لیست اشخاص (بدهی‌ها و طلب‌ها)
             </h2>
             <div className="grid grid-cols-2 gap-4 text-sm font-bold text-slate-700">
-               <div>فیلتر گروه: {selectedGroup === 'all' ? 'همه' : groups.find(g => g.id.toString() === selectedGroup.toString())?.name}</div>
+               <div>فیلتر گروه: {selectedGroup === 'all' ? 'همه' : (groups || []).find(g => g?.id?.toString() === selectedGroup?.toString())?.name}</div>
                <div>وضعیت تسویه: {filterType === 'all' ? 'همه' : filterType === 'debtor' ? 'اشخاص بدهکار' : filterType === 'creditor' ? 'اشخاص طلبکار' : 'بی‌حساب'}</div>
                <div className="col-span-2">تاریخ گزارش: {formatDateDisplay(new Date())}</div>
             </div>
@@ -232,6 +243,7 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
                 <th className="py-4 px-4 font-bold text-gray-600 border-b print:border-slate-300 border-l border-gray-100 print:border-slate-300">تلفن تماس</th>
                 <th className="py-4 px-4 font-bold text-gray-600 border-b print:border-slate-300 border-l border-gray-100 print:border-slate-300 text-center">وضعیت حساب</th>
                 <th className="py-4 px-4 font-bold text-gray-600 border-b print:border-slate-300 text-left">مبلغ تراز ({settings?.currency})</th>
+                <th className="py-4 px-4 font-bold text-gray-600 border-b print:hidden text-center">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-gray-100 print:divide-slate-300">
@@ -245,7 +257,21 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
                     </div>
                   </td>
                   <td className="py-3 px-4 text-gray-600 border-l border-gray-100 print:border-slate-300 text-xs font-bold">{row.groupName}</td>
-                  <td className="py-3 px-4 text-gray-600 border-l border-gray-100 print:border-slate-300 text-sm font-bold" dir="ltr">{row.phone || '-'}</td>
+                  <td className="py-3 px-4 text-gray-600 border-l border-gray-100 print:border-slate-300 text-sm font-bold" dir="ltr">
+                    <div className="flex items-center justify-between gap-1.5">
+                      <span>{row.phone || '-'}</span>
+                      {row.phone && (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenMessage(row)}
+                          className="p-1 text-indigo-600 hover:text-indigo-800 hover:bg-indigo-50 rounded-md transition-colors print:hidden cursor-pointer"
+                          title="ارسال سریع پیام به این شماره"
+                        >
+                          <MessageSquare className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  </td>
                   <td className="py-3 px-4 border-l border-gray-100 print:border-slate-300 text-center">
                     <span className={`text-xs font-bold px-2.5 py-1 rounded-lg print:border print:bg-transparent ${row.balanceBg} ${row.balanceColor} print:border-current inline-block`}>
                       {row.balanceStatus}
@@ -256,11 +282,22 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
                          {formatNumber(row.balanceAmount)}
                      </span>
                   </td>
+                  <td className="py-3 px-4 text-center print:hidden">
+                    <button
+                      type="button"
+                      onClick={() => handleOpenMessage(row)}
+                      className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 rounded-xl text-xs font-black transition-all shadow-2xs border border-indigo-100/80 cursor-pointer"
+                      title="ارسال پیامک با مانده حساب و یادآوری"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5" />
+                      <span>ارسال پیام</span>
+                    </button>
+                  </td>
                 </tr>
               ))}
               {rows.length === 0 && (
                 <tr>
-                  <td colSpan={6} className="py-8 text-center text-gray-400 font-bold border-t border-gray-100">
+                  <td colSpan={7} className="py-8 text-center text-gray-400 font-bold border-t border-gray-100">
                     هیچ نتیجه‌ای یافت نشد.
                   </td>
                 </tr>
@@ -270,7 +307,7 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
               <tfoot className="bg-slate-50 print:bg-slate-100 border-t-2 border-gray-200 print:border-slate-800 font-black text-sm text-slate-800 print:text-xs">
                 <tr>
                   <td colSpan={5} className="py-4 px-4 text-left border-l border-gray-200 print:border-slate-400">جمع تراز محاسبه شده (کسر بدهی از طلب):</td>
-                  <td className="py-4 px-4 text-left font-sans text-lg print:text-base whitespace-nowrap" dir="ltr">
+                  <td colSpan={2} className="py-4 px-4 text-left font-sans text-lg print:text-base whitespace-nowrap" dir="ltr">
                      {netBalance < 0 ? `(${formatNumber(Math.abs(netBalance))})` : formatNumber(netBalance)}
                   </td>
                 </tr>
@@ -279,6 +316,22 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
           </table>
         </div>
       </div>
+
+      {messagePerson && (
+        <SendPersonMessageModal
+          isOpen={isMessageModalOpen}
+          onClose={() => {
+            setIsMessageModalOpen(false);
+            setMessagePerson(null);
+          }}
+          person={messagePerson}
+          showNotification={(msg, type) => {
+            if (showNotification) showNotification(type === 'error' ? 'error' : 'success', msg);
+          }}
+          calculatePersonBalance={calculatePersonBalance}
+          storeSettings={settings}
+        />
+      )}
     </motion.div>
   );
 };

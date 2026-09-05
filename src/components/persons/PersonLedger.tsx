@@ -3,6 +3,8 @@ import { createPortal } from 'react-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import DateObject from "react-date-object";
 import * as lucide from 'lucide-react';
+import { MessageSquare } from 'lucide-react';
+import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 
 export default function PersonLedger(props: any) {
   const {
@@ -65,6 +67,31 @@ export default function PersonLedger(props: any) {
   const [filterStartDate, setFilterStartDate] = useState("");
   const [filterEndDate, setFilterEndDate] = useState("");
   const [includeOpening, setIncludeOpening] = useState(true);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+
+  const currentPerson = ledgerPersonId
+    ? persons?.find((p: any) => String(p.id) === String(ledgerPersonId))
+    : null;
+
+  const calculatePersonBalance = (personId: string | number) => {
+    let balance = 0;
+    (accountingDocuments || []).forEach((doc: any) => {
+      if (doc.status === 'draft' || doc.isDeleted) return;
+      (doc.items || []).forEach((item: any) => {
+        if (String(item.detailedAccountId) === String(personId)) {
+          const debit = Number(item.debit || 0);
+          const credit = Number(item.credit || 0);
+          balance += (debit - credit);
+        }
+      });
+    });
+    if (balance > 0) {
+      return { amount: balance, status: 'بدهکار', value: balance };
+    } else if (balance < 0) {
+      return { amount: Math.abs(balance), status: 'بستانکار', value: balance };
+    }
+    return { amount: 0, status: 'بی‌حساب', value: 0 };
+  };
 
   return (
                   /* Contact/Person Ledger Card View (کارت حساب اشخاص) */
@@ -88,12 +115,23 @@ export default function PersonLedger(props: any) {
                       </div>
 
                       <div className="flex flex-wrap items-center justify-end gap-2 mt-4 md:mt-0">
+                        {currentPerson && (
+                          <button
+                            type="button"
+                            onClick={() => setIsMessageModalOpen(true)}
+                            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-sm cursor-pointer"
+                            title="ارسال پیامک با مانده حساب و صورت‌حساب"
+                          >
+                            <MessageSquare className="w-4 h-4" />
+                            <span>ارسال پیام و مانده حساب</span>
+                          </button>
+                        )}
                         <PersonLedgerActionsDropdown 
                           ledgerPersonId={ledgerPersonId}
                           setActiveTab={setActiveTab}
                           setCustomerId={setCustomerId}
                           setReceiptPersonId={setReceiptPersonId}
-                         
+                          persons={persons || []}
                           handleEditPerson={handleEditPerson}
                           setIsPersonModalOpen={setIsPersonModalOpen}
                           storeSettings={storeSettings}
@@ -118,15 +156,15 @@ export default function PersonLedger(props: any) {
                           isRtl
                           value={
                             ledgerPersonId
-                              ? persons.find(
-                                  (p) =>
-                                    p.id.toString() ===
+                              ? (persons || []).find(
+                                  (p: any) =>
+                                    p?.id?.toString() ===
                                     ledgerPersonId.toString(),
                                 )
                                 ? mapPersonToOption(
-                                    persons.find(
-                                      (p) =>
-                                        p.id.toString() ===
+                                    (persons || []).find(
+                                      (p: any) =>
+                                        p?.id?.toString() ===
                                         ledgerPersonId.toString(),
                                     )!,
                                   )
@@ -295,8 +333,8 @@ export default function PersonLedger(props: any) {
                         );
                       }
 
-                      const selectedPerson = persons.find(
-                        (p) => p.id.toString() === ledgerPersonId.toString(),
+                      const selectedPerson = (persons || []).find(
+                        (p: any) => p?.id?.toString() === ledgerPersonId?.toString(),
                       );
                       if (!selectedPerson) {
                         return (
@@ -320,7 +358,7 @@ export default function PersonLedger(props: any) {
                           let desc = doc.description || descriptions.join(" - ") || "سند حسابداری";
                           let isPayslip = false;
                           try {
-                            let p = payslips.find(ps => String(ps.transactionId) === String(doc.sourceId));
+                            let p = (payslips || []).find(ps => String(ps.transactionId) === String(doc.sourceId));
                             if (!p) {
                               p = JSON.parse(desc);
                             }
@@ -336,7 +374,7 @@ export default function PersonLedger(props: any) {
                           let typeName = "سند حسابداری";
                           if (doc.sourceType && doc.sourceType.startsWith("invoice_")) {
                             entryType = "invoice";
-                            const invoice = invoices.find(inv => inv.id.toString() === doc.sourceId?.toString());
+                            const invoice = (invoices || []).find(inv => inv.id.toString() === doc.sourceId?.toString());
                             if (invoice) {
                                 if (invoice.type === "sale") typeName = "فاکتور فروش";
                                 else if (invoice.type === "purchase") typeName = "فاکتور خرید";
@@ -510,26 +548,52 @@ export default function PersonLedger(props: any) {
                                         </span>
                                       </p>
                                     </div>
-                                                                        <p className="flex items-center">
-                                      <span className="text-slate-500 w-24 inline-block font-bold print:w-20">
-                                        تلفن تماس:
-                                      </span>{" "}
-                                      <span className="text-slate-900 font-bold bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0 print:bg-transparent">
-                                        {toPersianDigits(
-                                          selectedPerson.phone
-                                            ? selectedPerson.phone
-                                            : "---",
-                                        )}
-                                      </span>
+                                                                        <p className="flex items-center justify-between">
+                                      <div className="flex items-center">
+                                        <span className="text-slate-500 w-24 inline-block font-bold print:w-20">
+                                          تلفن تماس:
+                                        </span>{" "}
+                                        <span className="text-slate-900 font-bold bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0 print:bg-transparent font-sans" dir="ltr">
+                                          {toPersianDigits(
+                                            selectedPerson.phone
+                                              ? selectedPerson.phone
+                                              : "---",
+                                          )}
+                                        </span>
+                                      </div>
+                                      {selectedPerson.phone && (
+                                        <button
+                                          type="button"
+                                          onClick={() => setIsMessageModalOpen(true)}
+                                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors flex items-center gap-1 print:hidden cursor-pointer"
+                                          title="ارسال پیام به این شماره"
+                                        >
+                                          <MessageSquare className="w-3 h-3" />
+                                          ارسال پیام
+                                        </button>
+                                      )}
                                     </p>
                                     {selectedPerson.contacts && selectedPerson.contacts.length > 0 && selectedPerson.contacts.map((contact, idx) => (
-                                      <p key={idx} className="flex items-center">
-                                        <span className="text-slate-500 w-24 inline-block font-bold print:w-20 text-xs">
-                                          {contact.type === 'mobile' ? 'موبایل' : contact.type === 'phone' ? 'تلفن ثابت' : contact.type === 'fax' ? 'فکس' : 'دیگر'}:
-                                        </span>{" "}
-                                        <span className="text-slate-900 font-bold bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0 print:bg-transparent text-xs">
-                                          {toPersianDigits(contact.number)} {contact.title ? `(${contact.title})` : ''}
-                                        </span>
+                                      <p key={idx} className="flex items-center justify-between">
+                                        <div className="flex items-center">
+                                          <span className="text-slate-500 w-24 inline-block font-bold print:w-20 text-xs">
+                                            {contact.type === 'mobile' ? 'موبایل' : contact.type === 'phone' ? 'تلفن ثابت' : contact.type === 'fax' ? 'فکس' : 'دیگر'}:
+                                          </span>{" "}
+                                          <span className="text-slate-900 font-bold bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0 print:bg-transparent text-xs font-sans" dir="ltr">
+                                            {toPersianDigits(contact.number)} {contact.title ? `(${contact.title})` : ''}
+                                          </span>
+                                        </div>
+                                        {(contact.type === 'mobile' || contact.type === 'phone') && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setIsMessageModalOpen(true)}
+                                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded-md transition-colors flex items-center gap-1 print:hidden cursor-pointer"
+                                            title="ارسال پیام به این شماره"
+                                          >
+                                            <MessageSquare className="w-3 h-3" />
+                                            پیام
+                                          </button>
+                                        )}
                                       </p>
                                     ))}
                                     <p className="flex items-center">
@@ -1180,14 +1244,14 @@ export default function PersonLedger(props: any) {
                                               } hover:bg-slate-50/80`}
                                               onClick={() => {
                                                 if (entry.entryType === "invoice" && entry.rawItem) {
-                                                  const actualInvoice = invoices.find(i => String(i.id) === String(entry.rawItem.sourceId));
+                                                  const actualInvoice = (invoices || []).find(i => String(i?.id) === String(entry.rawItem.sourceId));
                                                   if (actualInvoice) setViewingInvoice(actualInvoice);
                                                 } else if (entry.entryType === "transaction" && entry.rawItem) {
-                                                  const actualTx = transactions.find(t => String(t.id) === String(entry.rawItem.sourceId));
+                                                  const actualTx = (transactions || []).find(t => String(t?.id) === String(entry.rawItem.sourceId));
                                                   if (actualTx) {
                                                     if (actualTx.type === "salary") {
                                                       try {
-                                                        let parsedDesc = payslips.find(p => String(p.transactionId) === String(actualTx.id));
+                                                        let parsedDesc = (payslips || []).find(p => String(p?.transactionId) === String(actualTx.id));
                                                         if (!parsedDesc && typeof actualTx.description === "string" && actualTx.description.includes("isPayslip")) {
                                                           parsedDesc = JSON.parse(actualTx.description);
                                                         }
@@ -1195,7 +1259,7 @@ export default function PersonLedger(props: any) {
                                                           setViewingPayslip({
                                                             ...actualTx,
                                                             parsed: parsedDesc,
-                                                            computedPersonName: selectedPerson.name,
+                                                            computedPersonName: selectedPerson?.name,
                                                           });
                                                           return;
                                                         }
@@ -1203,15 +1267,15 @@ export default function PersonLedger(props: any) {
                                                     }
                                                     setPrintingTransaction({
                                                       ...actualTx,
-                                                                                                            personId: selectedPerson.id,
+                                                      personId: selectedPerson?.id,
                                                       _isReadOnly: true,
                                                     });
                                                   }
                                                 } else if (entry.entryType === "issued_check") {
-                                                  const check = issuedChecks.find(c => String(c.id) === String(entry.rawItem?.sourceId));
+                                                  const check = (issuedChecks || []).find(c => String(c?.id) === String(entry.rawItem?.sourceId));
                                                   if (check) setViewingCheck({ ...check, _type: 'issued' });
                                                 } else if (entry.entryType === "received_check") {
-                                                  const check = receivedChecks.find(c => String(c.id) === String(entry.rawItem?.sourceId));
+                                                  const check = (receivedChecks || []).find(c => String(c?.id) === String(entry.rawItem?.sourceId));
                                                   if (check) setViewingCheck({ ...check, _type: 'received' });
                                                 }
                                               }}
@@ -1406,6 +1470,17 @@ export default function PersonLedger(props: any) {
                         </div>
                       );
                     })()}
+
+                    {currentPerson && (
+                      <SendPersonMessageModal
+                        isOpen={isMessageModalOpen}
+                        onClose={() => setIsMessageModalOpen(false)}
+                        person={currentPerson}
+                        showNotification={showNotification}
+                        calculatePersonBalance={calculatePersonBalance}
+                        storeSettings={storeSettings}
+                      />
+                    )}
                   </motion.div>
 
   );

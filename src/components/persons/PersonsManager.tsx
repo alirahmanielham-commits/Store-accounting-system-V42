@@ -6,9 +6,11 @@ import {
   Banknote, History, Printer, ShoppingCart, ArrowDownToLine, ArrowUpFromLine,
   Info, Trash2, RefreshCw, Key, ArrowRightLeft, LayoutGrid, Table as TableIcon,
   Building, BookOpen, Settings, Check, X, FilterX, MoreHorizontal, FileSpreadsheet,
-  ArrowUpDown, Download, CheckSquare, Square, FileOutput, Power, PowerOff
+  ArrowUpDown, Download, CheckSquare, Square, FileOutput, Power, PowerOff,
+  MessageSquare
 } from "lucide-react";
 import { updatePerson } from '../../services/personService';
+import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 
 export default function PersonsManager(props: any) {
   const { 
@@ -100,6 +102,19 @@ export default function PersonsManager(props: any) {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [isFilterOpen, setIsFilterOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+
+  // Send Message Modal state
+  const [selectedPersonForMessage, setSelectedPersonForMessage] = useState<any | null>(null);
+  const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+
+  const handleOpenMessageModal = (person: any, e?: React.MouseEvent) => {
+    if (e) {
+      e.stopPropagation();
+      e.preventDefault();
+    }
+    setSelectedPersonForMessage(person);
+    setIsMessageModalOpen(true);
+  };
 
   // Advanced Filters (Stored in session to persist during navigation)
   const [filterActiveStatus, setFilterActiveStatus] = useState<string>(() => sessionStorage.getItem('person_filterActiveStatus') || 'all');
@@ -339,7 +354,7 @@ export default function PersonsManager(props: any) {
           setIsBulkLoading(true);
           try {
               for(const id of selectedIds) {
-                  const p = filteredPersons.find((x:any) => x.id === id);
+                  const p = (filteredPersons || []).find((x:any) => x.id === id);
                   if(p) await updatePerson(id, { ...p, isActive });
               }
               notify(`عملیات با موفقیت انجام شد`, "success");
@@ -786,7 +801,7 @@ export default function PersonsManager(props: any) {
                       <div className="flex flex-wrap items-center gap-1 mt-1.5">
                         <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${getRoleBadgeClasses(p.role)}`}>{getRoleName(p.role)}</span>
                         {p.group && (() => {
-                          const g = personGroups.find((grp: any) => grp.id === p.group);
+                          const g = (personGroups || []).find((grp: any) => grp.id === p.group);
                           return g ? <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 truncate max-w-[80px]">{g.name}</span> : null;
                         })()}
                       </div>
@@ -795,8 +810,17 @@ export default function PersonsManager(props: any) {
 
                   <div className="mt-4 pt-3 border-t border-slate-100 flex justify-between items-center gap-2">
                     <div className="truncate">
-                      <div className="text-[9px] font-black text-slate-400 mb-0.5">شماره تماس</div>
-                      <div className="text-xs font-bold text-slate-700 font-sans truncate">{p.phone ? toPersianDigits(p.phone) : "-"}</div>
+                      <div className="text-[9px] font-black text-slate-400 mb-0.5">شماره تماس (ارسال پیام)</div>
+                      <button
+                        type="button"
+                        onClick={(e) => handleOpenMessageModal(p, e)}
+                        className="group inline-flex items-center gap-1.5 text-xs font-bold text-slate-700 hover:text-indigo-600 font-sans truncate hover:bg-indigo-50/80 px-2 py-0.5 -mx-1.5 rounded-lg transition-all border border-transparent hover:border-indigo-100 cursor-pointer"
+                        title="کلیک جهت ارسال پیامک با موضوعات مانده حساب، یادآوری یا اطلاع‌رسانی"
+                      >
+                        <Phone className="w-3 h-3 text-slate-400 group-hover:text-indigo-600 transition-colors shrink-0" />
+                        <span className="truncate">{p.phone || p.mobile ? toPersianDigits(p.phone || p.mobile) : "ثبت و ارسال پیام"}</span>
+                        <MessageSquare className="w-2.5 h-2.5 opacity-0 group-hover:opacity-100 text-indigo-500 transition-opacity shrink-0" />
+                      </button>
                     </div>
                     <div className="text-left">
                       <div className={`text-[9px] font-black mb-0.5 ${isDebtor ? "text-rose-500" : isCreditor ? "text-emerald-500" : "text-slate-400"}`}>وضعیت مانده</div>
@@ -898,16 +922,24 @@ export default function PersonsManager(props: any) {
                           <div className="flex flex-col gap-1 items-start">
                             <span className={`text-[10px] font-black px-2 py-0.5 rounded-md ${getRoleBadgeClasses(p.role)}`}>{getRoleName(p.role)}</span>
                             {p.group && (() => {
-                              const g = personGroups.find((grp: any) => grp.id === p.group);
+                              const g = (personGroups || []).find((grp: any) => grp.id === p.group);
                               return g ? <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md truncate max-w-[140px]">{g.name}</span> : null;
                             })()}
                           </div>
                         </td>
                         <td className="px-4 py-3">
                           <div className="flex flex-col gap-1">
-                            <div className="font-sans tabular-nums font-black text-xs text-slate-700 flex items-center gap-1.5" dir="ltr">
-                              <Phone className="w-3 h-3 text-slate-400" /> {p.phone ? toPersianDigits(p.phone) : "-"}
-                            </div>
+                            <button
+                              type="button"
+                              onClick={(e) => handleOpenMessageModal(p, e)}
+                              className="group inline-flex items-center gap-1.5 font-sans tabular-nums font-black text-xs text-slate-700 hover:text-indigo-600 hover:bg-indigo-50/80 px-2.5 py-1 -mx-2 rounded-lg transition-all border border-transparent hover:border-indigo-200 cursor-pointer text-left"
+                              dir="ltr"
+                              title="کلیک جهت ارسال پیامک با موضوعات مانده حساب، یادآوری یا اطلاع‌رسانی"
+                            >
+                              <Phone className="w-3.5 h-3.5 text-slate-400 group-hover:text-indigo-600 transition-colors shrink-0" />
+                              <span>{p.phone || p.mobile ? toPersianDigits(p.phone || p.mobile) : "-"}</span>
+                              <MessageSquare className="w-3 h-3 text-indigo-500 opacity-0 group-hover:opacity-100 transition-opacity ml-1 shrink-0" />
+                            </button>
                           </div>
                         </td>
                         <td className="px-4 py-3" dir="ltr">
@@ -946,6 +978,9 @@ export default function PersonsManager(props: any) {
                                       </button>
                                       <button onClick={() => { setOpenPersonActionsId(null); handleEditPerson(p); }} className="w-full text-right px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-lg flex items-center gap-2 transition-colors">
                                         <Edit2 className="w-3.5 h-3.5 text-slate-400" /> ویرایش اطلاعات
+                                      </button>
+                                      <button onClick={() => { setOpenPersonActionsId(null); handleOpenMessageModal(p); }} className="w-full text-right px-3 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg flex items-center gap-2 transition-colors">
+                                        <MessageSquare className="w-3.5 h-3.5 text-indigo-500" /> ارسال پیامک و مانده حساب
                                       </button>
                                       
                                       <div className="h-px bg-slate-100 my-1"></div>
@@ -1029,6 +1064,19 @@ export default function PersonsManager(props: any) {
             )}
           </div>
         )}
+
+        {/* Send Person Message Modal */}
+        <SendPersonMessageModal
+          isOpen={isMessageModalOpen}
+          onClose={() => {
+            setIsMessageModalOpen(false);
+            setSelectedPersonForMessage(null);
+          }}
+          person={selectedPersonForMessage}
+          showNotification={notify}
+          calculatePersonBalance={calculatePersonBalance}
+          storeSettings={storeSettings}
+        />
       </div>
     </div>
   );

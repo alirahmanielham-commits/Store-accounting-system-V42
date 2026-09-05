@@ -34,6 +34,83 @@ interface PersonProfileViewProps {
   formatDateDisplay: (date: any) => string;
 }
 
+function PersonFollowUpCrmSection({ personId, storeSettings }: { personId: any; storeSettings: any }) {
+  const [followUpData, setFollowUpData] = useState<any>(null);
+  const [isLoading, setIsLoading] = useState(true);
+
+  useEffect(() => {
+    let isMounted = true;
+    const loadFollowUps = async () => {
+      try {
+        setIsLoading(true);
+        const data = await getPersonFollowUps();
+        if (isMounted) {
+          const list = Array.isArray(data) ? data : [];
+          const personData = list.find((d: any) => String(d?.personId) === String(personId));
+          setFollowUpData(personData || null);
+        }
+      } catch (e) {
+        console.error("Error loading followups:", e);
+      } finally {
+        if (isMounted) setIsLoading(false);
+      }
+    };
+    if (personId) {
+      loadFollowUps();
+    } else {
+      setIsLoading(false);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [personId]);
+
+  if (isLoading) {
+    return <div className="text-center py-6 text-slate-400 font-bold text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">در حال بارگذاری اطلاعات پیگیری...</div>;
+  }
+
+  if (!followUpData) {
+    return <div className="text-center py-6 text-slate-400 font-bold text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">سابقه پیگیری برای این شخص ثبت نشده است.</div>;
+  }
+
+  return (
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-3">
+        <span className="text-sm font-bold text-slate-600">وضعیت فعلی:</span>
+        <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
+          {followUpData.status}
+        </span>
+        {followUpData.nextActionDate && (
+          <span className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-sm font-bold">
+            <Calendar className="w-4 h-4" />
+            اقدام بعدی: {storeSettings?.calendarType === 'gregorian' ? new Date(followUpData.nextActionDate).toLocaleDateString('en-US') : new Date(followUpData.nextActionDate).toLocaleDateString('fa-IR')}
+          </span>
+        )}
+      </div>
+      
+      <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mt-4">
+        <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
+          <FileText className="w-4 h-4 text-slate-500" /> تاریخچه یادداشت‌ها
+        </h4>
+        <div className="space-y-3 max-h-60 overflow-y-auto">
+          {!followUpData.notes || followUpData.notes.length === 0 ? (
+            <div className="text-xs text-slate-500 text-center py-3">یادداشتی ثبت نشده است</div>
+          ) : (
+            [...followUpData.notes].reverse().map((note: any, idx: number) => (
+              <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 relative">
+                <span className="absolute left-3 top-3 text-[10px] text-slate-400 font-sans">
+                  {storeSettings?.calendarType === 'gregorian' ? new Date(note.date).toLocaleDateString('en-US') : new Date(note.date).toLocaleDateString('fa-IR')}
+                </span>
+                <p className="text-xs text-slate-700 leading-relaxed pl-16 whitespace-pre-wrap">{note.text}</p>
+              </div>
+            ))
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function PersonProfileView({
   personId,
   persons,
@@ -60,41 +137,51 @@ export default function PersonProfileView({
   showNotification,
   formatDateDisplay
 }: PersonProfileViewProps) {
-  const person = persons.find(p => p.id.toString() === personId.toString());
-  
-  if (!person) {
-    return <BeautifulLoading text="در حال بارگذاری اطلاعات شخص..." />;
-  }
-  
   const [followUps, setFollowUps] = useState<any[]>([]);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
-  
+
+  const person = useMemo(() => {
+    return (persons || []).find(p => p && p.id != null && personId != null && String(p.id) === String(personId)) || null;
+  }, [persons, personId]);
+
   useEffect(() => {
+    let isMounted = true;
     const loadFollowUps = async () => {
       try {
         const data = await getPersonFollowUps();
-        setFollowUps(data.filter((f: any) => String(f.personId) === String(personId)));
+        if (isMounted) {
+          const list = Array.isArray(data) ? data : [];
+          setFollowUps(list.filter((f: any) => String(f?.personId) === String(personId)));
+        }
       } catch (e) {
         console.error("Error loading follow ups", e);
       }
     };
-    loadFollowUps();
+    if (personId) {
+      loadFollowUps();
+    }
+    return () => {
+      isMounted = false;
+    };
   }, [personId]);
-  
-  const balance = useMemo(() => calculatePersonBalance(personId), [personId, calculatePersonBalance]);
-  
+
+  const balance = useMemo(() => {
+    if (!personId || !calculatePersonBalance) return { amount: 0, status: 'بی‌حساب', value: 0 };
+    return calculatePersonBalance(personId);
+  }, [personId, calculatePersonBalance]);
+
   const { totalDebits, totalCredits } = useMemo(() => {
-    if (!person) return { totalDebits: 0, totalCredits: 0 };
+    if (!person || !accountingDocuments) return { totalDebits: 0, totalCredits: 0 };
     let debits = 0;
     let credits = 0;
 
-    accountingDocuments.forEach(doc => {
-      if (doc.status === 'draft' || doc.isDeleted) return;
-      if (doc.items && Array.isArray(doc.items)) {
-        doc.items.forEach(item => {
-          if (item.detailedAccountId?.toString() === personId.toString()) {
-            debits += Number(item.debit) || 0;
-            credits += Number(item.credit) || 0;
+    (accountingDocuments || []).forEach((doc: any) => {
+      if (doc?.status === 'draft' || doc?.isDeleted) return;
+      if (doc?.items && Array.isArray(doc.items)) {
+        doc.items.forEach((item: any) => {
+          if (String(item?.detailedAccountId) === String(personId)) {
+            debits += Number(item?.debit) || 0;
+            credits += Number(item?.credit) || 0;
           }
         });
       }
@@ -102,26 +189,38 @@ export default function PersonProfileView({
 
     return { totalDebits: debits, totalCredits: credits };
   }, [person, accountingDocuments, personId]);
-  
+
   const recentInvoices = useMemo(() => {
-    return (invoices || []).filter(inv => inv.customerId?.toString() === personId.toString() && inv.status !== 'draft' && inv.status !== 'voided')
-      .sort((a, b) => new Date(convertToGregorian(b.date)).getTime() - new Date(convertToGregorian(a.date)).getTime())
+    return (invoices || []).filter(inv => String(inv?.customerId) === String(personId) && inv?.status !== 'draft' && inv?.status !== 'voided')
+      .sort((a, b) => new Date(convertToGregorian(b?.date)).getTime() - new Date(convertToGregorian(a?.date)).getTime())
       .slice(0, 5);
   }, [invoices, personId]);
 
-  if (!person) return null;
+  const totalInvoices = useMemo(() => (invoices || []).filter(i => String(i?.customerId) === String(personId) && i?.status !== 'draft' && i?.status !== 'voided').length, [invoices, personId]);
+  
+  const pendingChecksCount = useMemo(() => {
+    const issued = (issuedChecks || []).filter((c: any) => String(c?.payeeId) === String(personId) && c?.status !== "cancelled" && c?.status !== "bounced" && c?.status !== "cashed").length;
+    const received = (receivedChecks || []).filter((c: any) => String(c?.payerId) === String(personId) && c?.status !== "returned" && c?.status !== "bounced" && c?.status !== "cashed").length;
+    return issued + received;
+  }, [issuedChecks, receivedChecks, personId]);
+
+  if (!person) {
+    return (
+      <div className="bg-white rounded-3xl p-8 border border-slate-200 text-center max-w-lg mx-auto my-12" dir="rtl">
+        <p className="text-slate-600 font-bold mb-4">شخص مورد نظر در سیستم یافت نشد یا در حال بارگذاری است.</p>
+        <button
+          onClick={onBack}
+          className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer"
+        >
+          بازگشت به لیست اشخاص
+        </button>
+      </div>
+    );
+  }
 
   const isOwed = balance.status === "بدهکار";
   const isOwes = balance.status === "بستانکار";
   const isClr = balance.status === "بی‌حساب" || balance.status === "تسویه";
-
-  const totalInvoices = useMemo(() => (invoices || []).filter(i => i.customerId?.toString() === personId.toString() && i.status !== 'draft' && i.status !== 'voided').length, [invoices, personId]);
-  
-  const pendingChecksCount = useMemo(() => {
-    const issued = (issuedChecks || []).filter((c) => c.payeeId?.toString() === personId.toString() && c.status !== "cancelled" && c.status !== "bounced" && c.status !== "cashed").length;
-    const received = (receivedChecks || []).filter((c) => c.payerId?.toString() === personId.toString() && c.status !== "returned" && c.status !== "bounced" && c.status !== "cashed").length;
-    return issued + received;
-  }, [issuedChecks, receivedChecks, personId]);
 
   return (
     <motion.div
@@ -169,23 +268,50 @@ export default function PersonProfileView({
               </div>
             </div>
             
-                        <div className="flex items-center gap-3">
-              <Phone className="w-4 h-4 text-indigo-500 shrink-0" />
-              <span dir="ltr">{toPersianDigits(person.phone || "---")}</span>
+            <div className="flex items-center justify-between gap-3 group">
+              <div className="flex items-center gap-3">
+                <Phone className="w-4 h-4 text-indigo-500 shrink-0" />
+                <span dir="ltr">{toPersianDigits(person.phone || "---")}</span>
+              </div>
+              {person.phone && (
+                <button
+                  type="button"
+                  onClick={() => setIsMessageModalOpen(true)}
+                  className="px-2 py-0.5 text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                  title="ارسال پیام به این شماره"
+                >
+                  <MessageSquare className="w-3 h-3" />
+                  ارسال پیام
+                </button>
+              )}
             </div>
             {person.contacts && person.contacts.length > 0 && person.contacts.map((contact: any, idx: number) => {
               const typeMap: any = { mobile: 'موبایل', phone: 'تلفن ثابت', fax: 'فکس', email: 'ایمیل', website: 'وبسایت', instagram: 'اینستاگرام', telegram: 'تلگرام', whatsapp: 'واتساپ', address: 'آدرس', postal_code: 'کد پستی', other: 'دیگر' };
               const tLabel = typeMap[contact.type] || 'دیگر';
+              const isPhoneLike = contact.type === 'mobile' || contact.type === 'phone';
               return (
-                <div key={idx} className="flex items-center gap-3 items-start">
-                  <span className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5 flex justify-center items-center">
-                    {contact.type === 'address' ? <MapPin className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
-                  </span>
-                  <span dir={contact.type === 'address' || contact.type === 'other' ? "rtl" : "ltr"} className="leading-relaxed">
-                    {toPersianDigits(contact.number)}
-                  </span>
-                  {contact.title && <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full whitespace-nowrap">{contact.title}</span>}
-                  <span className="text-[10px] text-gray-400 whitespace-nowrap">({tLabel})</span>
+                <div key={idx} className="flex items-center justify-between gap-2 group">
+                  <div className="flex items-center gap-3">
+                    <span className="w-4 h-4 text-indigo-400 shrink-0 mt-0.5 flex justify-center items-center">
+                      {contact.type === 'address' ? <MapPin className="w-4 h-4" /> : <Phone className="w-4 h-4" />}
+                    </span>
+                    <span dir={contact.type === 'address' || contact.type === 'other' ? "rtl" : "ltr"} className="leading-relaxed">
+                      {toPersianDigits(contact.number)}
+                    </span>
+                    {contact.title && <span className="text-xs text-gray-400 bg-gray-100 px-2 py-0.5 rounded-full whitespace-nowrap">{contact.title}</span>}
+                    <span className="text-[10px] text-gray-400 whitespace-nowrap">({tLabel})</span>
+                  </div>
+                  {isPhoneLike && (
+                    <button
+                      type="button"
+                      onClick={() => setIsMessageModalOpen(true)}
+                      className="px-1.5 py-0.5 text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 rounded-md transition-colors flex items-center gap-1 cursor-pointer opacity-80 hover:opacity-100"
+                      title="ارسال پیام به این شماره"
+                    >
+                      <MessageSquare className="w-3 h-3" />
+                      پیام
+                    </button>
+                  )}
                 </div>
               );
             })}
@@ -429,77 +555,7 @@ export default function PersonProfileView({
               <CheckCircle className="w-5 h-5 text-indigo-600" />
               گزارش پیگیری (CRM)
             </h3>
-            <div className="space-y-4">
-              {(() => {
-                const [followUpData, setFollowUpData] = React.useState<any>(null);
-                const [isLoading, setIsLoading] = React.useState(true);
-                
-                React.useEffect(() => {
-                  let isMounted = true;
-                  const loadFollowUps = async () => {
-                    try {
-                      setIsLoading(true);
-                      const data = await getPersonFollowUps();
-                      if (isMounted) {
-                        const personData = data.find((d: any) => String(d.personId) === String(personId));
-                        setFollowUpData(personData || null);
-                      }
-                    } catch (e) {
-                      console.error("Error loading followups:", e);
-                    } finally {
-                      if (isMounted) setIsLoading(false);
-                    }
-                  };
-                  loadFollowUps();
-                  return () => { isMounted = false; };
-                }, [personId]);
-
-                if (isLoading) {
-                  return <div className="text-center py-6 text-slate-400 font-bold text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">در حال بارگذاری اطلاعات پیگیری...</div>;
-                }
-
-                if (!followUpData) {
-                  return <div className="text-center py-6 text-slate-400 font-bold text-sm bg-slate-50 rounded-2xl border border-dashed border-slate-200">سابقه پیگیری برای این شخص ثبت نشده است.</div>;
-                }
-
-                return (
-                  <div className="space-y-4">
-                    <div className="flex flex-wrap items-center gap-3">
-                      <span className="text-sm font-bold text-slate-600">وضعیت فعلی:</span>
-                      <span className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded-full text-sm font-bold">
-                        {followUpData.status}
-                      </span>
-                      {followUpData.nextActionDate && (
-                        <span className="flex items-center gap-1.5 bg-amber-100 text-amber-700 px-3 py-1 rounded-full text-sm font-bold">
-                          <Calendar className="w-4 h-4" />
-                          اقدام بعدی: {storeSettings?.calendarType === 'gregorian' ? new Date(followUpData.nextActionDate).toLocaleDateString('en-US') : new Date(followUpData.nextActionDate).toLocaleDateString('fa-IR')}
-                        </span>
-                      )}
-                    </div>
-                    
-                    <div className="bg-slate-50 rounded-xl p-4 border border-slate-200 mt-4">
-                      <h4 className="text-sm font-bold text-slate-800 mb-3 flex items-center gap-2">
-                        <FileText className="w-4 h-4 text-slate-500" /> تاریخچه یادداشت‌ها
-                      </h4>
-                      <div className="space-y-3 max-h-60 overflow-y-auto">
-                        {!followUpData.notes || followUpData.notes.length === 0 ? (
-                          <div className="text-xs text-slate-500 text-center py-3">یادداشتی ثبت نشده است</div>
-                        ) : (
-                          [...followUpData.notes].reverse().map((note: any, idx: number) => (
-                            <div key={idx} className="bg-white p-3 rounded-lg border border-slate-200 relative">
-                              <span className="absolute left-3 top-3 text-[10px] text-slate-400 font-sans">
-                                {storeSettings?.calendarType === 'gregorian' ? new Date(note.date).toLocaleDateString('en-US') : new Date(note.date).toLocaleDateString('fa-IR')}
-                              </span>
-                              <p className="text-xs text-slate-700 leading-relaxed pl-16 whitespace-pre-wrap">{note.text}</p>
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
+            <PersonFollowUpCrmSection personId={personId} storeSettings={storeSettings} />
           </div>
 
           <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm">
@@ -548,6 +604,7 @@ export default function PersonProfileView({
         person={person}
         showNotification={showNotification || (() => {})}
         calculatePersonBalance={calculatePersonBalance}
+        storeSettings={storeSettings}
       />
     </motion.div>
   );

@@ -10,7 +10,7 @@ function PersonLedgerActionsDropdown({
   setActiveTab,
   setCustomerId,
   setReceiptPersonId,
-  persons,
+  persons = [],
   handleEditPerson,
   setIsPersonModalOpen,
   storeSettings,
@@ -109,7 +109,7 @@ function PersonLedgerActionsDropdown({
             <button
               onClick={() => {
                 setIsOpen(false);
-                const p = persons.find(x => x.id?.toString() === ledgerPersonId?.toString());
+                const p = (persons || []).find(x => x?.id?.toString() === ledgerPersonId?.toString());
                 if (p) {
                    handleEditPerson(p);
                    setIsPersonModalOpen(true);
@@ -123,7 +123,7 @@ function PersonLedgerActionsDropdown({
             <button
               onClick={() => {
                 setIsOpen(false);
-                const person = persons.find((p) => p.id?.toString() === ledgerPersonId?.toString());
+                const person = (persons || []).find((p: any) => p?.id?.toString() === ledgerPersonId?.toString());
                 if (person && person.phone) {
                   if (storeSettings?.notify_method === "none" || !storeSettings?.notify_method) {
                     customAlert("ارسال پیامک تنظیم نشده است. ابتدا به تنظیمات بروید.");
@@ -169,7 +169,7 @@ function PersonLedgerActionsDropdown({
                     setPrintingPersonLedger(false);
                     return;
                   }
-                  const person = persons.find((p) => p.id?.toString() === ledgerPersonId?.toString());
+                  const person = (persons || []).find((p: any) => p?.id?.toString() === ledgerPersonId?.toString());
                   const opt = {
                     margin: 10,
                     filename: `صورتحساب_${person?.name || "شخص"}.pdf`,
