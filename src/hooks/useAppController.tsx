@@ -1,4 +1,5 @@
 import { autoGenerateRentCommitments } from "../services/hrService";
+import { suspendAppDataChanged, resumeAppDataChanged } from "../services/coreService";
 import CustomDatePicker from "../components/ui/CustomDatePicker";
 import { SystemUpdatePage } from "../components/admin/SystemUpdatePage";
 import { PersonalNotesManager } from "../components/notes/PersonalNotesManager";
@@ -4443,6 +4444,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
   ) => {
     setSubmitting(true);
     setSuccessMsg("");
+    suspendAppDataChanged();
     startAppProcessing('شروع فرآیند ثبت فاکتور...');
     await new Promise(r => setTimeout(r, 20));
 
@@ -5280,8 +5282,9 @@ const getInvoiceNumber = (typeOverride?: string) => {
       }
       await new Promise(r => setTimeout(r, 20));
       if (!isDraft && payload.type !== "proforma") {
-        await recalculateAllWarehouseStocks();
-        await fetchWarehouses();
+        recalculateAllWarehouseStocks()
+          .then(() => fetchWarehouses())
+          .catch(console.error);
       }
 
       if (payload.type === "sale") {
@@ -5423,7 +5426,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
         setSuccessMsg("");
         setPreviewInvoiceData(null); // Clear preview modal
       }, 1500);
-      return true;
+      return addedInvoice || true;
     } catch (error: any) {
       console.error("Error submitting invoice, rolling back operations...", error);
       updateAppProcessing('خطا رخ داد! در حال بازگردانی (Rollback)...');
@@ -5437,6 +5440,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
       }
       customAlert(`عملیات با خطا مواجه شد و تمامی مراحل بازگردانی شدند (Rollback).\nشرح خطا: ${error.message || "خطای ارتباط با سرور رخ داد"}`);
     } finally {
+      resumeAppDataChanged(true);
       setSubmitting(false);
       stopAppProcessing();
     }

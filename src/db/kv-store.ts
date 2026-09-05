@@ -1,5 +1,37 @@
 import { getDb, isPgActive, getActivePgPool } from './connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema } from './schema-sync';
+import fs from 'fs';
+import fsPromises from 'fs/promises';
+import path from 'path';
+
+let cachedDbData: Record<string, any> | null = null;
+let saveDebounceTimer: NodeJS.Timeout | null = null;
+
+async function getFileData(): Promise<Record<string, any>> {
+  if (cachedDbData) return cachedDbData;
+  const dbFile = path.join(process.cwd(), 'data.json');
+  try {
+    const raw = await fsPromises.readFile(dbFile, 'utf8');
+    cachedDbData = JSON.parse(raw);
+  } catch(e) {
+    cachedDbData = {};
+  }
+  return cachedDbData!;
+}
+
+function scheduleFileSave() {
+  if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
+  saveDebounceTimer = setTimeout(async () => {
+    saveDebounceTimer = null;
+    if (!cachedDbData) return;
+    try {
+      const dbFile = path.join(process.cwd(), 'data.json');
+      await fsPromises.writeFile(dbFile, JSON.stringify(cachedDbData, null, 2), 'utf8');
+    } catch (err) {
+      console.error('Error writing data.json:', err);
+    }
+  }, 100);
+}
 
 export async function innerGetDbData(key: string) {
   if (isPgActive() && getActivePgPool()) {
@@ -52,17 +84,8 @@ export async function innerGetDbData(key: string) {
       throw e;
     }
   } else {
-    const fs = await import("fs");
-    const path = await import("path");
-    const dbFile = path.join(process.cwd(), 'data.json');
-    if (fs.existsSync(dbFile)) {
-        try { 
-            const dbData = JSON.parse(fs.readFileSync(dbFile, 'utf8')); 
-            return dbData[key] || null;
-        } catch(e) { return null; }
-    }
-    
-      return null;
+    const dbData = await getFileData();
+    return dbData[key] !== undefined ? dbData[key] : null;
   }
 }
 
@@ -117,15 +140,9 @@ export async function innerSetDbData(key: string, data: any) {
        client.release();
     }
   } else {
-    const fs = await import("fs");
-    const path = await import("path");
-    const dbFile = path.join(process.cwd(), 'data.json');
-    let dbData = {};
-    if (fs.existsSync(dbFile)) {
-        try { dbData = JSON.parse(fs.readFileSync(dbFile, 'utf8')); } catch(e) {}
-    }
+    const dbData = await getFileData();
     dbData[key] = data;
-    fs.writeFileSync(dbFile, JSON.stringify(dbData, null, 2));
+    scheduleFileSave();
   }
 }
 
