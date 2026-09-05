@@ -1,6 +1,6 @@
 import { checkFinancialYear, getStoreSettings } from './settingsService';
 import { mapTransactionTypeToTable, mapInvoiceTypeToTable } from './coreService';
-import { getLedgerAccounts, addLedgerAccount, addAccountingDocument, getAccountingDocuments, updateAccountingDocument } from './accountingService';
+import { getLedgerAccounts, addLedgerAccount, addAccountingDocument, getAccountingDocuments, updateAccountingDocument, deleteAccountingDocument } from './accountingService';
 import { syncProductLatestPrices, syncProductsLatestPrices } from './productService';
 import { recalculateAllWarehouseStocks } from './inventoryService';
 
@@ -915,57 +915,77 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
       }
   }
 
-  // Auto-update corresponding accounting document
+  // Auto-update or create corresponding accounting document
   try {
      const docType = newInvoice.type;
      const title = docType === 'sale' ? 'فاکتور فروش' : docType === 'purchase' ? 'فاکتور خرید' : docType === 'sale_return' ? 'برگشت از فروش' : docType === 'purchase_return' ? 'برگشت از خرید' : 'فاکتور';
      
      const accountingDocs = await getAccountingDocuments();
      const existingDoc = accountingDocs.find((d: any) => 
-       (d.sourceType === 'invoice_sale' || d.sourceType === 'invoice_purchase' || d.sourceType === 'invoice_sale_return' || d.sourceType === 'invoice_purchase_return') && String(d.sourceId) === String(id)
+       (d.sourceType === 'invoice_sale' || d.sourceType === 'invoice_purchase' || d.sourceType === 'invoice_sale_return' || d.sourceType === 'invoice_purchase_return') && 
+       (String(d.sourceId) === String(id) || String(d.sourceId) === String(newInvoice.id) || String(d.sourceId) === String(newInvoice.invoiceNumber))
      );
      
-     if (existingDoc) {
-       const ledgerAccounts = await getLedgerAccounts();
-       const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
-       const total = Number(newInvoice.totalAmount) || 0;
+     const isDraftOrVoided = newInvoice.isDraft || newInvoice.status === 'draft' || newInvoice.status === 'voided' || newInvoice.type === 'proforma' || newInvoice.type?.startsWith('warehouse_');
 
-       // Find Customer/Supplier/Person Ledger Account
-       let personLedgerId = defaultLedger;
-       if (newInvoice.customerId) {
-          const persons = await getLocalData<any[]>('persons', []);
-          const person = persons.find(p => String(p.id) === String(newInvoice.customerId));
-          if (person && person.accountingCode) {
-             const acc = ledgerAccounts.find(a => a.code === person.accountingCode);
-             if (acc) personLedgerId = acc.id;
-          }
-       }
+     if (isDraftOrVoided) {
+        if (existingDoc) {
+           await deleteAccountingDocument(existingDoc.id);
+        }
+     } else {
+        const ledgerAccounts = await getLedgerAccounts();
+        const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
+        const total = Number(newInvoice.totalAmount) || 0;
 
-       // Find Sales Revenue ('41') Ledger Account
-       let salesLedgerId = defaultLedger;
-       const salesAcc = ledgerAccounts.find(a => a.code === '41');
-       if (salesAcc) salesLedgerId = salesAcc.id;
+        // Find Customer/Supplier/Person Ledger Account
+        let personLedgerId = defaultLedger;
+        if (newInvoice.customerId) {
+           const persons = await getLocalData<any[]>('persons', []);
+           const person = persons.find(p => String(p.id) === String(newInvoice.customerId));
+           if (person && person.accountingCode) {
+              const acc = ledgerAccounts.find(a => a.code === person.accountingCode);
+              if (acc) personLedgerId = acc.id;
+           }
+        }
 
-       // Find Inventory ('13') Ledger Account
-       let inventoryLedgerId = defaultLedger;
-       const inventoryAcc = ledgerAccounts.find(a => a.code === '13');
-       if (inventoryAcc) inventoryLedgerId = inventoryAcc.id;
+        // Find Sales Revenue ('41') Ledger Account
+        let salesLedgerId = defaultLedger;
+        const salesAcc = ledgerAccounts.find(a => a.code === '41');
+        if (salesAcc) salesLedgerId = salesAcc.id;
 
-       const items = [];
-       if (docType === 'sale' || docType === 'purchase_return') {
-          items.push({ description: 'شخص', debit: total, credit: 0, ledgerAccountId: personLedgerId, detailedAccountId: newInvoice.customerId});
-          items.push({ description: 'درآمد/فروش', debit: 0, credit: total, ledgerAccountId: salesLedgerId});
-       } else if (docType === 'purchase' || docType === 'sale_return') {
-          items.push({ description: 'موجودی کالا', debit: total, credit: 0, ledgerAccountId: inventoryLedgerId});
-          items.push({ description: 'شخص', debit: 0, credit: total, ledgerAccountId: personLedgerId, detailedAccountId: newInvoice.customerId});
-       }
+        // Find Inventory ('13') Ledger Account
+        let inventoryLedgerId = defaultLedger;
+        const inventoryAcc = ledgerAccounts.find(a => a.code === '13');
+        if (inventoryAcc) inventoryLedgerId = inventoryAcc.id;
 
-       await updateAccountingDocument(existingDoc.id, {
-          ...existingDoc,
-          date: newInvoice.date || existingDoc.date || new Date().toISOString().split('T')[0],
-          description: `${title} شماره ${newInvoice.invoiceNumber || newInvoice.id}`,
-          items
-       });
+        const items = [];
+        if (docType === 'sale' || docType === 'purchase_return') {
+           items.push({ description: 'شخص', debit: total, credit: 0, ledgerAccountId: personLedgerId, detailedAccountId: newInvoice.customerId});
+           items.push({ description: 'درآمد/فروش', debit: 0, credit: total, ledgerAccountId: salesLedgerId});
+        } else if (docType === 'purchase' || docType === 'sale_return') {
+           items.push({ description: 'موجودی کالا', debit: total, credit: 0, ledgerAccountId: inventoryLedgerId});
+           items.push({ description: 'شخص', debit: 0, credit: total, ledgerAccountId: personLedgerId, detailedAccountId: newInvoice.customerId});
+        }
+
+        if (existingDoc) {
+           await updateAccountingDocument(existingDoc.id, {
+              ...existingDoc,
+              date: newInvoice.date || existingDoc.date || new Date().toISOString().split('T')[0],
+              description: `${title} شماره ${newInvoice.invoiceNumber || newInvoice.id}`,
+              isDeleted: false,
+              status: 'approved',
+              items
+           });
+        } else if (items.length > 0) {
+           await addAccountingDocument({
+              date: newInvoice.date || new Date().toISOString().split('T')[0],
+              description: `${title} شماره ${newInvoice.invoiceNumber || newInvoice.id}`,
+              status: 'approved',
+              sourceType: docType === 'sale' ? 'invoice_sale' : docType === 'purchase' ? 'invoice_purchase' : docType === 'sale_return' ? 'invoice_sale_return' : 'invoice_purchase_return',
+              sourceId: newInvoice.id,
+              items
+           });
+        }
      }
   } catch (e) {
      console.error("Failed to update auto accounting doc for invoice:", e);

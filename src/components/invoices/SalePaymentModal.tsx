@@ -61,7 +61,7 @@ export default function SalePaymentModal({
     e.preventDefault();
     setSubmitting(true);
     try {
-      const finalPayload = { ...payload };
+      const finalPayload = { ...payload, isDraft: false, status: 'final' };
       finalPayload.paymentStatus = paymentType === 'credit' ? 'unpaid' : (paymentType === 'full' ? 'paid' : 'partial');
       
       let newPaidAmount = 0;

@@ -18,9 +18,17 @@ export default function WarehousePrintTemplate({
   products = [],
 }: WarehousePrintTemplateProps) {
   const isReceipt = data.type === "warehouse_receipt";
-  const title = isReceipt
+  const isVoided = data.status === "voided" || data.isVoided === true;
+  const isDraft = data.status === "draft" || data.isDraft === true;
+
+  let rawTitle = isReceipt
     ? "رسید ورود کالا به انبار"
     : "حواله خروج کالا از انبار";
+  const title = isVoided
+    ? `${rawTitle} (ابطال شده)`
+    : isDraft
+      ? `${rawTitle} (پیش‌نویس)`
+      : rawTitle;
   const relatedPerson = persons.find(
     (p) => p.id === data.customerId,
   );
@@ -69,12 +77,23 @@ export default function WarehousePrintTemplate({
           <h1 className="text-lg font-black tracking-tight mb-1">
             {storeSettings.storeName || "عنوان مجموعه"}
           </h1>
-          <h2 className="text-base font-bold bg-slate-200 print:bg-slate-200 px-4 py-1 rounded-full whitespace-nowrap">
+          <h2 className={`text-base font-bold px-4 py-1 rounded-full whitespace-nowrap ${
+            isVoided
+              ? "bg-red-100 text-red-800 border border-red-300 print:bg-red-100 print:text-red-800"
+              : isDraft
+                ? "bg-amber-100 text-amber-800 border border-dashed border-amber-300 print:bg-amber-100 print:text-amber-800"
+                : "bg-slate-200 print:bg-slate-200 text-slate-800"
+          }`}>
             {title}
           </h2>
-          {data.status === "voided" && (
-             <div className="mt-2 text-sm font-black text-rose-600 border-2 border-rose-600 px-3 py-0.5 rounded-md transform -rotate-12 absolute z-10 opacity-70 print:border-rose-500 print:text-rose-500 text-center" style={{ top: "30%" }}>
+          {isVoided && (
+             <div className="mt-2 text-sm font-black text-red-600 border-2 border-red-600 px-3 py-0.5 rounded-md transform -rotate-12 absolute z-10 opacity-70 print:border-red-600 print:text-red-600 text-center" style={{ top: "30%" }}>
                 سند ابطال شده
+             </div>
+          )}
+          {isDraft && !isVoided && (
+             <div className="mt-2 text-sm font-black text-amber-600 border-2 border-dashed border-amber-600 px-3 py-0.5 rounded-md transform -rotate-12 absolute z-10 opacity-70 print:border-amber-600 print:text-amber-600 text-center" style={{ top: "30%" }}>
+                نسخه پیش‌نویس
              </div>
           )}
         </div>

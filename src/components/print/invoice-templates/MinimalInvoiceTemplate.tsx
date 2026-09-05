@@ -10,10 +10,18 @@ export default function MinimalInvoiceTemplate({
 }: InvoicePrintTemplateProps) {
   const isSale = data.type === "sale" || data.type === "sale_return";
   const isReturn = data.type === "sale_return" || data.type === "purchase_return";
+  const isVoided = data.status === "voided" || data.isVoided === true;
+  const isDraft = data.status === "draft" || data.isDraft === true;
   
-  const title = isSale
+  let rawTitle = isSale
     ? isReturn ? "فاکتور برگشت از فروش" : "فاکتور فروش"
     : isReturn ? "فاکتور برگشت از خرید" : "فاکتور خرید";
+
+  const title = isVoided
+    ? `${rawTitle} (ابطال شده)`
+    : isDraft
+      ? `${rawTitle} (پیش‌نویس)`
+      : rawTitle;
       
   const relatedPerson = persons.find(p => p.id === data.customerId);
   const sumTotal = data.items?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;

@@ -92,7 +92,10 @@ export default function SaleInvoiceCreate(props: any) {
     calculateProductCurrentStock,
     formatProductStockDetails,
     activeTab,
-    calculateSubtotal
+    calculateSubtotal,
+    getProductStockInfo,
+    invoices,
+    customAlert
   } = props;
   const itemsEndRef = useRef<HTMLDivElement>(null);
   const [prevItemsLength, setPrevItemsLength] = useState((items || []).length);
@@ -102,6 +105,140 @@ export default function SaleInvoiceCreate(props: any) {
     }
     setPrevItemsLength((items || []).length);
   }, [items]);
+
+  const rowStockErrors = useMemo(() => {
+    const errors: Record<
+      string,
+      {
+        isDeficit: boolean;
+        productName: string;
+        warehouseName: string;
+        availableStock: number;
+        requestedQty: number;
+        deficit: number;
+        unitName: string;
+        rowNumber: number;
+      }
+    > = {};
+
+    const targetWhId = (invoiceWarehouseId || "").toString();
+    const whObj = (warehouses || []).find((w: any) => w.id?.toString() === targetWhId);
+    const defaultWhName = whObj ? whObj.name : "انبار انتخاب شده";
+
+    const consumedPerProduct: Record<string, number> = {};
+
+    (items || []).forEach((item: any, index: number) => {
+      if (!item || !item.productId) return;
+      const prod = (products || []).find(
+        (p: any) => p.id?.toString() === item.productId?.toString()
+      );
+      if (!prod || prod.type === "service") return;
+
+      const itemWhId = (item.warehouseId || targetWhId).toString();
+      const currentWhObj = (warehouses || []).find((w: any) => w.id?.toString() === itemWhId);
+      const warehouseName = currentWhObj ? currentWhObj.name : defaultWhName;
+
+      const itemQty = Number(item.quantity) || 0;
+      if (itemQty <= 0) return;
+
+      const ratio = item.isSecondaryUnit && prod.unitRatio ? Number(prod.unitRatio) : 1;
+      const neededQtyInBase = itemQty * ratio;
+
+      let availableInBase = 0;
+      if (typeof getProductStockInfo === "function") {
+        const stockInfo = getProductStockInfo(prod.id);
+        if (itemWhId && stockInfo?.warehouses && stockInfo.warehouses[itemWhId]) {
+          availableInBase =
+            stockInfo.warehouses[itemWhId].available ??
+            stockInfo.warehouses[itemWhId].physical ??
+            0;
+        } else if (!itemWhId) {
+          availableInBase = stockInfo?.totalAvailable ?? stockInfo?.totalPhysical ?? 0;
+        }
+      } else if (typeof calculateProductCurrentStock === "function") {
+        availableInBase = calculateProductCurrentStock(prod.id) || 0;
+      } else if (prod.stock !== undefined) {
+        availableInBase = Number(prod.stock) || 0;
+      }
+
+      // If editing existing invoice, add back this invoice's original quantity for this item
+      let originalQtyInBase = 0;
+      if (editingInvoiceId && Array.isArray(invoices)) {
+        const originalInvoice = invoices.find(
+          (i: any) => i.id?.toString() === editingInvoiceId?.toString()
+        );
+        if (originalInvoice && originalInvoice.type === "sale" && Array.isArray(originalInvoice.items)) {
+          const origItem = originalInvoice.items.find(
+            (oi: any) =>
+              oi.productId?.toString() === item.productId?.toString() &&
+              (oi.warehouseId?.toString() === itemWhId ||
+                (!oi.warehouseId && itemWhId === targetWhId))
+          );
+          if (origItem) {
+            const origRatio =
+              origItem.isSecondaryUnit && origItem.unitRatio
+                ? Number(origItem.unitRatio)
+                : 1;
+            originalQtyInBase = (Number(origItem.quantity) || 0) * origRatio;
+          }
+        }
+      }
+
+      const totalEffectiveAvailableInBase = availableInBase + originalQtyInBase;
+      const productKey = `${prod.id}_${itemWhId}`;
+      const previouslyConsumed = consumedPerProduct[productKey] || 0;
+      const availableForThisRowInBase = Math.max(
+        0,
+        totalEffectiveAvailableInBase - previouslyConsumed
+      );
+
+      if (itemWhId && neededQtyInBase > availableForThisRowInBase) {
+        const availableInDisplayUnit =
+          ratio > 1
+            ? Number((availableForThisRowInBase / ratio).toFixed(2))
+            : availableForThisRowInBase;
+        const deficitInDisplayUnit = Number(
+          (itemQty - availableInDisplayUnit).toFixed(2)
+        );
+        const unitName =
+          item.isSecondaryUnit && prod.secondaryUnit
+            ? prod.secondaryUnit
+            : prod.unit || "عدد";
+
+        errors[item.id] = {
+          isDeficit: true,
+          productName: prod.name,
+          warehouseName,
+          availableStock: Math.max(0, availableInDisplayUnit),
+          requestedQty: itemQty,
+          deficit:
+            deficitInDisplayUnit > 0
+              ? deficitInDisplayUnit
+              : Number(
+                  Math.max(
+                    0,
+                    (neededQtyInBase - availableForThisRowInBase) / ratio
+                  ).toFixed(2)
+                ),
+          unitName,
+          rowNumber: index + 1,
+        };
+      }
+
+      consumedPerProduct[productKey] = previouslyConsumed + neededQtyInBase;
+    });
+
+    return errors;
+  }, [
+    items,
+    products,
+    invoiceWarehouseId,
+    warehouses,
+    editingInvoiceId,
+    invoices,
+    getProductStockInfo,
+    calculateProductCurrentStock,
+  ]);
 
   return (
 <motion.div
@@ -392,6 +529,43 @@ export default function SaleInvoiceCreate(props: any) {
                   آماده فروش
                 </h3>
               </div>
+
+              {/* Top Stock Shortage Alert Banner */}
+              {Object.keys(rowStockErrors).length > 0 && (
+                <div className="m-5 mb-0 p-4 bg-rose-50 border-2 border-rose-300 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-rose-900 shadow-sm animate-in fade-in">
+                  <div className="flex items-start gap-3">
+                    <div className="p-2 bg-rose-200/80 rounded-xl text-rose-700 shrink-0 mt-0.5">
+                      <AlertTriangle className="w-5 h-5 text-rose-600" />
+                    </div>
+                    <div>
+                      <h4 className="font-black text-sm text-rose-900 flex items-center gap-2">
+                        <span>هشدار کسری موجودی انبار:</span>
+                        <span className="bg-rose-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                          {toPersianDigits(Object.keys(rowStockErrors).length)} ردیف
+                        </span>
+                      </h4>
+                      <p className="text-xs text-rose-700 font-bold mt-1 leading-relaxed">
+                        تعداد وارد شده در ردیف‌های با <span className="bg-rose-200 text-rose-950 px-1.5 py-0.5 rounded font-black border border-rose-300">کادر قرمز رنگ</span> بیشتر از موجودی انبار انتخاب شده است. لطفاً تعداد اقلام را بررسی و اصلاح فرمایید.
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const firstKey = Object.keys(rowStockErrors)[0];
+                      if (firstKey) {
+                        const el = document.getElementById(`sale-invoice-item-row-${firstKey}`);
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      }
+                    }}
+                    className="self-end md:self-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-colors shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
+                  >
+                    <span>مشاهده ردیف خطا</span>
+                    <ArrowDown className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
+
               <div className="overflow-x-auto">
                 <table className="w-full text-right min-w-[1000px]">
                   <thead>
@@ -437,16 +611,38 @@ export default function SaleInvoiceCreate(props: any) {
                         </td>
                       </tr>
                     )}
-                    {(items || []).map((item, index) => (
+                    {(items || []).map((item, index) => {
+                      const stockErr = rowStockErrors[item.id];
+                      return (
                       <tr
                         key={item.id}
-                        className="hover:bg-indigo-50/20 transition-colors"
+                        id={`sale-invoice-item-row-${item.id}`}
+                        className={`transition-all duration-300 ${
+                          stockErr
+                            ? "bg-rose-50/70 border-y-2 border-rose-500 shadow-sm ring-1 ring-rose-300"
+                            : "hover:bg-indigo-50/20 transition-colors"
+                        }`}
                         data-row-type="sale-row"
+                        data-has-stock-error={stockErr ? "true" : "false"}
                       >
-                        <td className="p-5 text-center font-bold text-slate-300">
-                          {index + 1}
+                        <td className={`p-5 text-center font-bold ${stockErr ? "border-y-2 border-r-2 border-rose-500 rounded-r-2xl bg-rose-50/90" : "text-slate-300"}`}>
+                          {stockErr ? (
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <span
+                                className="w-7 h-7 rounded-xl bg-rose-600 text-white font-black text-xs flex items-center justify-center shadow-sm ring-2 ring-rose-300 animate-pulse"
+                                title="کسری موجودی انبار"
+                              >
+                                {index + 1}
+                              </span>
+                              <span className="text-[10px] text-rose-600 font-extrabold flex items-center gap-0.5 whitespace-nowrap">
+                                <AlertTriangle className="w-3 h-3 text-rose-600" /> خطا
+                              </span>
+                            </div>
+                          ) : (
+                            <span>{index + 1}</span>
+                          )}
                         </td>
-                        <td className="p-5">
+                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
                           {item.productId ? (
                             <div className="font-black text-slate-800 flex flex-col gap-1">
                               <span>{item.productName}</span>
@@ -488,8 +684,28 @@ export default function SaleInvoiceCreate(props: any) {
                               className="w-full p-2.5 bg-white border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm font-bold text-slate-800 outline-none"
                             />
                           )}
+
+                          {stockErr && (
+                            <div className="mt-2.5 p-3 bg-rose-100/95 border-2 border-rose-400/90 rounded-xl text-rose-900 text-xs font-black flex items-start gap-2 shadow-xs animate-in fade-in">
+                              <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                              <div className="space-y-1">
+                                <div className="text-rose-800 font-black flex items-center gap-1.5">
+                                  <span>خطای کسری موجودی در انبار «{stockErr.warehouseName}»</span>
+                                </div>
+                                <p className="text-[11px] text-rose-700 font-bold leading-relaxed">
+                                  موجودی این کالا در انبار <span className="text-rose-950 font-black px-1.5 py-0.5 bg-white rounded border border-rose-300">{formatNumber(stockErr.availableStock)} {stockErr.unitName}</span> است، اما شما <span className="text-rose-950 font-black px-1.5 py-0.5 bg-white rounded border border-rose-300">{formatNumber(stockErr.requestedQty)} {stockErr.unitName}</span> وارد کرده‌اید.
+                                </p>
+                                <div className="text-[11px] text-rose-900 font-black flex items-center gap-1">
+                                  <span>کسری موجودی:</span>
+                                  <span className="text-rose-700 bg-white px-1.5 py-0.5 rounded-md border border-rose-300 font-black">
+                                    {formatNumber(stockErr.deficit)} {stockErr.unitName}
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </td>
-                        <td className="p-5">
+                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
                           <div className="flex flex-col gap-1.5">
                             <CurrencyInput
                               hideWords={true}
@@ -502,11 +718,21 @@ export default function SaleInvoiceCreate(props: any) {
                                   e.target.value,
                                 )
                               }
-                              className="w-full p-2.5 bg-indigo-50/30 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-sans text-center font-black text-slate-800 outline-none"
+                              className={`w-full p-2.5 rounded-xl font-sans text-center font-black outline-none transition-all ${
+                                stockErr
+                                  ? "bg-white border-2 border-rose-500 text-rose-900 ring-2 ring-rose-400/70 shadow-xs focus:ring-rose-500"
+                                  : "bg-indigo-50/30 border border-indigo-100 focus:ring-2 focus:ring-indigo-500 text-slate-800"
+                              }`}
                             />
+                            {stockErr && (
+                              <div className="flex items-center justify-center gap-1 text-[10px] text-rose-800 font-black bg-white/95 py-0.5 px-1.5 rounded-lg border border-rose-300 shadow-2xs">
+                                <span>موجودی:</span>
+                                <span>{formatNumber(stockErr.availableStock)}</span>
+                              </div>
+                            )}
                           </div>
                         </td>
-                        <td className="p-5">
+                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
                           {(() => {
                             const product = item.productId
                               ? products.find(
@@ -573,7 +799,7 @@ export default function SaleInvoiceCreate(props: any) {
                             );
                           })()}
                         </td>
-                        <td className="p-5">
+                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
                           <CurrencyInput
                             currencyLabel={storeSettings?.currency}
                             value={item.unitPrice}
@@ -587,7 +813,7 @@ export default function SaleInvoiceCreate(props: any) {
                             className="w-full p-2.5 bg-indigo-50/30 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-sans text-left font-black text-indigo-900 text-sm outline-none"
                           />
                         </td>
-                        <td className="p-5">
+                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
                           <input
                             type="number"
                             min="0"
@@ -606,12 +832,12 @@ export default function SaleInvoiceCreate(props: any) {
                           />
                         </td>
                         <td
-                          className="p-5 font-black text-left font-sans text-indigo-950"
+                          className={`p-5 font-black text-left font-sans text-indigo-950 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}
                           dir="ltr"
                         >
                           {formatCurrency(item.totalPrice)}
                         </td>
-                        <td className="p-5 text-center">
+                        <td className={`p-5 text-center ${stockErr ? "border-y-2 border-l-2 border-rose-500 rounded-l-2xl bg-rose-50/80" : ""}`}>
                           <button
                             onClick={() => handleRemoveItem(item.id)}
                             className="p-2.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors outline-none focus:ring-2 focus:ring-rose-500"
@@ -620,7 +846,8 @@ export default function SaleInvoiceCreate(props: any) {
                           </button>
                         </td>
                       </tr>
-                    ))}
+                      );
+                    })}
                     {(items || []).length === 0 && (
                       <tr>
                         <td colSpan={7} className="p-16 text-center">
@@ -799,6 +1026,18 @@ export default function SaleInvoiceCreate(props: any) {
                   type="button"
                   disabled={submitting || (items || []).length === 0 || !customerId}
                   onClick={() => {
+                    if (storeSettings?.allowNegativeStock !== true && Object.keys(rowStockErrors).length > 0) {
+                      const firstErrKey = Object.keys(rowStockErrors)[0];
+                      const firstErr = rowStockErrors[firstErrKey];
+                      const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
+                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      if (typeof customAlert === "function") {
+                        customAlert(
+                          `خطای کسری موجودی در ردیف ${firstErr.rowNumber}:\nتعداد وارد شده برای کالای «${firstErr.productName}» از موجودی انبار «${firstErr.warehouseName}» بیشتر است.\nردیف‌های دارای کسری با کادر قرمز رنگ مشخص شده‌اند.`
+                        );
+                      }
+                      return;
+                    }
                     if (
                       confirm(
                         "آیا از ذخیره این فاکتور به عنوان پیش‌نویس اطمینان دارید؟",
@@ -814,7 +1053,21 @@ export default function SaleInvoiceCreate(props: any) {
                 </button>
                 <button
                   type="button"
-                  onClick={handleInvoicePreviewTrigger}
+                  onClick={() => {
+                    if (storeSettings?.allowNegativeStock !== true && Object.keys(rowStockErrors).length > 0) {
+                      const firstErrKey = Object.keys(rowStockErrors)[0];
+                      const firstErr = rowStockErrors[firstErrKey];
+                      const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
+                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      if (typeof customAlert === "function") {
+                        customAlert(
+                          `خطای کسری موجودی در ردیف ${firstErr.rowNumber}:\nتعداد وارد شده برای کالای «${firstErr.productName}» از موجودی انبار «${firstErr.warehouseName}» بیشتر است.\nردیف‌های دارای کسری با کادر قرمز رنگ مشخص شده‌اند.`
+                        );
+                      }
+                      return;
+                    }
+                    handleInvoicePreviewTrigger();
+                  }}
                   disabled={submitting || (items || []).length === 0 || !customerId}
                   className="px-10 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-200 text-white rounded-2xl font-black flex items-center justify-center gap-3 transition-colors shadow-sm outline-none focus:ring-4 focus:ring-indigo-500/20 cursor-pointer"
                 >

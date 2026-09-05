@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { X, Printer, CheckCircle, Eye, Wallet, Settings } from "lucide-react";
+import { X, Printer, CheckCircle, Eye, Wallet, Settings, AlertTriangle, Ban, FileText, AlertCircle } from "lucide-react";
 import InvoicePrintTemplate from "../print/InvoicePrintTemplate";
 import WarehousePrintTemplate from "../print/WarehousePrintTemplate";
 import ReceiptPrintTemplate from "../print/ReceiptPrintTemplate";
@@ -14,6 +14,10 @@ export default function PreviewModals(props: any) {
     storeSettings, products, warehouses,
     transactions, invoices, personOpeningBalances, issuedChecks, receivedChecks, printingTransaction, setPrintingTransaction
   } = props;
+
+  const currentInvoice = viewingInvoice || previewInvoiceData;
+  const isVoided = currentInvoice?.status === "voided" || currentInvoice?.isVoided === true;
+  const isDraft = currentInvoice?.status === "draft" || currentInvoice?.isDraft === true;
 
   const [printSettings, setPrintSettings] = useState({
     showStoreLogo: true,
@@ -33,10 +37,22 @@ export default function PreviewModals(props: any) {
         <div className="fixed inset-0 z-[99999] flex flex-col bg-slate-900/50 backdrop-blur-sm print:bg-transparent print:backdrop-blur-none print-section" dir="rtl">
           <div className="flex-1 w-full max-w-5xl mx-auto my-0 sm:my-4 bg-slate-100 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden print:w-full print:max-w-none print:m-0 print:rounded-none print:shadow-none print:bg-white relative">
             <div className="bg-white border-b border-slate-200 p-4 flex items-center justify-between print:hidden shrink-0 z-10">
-              <div className="flex items-center gap-4">
+              <div className="flex items-center gap-3">
                 <h3 className="text-lg font-black text-slate-800">
-                  {viewingInvoice ? "پیش‌نمایش چاپ" : "تایید نهایی و چاپ سند"}
+                  {viewingInvoice ? "پیش‌نمایش سند" : "تایید نهایی و پیش‌نمایش سند"}
                 </h3>
+                {isVoided && (
+                  <span className="px-3 py-1 bg-red-100 text-red-700 border border-red-200 rounded-full text-xs font-black flex items-center gap-1.5 shadow-xs">
+                    <Ban className="w-3.5 h-3.5 text-red-600" />
+                    ابطال شده (فاقد اعتبار مالی)
+                  </span>
+                )}
+                {isDraft && !isVoided && (
+                  <span className="px-3 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-full text-xs font-black flex items-center gap-1.5 shadow-xs">
+                    <FileText className="w-3.5 h-3.5 text-amber-600" />
+                    پیش‌نویس (غیر رسمی)
+                  </span>
+                )}
                 <div className="hidden sm:flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
                   <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
                     <Settings className="w-3.5 h-3.5" />
@@ -86,6 +102,26 @@ export default function PreviewModals(props: any) {
                 <X className="w-5 h-5" />
               </button>
             </div>
+
+            {/* Informational Alert Banner for Voided or Draft */}
+            {isVoided && (
+              <div className="bg-red-50 border-b border-red-200 text-red-800 px-4 py-2.5 text-xs font-bold flex items-center justify-between shrink-0 print:hidden">
+                <div className="flex items-center gap-2">
+                  <Ban className="w-4 h-4 text-red-600 shrink-0" />
+                  <span>هشدار: این سند / فاکتور ابطال گردیده و در کلیه دفاتر حسابداری و انبارداری باطل شده است.</span>
+                </div>
+                <span className="bg-red-600 text-white text-[10px] px-2 py-0.5 rounded font-black">ابطال شده</span>
+              </div>
+            )}
+            {isDraft && !isVoided && (
+              <div className="bg-amber-50 border-b border-amber-200 text-amber-900 px-4 py-2.5 text-xs font-bold flex items-center justify-between shrink-0 print:hidden">
+                <div className="flex items-center gap-2">
+                  <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                  <span>توجه: این سند در وضعیت «پیش‌نویس» قرار دارد و تا پیش از تایید نهایی فاقد اثر مالی، سند حسابداری و قانونی می‌باشد.</span>
+                </div>
+                <span className="bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded font-black">پیش‌نویس</span>
+              </div>
+            )}
             
             {/* Mobile Print Settings */}
             <div className="sm:hidden bg-slate-50 border-b border-slate-200 p-3 shrink-0 print:hidden overflow-x-auto flex items-center gap-4 whitespace-nowrap">
@@ -124,7 +160,22 @@ export default function PreviewModals(props: any) {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 print:p-0 print:overflow-visible">
-              <div className={`bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:w-full print:max-w-none ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}>
+              <div className={`bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:w-full print:max-w-none relative overflow-hidden ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}>
+                {/* Visual Watermarks for Draft and Voided */}
+                {isVoided && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-30 overflow-hidden print:flex">
+                    <div className="transform -rotate-45 border-8 border-red-600/35 text-red-600/35 font-black text-6xl sm:text-7xl md:text-8xl px-12 py-6 rounded-3xl tracking-widest text-center shadow-xs">
+                      ابطال شد
+                    </div>
+                  </div>
+                )}
+                {isDraft && !isVoided && (
+                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-30 overflow-hidden print:flex">
+                    <div className="transform -rotate-45 border-8 border-dashed border-amber-600/35 text-amber-600/35 font-black text-6xl sm:text-7xl md:text-8xl px-12 py-6 rounded-3xl tracking-widest text-center shadow-xs">
+                      پیش‌نویس
+                    </div>
+                  </div>
+                )}
                 {(viewingInvoice?.type?.includes("warehouse") || previewInvoiceData?.type?.includes("warehouse")) ? (
                   <WarehousePrintTemplate
                     data={viewingInvoice || previewInvoiceData}
@@ -163,7 +214,8 @@ export default function PreviewModals(props: any) {
                  </button>
                  <button
                   onClick={() => {
-                    saveInvoiceData(previewInvoiceData);
+                    const finalData = { ...previewInvoiceData, isDraft: false, status: 'final' };
+                    saveInvoiceData(finalData, false);
                     setPreviewInvoiceData(null);
                   }}
                   disabled={submitting}

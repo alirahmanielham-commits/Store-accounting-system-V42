@@ -24,10 +24,18 @@ export default function StandardInvoiceTemplate({
 }: InvoicePrintTemplateProps) {
   const isSale = data.type === "sale" || data.type === "sale_return";
   const isReturn = data.type === "sale_return" || data.type === "purchase_return";
+  const isVoided = data.status === "voided" || data.isVoided === true;
+  const isDraft = data.status === "draft" || data.isDraft === true;
   
-  const title = isSale
+  let rawTitle = isSale
     ? isReturn ? "فاکتور برگشت از فروش" : "صورتحساب فروش کالا و خدمات"
     : isReturn ? "فاکتور برگشت از خرید" : "فاکتور خرید";
+
+  const title = isVoided
+    ? `${rawTitle} (ابطال شده)`
+    : isDraft
+      ? `${rawTitle} (پیش‌نویس)`
+      : rawTitle;
       
   const relatedPerson = persons.find(
     (p) => p.id === data.customerId
@@ -165,7 +173,23 @@ export default function StandardInvoiceTemplate({
                 </div>
                 
                 <div className="flex flex-col items-center justify-center px-4 flex-1">
-                  <h2 className={`${isA5 ? 'text-lg px-4 py-1.5' : 'text-2xl px-6 py-2'} font-black mb-2 border-2 border-slate-800 rounded-lg shadow-[4px_4px_0_0_#1e293b]`}>{title}</h2>
+                  <h2 className={`${isA5 ? 'text-lg px-4 py-1.5' : 'text-2xl px-6 py-2'} font-black mb-1 border-2 rounded-lg ${
+                    isVoided 
+                      ? 'border-red-600 text-red-700 bg-red-50 shadow-[4px_4px_0_0_#dc2626]' 
+                      : isDraft 
+                        ? 'border-dashed border-amber-600 text-amber-800 bg-amber-50 shadow-[4px_4px_0_0_#d97706]' 
+                        : 'border-slate-800 shadow-[4px_4px_0_0_#1e293b]'
+                  }`}>{title}</h2>
+                  {isVoided && (
+                    <span className="text-[10px] font-black text-red-700 bg-red-100 border border-red-300 px-2 py-0.5 rounded">
+                      فاقد هرگونه اعتبار قانونی و مالی
+                    </span>
+                  )}
+                  {isDraft && !isVoided && (
+                    <span className="text-[10px] font-black text-amber-800 bg-amber-100 border border-amber-300 px-2 py-0.5 rounded">
+                      نسخه پیش‌نویس - غیر رسمی
+                    </span>
+                  )}
                 </div>
 
                 <div className="flex-1 text-left space-y-1">

@@ -1,6 +1,24 @@
 import React, { useState, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { motion, AnimatePresence } from "motion/react";
-import { User, X, Check, Plus, RefreshCw, Search, CreditCard, Building, MapPin, Tag } from "lucide-react";
+import { 
+  User, 
+  X, 
+  Check, 
+  Plus, 
+  RefreshCw, 
+  Search, 
+  CreditCard, 
+  Building, 
+  MapPin, 
+  Tag,
+  AlertTriangle,
+  AlertCircle,
+  Phone,
+  ShieldAlert,
+  CheckCircle2,
+  FileText
+} from "lucide-react";
 import DateObject from "react-date-object";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -212,71 +230,264 @@ export default function PersonFormModal({
   }, [isOpen, editingPersonId, persons]);
 
 
+  const normalizePersian = (text: any): string => {
+    if (!text) return "";
+    return String(text)
+      .trim()
+      .toLowerCase()
+      .replace(/[\u064B-\u065F]/g, "")
+      .replace(/[ي]/g, "ی")
+      .replace(/[ك]/g, "ک")
+      .replace(/[آأإ]/g, "ا")
+      .replace(/[ة]/g, "ه")
+      .replace(/\u200c/g, " ")
+      .replace(/\s+/g, " ");
+  };
+
+  const normalizeDigits = (val: any): string => {
+    if (!val) return "";
+    const persianDigits = ["۰", "۱", "۲", "۳", "۴", "۵", "۶", "۷", "۸", "۹"];
+    const arabicDigits = ["٠", "١", "٢", "٣", "٤", "٥", "٦", "٧", "٨", "٩"];
+    let res = String(val);
+    persianDigits.forEach((d, i) => {
+      res = res.replace(new RegExp(d, "g"), String(i));
+    });
+    arabicDigits.forEach((d, i) => {
+      res = res.replace(new RegExp(d, "g"), String(i));
+    });
+    return res.replace(/\D/g, "");
+  };
+
+  const normalizePhoneNumber = (phone: any): string => {
+    const digits = normalizeDigits(phone);
+    if (!digits) return "";
+    let clean = digits;
+    if (clean.startsWith("0098")) clean = clean.slice(4);
+    else if (clean.startsWith("98")) clean = clean.slice(2);
+    if (clean.startsWith("0")) clean = clean.slice(1);
+    return clean;
+  };
+
   const handleCheckDuplicates = async (e?: React.FormEvent) => {
     if (e && typeof e.preventDefault === "function") {
       try { e.preventDefault(); } catch (err) {}
     }
 
-    if (newPersonType === "real" && (!newPersonFirstName || !newPersonLastName)) {
+    if (newPersonType === "real" && (!newPersonFirstName?.trim() || !newPersonLastName?.trim())) {
       showNotification("لطفاً نام و نام خانوادگی را وارد کنید.", "error");
       return;
     }
-    if (newPersonType === "legal" && !newPersonCompanyName) {
+    if (newPersonType === "legal" && !newPersonCompanyName?.trim()) {
       showNotification("لطفاً نام شرکت/سازمان را وارد کنید.", "error");
       return;
     }
-    if (newPersonNationalId && !/^\d{10,11}$/.test(newPersonNationalId)) {
+    if (newPersonNationalId && !/^\d{10,11}$/.test(normalizeDigits(newPersonNationalId))) {
       showNotification("کد ملی/شناسه ملی نامعتبر است (باید ۱۰ یا ۱۱ رقم باشد).", "error");
       return;
     }
-    if (newPersonPhone && !/^09\d{9}$|^\d{8,11}$/.test(newPersonPhone)) {
+    if (newPersonPhone && !/^09\d{9}$|^\d{8,11}$/.test(normalizeDigits(newPersonPhone))) {
       showNotification("شماره تماس نامعتبر است.", "error");
       return;
     }
-    
-    // Check duplicates API
-    try {
-        const response = await fetch('/api/persons/check-duplicates', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-                name: newPersonType === "legal" ? newPersonCompanyName : `${newPersonFirstName} ${newPersonLastName}`.trim(),
-                nationalId: newPersonNationalId,
-                phone: newPersonPhone,
-                taxNumber: newPersonEconomicCode,
-                registrationNumber: newPersonRegistrationNumber,
-                companyName: newPersonCompanyName
-            })
+
+    // Check for similar or duplicate persons in local state
+    const matches: {
+      person: any;
+      reasons: {
+        field: 'nationalId' | 'phone' | 'name' | 'alias';
+        title: string;
+        description: string;
+        severity: 'danger' | 'warning';
+      }[];
+    }[] = [];
+
+    const normInputNId = normalizeDigits(newPersonNationalId);
+    const normInputPhone = normalizePhoneNumber(newPersonPhone);
+    const normInputMobile = normalizePhoneNumber(newPersonMobile);
+    const normInputContacts = (newPersonContacts || []).map((c: any) => normalizePhoneNumber(c?.number)).filter(Boolean);
+    const allInputPhones = Array.from(new Set([normInputPhone, normInputMobile, ...normInputContacts].filter(p => p.length >= 7)));
+
+    const inputFullName = newPersonType === "legal"
+      ? (newPersonCompanyName || "").trim()
+      : `${newPersonFirstName || ''} ${newPersonLastName || ''}`.trim();
+    const normInputName = normalizePersian(inputFullName);
+    const normInputFirst = normalizePersian(newPersonFirstName);
+    const normInputLast = normalizePersian(newPersonLastName);
+    const normInputAlias = normalizePersian(newPersonAlias);
+
+    (persons || []).forEach((p: any) => {
+      if (!p) return;
+      if (editingPersonId && String(p.id) === String(editingPersonId)) return;
+
+      const pReasons: {
+        field: 'nationalId' | 'phone' | 'name' | 'alias';
+        title: string;
+        description: string;
+        severity: 'danger' | 'warning';
+      }[] = [];
+
+      // 1. National ID Check (Duplicate)
+      const normPNId = normalizeDigits(p.nationalId);
+      if (normInputNId && normPNId && normInputNId.length >= 8 && normInputNId === normPNId) {
+        pReasons.push({
+          field: 'nationalId',
+          title: 'کد ملی یکسان و تکراری',
+          description: `کد ملی وارد شده با کد ملی این شخص (${toPersianDigits(p.nationalId)}) کاملاً یکسان است.`,
+          severity: 'danger'
         });
-        const result = await response.json();
-        
-        if (result.success && result.duplicates && result.duplicates.length > 0) {
-            // Remove the editing person from duplicates if it's edit mode
-            const filteredDuplicates = editingPersonId 
-               ? result.duplicates.filter((d: any) => d.id !== editingPersonId) 
-               : result.duplicates;
-               
-            if (filteredDuplicates.length > 0) {
-                setDuplicates(filteredDuplicates);
-                confirmAction("موارد مشابهی در سیستم یافت شد (مانند نام یا نام شرکت مشابه). آیا از ثبت این شخص اطمینان دارید؟", () => {
-                    handleSubmitPerson();
-                });
-                return; // Stop submission until confirmed
-            }
+      }
+
+      // 2. Phone / Mobile Check (Duplicate)
+      const pPhones = [
+        normalizePhoneNumber(p.phone),
+        normalizePhoneNumber(p.mobile),
+        ...(p.contacts || []).map((c: any) => normalizePhoneNumber(c?.number))
+      ].filter(ph => ph && ph.length >= 7);
+
+      const hasMatchingPhone = allInputPhones.some(inPh => pPhones.includes(inPh));
+      if (hasMatchingPhone) {
+        pReasons.push({
+          field: 'phone',
+          title: 'شماره همراه / تماس تکراری',
+          description: `شماره تماس وارد شده با شماره ثبت‌شده برای این شخص (${toPersianDigits(p.phone || p.mobile || 'ثبت شده')}) یکسان است.`,
+          severity: 'danger'
+        });
+      }
+
+      // 3. Name & Family similarity Check
+      if (newPersonType === "real") {
+        const pFullName = normalizePersian(p.name || `${p.firstName || ''} ${p.lastName || ''}`);
+        const pFirst = normalizePersian(p.firstName || '');
+        const pLast = normalizePersian(p.lastName || '');
+        const pAlias = normalizePersian(p.alias || '');
+
+        if (normInputName && pFullName && normInputName === pFullName) {
+          pReasons.push({
+            field: 'name',
+            title: 'نام و نام خانوادگی یکسان',
+            description: `نام و نام خانوادگی وارد شده با «${p.name || `${p.firstName} ${p.lastName}`}» کاملاً یکسان است.`,
+            severity: 'danger'
+          });
+        } else if (
+          normInputName && pFullName &&
+          normInputName.length >= 4 &&
+          pFullName.length >= 4 &&
+          (pFullName.includes(normInputName) || normInputName.includes(pFullName))
+        ) {
+          pReasons.push({
+            field: 'name',
+            title: 'نام و نام خانوادگی مشابه',
+            description: `نام وارد شده با نام «${p.name}» شباهت دارد.`,
+            severity: 'warning'
+          });
+        } else if (
+          normInputLast && pLast &&
+          normInputLast.length >= 3 &&
+          normInputLast === pLast &&
+          normInputFirst && pFirst &&
+          (normInputFirst === pFirst || normInputFirst.includes(pFirst) || pFirst.includes(normInputFirst))
+        ) {
+          pReasons.push({
+            field: 'name',
+            title: 'نام خانوادگی یکسان و نام مشابه',
+            description: `نام خانوادگی (${newPersonLastName}) و نام (${newPersonFirstName}) با این شخص مشابه است.`,
+            severity: 'warning'
+          });
+        } else if (normInputAlias && pAlias && normInputAlias.length >= 3 && (normInputAlias === pAlias || normInputAlias === pFullName)) {
+          pReasons.push({
+            field: 'alias',
+            title: 'نام مستعار یا عنوان یکسان',
+            description: `عنوان یا نام مستعار وارد شده با «${p.alias || p.name}» یکسان است.`,
+            severity: 'warning'
+          });
         }
+      } else {
+        // Legal person
+        const pCompany = normalizePersian(p.companyName || p.name || '');
+        if (normInputName && pCompany) {
+          if (normInputName === pCompany) {
+            pReasons.push({
+              field: 'name',
+              title: 'نام شرکت / سازمان یکسان',
+              description: `نام شرکت وارد شده با «${p.companyName || p.name}» دقیقاً یکسان است.`,
+              severity: 'danger'
+            });
+          } else if (
+            normInputName.length >= 4 &&
+            pCompany.length >= 4 &&
+            (pCompany.includes(normInputName) || normInputName.includes(pCompany))
+          ) {
+            pReasons.push({
+              field: 'name',
+              title: 'نام شرکت / سازمان مشابه',
+              description: `نام وارد شده با نام شرکت «${p.companyName || p.name}» تشابه دارد.`,
+              severity: 'warning'
+            });
+          }
+        }
+      }
+
+      if (pReasons.length > 0) {
+        matches.push({
+          person: p,
+          reasons: pReasons
+        });
+      }
+    });
+
+    // Check duplicates on backend API if available
+    try {
+      const response = await fetch('/api/persons/check-duplicates', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: inputFullName,
+          nationalId: newPersonNationalId,
+          phone: newPersonPhone,
+          taxNumber: newPersonEconomicCode,
+          registrationNumber: newPersonRegistrationNumber,
+          companyName: newPersonCompanyName
+        })
+      });
+      const result = await response.json();
+      if (result.success && Array.isArray(result.duplicates)) {
+        const filteredServerDups = editingPersonId
+          ? result.duplicates.filter((d: any) => String(d.id) !== String(editingPersonId))
+          : result.duplicates;
+
+        filteredServerDups.forEach((serverP: any) => {
+          const alreadyMatched = matches.some(m => String(m.person.id) === String(serverP.id));
+          if (!alreadyMatched) {
+            matches.push({
+              person: serverP,
+              reasons: [{
+                field: 'name',
+                title: 'مورد مشابه در سرور',
+                description: `شخص «${serverP.name || serverP.companyName || 'بدون نام'}» با مشخصات مشابه در پایگاه داده شناسایی شد.`,
+                severity: 'warning'
+              }]
+            });
+          }
+        });
+      }
     } catch (e) {
-        console.error("Failed to check duplicates", e);
+      console.warn("Backend duplicate check skipped:", e);
     }
-    
-    // Proceed to submit if no duplicates or error
+
+    if (matches.length > 0) {
+      setDuplicates(matches);
+      setShowDuplicatesModal(true);
+      return;
+    }
+
+    // Proceed to submit if no duplicates found
     handleSubmitPerson();
   };
 
-const handleSubmitPerson = async (e?: React.FormEvent) => {
+  const handleSubmitPerson = async (e?: React.FormEvent) => {
     if (e && typeof e.preventDefault === "function") {
       try { e.preventDefault(); } catch (err) {}
     }
-    // Validation is already handled in handleCheckDuplicates
 
     setSubmittingPerson(true);
     setSubmitStatus("در حال اعتبارسنجی اطلاعات...");
@@ -321,58 +532,6 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
           generatedAlias = defaultAlias;
         } else {
           generatedAlias = newPersonAlias;
-        }
-      }
-
-      const duplicateNationalId = newPersonNationalId
-        ? persons.find(
-            (p) =>
-              p.nationalId === newPersonNationalId &&
-              (!isEdit || p.id.toString() !== editingPersonId.toString()),
-          )
-        : null;
-      const duplicatePhone = newPersonPhone
-        ? persons.find(
-            (p) =>
-              p.phone === newPersonPhone &&
-              (!isEdit || p.id.toString() !== editingPersonId.toString()),
-          )
-        : null;
-      const duplicateAlias = generatedAlias
-        ? persons.find(
-            (p) =>
-              (p.alias === generatedAlias || p.name === generatedAlias) &&
-              (!isEdit || p.id.toString() !== editingPersonId.toString()),
-          )
-        : null;
-
-      let warningMessage = "";
-      if (duplicateAlias)
-        warningMessage +=
-          "نام مستعار یا نام وارد شده تکراری است (مربوط به: " +
-          (duplicateAlias.name || duplicateAlias.alias) +
-          ").\n";
-      if (duplicateNationalId)
-        warningMessage +=
-          "کد/شناسه ملی وارد شده تکراری است (مربوط به: " +
-          duplicateNationalId.name +
-          ").\n";
-      if (duplicatePhone)
-        warningMessage +=
-          "شماره تماس وارد شده تکراری است (مربوط به: " +
-          duplicatePhone.name +
-          ").\n";
-
-      if (warningMessage) {
-        if (
-          !window.confirm(
-            warningMessage +
-              "\nآیا مطمئن هستید که می‌خواهید این شخص را با اطلاعات تکراری ثبت کنید؟",
-          )
-        ) {
-          setSubmittingPerson(false);
-          setSubmitStatus(null);
-          return;
         }
       }
 
@@ -1392,6 +1551,196 @@ const handleSubmitPerson = async (e?: React.FormEvent) => {
                     </div>
                   </motion.div>
                 </div>
+
+      {/* Duplicate Review & Confirmation Modal */}
+      {showDuplicatesModal && typeof document !== "undefined" && createPortal(
+        <AnimatePresence>
+          <div className="fixed inset-0 z-[1000000] flex items-center justify-center p-3 sm:p-4 overflow-y-auto">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs"
+              onClick={() => setShowDuplicatesModal(false)}
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto border border-amber-200/80 z-10"
+              dir="rtl"
+            >
+              {/* Header */}
+              <div className="px-6 py-4 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-white flex items-center justify-between shadow-md">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
+                    <AlertTriangle className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-base text-white">
+                      تشخیص اشخاص با مشخصات مشابه یا تکراری
+                    </h3>
+                    <p className="text-xs text-amber-100 font-medium">
+                      اطلاعات وارد شده با {toPersianDigits(duplicates.length)} شخص موجود در سیستم تشابه دارد
+                    </p>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setShowDuplicatesModal(false)}
+                  className="p-1.5 text-white/80 hover:text-white hover:bg-white/10 rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Alert Message Banner & List */}
+              <div className="p-4 sm:p-5 overflow-y-auto flex-1 space-y-4">
+                <div className="bg-amber-50/80 border border-amber-200/90 rounded-2xl p-4 text-amber-900 text-xs sm:text-sm leading-relaxed flex items-start gap-3">
+                  <AlertCircle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                  <div>
+                    <p className="font-bold text-amber-950 mb-1">
+                      هشدار جهت جلوگیری از ثبت تکراری اطلاعات:
+                    </p>
+                    <p className="text-slate-700">
+                      مشخصات وارد شده (نام و نام خانوادگی، شماره تماس یا کد ملی) مشابه اشخاص زیر است. لطفاً سوابق زیر را بررسی نمایید؛ در صورت اطمینان، می‌توانید با تایید دکمه زیر نسبت به ثبت این شخص جدید اقدام فرمایید.
+                    </p>
+                  </div>
+                </div>
+
+                {/* Duplicates List */}
+                <div className="space-y-3">
+                  {duplicates.map((dupItem: any, idx: number) => {
+                    const p = dupItem.person || dupItem;
+                    const reasons = dupItem.reasons || [];
+                    const pName = p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim() || p.companyName || 'شخص بدون نام';
+                    const roleLabel = (personRoles || []).find((r: any) => r.id === p.role)?.name || (
+                      p.role === 'customer' ? 'مشتری' :
+                      p.role === 'supplier' ? 'تامین‌کننده' :
+                      p.role === 'employee' ? 'کارمند' :
+                      p.role === 'shareholder' ? 'سهامدار' : 'مشتری'
+                    );
+
+                    return (
+                      <div
+                        key={p.id || idx}
+                        className="bg-slate-50/70 border border-slate-200 rounded-2xl p-4 transition-all hover:border-amber-300 hover:shadow-sm"
+                      >
+                        <div className="flex items-start justify-between gap-3 mb-2.5">
+                          <div className="flex items-center gap-2.5 flex-wrap">
+                            <div className="w-8 h-8 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-700 font-black text-sm">
+                              {p.personType === 'legal' ? <Building className="w-4 h-4" /> : <User className="w-4 h-4" />}
+                            </div>
+                            <span className="font-black text-slate-900 text-sm sm:text-base">
+                              {pName}
+                            </span>
+                            {p.alias && p.alias !== pName && (
+                              <span className="text-xs text-slate-500 bg-white px-2 py-0.5 rounded-lg border border-slate-200">
+                                شهرت: {p.alias}
+                              </span>
+                            )}
+                            <span className="text-[11px] font-bold px-2 py-0.5 rounded-lg bg-indigo-100/70 text-indigo-800">
+                              {roleLabel}
+                            </span>
+                            {(p.personCode || p.accountingCode) && (
+                              <span className="text-[11px] font-mono font-bold px-2 py-0.5 rounded-lg bg-slate-200/80 text-slate-700">
+                                کد: {toPersianDigits(p.accountingCode || p.personCode)}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Match Reasons Badges */}
+                        <div className="flex flex-wrap gap-2 my-2.5">
+                          {reasons.map((r: any, rIdx: number) => {
+                            const isDanger = r.severity === 'danger';
+                            return (
+                              <div
+                                key={rIdx}
+                                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-xs font-bold border ${
+                                  isDanger
+                                    ? 'bg-rose-50 text-rose-700 border-rose-200'
+                                    : 'bg-amber-50 text-amber-800 border-amber-200'
+                                }`}
+                              >
+                                {r.field === 'nationalId' ? (
+                                  <ShieldAlert className="w-3.5 h-3.5 shrink-0" />
+                                ) : r.field === 'phone' ? (
+                                  <Phone className="w-3.5 h-3.5 shrink-0" />
+                                ) : (
+                                  <User className="w-3.5 h-3.5 shrink-0" />
+                                )}
+                                <span>{r.title}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+
+                        {/* Reasons Explanations */}
+                        <div className="space-y-1 mb-2 text-xs text-slate-600">
+                          {reasons.map((r: any, rIdx: number) => (
+                            <p key={rIdx} className="flex items-center gap-1.5">
+                              <span className="w-1.5 h-1.5 rounded-full bg-slate-400" />
+                              {r.description}
+                            </p>
+                          ))}
+                        </div>
+
+                        {/* Person Recorded Info Footer */}
+                        <div className="pt-2 border-t border-slate-200/70 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-slate-500 font-medium">
+                          {p.phone && (
+                            <span className="flex items-center gap-1">
+                              <Phone className="w-3.5 h-3.5 text-slate-400" />
+                              تلفن: <span className="font-mono font-bold text-slate-700">{toPersianDigits(p.phone)}</span>
+                            </span>
+                          )}
+                          {p.nationalId && (
+                            <span className="flex items-center gap-1">
+                              <CreditCard className="w-3.5 h-3.5 text-slate-400" />
+                              کد ملی: <span className="font-mono font-bold text-slate-700">{toPersianDigits(p.nationalId)}</span>
+                            </span>
+                          )}
+                          {p.address && (
+                            <span className="flex items-center gap-1 truncate max-w-xs">
+                              <MapPin className="w-3.5 h-3.5 text-slate-400" />
+                              آدرس: {p.address}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Modal Actions */}
+              <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex flex-col-reverse sm:flex-row items-center justify-between gap-3">
+                <button
+                  type="button"
+                  onClick={() => setShowDuplicatesModal(false)}
+                  className="w-full sm:w-auto px-5 py-2.5 rounded-xl border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 font-bold text-sm transition-colors flex items-center justify-center gap-2"
+                >
+                  <X className="w-4 h-4 text-slate-500" />
+                  <span>انصراف و اصلاح اطلاعات</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowDuplicatesModal(false);
+                    handleSubmitPerson();
+                  }}
+                  className="w-full sm:w-auto px-6 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white font-black text-sm transition-colors shadow-lg shadow-emerald-600/20 flex items-center justify-center gap-2"
+                >
+                  <CheckCircle2 className="w-4 h-4" />
+                  <span>تایید و ثبت شخص جدید</span>
+                </button>
+              </div>
+            </motion.div>
+          </div>
+        </AnimatePresence>,
+        document.body
+      )}
     </>
   );
 }

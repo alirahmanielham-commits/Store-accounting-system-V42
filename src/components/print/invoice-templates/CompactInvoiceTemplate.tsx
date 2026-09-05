@@ -9,7 +9,14 @@ export default function CompactInvoiceTemplate({
   printSettings = { showStoreLogo: true, showNotes: true }
 }: InvoicePrintTemplateProps) {
   const isSale = data.type === "sale" || data.type === "sale_return";
-  const title = isSale ? "فاکتور فروش" : "فاکتور خرید";
+  const isVoided = data.status === "voided" || data.isVoided === true;
+  const isDraft = data.status === "draft" || data.isDraft === true;
+  let rawTitle = isSale ? "فاکتور فروش" : "فاکتور خرید";
+  const title = isVoided
+    ? `${rawTitle} (ابطال شده)`
+    : isDraft
+      ? `${rawTitle} (پیش‌نویس)`
+      : rawTitle;
   const relatedPerson = persons.find(p => p.id === data.customerId);
   const sumTotal = data.items?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
   const totalDiscount = sumTotal - (data.totalAmount || 0);

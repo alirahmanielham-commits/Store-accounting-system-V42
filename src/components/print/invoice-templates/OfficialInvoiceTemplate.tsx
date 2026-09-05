@@ -9,7 +9,14 @@ export default function OfficialInvoiceTemplate({
   printSettings = { showStoreLogo: true, showNotes: true }
 }: InvoicePrintTemplateProps) {
   const isSale = data.type === "sale" || data.type === "sale_return";
-  const title = isSale ? "صورتحساب فروش کالا و خدمات" : "صورتحساب خرید کالا و خدمات";
+  const isVoided = data.status === "voided" || data.isVoided === true;
+  const isDraft = data.status === "draft" || data.isDraft === true;
+  let rawTitle = isSale ? "صورتحساب فروش کالا و خدمات" : "صورتحساب خرید کالا و خدمات";
+  const title = isVoided
+    ? `${rawTitle} (ابطال شده)`
+    : isDraft
+      ? `${rawTitle} (پیش‌نویس)`
+      : rawTitle;
       
   const relatedPerson = persons.find(p => p.id === data.customerId);
   const sumTotal = data.items?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
