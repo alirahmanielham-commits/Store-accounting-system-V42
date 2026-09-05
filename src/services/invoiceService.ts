@@ -718,23 +718,27 @@ export const deleteTransaction = async (id: string) => {
 
 export const getInvoices = async () => {
   const tables = ['invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes'];
+  const results = await Promise.all(
+    tables.map(t => getLocalData<any[]>(t, [], { limit: 500 }).catch(() => []))
+  );
   let allInvoices: any[] = [];
-  for (const t of tables) {
-     const data = await getLocalData<any[]>(t, [], { limit: 500 });
-     if (data) allInvoices = allInvoices.concat(data);
+  for (const data of results) {
+     if (data && Array.isArray(data)) {
+       allInvoices = allInvoices.concat(data);
+     }
   }
   
   // Deduplicate by ID
   const uniqueInv = new Map();
   allInvoices.forEach(inv => {
     if (inv && !inv.isDeleted) {
-        if (!uniqueInv.has(inv.id) || inv.updatedAt > uniqueInv.get(inv.id).updatedAt) {
+        if (!uniqueInv.has(inv.id) || (inv.updatedAt || 0) > (uniqueInv.get(inv.id).updatedAt || 0)) {
             uniqueInv.set(inv.id, inv);
         }
     }
   });
   
-  return Array.from(uniqueInv.values()).sort((a, b) => b.createdAt - a.createdAt);
+  return Array.from(uniqueInv.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 };
 
 export const addInvoice = async (invoice: any, skipRecalc: boolean = false) => {

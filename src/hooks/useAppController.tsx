@@ -3761,9 +3761,10 @@ const fetchData = async () => {
         fetchSmsMessages(),
         fetchFinancialYearInfo(),
         fetchLoansAndInstallments(),
+        fetchInvoices(),
       ]);
 
-      
+      await autoGenerateRentCommitments();
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
@@ -3777,6 +3778,12 @@ useEffect(() => {
       fetchData();
     }
   }, [user]);
+
+useEffect(() => {
+    if (activeTab && (activeTab.startsWith("list_") || activeTab.includes("invoice")) && invoices.length === 0) {
+      fetchInvoices();
+    }
+  }, [activeTab]);
 
 const handleAddItem = () => {
     setItems((prevItems) => [
