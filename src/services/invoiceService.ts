@@ -780,7 +780,7 @@ export const addInvoice = async (invoice: any, skipRecalc: boolean = false) => {
              }
          }
          if (historyItems.length > 0) {
-             await Promise.all(historyItems.map(h => appendLocalData('product_price_history', h)));
+             await batchLocalData(historyItems.map(h => ({ type: 'append', key: 'product_price_history', data: h })));
          }
          if (affectedProducts.size > 0) {
              await syncProductsLatestPrices(Array.from(affectedProducts));
@@ -871,7 +871,7 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
   }
 
   // Generate/Update price history for invoice items
-  if (newInvoice.type === 'purchase' || newInvoice.type === 'sale') {
+  if ((newInvoice.type === 'purchase' || newInvoice.type === 'sale') && updated.items && Array.isArray(updated.items) && updated.items.length > 0) {
       try {
           const oldHistories = await getLocalData<any[]>('product_price_history', []);
           const filteredHistories = oldHistories.filter(h => h.invoiceId?.toString() !== newInvoice.id?.toString());

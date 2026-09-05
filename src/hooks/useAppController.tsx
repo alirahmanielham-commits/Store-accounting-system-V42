@@ -2810,23 +2810,28 @@ description: receiptDescription,
       updateAppProcessing("مرحله ۳ از ۳: تسویه فاکتورهای مرتبط و به‌روزرسانی مانده حساب...");
 
       // Update actual invoices payment status and paid amount out of linkedInvoices
-      for (const [invId, amount] of Object.entries(receiptLinkedInvoices)) {
-        const inv = invoices.find((i) => i.id.toString() === invId);
-        if (inv && amount > 0) {
-          const originalInv = { ...inv };
-          const newPaid = (inv.paidAmount || 0) + amount;
-          const newStatus =
-            newPaid >= (inv.totalAmount || 0) ? "paid" : "partial";
-          await updateInvoice(inv.id, {
-            ...inv,
-            paidAmount: newPaid,
-            paymentStatus: newStatus,
-          });
+      const linkedEntries = Object.entries(receiptLinkedInvoices);
+      if (linkedEntries.length > 0) {
+        await Promise.all(
+          linkedEntries.map(async ([invId, amount]) => {
+            const inv = invoices.find((i) => i.id.toString() === invId);
+            if (inv && amount > 0) {
+              const originalInv = { ...inv };
+              const newPaid = (inv.paidAmount || 0) + amount;
+              const newStatus =
+                newPaid >= (inv.totalAmount || 0) ? "paid" : "partial";
+              await updateInvoice(inv.id, {
+                ...inv,
+                paidAmount: newPaid,
+                paymentStatus: newStatus,
+              }, true);
 
-          rollbackActions.push(async () => {
-            await updateInvoice(inv.id, originalInv, true);
-          });
-        }
+              rollbackActions.push(async () => {
+                await updateInvoice(inv.id, originalInv, true);
+              });
+            }
+          })
+        );
       }
 
       const typeTmp = payload.type;
@@ -2884,7 +2889,7 @@ description: receiptDescription,
       checkDebtThreshold(payload.personId).catch(console.error);
       
       updateAppProcessing("عملیات با موفقیت انجام شد...");
-      await new Promise(resolve => setTimeout(resolve, 800));
+      await new Promise(resolve => setTimeout(resolve, 20));
       
     } catch (err: any) {
       console.error("Error submitting receipt, rolling back operations...", err);
@@ -3015,10 +3020,10 @@ const handleSubmitSalary = async (e: React.FormEvent) => {
 
     setSubmittingSalary(true);
     startAppProcessing('شروع فرآیند ثبت سند حقوق و دستمزد...');
-    await new Promise(r => setTimeout(r, 300));
+    await new Promise(r => setTimeout(r, 20));
     try {
       updateAppProcessing('مرحله ۱ از ۴: محاسبه کارکرد، کسورات و مزایای کارمند...');
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 20));
 
       const p = persons.find(
         (item) => item.id.toString() === salaryPersonId.toString(),
@@ -3052,7 +3057,7 @@ const handleSubmitSalary = async (e: React.FormEvent) => {
       const payloadDescription = normalDescription;
 
       updateAppProcessing('مرحله ۲ از ۴: شماره‌گذاری خودکار و ثبت تراکنش حقوق...');
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 20));
 
       // Auto-assign receipt number for salary
       const salaryPrefix =
@@ -3109,12 +3114,12 @@ const handleSubmitSalary = async (e: React.FormEvent) => {
       payslipObj.date = payload.date;
 
       updateAppProcessing('مرحله ۳ از ۴: صدور فیش حقوقی پرسنل در سیستم...');
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 20));
       const savedPayslip = await addPayslip(payslipObj);
       setPayslips([...payslips, savedPayslip]);
 
       updateAppProcessing('مرحله ۴ از ۴: بروزرسانی کاردکس کارمند و مانده حساب...');
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 20));
 
       setSalarySuccessMsg("سند حقوق و دستمزد با موفقیت صادر شد.");
       setSalaryBaseAmount("");
@@ -4669,7 +4674,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
       }
       
       updateAppProcessing('تمامی ۷ گیت اعتبارسنجی تایید شدند. شروع تراکنش (BEGIN TRANSACTION)...');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 20));
     }
 
     // ---- Purchase Return Validation Gates (Partial) ----
@@ -4692,7 +4697,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
     // ---- Purchase Invoice Validation Gates ----
     if (!isDraft && actualType === "purchase") {
       updateAppProcessing('بررسی گیت‌های ۵ گانه اعتبارسنجی فاکتور خرید...');
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 20));
       const validationErrors: string[] = [];
 
       // 1. فعال و معتبر بودن تامین کننده
@@ -4856,7 +4861,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
         };
 
     updateAppProcessing('اعتبارسنجی موجودی و انبار...');
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 20));
     // 1. If it's a sale and not a draft, perform the Sales Warehouse check and identify shortages
     if (payload.type === "sale" && !isDraft) {
       const shortages: any[] = [];
@@ -5274,8 +5279,10 @@ const getInvoiceNumber = (typeOverride?: string) => {
         updateAppProcessing("مرحله ۳ از ۴: محاسبه کاردکس کالا و به‌روزرسانی انبارها...");
       }
       await new Promise(r => setTimeout(r, 20));
-      await recalculateAllWarehouseStocks();
-      await fetchWarehouses();
+      if (!isDraft && payload.type !== "proforma") {
+        await recalculateAllWarehouseStocks();
+        await fetchWarehouses();
+      }
 
       if (payload.type === "sale") {
         updateAppProcessing("مرحله ۷ از ۷: تثبیت نهایی و تغییر وضعیت فاکتور (COMMIT)...");
@@ -5420,7 +5427,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
     } catch (error: any) {
       console.error("Error submitting invoice, rolling back operations...", error);
       updateAppProcessing('خطا رخ داد! در حال بازگردانی (Rollback)...');
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 20));
       for (let i = rollbackActions.length - 1; i >= 0; i--) {
         try {
           await rollbackActions[i]();
@@ -5550,12 +5557,12 @@ const handleExecuteTransferAndSubmit = async () => {
             totalAmount: 0,
           };
 
-          const addedRem = await addInvoice(remittancePayload as any);
+          const addedRem = await addInvoice(remittancePayload as any, true);
           rollbackActions.push(async () => {
             if (addedRem?.id) await deleteInvoice(addedRem.id.toString(), true, true);
           });
 
-          const addedRec = await addInvoice(receiptPayload as any);
+          const addedRec = await addInvoice(receiptPayload as any, true);
           rollbackActions.push(async () => {
             if (addedRec?.id) await deleteInvoice(addedRec.id.toString(), true, true);
           });
