@@ -177,21 +177,27 @@ router.post('/api/data/:key/append', async (req, res) => {
          }
       }
 
-      // Log creation
-      const sysLogs = (await getDbData('system_logs')) || [];
-      const timestamp = Date.now();
-      sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'CREATE', userId: 'system', details: 'ایجاد رکورد جدید', entityType: key, entityId: newItem.id, changes: JSON.stringify(newItem), timestamp });
-      if (isPgActive() && getActivePgPool()) {
-         const log = sysLogs[sysLogs.length - 1];
-         await syncTableSchema(getActivePgPool(), 'system_logs', log);
-         const keys = Object.keys(log);
-         const vals = Object.values(log).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
-         const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-         const colNames = keys.map(k => `"${k}"`).join(', ');
-         await getActivePgPool().query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
-      } else {
-         await setDbData('system_logs', sysLogs);
-      }
+      // Log creation in background to avoid delaying client response
+      (async () => {
+        try {
+          const sysLogs = (await getDbData('system_logs')) || [];
+          const timestamp = Date.now();
+          sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'CREATE', userId: 'system', details: 'ایجاد رکورد جدید', entityType: key, entityId: newItem.id, changes: JSON.stringify(newItem), timestamp });
+          if (isPgActive() && getActivePgPool()) {
+             const log = sysLogs[sysLogs.length - 1];
+             await syncTableSchema(getActivePgPool(), 'system_logs', log);
+             const keys = Object.keys(log);
+             const vals = Object.values(log).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+             const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+             const colNames = keys.map(k => `"${k}"`).join(', ');
+             await getActivePgPool().query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
+          } else {
+             await setDbData('system_logs', sysLogs);
+          }
+        } catch (logErr) {
+          console.error('Error writing system_logs on create:', logErr);
+        }
+      })();
 
       res.json({ success: true, data: newItem });
     } catch(err: any) {
@@ -336,21 +342,27 @@ router.put('/api/data/:key/:id', async (req, res) => {
          }
       }
 
-      // Log update
-      const sysLogs = (await getDbData('system_logs')) || [];
-      const timestamp = Date.now();
-      sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'UPDATE', userId: 'system', details: 'ویرایش رکورد', entityType: key, entityId: id, changes: JSON.stringify(updatedItem), timestamp });
-      if (isPgActive() && getActivePgPool()) {
-         const log = sysLogs[sysLogs.length - 1];
-         await syncTableSchema(getActivePgPool(), 'system_logs', log);
-         const keys = Object.keys(log);
-         const vals = Object.values(log).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
-         const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-         const colNames = keys.map(k => `"${k}"`).join(', ');
-         await getActivePgPool().query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
-      } else {
-         await setDbData('system_logs', sysLogs);
-      }
+      // Log update in background to avoid delaying client response
+      (async () => {
+        try {
+          const sysLogs = (await getDbData('system_logs')) || [];
+          const timestamp = Date.now();
+          sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'UPDATE', userId: 'system', details: 'ویرایش رکورد', entityType: key, entityId: id, changes: JSON.stringify(updatedItem), timestamp });
+          if (isPgActive() && getActivePgPool()) {
+             const log = sysLogs[sysLogs.length - 1];
+             await syncTableSchema(getActivePgPool(), 'system_logs', log);
+             const keys = Object.keys(log);
+             const vals = Object.values(log).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+             const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+             const colNames = keys.map(k => `"${k}"`).join(', ');
+             await getActivePgPool().query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
+          } else {
+             await setDbData('system_logs', sysLogs);
+          }
+        } catch (logErr) {
+          console.error('Error writing system_logs on update:', logErr);
+        }
+      })();
 
       res.json({ success: true, data: mergedItem });
     } catch(err: any) {

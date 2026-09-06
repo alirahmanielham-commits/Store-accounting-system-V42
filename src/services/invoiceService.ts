@@ -741,7 +741,85 @@ export const getInvoices = async () => {
   return Array.from(uniqueInv.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 };
 
-export const addInvoice = async (invoice: any, skipRecalc: boolean = false) => {
+export const syncInvoiceAccountingDocument = async (invoice: any) => {
+  if (!invoice) return;
+  const isDraftOrVoided = invoice.isDraft || invoice.status === 'draft' || invoice.status === 'voided' || invoice.type === 'proforma' || invoice.type?.startsWith('warehouse_');
+  const docType = invoice.type;
+  const title = docType === 'sale' ? 'فاکتور فروش' : docType === 'purchase' ? 'فاکتور خرید' : docType === 'sale_return' ? 'برگشت از فروش' : docType === 'purchase_return' ? 'برگشت از خرید' : 'فاکتور';
+
+  try {
+     const accountingDocs = await getAccountingDocuments();
+     const existingDoc = accountingDocs.find((d: any) => 
+       (d.sourceType === 'invoice_sale' || d.sourceType === 'invoice_purchase' || d.sourceType === 'invoice_sale_return' || d.sourceType === 'invoice_purchase_return') && 
+       (String(d.sourceId) === String(invoice.id) || String(d.sourceId) === String(invoice.invoiceNumber))
+     );
+
+     if (isDraftOrVoided) {
+        if (existingDoc) {
+           await deleteAccountingDocument(existingDoc.id);
+        }
+        return;
+     }
+
+     const ledgerAccounts = await getLedgerAccounts();
+     const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
+     const total = Number(invoice.totalAmount) || 0;
+
+     // Find Customer/Supplier/Person Ledger Account
+     let personLedgerId = defaultLedger;
+     if (invoice.customerId) {
+        const persons = await getLocalData<any[]>('persons', []);
+        const person = persons.find(p => String(p.id) === String(invoice.customerId));
+        if (person && person.accountingCode) {
+           const acc = ledgerAccounts.find(a => a.code === person.accountingCode);
+           if (acc) personLedgerId = acc.id;
+        }
+     }
+
+     // Find Sales Revenue ('41') Ledger Account
+     let salesLedgerId = defaultLedger;
+     const salesAcc = ledgerAccounts.find(a => a.code === '41');
+     if (salesAcc) salesLedgerId = salesAcc.id;
+
+     // Find Inventory ('13') Ledger Account
+     let inventoryLedgerId = defaultLedger;
+     const inventoryAcc = ledgerAccounts.find(a => a.code === '13');
+     if (inventoryAcc) inventoryLedgerId = inventoryAcc.id;
+
+     const items = [];
+     if (docType === 'sale' || docType === 'purchase_return') {
+        items.push({ description: 'شخص', debit: total, credit: 0, ledgerAccountId: personLedgerId, detailedAccountId: invoice.customerId});
+        items.push({ description: 'درآمد/فروش', debit: 0, credit: total, ledgerAccountId: salesLedgerId});
+     } else if (docType === 'purchase' || docType === 'sale_return') {
+        items.push({ description: 'موجودی کالا', debit: total, credit: 0, ledgerAccountId: inventoryLedgerId});
+        items.push({ description: 'شخص', debit: 0, credit: total, ledgerAccountId: personLedgerId, detailedAccountId: invoice.customerId});
+     }
+
+     if (existingDoc) {
+        await updateAccountingDocument(existingDoc.id, {
+           ...existingDoc,
+           date: invoice.date || existingDoc.date || new Date().toISOString().split('T')[0],
+           description: `${title} شماره ${invoice.invoiceNumber || invoice.id}`,
+           isDeleted: false,
+           status: 'approved',
+           items
+        });
+     } else if (items.length > 0) {
+        await addAccountingDocument({
+           date: invoice.date || new Date().toISOString().split('T')[0],
+           description: `${title} شماره ${invoice.invoiceNumber || invoice.id}`,
+           status: 'approved',
+           sourceType: docType === 'sale' ? 'invoice_sale' : docType === 'purchase' ? 'invoice_purchase' : docType === 'sale_return' ? 'invoice_sale_return' : 'invoice_purchase_return',
+           sourceId: invoice.id,
+           items
+        });
+     }
+  } catch (e) {
+     console.error("Failed to sync accounting document for invoice:", e);
+  }
+};
+
+export const addInvoice = async (invoice: any, skipRecalc: boolean = false, skipAccounting: boolean = false) => {
   let activeYear = null;
   if (invoice.date) activeYear = await checkFinancialYear(invoice.date);
   const now = Date.now();
@@ -809,63 +887,14 @@ export const addInvoice = async (invoice: any, skipRecalc: boolean = false) => {
     return newInvoice;
   }
 
-  try {
-     const docType = newInvoice.type;
-     let title = 'فاکتور';
-     if (docType === 'sale') title = 'فاکتور فروش';
-     if (docType === 'purchase') title = 'فاکتور خرید';
-     if (docType === 'sale_return') title = 'برگشت از فروش';
-     if (docType === 'purchase_return') title = 'برگشت از خرید';
-     
-     const items = [];
-     const ledgerAccounts = await getLedgerAccounts();
-     const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
-     const total = Number(newInvoice.totalAmount) || 0;
-
-     // Find Customer/Supplier/Person Ledger Account
-     let personLedgerId = defaultLedger;
-     if (newInvoice.customerId) {
-        const persons = await getLocalData<any[]>('persons', []);
-        const person = persons.find(p => String(p.id) === String(newInvoice.customerId));
-        if (person && person.accountingCode) {
-           const acc = ledgerAccounts.find(a => a.code === person.accountingCode);
-           if (acc) personLedgerId = acc.id;
-        }
-     }
-
-     // Find Sales Revenue ('41') Ledger Account
-     let salesLedgerId = defaultLedger;
-     const salesAcc = ledgerAccounts.find(a => a.code === '41');
-     if (salesAcc) salesLedgerId = salesAcc.id;
-
-     // Find Inventory ('13') Ledger Account
-     let inventoryLedgerId = defaultLedger;
-     const inventoryAcc = ledgerAccounts.find(a => a.code === '13');
-     if (inventoryAcc) inventoryLedgerId = inventoryAcc.id;
-     
-     if (docType === 'sale' || docType === 'purchase_return') {
-        items.push({ description: 'شخص', debit: total, credit: 0, ledgerAccountId: personLedgerId, detailedAccountId: newInvoice.customerId});
-        items.push({ description: 'درآمد/فروش', debit: 0, credit: total, ledgerAccountId: salesLedgerId});
-     } else if (docType === 'purchase' || docType === 'sale_return') {
-        items.push({ description: 'موجودی کالا', debit: total, credit: 0, ledgerAccountId: inventoryLedgerId});
-        items.push({ description: 'شخص', debit: 0, credit: total, ledgerAccountId: personLedgerId, detailedAccountId: newInvoice.customerId});
-     }
-     
-     if (items.length > 0) {
-       await addAccountingDocument({
-          date: newInvoice.date || new Date().toISOString().split('T')[0],
-          description: `${title} شماره ${newInvoice.invoiceNumber || newInvoice.id}`,
-          status: 'approved',
-          sourceType: docType === 'sale' ? 'invoice_sale' : docType === 'purchase' ? 'invoice_purchase' : docType === 'sale_return' ? 'invoice_sale_return' : 'invoice_purchase_return',
-          sourceId: newInvoice.id,
-          items});
-     }
-  } catch(e) {}
+  if (!skipAccounting) {
+    syncInvoiceAccountingDocument(newInvoice).catch(console.error);
+  }
 
   return newInvoice;
 };
 
-export const updateInvoice = async (id: string | number, updated: any, skipRecalc: boolean = false) => {
+export const updateInvoice = async (id: string | number, updated: any, skipRecalc: boolean = false, skipAccounting: boolean = false) => {
   let activeYear = null;
   if (updated.date) activeYear = await checkFinancialYear(updated.date);
   
@@ -882,113 +911,44 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
     await addSystemLog('UPDATE_' + 'Invoice'.toUpperCase(), 'ویرایش رکورد در invoices', 'Invoice', newInvoice.id);
   }
 
-  // Generate/Update price history for invoice items
+  // Generate/Update price history for invoice items in background
   if ((newInvoice.type === 'purchase' || newInvoice.type === 'sale') && updated.items && Array.isArray(updated.items) && updated.items.length > 0) {
-      try {
-          const oldHistories = await getLocalData<any[]>('product_price_history', []);
-          const filteredHistories = oldHistories.filter(h => h.invoiceId?.toString() !== newInvoice.id?.toString());
-          
-          const affectedProducts = new Set<string>();
-          if (newInvoice.items && Array.isArray(newInvoice.items)) {
-              for (const item of newInvoice.items) {
-                  if (item.productId && Number(item.unitPrice) > 0) {
-                      filteredHistories.push({
-                          id: generateId(),
-                          productId: item.productId,
-                          date: newInvoice.date || new Date().toISOString().split('T')[0],
-                          type: newInvoice.type,
-                          price: Number(item.unitPrice),
-                          invoiceId: newInvoice.id,
-                          quantity: Number(item.quantity) || 0,
-                          invoiceItemId: item.id || generateId()
-                      });
-                      affectedProducts.add(String(item.productId));
+      (async () => {
+          try {
+              const oldHistories = await getLocalData<any[]>('product_price_history', []);
+              const filteredHistories = oldHistories.filter(h => h.invoiceId?.toString() !== newInvoice.id?.toString());
+              
+              const affectedProducts = new Set<string>();
+              if (newInvoice.items && Array.isArray(newInvoice.items)) {
+                  for (const item of newInvoice.items) {
+                      if (item.productId && Number(item.unitPrice) > 0) {
+                          filteredHistories.push({
+                              id: generateId(),
+                              productId: item.productId,
+                              date: newInvoice.date || new Date().toISOString().split('T')[0],
+                              type: newInvoice.type,
+                              price: Number(item.unitPrice),
+                              invoiceId: newInvoice.id,
+                              quantity: Number(item.quantity) || 0,
+                              invoiceItemId: item.id || generateId()
+                          });
+                          affectedProducts.add(String(item.productId));
+                      }
                   }
               }
+              await saveLocalData('product_price_history', filteredHistories);
+              if (affectedProducts.size > 0) {
+                  await syncProductsLatestPrices(Array.from(affectedProducts));
+              }
+          } catch (e) {
+              console.error('Error updating price history:', e);
           }
-          await saveLocalData('product_price_history', filteredHistories);
-          if (affectedProducts.size > 0) {
-              await syncProductsLatestPrices(Array.from(affectedProducts));
-          }
-      } catch (e) {
-          console.error(e);
-      }
+      })();
   }
 
   // Auto-update or create corresponding accounting document
-  try {
-     const docType = newInvoice.type;
-     const title = docType === 'sale' ? 'فاکتور فروش' : docType === 'purchase' ? 'فاکتور خرید' : docType === 'sale_return' ? 'برگشت از فروش' : docType === 'purchase_return' ? 'برگشت از خرید' : 'فاکتور';
-     
-     const accountingDocs = await getAccountingDocuments();
-     const existingDoc = accountingDocs.find((d: any) => 
-       (d.sourceType === 'invoice_sale' || d.sourceType === 'invoice_purchase' || d.sourceType === 'invoice_sale_return' || d.sourceType === 'invoice_purchase_return') && 
-       (String(d.sourceId) === String(id) || String(d.sourceId) === String(newInvoice.id) || String(d.sourceId) === String(newInvoice.invoiceNumber))
-     );
-     
-     const isDraftOrVoided = newInvoice.isDraft || newInvoice.status === 'draft' || newInvoice.status === 'voided' || newInvoice.type === 'proforma' || newInvoice.type?.startsWith('warehouse_');
-
-     if (isDraftOrVoided) {
-        if (existingDoc) {
-           await deleteAccountingDocument(existingDoc.id);
-        }
-     } else {
-        const ledgerAccounts = await getLedgerAccounts();
-        const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
-        const total = Number(newInvoice.totalAmount) || 0;
-
-        // Find Customer/Supplier/Person Ledger Account
-        let personLedgerId = defaultLedger;
-        if (newInvoice.customerId) {
-           const persons = await getLocalData<any[]>('persons', []);
-           const person = persons.find(p => String(p.id) === String(newInvoice.customerId));
-           if (person && person.accountingCode) {
-              const acc = ledgerAccounts.find(a => a.code === person.accountingCode);
-              if (acc) personLedgerId = acc.id;
-           }
-        }
-
-        // Find Sales Revenue ('41') Ledger Account
-        let salesLedgerId = defaultLedger;
-        const salesAcc = ledgerAccounts.find(a => a.code === '41');
-        if (salesAcc) salesLedgerId = salesAcc.id;
-
-        // Find Inventory ('13') Ledger Account
-        let inventoryLedgerId = defaultLedger;
-        const inventoryAcc = ledgerAccounts.find(a => a.code === '13');
-        if (inventoryAcc) inventoryLedgerId = inventoryAcc.id;
-
-        const items = [];
-        if (docType === 'sale' || docType === 'purchase_return') {
-           items.push({ description: 'شخص', debit: total, credit: 0, ledgerAccountId: personLedgerId, detailedAccountId: newInvoice.customerId});
-           items.push({ description: 'درآمد/فروش', debit: 0, credit: total, ledgerAccountId: salesLedgerId});
-        } else if (docType === 'purchase' || docType === 'sale_return') {
-           items.push({ description: 'موجودی کالا', debit: total, credit: 0, ledgerAccountId: inventoryLedgerId});
-           items.push({ description: 'شخص', debit: 0, credit: total, ledgerAccountId: personLedgerId, detailedAccountId: newInvoice.customerId});
-        }
-
-        if (existingDoc) {
-           await updateAccountingDocument(existingDoc.id, {
-              ...existingDoc,
-              date: newInvoice.date || existingDoc.date || new Date().toISOString().split('T')[0],
-              description: `${title} شماره ${newInvoice.invoiceNumber || newInvoice.id}`,
-              isDeleted: false,
-              status: 'approved',
-              items
-           });
-        } else if (items.length > 0) {
-           await addAccountingDocument({
-              date: newInvoice.date || new Date().toISOString().split('T')[0],
-              description: `${title} شماره ${newInvoice.invoiceNumber || newInvoice.id}`,
-              status: 'approved',
-              sourceType: docType === 'sale' ? 'invoice_sale' : docType === 'purchase' ? 'invoice_purchase' : docType === 'sale_return' ? 'invoice_sale_return' : 'invoice_purchase_return',
-              sourceId: newInvoice.id,
-              items
-           });
-        }
-     }
-  } catch (e) {
-     console.error("Failed to update auto accounting doc for invoice:", e);
+  if (!skipAccounting) {
+    syncInvoiceAccountingDocument(newInvoice).catch(console.error);
   }
 
   // Update auto-generated warehouse documents
@@ -1098,6 +1058,17 @@ export const deleteInvoice = async (id: string, forceDelete: boolean = false, sk
 
     const operations: any[] = [];
     
+    // Fast path for draft invoices: they do not affect price history, accounting, or payments
+    if (invoiceToDelete.status === 'draft' || invoiceToDelete.isDraft) {
+      toDeleteIds.forEach(delId => {
+        operations.push({ type: 'delete', key: mapInvoiceTypeToTable(invoiceToDelete.type), id: delId });
+      });
+      if (operations.length > 0) {
+        await batchLocalData(operations);
+      }
+      return;
+    }
+
     // Soft delete
     invoices.forEach(inv => {
       if (toDeleteIds.has(inv.id) || toDeleteIds.has(String(inv.id))) {

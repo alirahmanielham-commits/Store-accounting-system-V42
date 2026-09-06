@@ -13,13 +13,24 @@ import { CompanySettings } from '../types';
 
 const cache: Record<string, { data: any, timestamp: number }> = {};
 
-const CACHE_DURATION = 0;
+const CACHE_DURATION = 5000;
 
-const CACHEABLE_KEYS = ['company_profile', 'warehouses', 'financial_years', 'product_categories', 'person_groups'];
+const CACHEABLE_KEYS = [
+  'company_profile',
+  'settings',
+  'warehouses',
+  'financial_years',
+  'product_categories',
+  'person_groups',
+  'ledger_accounts',
+  'doc_counters'
+];
 
-const invalidateCache = (key: string) => {
-  if (cache[key]) {
+export const invalidateCache = (key?: string) => {
+  if (key) {
     delete cache[key];
+  } else {
+    Object.keys(cache).forEach(k => delete cache[k]);
   }
 };
 
