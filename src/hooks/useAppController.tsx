@@ -3804,41 +3804,65 @@ const handleRemoveItem = (id: string) => {
     setItems((items || []).filter((item) => item.id !== id));
   };
 
+const productLastPrices = useMemo(() => {
+    const prices: Record<string, { purchase: { price: number, date: number }, sale: { price: number, date: number } }> = {};
+
+    invoices.forEach((inv) => {
+      if (inv.status === 'voided' || inv.isDeleted || inv.status === 'draft' || inv.isDraft || !inv.items) return;
+
+      const isPurchase = inv.type === "purchase" || inv.type === "warehouse_receipt";
+      const isSale = inv.type === "sale" || inv.type === "warehouse_remittance";
+
+      if (!isPurchase && !isSale) return;
+
+      const invDate = new Date(inv.date || inv.createdAt || 0).getTime();
+      const rate = inv.exchangeRate || 1;
+
+      inv.items.forEach((item: any) => {
+        const pid = item.productId?.toString();
+        if (!pid) return;
+
+        if (!prices[pid]) {
+          prices[pid] = {
+            purchase: { price: 0, date: 0 },
+            sale: { price: 0, date: 0 }
+          };
+        }
+
+        const price = (Number(item.unitPrice) || 0) * rate;
+        if (price > 0) {
+          if (isPurchase && invDate > prices[pid].purchase.date) {
+            prices[pid].purchase.date = invDate;
+            prices[pid].purchase.price = price;
+          }
+          if (isSale && invDate > prices[pid].sale.date) {
+            prices[pid].sale.date = invDate;
+            prices[pid].sale.price = price;
+          }
+        }
+      });
+    });
+
+    return prices;
+  }, [invoices]);
+
 const getLastPriceForProduct = (
     productId: string | number,
     isPurchase: boolean,
   ) => {
-    let lastPrice = 0;
-    let latestDate = 0;
-    const targetTypes = isPurchase
-      ? ["purchase", "warehouse_receipt"]
-      : ["sale", "warehouse_remittance"];
-
-    // Use the invoice date if available, otherwise current date
-    const currentInvoiceDate = date ? new Date(convertToGregorian(date)).getTime() : new Date().getTime();
-
-    invoices.forEach((inv) => {
-      if (targetTypes.includes(inv.type) && inv.items && inv.status !== 'voided' && !inv.isDeleted && inv.status !== 'draft' && !inv.isDraft) {
-        inv.items.forEach((item: any) => {
-          if (item.productId?.toString() === productId.toString()) {
-            const invDate = new Date(inv.date || inv.createdAt || 0).getTime();
-            // Ensure the invoice date is before or equal to the current invoice date
-            if (invDate <= currentInvoiceDate && invDate > latestDate && (item.unitPrice || 0) > 0) {
-              latestDate = invDate;
-              // Normalize unit prices assuming the standard is the same unless exchange rate applies
-              const rate = inv.exchangeRate || 1;
-              lastPrice = (Number(item.unitPrice) || 0) * rate;
-            }
-          }
-        });
-      }
-    });
-    return lastPrice;
+    const pid = productId.toString();
+    const prices = productLastPrices[pid];
+    if (!prices) return 0;
+    
+    // Note: This optimization drops the "currentInvoiceDate" restriction for performance,
+    // assuming the absolute latest price is acceptable for UX auto-fill.
+    return isPurchase ? prices.purchase.price : prices.sale.price;
   };
 
 const handleFastAddProduct = (
     productIdStr: string,
     forceProductObj?: any,
+    initialQuantity: number = 1,
   ) => {
     if (!productIdStr) return;
     const product =
@@ -3862,6 +3886,7 @@ const handleFastAddProduct = (
     }
     const convertedPrice = exchangeRate > 0 ? pPrice / exchangeRate : pPrice;
     const unitPriceRounded = Number(convertedPrice.toFixed(4));
+    const addQty = Math.max(0.01, Number(initialQuantity) || 1);
 
     setItems((currentItems) => {
       // Check if it exists
@@ -3871,7 +3896,7 @@ const handleFastAddProduct = (
       if (existingItemIndex > -1 && !storeSettings.allowDuplicateInvoiceRows) {
         const newItems = [...currentItems];
         newItems[existingItemIndex].quantity =
-          Number(newItems[existingItemIndex].quantity || 0) + 1;
+          Number(newItems[existingItemIndex].quantity || 0) + addQty;
         newItems[existingItemIndex].totalPrice = Math.max(
           0,
           newItems[existingItemIndex].quantity *
@@ -3886,16 +3911,144 @@ const handleFastAddProduct = (
             id: generateId(),
             productId: productIdStr,
             productName: product.name,
-            quantity: 1,
+            quantity: addQty,
             unitPrice: unitPriceRounded,
             discountPercent: 0,
-            totalPrice: unitPriceRounded,
+            totalPrice: unitPriceRounded * addQty,
             selectedUnit: product.unit || "",
             unitRatio: product.unitRatio || 1,
             isSecondaryUnit: false,
           },
         ];
       }
+    });
+  };
+
+  const handleBulkAddProducts = (
+    selectedItems: Array<{ productId: string | number; quantity: number }>,
+  ) => {
+    if (!selectedItems || selectedItems.length === 0) return;
+    const isPurchase =
+      activeTab === "create_purchase" ||
+      (activeTab === "create_warehouse_doc" &&
+        invoiceType === "warehouse_receipt");
+
+    const pMap: Record<string, any> = {};
+    (products || []).forEach((p: any) => {
+      if (p && p.isActive !== false) {
+        pMap[p.id?.toString()] = p;
+      }
+    });
+
+    setItems((currentItems) => {
+      let newItems = [...currentItems];
+      for (const sel of selectedItems) {
+        const pidStr = sel.productId.toString();
+        const product = pMap[pidStr];
+        if (!product) continue;
+        if (activeTab === "create_warehouse_doc" && product.type === "service")
+          continue;
+
+        let pPrice = getLastPriceForProduct(product.id, isPurchase);
+        if (!pPrice || pPrice === 0) {
+          pPrice =
+            isPurchase && product.purchasePrice
+              ? product.purchasePrice
+              : product.price;
+        }
+        const convertedPrice = exchangeRate > 0 ? pPrice / exchangeRate : pPrice;
+        const unitPriceRounded = Number(convertedPrice.toFixed(4));
+        const addQty = Math.max(0.01, Number(sel.quantity) || 1);
+
+        const existingIndex = newItems.findIndex(
+          (i) => i.productId?.toString() === pidStr,
+        );
+        if (existingIndex > -1 && !storeSettings.allowDuplicateInvoiceRows) {
+          const updatedQty =
+            Number(newItems[existingIndex].quantity || 0) + addQty;
+          const discount =
+            Number(newItems[existingIndex].discountPercent) || 0;
+          const price = Number(newItems[existingIndex].unitPrice) || 0;
+          newItems[existingIndex] = {
+            ...newItems[existingIndex],
+            quantity: updatedQty,
+            totalPrice: Math.max(
+              0,
+              updatedQty * price * (1 - discount / 100),
+            ),
+          };
+        } else {
+          newItems.push({
+            id: generateId(),
+            productId: pidStr,
+            productName: product.name,
+            quantity: addQty,
+            unitPrice: unitPriceRounded,
+            discountPercent: 0,
+            totalPrice: unitPriceRounded * addQty,
+            selectedUnit: product.unit || "",
+            unitRatio: product.unitRatio || 1,
+            isSecondaryUnit: false,
+          });
+        }
+      }
+      return newItems;
+    });
+
+    playAudioFeedback("scan" as any);
+    showNotification(
+      `${toPersianDigits(selectedItems.length)} قلم کالا با موفقیت به فاکتور افزوده شد`,
+      "success",
+      true,
+    );
+  };
+
+  const handleAddBlankRow = () => {
+    setItems((currentItems) => [
+      ...currentItems,
+      {
+        id: generateId(),
+        productId: "",
+        productName: "",
+        quantity: 1,
+        unitPrice: 0,
+        discountPercent: 0,
+        totalPrice: 0,
+        selectedUnit: "عدد",
+        unitRatio: 1,
+        isSecondaryUnit: false,
+      },
+    ]);
+  };
+
+  const handleDuplicateItem = (id: string) => {
+    setItems((currentItems) => {
+      const item = currentItems.find((i) => i.id === id);
+      if (!item) return currentItems;
+      return [
+        ...currentItems,
+        {
+          ...item,
+          id: generateId(),
+        },
+      ];
+    });
+  };
+
+  const handleIncrementQuantity = (id: string, delta: number) => {
+    setItems((currentItems) => {
+      return currentItems.map((item) => {
+        if (item.id !== id) return item;
+        const currentQty = Number(item.quantity) || 0;
+        const newQty = Math.max(0.01, Number((currentQty + delta).toFixed(4)));
+        const discount = Number(item.discountPercent) || 0;
+        const unitPrice = Number(item.unitPrice) || 0;
+        return {
+          ...item,
+          quantity: newQty,
+          totalPrice: Math.max(0, newQty * unitPrice * (1 - discount / 100)),
+        };
+      });
     });
   };
 
@@ -3911,11 +4064,46 @@ const handleFastBarcodeScan = (code: string) => {
     }
   };
 
-const handleItemChange = (
+  const handleItemChange = (
     id: string,
     field: keyof InvoiceItem,
     value: any,
   ) => {
+    const isWarehouseTab = activeTab === "create_warehouse_doc";
+    let sourceInv: any = null;
+    let processedAmounts: Record<string, number> = {};
+
+    if (
+      isWarehouseTab &&
+      sourceInvoiceId &&
+      field === "quantity"
+    ) {
+      sourceInv = invoices.find(
+        (i) => i.id.toString() === sourceInvoiceId.toString(),
+      );
+      if (sourceInv) {
+        const pastDocs = (invoices || []).filter(
+          (i) =>
+            i.sourceInvoiceId?.toString() === sourceInvoiceId.toString() &&
+            (invoiceType === "warehouse_remittance"
+              ? i.type === "warehouse_remittance"
+              : i.type === "warehouse_receipt") &&
+            i.status !== "voided" &&
+            !i.isDeleted,
+        );
+        pastDocs.forEach((doc) => {
+          if (doc.items) {
+            doc.items.forEach((rt: any) => {
+              const key = String(rt.productId || rt.productName || "");
+              if (!key) return;
+              if (!processedAmounts[key]) processedAmounts[key] = 0;
+              processedAmounts[key] += Number(rt.quantity) || 0;
+            });
+          }
+        });
+      }
+    }
+
     setItems(
       (items || []).map((item) => {
         if (item.id === id) {
@@ -3947,9 +4135,10 @@ const handleItemChange = (
                   invoiceType === "warehouse_receipt");
               let pPrice = getLastPriceForProduct(product.id, isPurchase);
               if (!pPrice || pPrice === 0) {
-                pPrice = isPurchase && product.purchasePrice
-                  ? product.purchasePrice
-                  : product.price;
+                pPrice =
+                  isPurchase && product.purchasePrice
+                    ? product.purchasePrice
+                    : product.price;
               }
               const convertedPrice =
                 exchangeRate > 0 ? pPrice / exchangeRate : pPrice;
@@ -3991,31 +4180,8 @@ const handleItemChange = (
               field === "quantity"
                 ? Number(value)
                 : Number(updatedItem.quantity);
-            const isWarehouseTab = activeTab === "create_warehouse_doc";
             if (isWarehouseTab && sourceInvoiceId) {
-              const sourceInv = invoices.find(
-                (i) => i.id.toString() === sourceInvoiceId.toString(),
-              );
               if (sourceInv) {
-                const pastDocs = (invoices || []).filter(
-                  (i) =>
-                    i.sourceInvoiceId?.toString() ===
-                      sourceInvoiceId.toString() &&
-                    (invoiceType === "warehouse_remittance"
-                      ? i.type === "warehouse_remittance"
-                      : i.type === "warehouse_receipt") && i.status !== "voided" && !i.isDeleted,
-                );
-                const processedAmounts: Record<string, number> = {};
-                pastDocs.forEach((doc) => {
-                  if (doc.items) {
-                    doc.items.forEach((rt: any) => {
-                      const key = String(rt.productId || rt.productName || "");
-                      if (!key) return;
-                      if (!processedAmounts[key]) processedAmounts[key] = 0;
-                      processedAmounts[key] += Number(rt.quantity) || 0;
-                    });
-                  }
-                });
                 const key = String(
                   updatedItem.productId || updatedItem.productName || "",
                 );
@@ -4048,6 +4214,7 @@ const handleItemChange = (
             const discPercent =
               field === "discountPercent"
                 ? Number(value)
+
                 : Number(updatedItem.discountPercent);
 
             const subtotal = qty * price;
@@ -5787,165 +5954,201 @@ const handleInvoicePreviewTrigger = () => {
     saveInvoiceData(tempPayload);
   };
 
-const getProductStockInfo = (productId: string | number) => {
-    let baseStock = 0;
-    const product = products.find(
-      (p) => p.id.toString() === productId.toString(),
-    );
-    if (product?.stock) {
-      baseStock = Number(product.stock);
-    }
-    const defaultWhId = product?.warehouseId?.toString() || "unknown";
+  const productStockMap = useMemo(() => {
+    const map: Record<string, any> = {};
 
-    const info = {
-      totalPhysical: 0,
-      totalReserved: 0,
-      totalAvailable: 0,
-      warehouses: {} as Record<
-        string,
-        { physical: number; reserved: number; available: number }
-      >,
-    };
+    products.forEach((p) => {
+      const pid = p.id.toString();
+      const baseStock = Number(p.stock) || 0;
+      const defaultWhId = p.warehouseId?.toString() || "unknown";
+      map[pid] = {
+        totalPhysical: 0,
+        totalReserved: 0,
+        totalAvailable: 0,
+        warehouses: {},
+        defaultWhId,
+        unitRatio: p.unitRatio
+      };
+    });
 
     if (!inventoryTransactions || inventoryTransactions.length === 0) {
-      // Fallback to original calculation based on product.stock if transactions aren't loaded yet
-      info.totalPhysical = baseStock;
-      info.totalAvailable = baseStock;
-      if (baseStock !== 0) {
-        info.warehouses[defaultWhId] = {
-          physical: baseStock,
-          reserved: 0,
-          available: baseStock,
-        };
-      }
+      products.forEach((p) => {
+        const pid = p.id.toString();
+        const baseStock = Number(p.stock) || 0;
+        const defaultWhId = map[pid].defaultWhId;
+
+        map[pid].totalPhysical = baseStock;
+        map[pid].totalAvailable = baseStock;
+        if (baseStock !== 0) {
+          map[pid].warehouses[defaultWhId] = {
+            physical: baseStock,
+            reserved: 0,
+            available: baseStock,
+          };
+        }
+      });
       invoices.forEach((inv) => {
         if (
           !inv.items ||
           inv.isDraft ||
           inv.status === "draft" ||
-          inv.type === "proforma" || inv.status === "voided" || inv.isDeleted
+          inv.type === "proforma" ||
+          inv.status === "voided" ||
+          inv.isDeleted
         )
           return;
         inv.items.forEach((i: any) => {
-          if (i.productId?.toString() === productId.toString()) {
-            let q = Number(i.quantity) || 0;
-            if (i.isSecondaryUnit && product?.unitRatio) {
-              q = q * product.unitRatio;
-            }
+          const pid = i.productId?.toString();
+          if (!pid || !map[pid]) return;
 
-            const whId = (
-              i.warehouseId ||
-              inv.warehouseId ||
-              defaultWhId
-            ).toString();
-            if (!info.warehouses[whId]) {
-              info.warehouses[whId] = { physical: 0, reserved: 0, available: 0 };
-            }
+          let q = Number(i.quantity) || 0;
+          if (i.isSecondaryUnit && map[pid].unitRatio) {
+            q = q * map[pid].unitRatio;
+          }
 
-            if (inv.type === "warehouse_receipt") {
-              info.totalPhysical += q;
-              info.warehouses[whId].physical += q;
-            } else if (inv.type === "warehouse_remittance") {
-              info.totalPhysical -= q;
-              info.warehouses[whId].physical -= q;
-            }
+          const whId = (
+            i.warehouseId ||
+            inv.warehouseId ||
+            map[pid].defaultWhId
+          ).toString();
+          if (!map[pid].warehouses[whId]) {
+            map[pid].warehouses[whId] = { physical: 0, reserved: 0, available: 0 };
+          }
+
+          if (inv.type === "warehouse_receipt") {
+            map[pid].totalPhysical += q;
+            map[pid].warehouses[whId].physical += q;
+          } else if (inv.type === "warehouse_remittance") {
+            map[pid].totalPhysical -= q;
+            map[pid].warehouses[whId].physical -= q;
           }
         });
       });
     } else {
-      // Direct sum from InventoryTransactions
-      const prodTx = inventoryTransactions.filter(
-        (t) => t.productId?.toString() === productId.toString()
-      );
-      prodTx.forEach((t) => {
-        const whId = (t.warehouseId || defaultWhId).toString();
-        const qty = t.type === "in" ? (Number(t.quantity) || 0) : -(Number(t.quantity) || 0);
+      inventoryTransactions.forEach((t) => {
+        const pid = t.productId?.toString();
+        if (!pid || !map[pid]) return;
+        const whId = (t.warehouseId || map[pid].defaultWhId).toString();
+        const qty =
+          t.type === "in" ? Number(t.quantity) || 0 : -(Number(t.quantity) || 0);
 
-        info.totalPhysical += qty;
+        map[pid].totalPhysical += qty;
 
-        if (!info.warehouses[whId]) {
-          info.warehouses[whId] = { physical: 0, reserved: 0, available: 0 };
+        if (!map[pid].warehouses[whId]) {
+          map[pid].warehouses[whId] = { physical: 0, reserved: 0, available: 0 };
         }
-        info.warehouses[whId].physical += qty;
+        map[pid].warehouses[whId].physical += qty;
       });
     }
 
-    const saleQtys: Record<string, number> = {};
-    const remittedSaleQtys: Record<string, number> = {};
-    const saleReturnQtys: Record<string, number> = {};
+    const saleQtys: Record<string, Record<string, number>> = {};
+    const remittedSaleQtys: Record<string, Record<string, number>> = {};
+    const saleReturnQtys: Record<string, Record<string, number>> = {};
 
     invoices.forEach((inv) => {
       if (
         !inv.items ||
         inv.isDraft ||
         inv.status === "draft" ||
-        inv.type === "proforma" || inv.status === "voided" || inv.isDeleted
+        inv.type === "proforma" ||
+        inv.status === "voided" ||
+        inv.isDeleted
       )
         return;
       inv.items.forEach((i: any) => {
-        if (i.productId?.toString() === productId.toString()) {
-          let q = Number(i.quantity) || 0;
-          if (i.isSecondaryUnit && product?.unitRatio) {
-            q = q * product.unitRatio;
-          }
+        const pid = i.productId?.toString();
+        if (!pid || !map[pid]) return;
 
-          const whId = (
-            i.warehouseId ||
-            inv.warehouseId ||
-            defaultWhId
-          ).toString();
+        let q = Number(i.quantity) || 0;
+        if (i.isSecondaryUnit && map[pid].unitRatio) {
+          q = q * map[pid].unitRatio;
+        }
 
-          if (inv.type === "warehouse_remittance") {
-            if (inv.sourceInvoiceId) {
-              const sourceInv = invoices.find(
-                (sinv) =>
-                  sinv.id.toString() === inv.sourceInvoiceId?.toString(),
-              );
-              if (sourceInv && sourceInv.type === "sale") {
-                remittedSaleQtys[whId] = (remittedSaleQtys[whId] || 0) + q;
-              }
-            } else {
-              remittedSaleQtys[whId] = (remittedSaleQtys[whId] || 0) + q;
+        const whId = (
+          i.warehouseId ||
+          inv.warehouseId ||
+          map[pid].defaultWhId
+        ).toString();
+
+        if (!saleQtys[pid]) saleQtys[pid] = {};
+        if (!remittedSaleQtys[pid]) remittedSaleQtys[pid] = {};
+        if (!saleReturnQtys[pid]) saleReturnQtys[pid] = {};
+
+        if (inv.type === "warehouse_remittance") {
+          if (inv.sourceInvoiceId) {
+            const sourceInv = invoices.find(
+              (sinv) => sinv.id.toString() === inv.sourceInvoiceId?.toString(),
+            );
+            if (sourceInv && sourceInv.type === "sale") {
+              remittedSaleQtys[pid][whId] =
+                (remittedSaleQtys[pid][whId] || 0) + q;
             }
-          } else if (inv.type === "sale") {
-            saleQtys[whId] = (saleQtys[whId] || 0) + q;
-          } else if (inv.type === "sale_return") {
-            saleReturnQtys[whId] = (saleReturnQtys[whId] || 0) + q;
+          } else {
+            remittedSaleQtys[pid][whId] =
+              (remittedSaleQtys[pid][whId] || 0) + q;
           }
+        } else if (inv.type === "sale") {
+          saleQtys[pid][whId] = (saleQtys[pid][whId] || 0) + q;
+        } else if (inv.type === "sale_return") {
+          saleReturnQtys[pid][whId] = (saleReturnQtys[pid][whId] || 0) + q;
         }
       });
     });
 
-    const totalSaleRaw = Object.values(saleQtys).reduce((a, b) => a + b, 0);
-    const totalSaleReturn = Object.values(saleReturnQtys).reduce(
-      (a, b) => a + b,
-      0,
-    );
-    const totalSale = Math.max(0, totalSaleRaw - totalSaleReturn);
-    const totalRemittedForSale = Object.values(remittedSaleQtys).reduce(
-      (a, b) => a + b,
-      0,
-    );
-    const globalUnremitted = Math.max(0, totalSale - totalRemittedForSale);
+    Object.keys(map).forEach((pid) => {
+      const pSaleQtys = saleQtys[pid] || {};
+      const pRemittedSaleQtys = remittedSaleQtys[pid] || {};
+      const pSaleReturnQtys = saleReturnQtys[pid] || {};
 
-    if (globalUnremitted > 0) {
-      if (!info.warehouses[defaultWhId])
-        info.warehouses[defaultWhId] = {
-          physical: 0,
-          reserved: 0,
-          available: 0,
-        };
-      info.warehouses[defaultWhId].reserved += globalUnremitted;
-      info.totalReserved += globalUnremitted;
-    }
+      const totalSaleRaw = Object.values(pSaleQtys).reduce(
+        (a: any, b: any) => a + b,
+        0,
+      ) as number;
+      const totalSaleReturn = Object.values(pSaleReturnQtys).reduce(
+        (a: any, b: any) => a + b,
+        0,
+      ) as number;
+      const totalSale = Math.max(0, totalSaleRaw - totalSaleReturn);
+      const totalRemittedForSale = Object.values(pRemittedSaleQtys).reduce(
+        (a: any, b: any) => a + b,
+        0,
+      ) as number;
+      const globalUnremitted = Math.max(0, totalSale - totalRemittedForSale);
 
-    Object.keys(info.warehouses).forEach((whId) => {
-      info.warehouses[whId].available =
-        info.warehouses[whId].physical - info.warehouses[whId].reserved;
+      const defaultWhId = map[pid].defaultWhId;
+
+      if (globalUnremitted > 0) {
+        if (!map[pid].warehouses[defaultWhId])
+          map[pid].warehouses[defaultWhId] = {
+            physical: 0,
+            reserved: 0,
+            available: 0,
+          };
+        map[pid].warehouses[defaultWhId].reserved += globalUnremitted;
+        map[pid].totalReserved += globalUnremitted;
+      }
+
+      Object.keys(map[pid].warehouses).forEach((whId) => {
+        map[pid].warehouses[whId].available =
+          map[pid].warehouses[whId].physical -
+          map[pid].warehouses[whId].reserved;
+      });
+      map[pid].totalAvailable =
+        map[pid].totalPhysical - map[pid].totalReserved;
     });
-    info.totalAvailable = info.totalPhysical - info.totalReserved;
 
-    return info;
+    return map;
+  }, [products, invoices, inventoryTransactions]);
+
+  const getProductStockInfo = (productId: string | number) => {
+    const info = productStockMap[productId.toString()];
+    if (info) return info;
+    return {
+      totalPhysical: 0,
+      totalReserved: 0,
+      totalAvailable: 0,
+      warehouses: {},
+    };
   };
 
 const formatProductStockDetails = (product: any) => {
@@ -6000,28 +6203,33 @@ const calculateProductCurrentStock = (productId: string | number) => {
     return getProductStockInfo(productId).totalAvailable;
   };
 
-const calculatePersonBalance = (personId: string | number) => {
-    const person = persons.find((p) => p.id.toString() === personId.toString());
-    if (!person) return {
- amount: 0, status: "بی‌حساب" };
+  const personBalanceMap = useMemo(() => {
+    const map: Record<string, number> = {};
 
-    let balance = 0; // positive for debtor, negative for creditor
-
-    // Calculate purely from approved accounting documents
-    accountingDocuments.forEach(doc => {
-      if (doc.status === 'draft' || doc.isDeleted) return;
+    accountingDocuments.forEach((doc) => {
+      if (doc.status === "draft" || doc.isDeleted) return;
       if (doc.items && Array.isArray(doc.items)) {
-        doc.items.forEach(item => {
-          if (item.detailedAccountId?.toString() === personId.toString()) {
-            balance += (Number(item.debit) || 0) - (Number(item.credit) || 0);
+        doc.items.forEach((item: any) => {
+          if (item.detailedAccountId) {
+            const pid = item.detailedAccountId.toString();
+            map[pid] =
+              (map[pid] || 0) + (Number(item.debit) || 0) - (Number(item.credit) || 0);
           }
         });
       }
     });
 
+    return map;
+  }, [accountingDocuments]);
+
+  const calculatePersonBalance = (personId: string | number) => {
+    const person = persons.find((p) => p.id.toString() === personId.toString());
+    if (!person) return { amount: 0, status: "بی‌حساب" };
+
+    const balance = personBalanceMap[personId.toString()] || 0;
+
     if (balance > 0)
       return {
-
         amount: balance,
         status: "بدهکار",
         color: "text-rose-600",
@@ -6029,14 +6237,12 @@ const calculatePersonBalance = (personId: string | number) => {
       };
     if (balance < 0)
       return {
-
         amount: Math.abs(balance),
         status: "بستانکار",
         color: "text-emerald-600",
         bg: "bg-emerald-50",
       };
     return {
-
       amount: 0,
       status: "بی‌حساب",
       color: "text-gray-500",
@@ -6295,21 +6501,21 @@ const renderTabContent = () => {
 
       case "create_purchase_return":
         return (
-          <PurchaseReturnInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} />
+          <PurchaseReturnInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} />
         );
       case "create_purchase":
         return (
-          <PurchaseInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} sellerInvoiceNumber={sellerInvoiceNumber} setSellerInvoiceNumber={setSellerInvoiceNumber} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} />
+          <PurchaseInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} sellerInvoiceNumber={sellerInvoiceNumber} setSellerInvoiceNumber={setSellerInvoiceNumber} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} />
         );
       case "create_sale_return":
         return (
-          <SaleReturnInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Plus={Plus} Trash2={Trash2} CheckCircle={CheckCircle} History={History} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Info={Info} Tag={Tag} invoiceType={invoiceType} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} calculateProductCurrentStock={calculateProductCurrentStock} formatProductStockDetails={formatProductStockDetails} activeTab={activeTab} calculateSubtotal={calculateSubtotal} />
+          <SaleReturnInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Plus={Plus} Trash2={Trash2} CheckCircle={CheckCircle} History={History} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Info={Info} Tag={Tag} invoiceType={invoiceType} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} calculateProductCurrentStock={calculateProductCurrentStock} formatProductStockDetails={formatProductStockDetails} activeTab={activeTab} calculateSubtotal={calculateSubtotal} />
         );
 
 
       case "create_sale":
         return (
-          <SaleInvoiceCreate invoiceDueDate={invoiceDueDate} setInvoiceDueDate={setInvoiceDueDate} setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Plus={Plus} Trash2={Trash2} CheckCircle={CheckCircle} History={History} Save={Save} ShoppingCart={ShoppingCart} RefreshCw={RefreshCw} FileText={FileText} Info={Info} Tag={Tag} invoiceType={invoiceType} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} calculateProductCurrentStock={calculateProductCurrentStock} formatProductStockDetails={formatProductStockDetails} activeTab={activeTab} calculateSubtotal={calculateSubtotal} getProductStockInfo={getProductStockInfo} invoices={invoices} customAlert={customAlert} />
+          <SaleInvoiceCreate invoiceDueDate={invoiceDueDate} setInvoiceDueDate={setInvoiceDueDate} setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Plus={Plus} Trash2={Trash2} CheckCircle={CheckCircle} History={History} Save={Save} ShoppingCart={ShoppingCart} RefreshCw={RefreshCw} FileText={FileText} Info={Info} Tag={Tag} invoiceType={invoiceType} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} calculateProductCurrentStock={calculateProductCurrentStock} formatProductStockDetails={formatProductStockDetails} activeTab={activeTab} calculateSubtotal={calculateSubtotal} getProductStockInfo={getProductStockInfo} invoices={invoices} customAlert={customAlert} />
         );
 
       case "list_sale":

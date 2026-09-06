@@ -6,14 +6,21 @@ const DatePicker = CustomDatePicker;
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
 import {  
-  History, CheckCircle, RefreshCw, Info, Save, Trash2, Plus, 
+  History, CheckCircle, RefreshCw, Info, Save, Trash2, Plus, Minus, Copy, LayoutGrid,
   ShoppingCart, Building2, UserCircle, Hash, Percent,
   Calendar, CreditCard, Banknote, FileText, Truck
 , UserPlus } from 'lucide-react';
+import FastItemEntryBar from './FastItemEntryBar';
+import BulkProductPickerModal from './BulkProductPickerModal';
 // @ts-nocheck
 
       export default function PurchaseInvoiceCreate(props: any) {
   const {
+    handleBulkAddProducts,
+    handleAddBlankRow,
+    handleDuplicateItem,
+    handleIncrementQuantity,
+    productCategories,
     hasDraft,
     restoreDraft,
     clearDraft,
@@ -100,14 +107,26 @@ import {
     calculateSubtotal
   } = props;
   const itemsEndRef = useRef<HTMLDivElement>(null);
+  const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [prevItemsLength, setPrevItemsLength] = useState((items || []).length);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   useEffect(() => {
     if ((items || []).length > prevItemsLength) {
-      itemsEndRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+      itemsEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
     setPrevItemsLength((items || []).length);
   }, [items]);
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F4") {
+        e.preventDefault();
+        setIsBulkModalOpen(true);
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   return (
     <>
@@ -330,11 +349,55 @@ import {
               className="bg-white rounded-3xl shadow-sm border-2 border-emerald-50 "
               data-invoice-flow="purchase"
             >
-              <div className="p-5 bg-emerald-50/30 border-b border-emerald-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                <h3 className="font-extrabold text-slate-800 flex items-center gap-2 whitespace-nowrap">
-                  <Package className="w-5 h-5 text-emerald-600" /> لیست اقلام
-                  خریداری شده
-                </h3>
+              <div className="p-4 sm:p-5 bg-emerald-50/30 border-b border-emerald-100 flex flex-col gap-3">
+                <div className="flex flex-wrap justify-between items-center gap-2">
+                  <div className="flex items-center gap-2">
+                    <h3 className="font-extrabold text-slate-800 flex items-center gap-2 whitespace-nowrap text-base">
+                      <Package className="w-5 h-5 text-emerald-600" /> لیست اقلام خریداری شده
+                    </h3>
+                    <span className="text-xs font-bold text-emerald-600 bg-white px-2.5 py-0.5 rounded-full border border-emerald-200">
+                      {toPersianDigits((items || []).length)} ردیف
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsBulkModalOpen(true)}
+                      className="px-3 py-1.5 bg-white hover:bg-emerald-50 text-emerald-700 border border-emerald-200 hover:border-emerald-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                      title="انتخاب کاتالوگی و افزودن دسته‌ای اقلام (F4)"
+                    >
+                      <LayoutGrid className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>افزودن دسته‌ای (F4)</span>
+                    </button>
+                    {handleAddBlankRow && (
+                      <button
+                        type="button"
+                        onClick={handleAddBlankRow}
+                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                        title="افزودن یک سطر خالی دستی"
+                      >
+                        <Plus className="w-3.5 h-3.5 text-slate-500" />
+                        <span>سطر خالی</span>
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Fast Item Entry Bar directly accessible at top */}
+                <FastItemEntryBar
+                  products={products}
+                  onAddProduct={(pid, prod, qty) => handleFastAddProduct(pid, prod, qty)}
+                  onAddBlankRow={handleAddBlankRow}
+                  onOpenBulkModal={() => setIsBulkModalOpen(true)}
+                  onOpenScanner={() => setIsScannerOpen(true)}
+                  onOpenNewProductModal={() => setIsProductModalOpen(true)}
+                  formatNumber={formatNumber}
+                  formatCurrency={formatCurrency}
+                  invoiceCurrency={invoiceCurrency}
+                  themeColor="emerald"
+                  toPersianDigits={toPersianDigits}
+                />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-right min-w-[1000px]">
@@ -434,20 +497,56 @@ import {
                           )}
                         </td>
                         <td className="p-5">
-                          <div className="flex flex-col gap-1.5">
-                            <CurrencyInput
-                              hideWords={true}
-                              storeSettings={storeSettings}
-                              value={item.quantity}
-                              onChange={(e: any) =>
-                                handleItemChange(
-                                  item.id,
-                                  "quantity",
-                                  e.target.value,
-                                )
-                              }
-                              className="w-full p-2.5 bg-emerald-50/30 border border-emerald-100 rounded-xl focus:ring-2 focus:ring-emerald-500 font-sans text-center font-black text-slate-800 outline-none"
-                            />
+                          <div className="flex flex-col gap-1.5 min-w-[125px]">
+                            <div className="flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (handleIncrementQuantity) {
+                                    handleIncrementQuantity(item.id, -1);
+                                  } else {
+                                    const current = Number(item.quantity) || 0;
+                                    const next = Math.max(0.01, Number((current - 1).toFixed(4)));
+                                    handleItemChange(item.id, "quantity", next);
+                                  }
+                                }}
+                                className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-rose-600 transition-colors cursor-pointer"
+                                title="کاهش یک واحد"
+                              >
+                                <Minus className="w-3.5 h-3.5" />
+                              </button>
+                              <div className="flex-1 min-w-0">
+                                <CurrencyInput
+                                  hideWords={true}
+                                  storeSettings={storeSettings}
+                                  value={item.quantity}
+                                  onChange={(e: any) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "quantity",
+                                      e.target.value,
+                                    )
+                                  }
+                                  className="w-full p-2 bg-emerald-50/30 border border-emerald-100 rounded-xl focus:ring-2 focus:ring-emerald-500 font-sans text-center font-black text-slate-800 outline-none text-sm"
+                                />
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  if (handleIncrementQuantity) {
+                                    handleIncrementQuantity(item.id, 1);
+                                  } else {
+                                    const current = Number(item.quantity) || 0;
+                                    const next = Number((current + 1).toFixed(4));
+                                    handleItemChange(item.id, "quantity", next);
+                                  }
+                                }}
+                                className="w-7 h-7 shrink-0 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-emerald-600 transition-colors cursor-pointer"
+                                title="افزایش یک واحد"
+                              >
+                                <Plus className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
                           </div>
                         </td>
                         <td className="p-5">
@@ -556,12 +655,26 @@ import {
                           {formatCurrency(item.totalPrice)}
                         </td>
                         <td className="p-5 text-center">
-                          <button
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="p-2.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors outline-none focus:ring-2 focus:ring-rose-500"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
+                          <div className="flex items-center justify-center gap-1">
+                            {handleDuplicateItem && (
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateItem(item.id)}
+                                className="p-2 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-xl transition-colors outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer"
+                                title="تکرار سطر"
+                              >
+                                <Copy className="w-4 h-4" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="p-2 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors outline-none focus:ring-2 focus:ring-rose-500 cursor-pointer"
+                              title="حذف سطر"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          </div>
                         </td>
                       </tr>
                     ))}
@@ -587,7 +700,7 @@ import {
                   </tbody>
                 </table>
               </div>
-              <div ref={itemsEndRef as any} className="p-5 bg-emerald-50/30 border-t border-emerald-100 flex flex-col md:flex-row justify-between items-center gap-4">
+              <div ref={itemsEndRef as any} className="p-4 sm:p-5 bg-emerald-50/30 border-t border-emerald-100 flex flex-col md:flex-row justify-between items-center gap-4">
                 <div className="flex-1 w-full flex flex-col md:flex-row items-center gap-2 max-w-2xl">
                   <div className="flex gap-2">
                     <FastBarcodeScanner onScan={handleFastBarcodeScan} />
@@ -615,18 +728,41 @@ import {
                   </div>
                   <button
                     onClick={() => setIsScannerOpen(true)}
-                    className="p-[11px] bg-white border border-emerald-200 text-emerald-600 rounded-xl shadow-sm hover:bg-emerald-50 transition-colors focus:ring-2 focus:ring-emerald-500"
+                    className="p-[11px] bg-white border border-emerald-200 text-emerald-600 rounded-xl shadow-sm hover:bg-emerald-50 transition-colors focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                     title="اسکن بارکد با دوربین"
                   >
                     <ScanLine className="w-5 h-5" />
                   </button>
                 </div>
-                <button
-                  onClick={() => setIsProductModalOpen(true)}
-                  className="px-5 py-3 bg-white border border-emerald-200 text-emerald-700 shadow-sm rounded-xl font-bold hover:bg-emerald-50 flex items-center gap-2 transition-colors whitespace-nowrap outline-none focus:ring-2 focus:ring-emerald-500"
-                >
-                  <Plus className="w-4 h-4" /> تعریف کالا / خدمات جدید
-                </button>
+
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkModalOpen(true)}
+                    className="px-4 py-2.5 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 shadow-2xs rounded-xl font-bold flex items-center gap-2 transition-colors whitespace-nowrap outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer text-xs"
+                    title="افزودن دسته‌ای اقلام از کاتالوگ (F4)"
+                  >
+                    <LayoutGrid className="w-4 h-4 text-emerald-600" />
+                    <span>افزودن دسته‌ای (F4)</span>
+                  </button>
+                  {handleAddBlankRow && (
+                    <button
+                      type="button"
+                      onClick={handleAddBlankRow}
+                      className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs rounded-xl font-bold flex items-center gap-2 transition-colors whitespace-nowrap outline-none cursor-pointer text-xs"
+                      title="افزودن یک سطر خالی"
+                    >
+                      <Plus className="w-4 h-4 text-slate-500" />
+                      <span>سطر خالی</span>
+                    </button>
+                  )}
+                  <button
+                    onClick={() => setIsProductModalOpen(true)}
+                    className="px-4 py-2.5 bg-white border border-emerald-200 text-emerald-700 shadow-2xs rounded-xl font-bold hover:bg-emerald-50 flex items-center gap-2 transition-colors whitespace-nowrap outline-none focus:ring-2 focus:ring-emerald-500 cursor-pointer text-xs"
+                  >
+                    <Plus className="w-4 h-4" /> تعریف کالا
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -871,6 +1007,29 @@ import {
                 </div>
               </div>
             </div>
+          )}
+
+          {isBulkModalOpen && (
+            <BulkProductPickerModal
+              isOpen={isBulkModalOpen}
+              onClose={() => setIsBulkModalOpen(false)}
+              products={products}
+              categories={productCategories}
+              onAddBulk={(selected) => {
+                if (handleBulkAddProducts) {
+                  handleBulkAddProducts(selected);
+                } else {
+                  selected.forEach((item) => {
+                    handleFastAddProduct(String(item.productId), undefined, item.quantity);
+                  });
+                }
+              }}
+              formatNumber={formatNumber}
+              formatCurrency={formatCurrency}
+              invoiceCurrency={invoiceCurrency}
+              themeColor="emerald"
+              toPersianDigits={toPersianDigits}
+            />
           )}
     </>
   );

@@ -874,6 +874,36 @@
       "entityId": "test1",
       "changes": "{\"id\":\"test1\",\"contractNumber\":\"123\"}",
       "timestamp": 1787561870882
+    },
+    {
+      "id": "180cgbof377",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "0e4b177e-a189-4b74-b5a7-cf2f2c83b6a5",
+      "changes": "{\"id\":\"0e4b177e-a189-4b74-b5a7-cf2f2c83b6a5\",\"code\":\"2001\",\"title\":\"حسابهای پرداختنی\",\"nature\":\"credit\",\"level\":\"subsidiary\"}",
+      "timestamp": 1788654732614
+    },
+    {
+      "id": "40f5va7xx5h",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "ledger_accounts",
+      "entityId": "12de2ff9-0332-4c94-af80-d04a9ee5bf3f",
+      "changes": "{\"id\":\"12de2ff9-0332-4c94-af80-d04a9ee5bf3f\",\"code\":\"2001\",\"title\":\"حسابهای پرداختنی\",\"nature\":\"credit\",\"level\":\"subsidiary\"}",
+      "timestamp": 1788654732752
+    },
+    {
+      "id": "kq5xlgg1cn",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "ledger_accounts",
+      "entityId": "0e4b177e-a189-4b74-b5a7-cf2f2c83b6a5",
+      "changes": "{\"id\":\"0e4b177e-a189-4b74-b5a7-cf2f2c83b6a5\",\"code\":\"2001\",\"title\":\"حسابهای پرداختنی\",\"nature\":\"credit\",\"level\":\"subsidiary\"}",
+      "timestamp": 1788654732752
     }
   ],
   "person_roles": [
@@ -1101,6 +1131,13 @@
       "type": "detailed",
       "nature": "credit",
       "parentId": "50dc8f8a-e274-4f58-94f0-62a321e4731d"
+    },
+    {
+      "id": "12de2ff9-0332-4c94-af80-d04a9ee5bf3f",
+      "code": "2001",
+      "title": "حسابهای پرداختنی",
+      "nature": "credit",
+      "level": "subsidiary"
     }
   ],
   "persons": [
