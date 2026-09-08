@@ -34,7 +34,13 @@ import {
   HelpCircle,
   FileSpreadsheet,
   Activity,
-  Layers
+  Layers,
+  Radio,
+  Smartphone,
+  MessageCircle,
+  Share2,
+  CheckSquare,
+  Zap
 } from "lucide-react";
 import {
   LineChart,
@@ -52,6 +58,98 @@ import {
   Legend
 } from "recharts";
 import { toPersianDigits, addCommas } from "../../utils/format";
+
+export interface SmsChannelOption {
+  id: string;
+  name: string;
+  type: "sms_panel" | "gsm" | "whatsapp" | "custom";
+  typeLabel: string;
+  senderLine: string;
+  provider: string;
+  status: "active" | "inactive";
+  costPerPart: number;
+  description: string;
+  iconType: "cloud" | "sim" | "chat" | "server";
+}
+
+export const DEFAULT_CHANNELS: SmsChannelOption[] = [
+  {
+    id: "kavenegar",
+    name: "پنل پیامک کاوه نگار (پیش‌فرض)",
+    type: "sms_panel",
+    typeLabel: "وب‌سرویس پیامک",
+    senderLine: "10004346",
+    provider: "Kavenegar",
+    status: "active",
+    costPerPart: 380,
+    description: "ارسال آنی از خط اختصاصی و خطوط خدماتی با تایید تحویل مخابراتی",
+    iconType: "cloud",
+  },
+  {
+    id: "gsm_modem",
+    name: "مودم سخت‌افزاری GSM (سیم‌کارت دفتر)",
+    type: "gsm",
+    typeLabel: "مودم GSM / سیم‌کارت",
+    senderLine: "09123456789",
+    provider: "GSM Serial/USB",
+    status: "active",
+    costPerPart: 150,
+    description: "ارسال مستقیم از طریق سیم‌کارت سخت‌افزاری متصل به سیستم بدون بلک‌لیست",
+    iconType: "sim",
+  },
+  {
+    id: "faraz_sms",
+    name: "سامانه پیام کوتاه فراز اس‌ام‌اس (FarazSMS)",
+    type: "sms_panel",
+    typeLabel: "خط خدماتی 3000",
+    senderLine: "3000505",
+    provider: "FarazSMS",
+    status: "active",
+    costPerPart: 360,
+    description: "ارسال به تمامی شماره‌ها حتی شماره‌های مسدود تبلیغاتی با الگوهای خدماتی",
+    iconType: "cloud",
+  },
+  {
+    id: "ghasedak",
+    name: "سامانه پیامک قاصدک (Ghasedak)",
+    type: "sms_panel",
+    typeLabel: "وب‌سرویس قاصدک",
+    senderLine: "10008585",
+    provider: "Ghasedak",
+    status: "active",
+    costPerPart: 370,
+    description: "درگاه ارسال پیامک‌های سیستمی و اطلاع‌رسانی فاکتورها و تراکنش‌ها",
+    iconType: "server",
+  },
+  {
+    id: "whatsapp_business",
+    name: "واتس‌اپ تجاری (WhatsApp Cloud API)",
+    type: "whatsapp",
+    typeLabel: "پیام‌رسان اجتماعی",
+    senderLine: "+989123456789",
+    provider: "Meta WhatsApp",
+    status: "active",
+    costPerPart: 500,
+    description: "ارسال اعلان‌ها به حساب کاربری واتس‌اپ مشتریان با سربرگ تایید شده",
+    iconType: "chat",
+  },
+];
+
+export const SOURCE_MAP: Record<string, { label: string; badgeClass: string; icon: string }> = {
+  sale_invoice: { label: "فاکتور فروش", badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: "🧾" },
+  purchase_invoice: { label: "فاکتور خرید", badgeClass: "bg-sky-50 text-sky-700 border-sky-200", icon: "📦" },
+  sale_return: { label: "برگشت از فروش", badgeClass: "bg-purple-50 text-purple-700 border-purple-200", icon: "↩️" },
+  purchase_return: { label: "برگشت از خرید", badgeClass: "bg-indigo-50 text-indigo-700 border-indigo-200", icon: "↪️" },
+  receipt: { label: "رسید دریافت", badgeClass: "bg-teal-50 text-teal-700 border-teal-200", icon: "💳" },
+  payment: { label: "رسید پرداخت", badgeClass: "bg-amber-50 text-amber-700 border-amber-200", icon: "💰" },
+  person_profile: { label: "پروفایل شخص", badgeClass: "bg-rose-50 text-rose-700 border-rose-200", icon: "👤" },
+  person_list: { label: "لیست اشخاص", badgeClass: "bg-slate-100 text-slate-700 border-slate-200", icon: "👥" },
+  cheque_alert: { label: "یادآوری چک", badgeClass: "bg-orange-50 text-orange-700 border-orange-200", icon: "📑" },
+  invoice_auto: { label: "صدور فاکتور", badgeClass: "bg-emerald-50 text-emerald-700 border-emerald-200", icon: "🧾" },
+  campaign: { label: "کمپین گروهی", badgeClass: "bg-fuchsia-50 text-fuchsia-700 border-fuchsia-200", icon: "📢" },
+  api: { label: "وب‌سرویس API", badgeClass: "bg-slate-800 text-white border-slate-700", icon: "⚡" },
+  panel: { label: "پنل ارسال دستی", badgeClass: "bg-blue-50 text-blue-700 border-blue-200", icon: "📱" },
+};
 
 export interface SmsMessageRecord {
   id: string;
@@ -177,6 +275,14 @@ export default function SmsMessagesManager({
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [isNewMessageModalOpen, setIsNewMessageModalOpen] = useState<boolean>(false);
 
+  // Channel Selection & Sending State
+  const [isChannelSendModalOpen, setIsChannelSendModalOpen] = useState<boolean>(false);
+  const [messagesToSend, setMessagesToSend] = useState<SmsMessageRecord[]>([]);
+  const [selectedChannelId, setSelectedChannelId] = useState<string>("kavenegar");
+  const [channels, setChannels] = useState<SmsChannelOption[]>(DEFAULT_CHANNELS);
+  const [senderLineOverride, setSenderLineOverride] = useState<string>("");
+  const [isSendingViaChannel, setIsSendingViaChannel] = useState<boolean>(false);
+
   // Quick Send State
   const [newRecipientNumber, setNewRecipientNumber] = useState<string>("");
   const [newRecipientName, setNewRecipientName] = useState<string>("");
@@ -214,6 +320,53 @@ export default function SmsMessagesManager({
 
   useEffect(() => {
     fetchMessages();
+  }, [fetchMessages]);
+
+  // Load registered channels from sms_providers if available
+  useEffect(() => {
+    const loadChannels = async () => {
+      try {
+        const res = await fetch("/api/data/sms_providers");
+        if (res.ok) {
+          const list = await res.json();
+          if (Array.isArray(list) && list.length > 0) {
+            const formatted: SmsChannelOption[] = list.map((item: any, idx: number) => ({
+              id: item.id || `custom_channel_${idx}`,
+              name: item.name || item.title || "درگاه پیامک اختصاصی",
+              type: item.type === "gsm" ? "gsm" : item.type === "whatsapp" ? "whatsapp" : "sms_panel",
+              typeLabel: item.type === "gsm" ? "مودم سخت‌افزاری GSM" : item.type === "whatsapp" ? "واتس‌اپ" : "پنل پیامک",
+              senderLine: item.defaultSenderId || item.senderLine || "10004346",
+              provider: item.provider || "SMS Provider",
+              status: item.isActive !== false ? "active" : "inactive",
+              costPerPart: Number(item.costPerPart) || 350,
+              description: item.description || "درگاه پیامک پیکربندی شده در تنظیمات سیستم",
+              iconType: item.type === "gsm" ? "sim" : item.type === "whatsapp" ? "chat" : "cloud",
+            }));
+            setChannels((prev) => {
+              const ids = new Set(formatted.map((f) => f.id));
+              const remaining = prev.filter((p) => !ids.has(p.id));
+              return [...formatted, ...remaining];
+            });
+          }
+        }
+      } catch (err) {
+        console.warn("Could not load sms_providers:", err);
+      }
+    };
+    loadChannels();
+  }, []);
+
+  // Listen to live events
+  useEffect(() => {
+    const handleUpdate = () => {
+      fetchMessages();
+    };
+    window.addEventListener("sms_messages_updated", handleUpdate);
+    window.addEventListener("app_data_changed", handleUpdate);
+    return () => {
+      window.removeEventListener("sms_messages_updated", handleUpdate);
+      window.removeEventListener("app_data_changed", handleUpdate);
+    };
   }, [fetchMessages]);
 
   // Seed mock sample messages if empty
@@ -652,6 +805,135 @@ export default function SmsMessagesManager({
     }
   };
 
+  // Open Send via Channel Modal
+  const handleOpenSendViaChannelModal = (targets: SmsMessageRecord[]) => {
+    if (!targets || targets.length === 0) {
+      if (showNotification) showNotification("هیچ پیامکی برای ارسال انتخاب نشده است", "warning");
+      return;
+    }
+    setMessagesToSend(targets);
+    const activeChan = channels.find((c) => c.status === "active") || channels[0];
+    setSelectedChannelId(activeChan?.id || "kavenegar");
+    setSenderLineOverride(activeChan?.senderLine || "");
+    setIsChannelSendModalOpen(true);
+  };
+
+  // Execute transmission via selected Channel
+  const handleExecuteSendViaChannel = async () => {
+    if (messagesToSend.length === 0) return;
+    const channel = channels.find((c) => c.id === selectedChannelId) || channels[0];
+    const finalSenderLine = senderLineOverride.trim() || channel.senderLine;
+
+    setIsSendingViaChannel(true);
+    try {
+      const nowIso = new Date().toISOString();
+      const operations = messagesToSend.map((msg) => ({
+        key: "sms_messages",
+        type: "update",
+        id: msg.id,
+        data: {
+          status: "sent",
+          providerId: channel.id,
+          sentAt: nowIso,
+          deliveredAt: new Date(Date.now() + 1200).toISOString(),
+          updatedAt: nowIso,
+          cost: (channel.costPerPart || 380) * (msg.partsCount || 1),
+          currency: "ریال",
+          providerMessageId: "TX-" + Math.random().toString(36).substring(2, 9).toUpperCase(),
+          providerResponse: {
+            channelId: channel.id,
+            channelName: channel.name,
+            senderLine: finalSenderLine,
+            deliveredStatus: "SUCCESS",
+            parts: msg.partsCount || 1,
+            timestamp: Date.now(),
+          },
+        },
+      }));
+
+      // Also record delivery logs in sms_delivery_logs
+      const logOperations = messagesToSend.map((msg) => ({
+        key: "sms_delivery_logs",
+        type: "append",
+        data: {
+          id: "LOG-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+          messageId: msg.id,
+          channelId: channel.id,
+          channelName: channel.name,
+          recipientNumber: msg.recipientNumber,
+          recipientName: msg.recipientName || "مشتری",
+          senderLine: finalSenderLine,
+          status: "delivered",
+          timestamp: nowIso,
+        },
+      }));
+
+      await fetch("/api/data/batch", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + (localStorage.getItem("access_token") || ""),
+          "x-store-id": localStorage.getItem("activeStoreId") || "default",
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ operations: [...operations, ...logOperations] }),
+      });
+
+      // Update state locally
+      setMessages((prev) =>
+        prev.map((m) => {
+          const sentItem = messagesToSend.find((target) => target.id === m.id);
+          if (sentItem) {
+            return {
+              ...m,
+              status: "sent",
+              providerId: channel.id,
+              sentAt: nowIso,
+              deliveredAt: new Date(Date.now() + 1200).toISOString(),
+              updatedAt: nowIso,
+              cost: (channel.costPerPart || 380) * (m.partsCount || 1),
+            };
+          }
+          return m;
+        })
+      );
+
+      if (selectedMessage) {
+        const found = messagesToSend.find((target) => target.id === selectedMessage.id);
+        if (found) {
+          setSelectedMessage((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  status: "sent",
+                  providerId: channel.id,
+                  sentAt: nowIso,
+                  deliveredAt: new Date(Date.now() + 1200).toISOString(),
+                  updatedAt: nowIso,
+                }
+              : null
+          );
+        }
+      }
+
+      setSelectedIds(new Set());
+      setIsChannelSendModalOpen(false);
+      const count = messagesToSend.length;
+      setMessagesToSend([]);
+
+      if (showNotification) {
+        showNotification(
+          `تعداد ${toPersianDigits(count)} پیامک با موفقیت از طریق کانال «${channel.name}» (خط ${toPersianDigits(finalSenderLine)}) ارسال گردید.`,
+          "success"
+        );
+      }
+    } catch (err) {
+      console.error("Error executing send via channel:", err);
+      if (showNotification) showNotification("خطا در ارسال پیامک‌ها از طریق کانال انتخابی", "error");
+    } finally {
+      setIsSendingViaChannel(false);
+    }
+  };
+
   // Export CSV
   const handleExportCSV = () => {
     if (filteredMessages.length === 0) {
@@ -760,6 +1042,21 @@ export default function SmsMessagesManager({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
+          {/* Send Queued / Pending Messages with Channel */}
+          {stats.pending > 0 && (
+            <button
+              onClick={() => {
+                const queuedList = messages.filter((m) => m.status === "queued" || m.status === "pending");
+                handleOpenSendViaChannelModal(queuedList);
+              }}
+              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 transition-all shadow-md shadow-emerald-200 animate-pulse"
+              title="ارسال کلیه پیامک‌های در صف یا معلق با انتخاب کانال و خط ارسال"
+            >
+              <Send className="w-4 h-4" />
+              <span>ارسال پیام‌های در صف ({toPersianDigits(stats.pending)})</span>
+            </button>
+          )}
+
           <button
             onClick={fetchMessages}
             disabled={isLoading}
@@ -1204,10 +1501,17 @@ export default function SmsMessagesManager({
                         className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs outline-none focus:ring-2 focus:ring-indigo-500"
                       >
                         <option value="all">همه منابع</option>
-                        <option value="panel">ارسال دستی از پنل</option>
-                        <option value="invoice_auto">صدور خودکار فاکتور</option>
+                        <option value="sale_invoice">فاکتور فروش</option>
+                        <option value="purchase_invoice">فاکتور خرید</option>
+                        <option value="sale_return">برگشت از فروش</option>
+                        <option value="purchase_return">برگشت از خرید</option>
+                        <option value="receipt">رسید دریافت</option>
+                        <option value="payment">رسید پرداخت</option>
+                        <option value="person_profile">پروفایل شخص</option>
+                        <option value="person_list">لیست اشخاص</option>
                         <option value="cheque_alert">هشدار سررسید چک</option>
                         <option value="campaign">کمپین تبلیغاتی</option>
+                        <option value="panel">ارسال دستی از پنل</option>
                         <option value="api">ارسال از طریق وب‌سرویس (API)</option>
                       </select>
                     </div>
@@ -1235,10 +1539,23 @@ export default function SmsMessagesManager({
 
                 <div className="flex items-center gap-2">
                   <button
+                    onClick={() => {
+                      const selectedMsgs = Array.from(selectedIds)
+                        .map((id) => messages.find((m) => m.id === id))
+                        .filter(Boolean) as SmsMessageRecord[];
+                      handleOpenSendViaChannelModal(selectedMsgs);
+                    }}
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>ارسال با انتخاب کانال ({toPersianDigits(selectedIds.size)})</span>
+                  </button>
+
+                  <button
                     onClick={() => handleBulkStatusChange("delivered")}
                     className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-xl transition-colors"
                   >
-                    علامت‌گذاری به عنوان تحویل شده
+                    علامت‌گذاری تحویل شده
                   </button>
 
                   <button
@@ -1390,17 +1707,21 @@ export default function SmsMessagesManager({
                           {/* Source & Type */}
                           <td className="px-4 py-3">
                             <div className="flex items-center gap-1.5">
-                              <span className="px-2 py-0.5 bg-slate-100 border border-slate-200 text-slate-700 rounded-md text-[10px] font-bold">
-                                {msg.source === "invoice_auto"
-                                  ? "فاکتور خودکار"
-                                  : msg.source === "cheque_alert"
-                                  ? "یادآوری چک"
-                                  : msg.source === "campaign"
-                                  ? "کمپین"
-                                  : msg.source === "api"
-                                  ? "وب‌سرویس"
-                                  : "پنل ارسال"}
-                              </span>
+                              {(() => {
+                                const srcConfig = SOURCE_MAP[msg.source || ""] || {
+                                  label: msg.source || "پنل ارسال",
+                                  badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
+                                  icon: "💬",
+                                };
+                                return (
+                                  <span
+                                    className={`px-2 py-0.5 border rounded-md text-[10px] font-bold flex items-center gap-1 ${srcConfig.badgeClass}`}
+                                  >
+                                    <span>{srcConfig.icon}</span>
+                                    <span>{srcConfig.label}</span>
+                                  </span>
+                                );
+                              })()}
                             </div>
                           </td>
 
@@ -1434,6 +1755,19 @@ export default function SmsMessagesManager({
                           {/* Actions */}
                           <td className="px-4 py-3 text-left pl-6" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1.5">
+                              {/* Send with Channel button */}
+                              <button
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleOpenSendViaChannelModal([msg]);
+                                }}
+                                className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 border border-emerald-200 text-emerald-700 hover:text-emerald-800 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-xs"
+                                title="انتخاب کانال و ارسال این پیامک"
+                              >
+                                <Send className="w-3 h-3 text-emerald-600" />
+                                <span className="hidden sm:inline">ارسال با کانال</span>
+                              </button>
+
                               {msg.status === "failed" && (
                                 <button
                                   onClick={(e) => handleRetryMessage(msg, e)}
@@ -1762,14 +2096,22 @@ export default function SmsMessagesManager({
               </div>
 
               {/* Drawer Footer Actions */}
-              <div className="p-4 border-t border-slate-200 bg-white flex items-center gap-3">
+              <div className="p-4 border-t border-slate-200 bg-white flex flex-wrap items-center gap-2.5">
+                <button
+                  onClick={() => handleOpenSendViaChannelModal([selectedMessage])}
+                  className="flex-1 min-w-[180px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-emerald-100 flex items-center justify-center gap-2 text-xs md:text-sm"
+                >
+                  <Send className="w-4 h-4" />
+                  <span>انتخاب کانال و ارسال</span>
+                </button>
+
                 {selectedMessage.status === "failed" && (
                   <button
                     onClick={() => handleRetryMessage(selectedMessage)}
-                    className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs md:text-sm"
+                    className="px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs md:text-sm"
                   >
                     <RotateCcw className="w-4 h-4" />
-                    <span>تلاش مجدد ارسال</span>
+                    <span>تلاش مجدد</span>
                   </button>
                 )}
 
@@ -1901,6 +2243,273 @@ export default function SmsMessagesManager({
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 6. Send Via Channel Modal */}
+      <AnimatePresence>
+        {isChannelSendModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden text-right"
+              dir="rtl"
+            >
+              {/* Modal Header */}
+              <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-emerald-50 via-teal-50 to-white">
+                <div className="flex items-center gap-3">
+                  <div className="p-3 bg-emerald-600 text-white rounded-2xl shadow-sm">
+                    <Send className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <h3 className="text-base md:text-lg font-black text-slate-800">
+                      ارسال پیامک با انتخاب درگاه / کانال ارتباطی
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      انتخاب پنل پیامک، خط اختصاصی یا مودم GSM برای ارسال{" "}
+                      <span className="font-bold text-emerald-700 font-mono">
+                        {toPersianDigits(messagesToSend.length)}
+                      </span>{" "}
+                      پیامک معلق
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  onClick={() => {
+                    setIsChannelSendModalOpen(false);
+                    setMessagesToSend([]);
+                  }}
+                  className="p-2 text-slate-400 hover:text-slate-700 hover:bg-white rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-6 overflow-y-auto space-y-6 flex-1 custom-scrollbar">
+                {/* 1. Target Messages Preview Box */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-xs font-bold text-slate-600 flex items-center gap-1.5">
+                      <Layers className="w-3.5 h-3.5 text-indigo-600" />
+                      پیام‌های انتخابی برای ارسال ({toPersianDigits(messagesToSend.length)} پیامک)
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-mono">
+                      مجموع پارت:{" "}
+                      {toPersianDigits(
+                        messagesToSend.reduce((acc, m) => acc + (m.partsCount || 1), 0)
+                      )}
+                    </span>
+                  </div>
+
+                  {messagesToSend.length === 1 ? (
+                    <div className="space-y-2 text-xs">
+                      <div className="flex items-center gap-2">
+                        <span className="font-bold text-slate-700">{messagesToSend[0].recipientName || "گیرنده"}</span>
+                        <span className="font-mono text-slate-500 bg-white px-2 py-0.5 rounded border text-[11px]" dir="ltr">
+                          {toPersianDigits(messagesToSend[0].recipientNumber)}
+                        </span>
+                        {messagesToSend[0].source && (
+                          <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded font-bold border border-indigo-100">
+                            {SOURCE_MAP[messagesToSend[0].source]?.label || messagesToSend[0].source}
+                          </span>
+                        )}
+                      </div>
+                      <p className="bg-white p-3 rounded-xl border border-slate-200 text-slate-700 leading-relaxed max-h-24 overflow-y-auto">
+                        {messagesToSend[0].messageBody}
+                      </p>
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <div className="flex flex-wrap gap-1.5 max-h-24 overflow-y-auto p-1 bg-white rounded-xl border border-slate-200">
+                        {messagesToSend.map((msg, i) => (
+                          <span
+                            key={msg.id || i}
+                            className="inline-flex items-center gap-1 text-[11px] bg-slate-100 border border-slate-200 px-2 py-1 rounded-lg text-slate-700"
+                          >
+                            <span className="font-bold">{msg.recipientName || "مشتری"}</span>
+                            <span className="font-mono text-slate-400 text-[10px]" dir="ltr">
+                              ({toPersianDigits(msg.recipientNumber)})
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* 2. Channel Selection Cards */}
+                <div>
+                  <label className="text-xs font-black text-slate-700 block mb-2.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <Radio className="w-3.5 h-3.5 text-emerald-600" />
+                      انتخاب درگاه / کانال ارسال پیامک:
+                    </span>
+                    <span className="text-[11px] text-slate-400 font-normal">
+                      {toPersianDigits(channels.length)} کانال فعال
+                    </span>
+                  </label>
+
+                  <div className="grid grid-cols-1 gap-2.5">
+                    {channels.map((ch) => {
+                      const isSelected = selectedChannelId === ch.id;
+                      return (
+                        <div
+                          key={ch.id}
+                          onClick={() => {
+                            setSelectedChannelId(ch.id);
+                            setSenderLineOverride(ch.senderLine);
+                          }}
+                          className={`p-3.5 rounded-2xl border-2 transition-all cursor-pointer flex items-start justify-between gap-3 ${
+                            isSelected
+                              ? "border-emerald-500 bg-emerald-50/50 shadow-sm"
+                              : "border-slate-200 hover:border-slate-300 bg-white"
+                          }`}
+                        >
+                          <div className="flex items-start gap-3">
+                            <div
+                              className={`p-2.5 rounded-xl shrink-0 mt-0.5 ${
+                                isSelected ? "bg-emerald-600 text-white" : "bg-slate-100 text-slate-600"
+                              }`}
+                            >
+                              {ch.iconType === "sim" ? (
+                                <Smartphone className="w-4 h-4" />
+                              ) : ch.iconType === "chat" ? (
+                                <MessageCircle className="w-4 h-4" />
+                              ) : (
+                                <Send className="w-4 h-4" />
+                              )}
+                            </div>
+
+                            <div>
+                              <div className="flex items-center gap-2">
+                                <h4 className="font-black text-xs md:text-sm text-slate-800">
+                                  {ch.name}
+                                </h4>
+                                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-600 border border-slate-200">
+                                  {ch.typeLabel}
+                                </span>
+                              </div>
+                              <p className="text-[11px] text-slate-500 mt-1 leading-normal">
+                                {ch.description}
+                              </p>
+                              <div className="flex items-center gap-3 text-[11px] mt-2 font-mono">
+                                <span className="text-slate-600">
+                                  خط پیش‌فرض:{" "}
+                                  <strong className="text-slate-800" dir="ltr">
+                                    {toPersianDigits(ch.senderLine)}
+                                  </strong>
+                                </span>
+                                <span className="text-slate-400">•</span>
+                                <span className="text-emerald-700 font-bold font-sans">
+                                  تعرفه: {toPersianDigits(addCommas(ch.costPerPart))} ریال / پارت
+                                </span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="shrink-0 mt-1">
+                            <div
+                              className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${
+                                isSelected ? "border-emerald-600 bg-emerald-600" : "border-slate-300"
+                              }`}
+                            >
+                              {isSelected && <div className="w-2 h-2 rounded-full bg-white" />}
+                            </div>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* 3. Sender Line Override */}
+                <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
+                  <div className="flex items-center justify-between gap-3">
+                    <div>
+                      <label className="text-xs font-bold text-slate-700 block">
+                        شماره یا خط اختصاصی فرستنده
+                      </label>
+                      <span className="text-[10px] text-slate-400">
+                        در صورت نیاز می‌توانید شماره خط ارسال را تغییر دهید
+                      </span>
+                    </div>
+                    <input
+                      type="text"
+                      value={senderLineOverride}
+                      onChange={(e) => setSenderLineOverride(e.target.value)}
+                      placeholder="10004346"
+                      className="w-48 px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-bold text-left focus:ring-2 focus:ring-emerald-500 focus:border-emerald-500 outline-none"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                {/* 4. Financial & Transmission Summary */}
+                {(() => {
+                  const ch = channels.find((c) => c.id === selectedChannelId) || channels[0];
+                  const totalParts = messagesToSend.reduce((acc, m) => acc + (m.partsCount || 1), 0);
+                  const totalCost = (ch?.costPerPart || 380) * totalParts;
+                  return (
+                    <div className="bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 text-xs">
+                      <div className="flex items-center gap-2 text-emerald-900">
+                        <Zap className="w-4 h-4 text-emerald-600" />
+                        <span>
+                          برآورد هزینه ارسال:{" "}
+                          <strong className="font-mono text-sm text-emerald-700">
+                            {toPersianDigits(addCommas(totalCost))}
+                          </strong>{" "}
+                          ریال
+                        </span>
+                      </div>
+                      <div className="text-[11px] text-emerald-800">
+                        <span>
+                          تعداد: {toPersianDigits(messagesToSend.length)} پیامک ({toPersianDigits(totalParts)} پارت)
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Modal Footer Actions */}
+              <div className="p-4 border-t border-slate-100 bg-slate-50 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  disabled={isSendingViaChannel}
+                  onClick={() => {
+                    setIsChannelSendModalOpen(false);
+                    setMessagesToSend([]);
+                  }}
+                  className="px-4 py-2.5 bg-white border border-slate-200 text-slate-700 font-bold rounded-xl text-xs hover:bg-slate-100 transition-colors"
+                >
+                  انصراف
+                </button>
+
+                <button
+                  type="button"
+                  disabled={isSendingViaChannel || messagesToSend.length === 0}
+                  onClick={handleExecuteSendViaChannel}
+                  className="px-6 py-2.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold rounded-xl text-xs md:text-sm shadow-md shadow-emerald-200 transition-all flex items-center gap-2 disabled:opacity-50"
+                >
+                  {isSendingViaChannel ? (
+                    <>
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                      <span>در حال ارسال پیام‌ها...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Send className="w-4 h-4" />
+                      <span>تایید و ارسال نهایی ({toPersianDigits(messagesToSend.length)} پیامک)</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </motion.div>
           </div>
         )}

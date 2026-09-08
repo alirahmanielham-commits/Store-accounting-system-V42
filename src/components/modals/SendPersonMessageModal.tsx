@@ -41,6 +41,7 @@ export interface SendPersonMessageModalProps {
   showNotification?: ((msg: string, type?: "success" | "error" | "info") => void) | ((type: string, msg: string) => void);
   calculatePersonBalance?: (id: string | number) => { amount: number; status: string; color?: string; bg?: string; value?: number };
   storeSettings?: any;
+  source?: "person_profile" | "person_list" | string;
 }
 
 type MainTab = "composer" | "preview" | "history";
@@ -53,7 +54,8 @@ export default function SendPersonMessageModal({
   person,
   showNotification,
   calculatePersonBalance,
-  storeSettings
+  storeSettings,
+  source = "person_profile"
 }: SendPersonMessageModalProps) {
   const [activeTab, setActiveTab] = useState<MainTab>("composer");
   const [selectedTopic, setSelectedTopic] = useState<MessageTopic>("balance");
@@ -352,29 +354,50 @@ export default function SendPersonMessageModal({
     try {
       const recipientName = getPersonName(person);
 
+      const nowIso = new Date().toISOString();
       const msgData = {
         id: `sms_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
         recipientType: "contact",
-        recipientId: person.id,
+        recipientId: person?.id ? String(person.id) : null,
         recipientNumber: cleanNumber,
         recipientName,
         messageBody: message,
         messageLength: message.length,
+        partsCount: Math.ceil(message.length / 70) || 1,
         topic: selectedTopic,
-        status: "pending",
+        status: "queued",
         priority,
-        createdAt: Date.now()
+        source: source || "person_profile",
+        cost: 0,
+        currency: "IRR",
+        createdAt: nowIso,
+        updatedAt: nowIso,
+        // backwards compat
+        recipient: cleanNumber,
+        message: message,
+        timestamp: Date.now()
       };
 
       // 1. Append to SMS messages queue in database
       await fetch("/api/data/batch", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify([{ key: "sms_messages", type: "append", data: msgData }])
+        headers: {
+          "Authorization": "Bearer " + (localStorage.getItem("access_token") || ""),
+          "x-store-id": localStorage.getItem("activeStoreId") || "default",
+          "Content-Type": "application/json"
+        },
+        body: JSON.stringify({
+          operations: [{ key: "sms_messages", type: "append", data: msgData }]
+        })
       });
 
+      if (typeof window !== "undefined") {
+        window.dispatchEvent(new CustomEvent("sms_messages_updated", { detail: { record: msgData } }));
+        window.dispatchEvent(new CustomEvent("app_data_changed", { detail: { key: "sms_messages" } }));
+      }
+
       // 2. Add log entry
-      await addDatabaseLog("ارسال پیامک", "sms_messages", msgData.id, null, msgData);
+      await addDatabaseLog("ثبت پیامک شخص در جدول", "sms_messages", msgData.id, null, msgData);
 
       // 3. Attempt direct transmission via configured providers
       try {

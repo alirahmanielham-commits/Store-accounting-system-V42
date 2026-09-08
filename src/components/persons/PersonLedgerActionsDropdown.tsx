@@ -124,15 +124,18 @@ function PersonLedgerActionsDropdown({
               onClick={() => {
                 setIsOpen(false);
                 const person = (persons || []).find((p: any) => p?.id?.toString() === ledgerPersonId?.toString());
-                if (person && person.phone) {
-                  if (storeSettings?.notify_method === "none" || !storeSettings?.notify_method) {
-                    customAlert("ارسال پیامک تنظیم نشده است. ابتدا به تنظیمات بروید.");
-                    return;
-                  }
+                const phone = person?.phone || person?.mobile;
+                if (person && phone) {
+                  const method = storeSettings?.notify_method && storeSettings.notify_method !== "none" ? storeSettings.notify_method : undefined;
                   sendNotification(
-                    `${person.name} گرامی، به استحضار می رساند مانده حساب شما در سیستم ${storeSettings?.storeName || "ما"} بررسی و یادآوری می‌گردد. لطفا در صورت امکان جهت تسویه حساب اقدام فرمایید.`,
-                    person.phone,
-                    storeSettings?.notify_method,
+                    `${person.name} گرامی، به استحضار می‌رساند مانده حساب شما در سیستم ${storeSettings?.storeName || "مجموعه ما"} بررسی و یادآوری می‌گردد. لطفا در صورت امکان جهت تسویه حساب اقدام فرمایید.`,
+                    phone,
+                    method,
+                    {
+                      recipientName: person.name,
+                      recipientId: person.id,
+                      source: "person_profile",
+                    }
                   );
                 } else {
                   customAlert("شماره تماس این شخص در سیستم ثبت نشده است.");

@@ -46,6 +46,7 @@ export type Person = {
   taxNumber?: string;
   registrationNumber?: string; 
   phone: string;
+  mobile?: string;
   contacts?: { id?: string; type: 'mobile' | 'phone' | 'fax' | 'other'; number: string; title?: string }[]; 
   bankName?: string;
   bankAccountNumber?: string;

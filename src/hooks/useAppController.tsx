@@ -730,32 +730,66 @@ const [loading, setLoading] = useState(false);
 
 const [requiresInitSetup, setRequiresInitSetup] = useState(false);
 
-const sendNotification = async (message, personPhone, method) => {
-    if (!method || method === "none" || !personPhone) return;
-
-    if (method === "sms" || method === "gsm") {
-      const msgObj = {
-        id: generateId(),
-        recipient: personPhone,
-        message: message,
-        status: "sent",
-        provider: method,
-        timestamp: Date.now(),
-      };
-      await addSmsMessage(msgObj);
-      setSmsMessages((prev) => [...prev, msgObj]);
+const sendNotification = async (
+    message: string,
+    personPhone: string,
+    method?: string,
+    extraMeta?: {
+      recipientName?: string;
+      recipientId?: string | number;
+      source?: string;
+      status?: string;
+      priority?: number;
     }
+  ) => {
+    const cleanPhone = String(personPhone || "").trim().replace(/\s+/g, "");
+    if (!cleanPhone && !extraMeta?.recipientName) return;
 
-    setTimeout(() => {
-      let icon = "💬";
-      if (method === "sms") icon = "📱";
-      if (method === "whatsapp") icon = "🟢";
-      if (method === "gsm") icon = "📡";
+    const isSent = Boolean(method && method !== "none" && (method === "sms" || method === "gsm"));
+    const status = extraMeta?.status || (isSent ? "sent" : "queued");
 
+    const msgObj = {
+      id: `sms_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      recipientNumber: cleanPhone,
+      recipientName: extraMeta?.recipientName || "مشتری/مخاطب",
+      recipientId: extraMeta?.recipientId ? String(extraMeta.recipientId) : null,
+      recipientType: "contact",
+      messageBody: message,
+      messageLength: (message || "").length,
+      partsCount: Math.ceil(((message || "").length) / 70) || 1,
+      status: status,
+      providerId: isSent ? (method || "sms_default") : null,
+      source: extraMeta?.source || "panel",
+      priority: extraMeta?.priority ?? 0,
+      cost: 0,
+      currency: storeSettings?.currency || "IRR",
+      sentAt: isSent ? new Date().toISOString() : null,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+      // Backwards compatibility keys
+      recipient: cleanPhone,
+      message: message,
+      provider: method || "panel",
+      timestamp: Date.now(),
+    };
+
+    await addSmsMessage(msgObj);
+    setSmsMessages((prev) => [...prev, msgObj]);
+
+    if (isSent) {
+      setTimeout(() => {
+        let icon = "📱";
+        if (method === "whatsapp") icon = "🟢";
+        if (method === "gsm") icon = "📡";
+        setSuccessMsg(
+          icon + " پیامک/اطلاع‌رسانی به " + (cleanPhone || extraMeta?.recipientName) + " ارسال شد.",
+        );
+      }, 1000);
+    } else {
       setSuccessMsg(
-        icon + " پیامک/اطلاع‌رسانی به " + personPhone + " ارسال شد.",
+        "پیامک به شماره " + (cleanPhone || extraMeta?.recipientName) + " در جدول پیام‌ها ثبت شد (آماده ارسال با انتخاب کانال).",
       );
-    }, 1500);
+    }
   };
 
 const [receiptNumber, setReceiptNumber] = useState("");
@@ -2863,29 +2897,45 @@ description: receiptDescription,
           ? "رسید دریافت با موفقیت صادر شد"
           : "رسید پرداخت با موفقیت صادر شد",
       );
-      if (storeSettings?.notify_on_receipt) {
-        const person = persons.find(
-          (p) => p.id === payload.personId,
-        );
-        if (person && person.phone) {
-          const amt =
-            typeof formatNumber === "function"
-              ? formatNumber(payload.amount)
-              : payload.amount;
-          const isRec = typeTmp === "receive";
-          let msg = `${person.name} گرامی، رسید ${isRec ? "دریافت از" : "پرداخت به"} شما به مبلغ ${amt} ${storeSettings?.currency || "تومان"} با موفقیت ثبت شد.`;
+      // Queue or Send SMS for receipt/payment in sms_messages table
+      const receiptPerson = persons.find(
+        (p) => String(p.id) === String(payload.personId),
+      );
+      if (receiptPerson && (receiptPerson.phone || receiptPerson.mobile || receiptPerson.name)) {
+        const pPhone = String(receiptPerson.phone || receiptPerson.mobile || "").trim();
+        const amt =
+          typeof formatNumber === "function"
+            ? formatNumber(payload.amount)
+            : payload.amount;
+        const isRec = typeTmp === "receive";
+        const curStr = storeSettings?.currency || "تومان";
+        const recNum = String(createdReceiptObj?.receiptNumber || payload.receiptNumber || "");
+        const dateStr = formatDateDisplay(new Date(), storeSettings?.calendarType);
+
+        let msg = "";
+        if (isRec) {
+          msg = `${receiptPerson.name} گرامی، رسید دریافت شماره ${recNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} با موفقیت در سیستم ثبت گردید. با تشکر.`;
           if (storeSettings?.smsTemplateReceipt) {
             msg = storeSettings.smsTemplateReceipt
-              .replace(/{name}/g, person.name)
+              .replace(/{name}/g, receiptPerson.name)
               .replace(/{amount}/g, String(amt))
-              .replace(
-                /{receipt_number}/g,
-                String(createdReceiptObj?.receiptNumber || ""),
-              )
-              .replace(/{date}/g, formatDateDisplay(new Date(), storeSettings?.calendarType));
+              .replace(/{receipt_number}/g, recNum)
+              .replace(/{date}/g, dateStr);
           }
-          sendNotification(msg, person.phone, storeSettings?.notify_method);
+        } else {
+          msg = `${receiptPerson.name} گرامی، رسید پرداخت شماره ${recNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت و به حساب شما منظور گردید.`;
         }
+
+        sendNotification(
+          msg, 
+          pPhone, 
+          storeSettings?.notify_on_receipt ? storeSettings?.notify_method : undefined,
+          {
+            recipientName: receiptPerson.name,
+            recipientId: receiptPerson.id,
+            source: isRec ? "receipt" : "payment",
+          }
+        );
       }
 
       checkDebtThreshold(payload.personId).catch(console.error);
@@ -5472,35 +5522,54 @@ const getInvoiceNumber = (typeOverride?: string) => {
           : `${successTypeName} با موفقیت ثبت شد!`,
       );
       if (
-        storeSettings?.notify_on_invoice &&
         (payload.type === "sale" || payload.type === "purchase" || payload.type === "sale_return" || payload.type === "purchase_return") &&
         !isDraft
       ) {
-        const person = persons.find((p) => p.id === payload.customerId);
-        if (person && person.phone) {
+        const person = persons.find((p) => String(p.id) === String(payload.customerId));
+        if (person && (person.phone || person.mobile || person.name)) {
+          const pPhone = String(person.phone || person.mobile || "").trim();
           const amt =
             typeof formatNumber === "function"
               ? formatNumber(payload.totalAmount)
               : payload.totalAmount;
-          const mTitle =
-            (payload.type === "sale" || payload.type === "sale_return") ? "مشتری گرامی" : "همکار گرامی";
-          const mWord =
-            payload.type === "sale"
-              ? "خرید"
-              : payload.type === "purchase"
-                ? "فروش"
-                : payload.type === "sale_return"
-                  ? "برگشت از فروش"
-                  : "برگشت از خرید";
-          let msg = `${mTitle}، ${successTypeName} شما به مبلغ ${amt} ${storeSettings?.currency || "تومان"} در سیستم ثبت شد.`;
-          if (storeSettings?.smsTemplateInvoice) {
-            msg = storeSettings.smsTemplateInvoice
-              .replace(/{name}/g, person.name)
-              .replace(/{amount}/g, String(amt))
-              .replace(/{invoice_number}/g, String(payload.invoiceNumber || ""))
-              .replace(/{date}/g, formatDateDisplay(new Date(), storeSettings?.calendarType));
+          const invNum = String(payload.invoiceNumber || "");
+          const curStr = storeSettings?.currency || "تومان";
+          const dateStr = formatDateDisplay(new Date(), storeSettings?.calendarType);
+
+          let msg = "";
+          let smsSource = "sale_invoice";
+
+          if (payload.type === "sale") {
+            smsSource = "sale_invoice";
+            msg = `مشتری گرامی ${person.name}، فاکتور فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت گردید. با تشکر از خرید شما.`;
+            if (storeSettings?.smsTemplateInvoice) {
+              msg = storeSettings.smsTemplateInvoice
+                .replace(/{name}/g, person.name)
+                .replace(/{amount}/g, String(amt))
+                .replace(/{invoice_number}/g, invNum)
+                .replace(/{date}/g, dateStr);
+            }
+          } else if (payload.type === "purchase") {
+            smsSource = "purchase_invoice";
+            msg = `تأمین‌کننده گرامی ${person.name}، فاکتور خرید شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت گردید.`;
+          } else if (payload.type === "sale_return") {
+            smsSource = "sale_return";
+            msg = `مشتری گرامی ${person.name}، فاکتور برگشت از فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت و از حساب شما کسر گردید.`;
+          } else if (payload.type === "purchase_return") {
+            smsSource = "purchase_return";
+            msg = `همکار گرامی ${person.name}، فاکتور برگشت از خرید شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت گردید.`;
           }
-          sendNotification(msg, person.phone, storeSettings?.notify_method);
+
+          sendNotification(
+            msg, 
+            pPhone, 
+            storeSettings?.notify_on_invoice ? storeSettings?.notify_method : undefined,
+            {
+              recipientName: person.name,
+              recipientId: person.id,
+              source: smsSource,
+            }
+          );
         }
       }
       
@@ -5754,25 +5823,36 @@ const handleExecuteTransferAndSubmit = async () => {
         `سند انتقال موجودی و فاکتور فروش شماره ${originalPayload.invoiceNumber} با موفقیت ثبت شدند!`,
       );
 
-      if (storeSettings?.notify_on_invoice && originalPayload.customerId) {
-        const person = persons.find((p) => p.id === originalPayload.customerId);
-        if (person && person.phone) {
+      if (originalPayload.customerId) {
+        const person = persons.find((p) => String(p.id) === String(originalPayload.customerId));
+        if (person && (person.phone || person.mobile || person.name)) {
+          const pPhone = String(person.phone || person.mobile || "").trim();
           const amt =
             typeof formatNumber === "function"
               ? formatNumber(originalPayload.totalAmount)
               : originalPayload.totalAmount;
-          let msg = `مشتری گرامی، فاکتور خرید شما به مبلغ ${amt} ${storeSettings?.currency || "تومان"} در سیستم ثبت شد.`;
+          const invNum = String(originalPayload.invoiceNumber || "");
+          const curStr = storeSettings?.currency || "تومان";
+          const dateStr = formatDateDisplay(new Date(), storeSettings?.calendarType);
+
+          let msg = `مشتری گرامی ${person.name}، فاکتور فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت شد. با تشکر از خرید شما.`;
           if (storeSettings?.smsTemplateInvoice) {
             msg = storeSettings.smsTemplateInvoice
               .replace(/{name}/g, person.name)
               .replace(/{amount}/g, String(amt))
-              .replace(
-                /{invoice_number}/g,
-                String(originalPayload.invoiceNumber || ""),
-              )
-              .replace(/{date}/g, formatDateDisplay(new Date(), storeSettings?.calendarType));
+              .replace(/{invoice_number}/g, invNum)
+              .replace(/{date}/g, dateStr);
           }
-          sendNotification(msg, person.phone, storeSettings?.notify_method);
+          sendNotification(
+            msg, 
+            pPhone, 
+            storeSettings?.notify_on_invoice ? storeSettings?.notify_method : undefined,
+            {
+              recipientName: person.name,
+              recipientId: person.id,
+              source: "sale_invoice",
+            }
+          );
         }
       }
 

@@ -1076,6 +1076,7 @@ export default function PersonsManager(props: any) {
           showNotification={notify}
           calculatePersonBalance={calculatePersonBalance}
           storeSettings={storeSettings}
+          source="person_list"
         />
       </div>
     </div>
