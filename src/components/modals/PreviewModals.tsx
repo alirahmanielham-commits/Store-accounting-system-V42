@@ -3,6 +3,7 @@ import { X, Printer, CheckCircle, Eye, Wallet, Settings, AlertTriangle, Ban, Fil
 import InvoicePrintTemplate from "../print/InvoicePrintTemplate";
 import WarehousePrintTemplate from "../print/WarehousePrintTemplate";
 import ReceiptPrintTemplate from "../print/ReceiptPrintTemplate";
+import ReceiptConfirmationModal from "../financial/ReceiptConfirmationModal";
 
 export default function PreviewModals(props: any) {
   const {
@@ -12,7 +13,8 @@ export default function PreviewModals(props: any) {
     viewingCheck, setViewingCheck, getPersonDisplayName, persons, formatCurrency, toPersianDigits,
     previewReceiptData, setPreviewReceiptData, confirmReceiptSubmit,
     storeSettings, products, warehouses,
-    transactions, invoices, personOpeningBalances, issuedChecks, receivedChecks, printingTransaction, setPrintingTransaction
+    transactions, invoices, personOpeningBalances, issuedChecks, receivedChecks, printingTransaction, setPrintingTransaction,
+    accounts, cashboxes, checkbooks, submittingReceipt,
   } = props;
 
   const currentInvoice = viewingInvoice || previewInvoiceData;
@@ -241,54 +243,25 @@ export default function PreviewModals(props: any) {
       {/* Check Preview */}
 
 
-      {/* Receipt Preview */}
+      {/* Receipt Preview & Confirmation */}
       {previewReceiptData && (
-        <div className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm print:hidden" dir="rtl">
-          <div className="bg-white rounded-2xl w-full max-w-lg overflow-hidden shadow-2xl relative">
-            <button onClick={() => setPreviewReceiptData(null)} className="absolute top-4 left-4 p-2 text-slate-400 hover:bg-slate-100 rounded-full transition-colors z-10">
-              <X className="w-5 h-5" />
-            </button>
-            <div className="p-6">
-              <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-                <Wallet className="w-6 h-6 text-emerald-500" />
-                تایید رسید {previewReceiptData.type === 'receive' ? 'دریافت' : 'پرداخت'}
-              </h3>
-              <div className="space-y-4">
-                <div className="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-slate-500 text-sm font-bold">شخص</span>
-                  <span className="font-black text-slate-800">{getPersonDisplayName(previewReceiptData.personId, persons)}</span>
-                </div>
-                <div className="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-slate-500 text-sm font-bold">مبلغ تراکنش</span>
-                  <span className="font-black text-emerald-600">{toPersianDigits(formatCurrency(previewReceiptData.amount))} ریال</span>
-                </div>
-                <div className="flex justify-between p-3 bg-slate-50 rounded-xl border border-slate-100">
-                  <span className="text-slate-500 text-sm font-bold">تاریخ</span>
-                  <span className="font-black text-slate-800">{previewReceiptData.date}</span>
-                </div>
-              </div>
-              <div className="mt-8 flex gap-3">
-                <button
-                  onClick={() => setPreviewReceiptData(null)}
-                  className="flex-1 px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold transition-colors"
-                >
-                  انصراف
-                </button>
-                <button
-                  onClick={() => {
-                    confirmReceiptSubmit(previewReceiptData);
-                    setPreviewReceiptData(null);
-                  }}
-                  disabled={submitting}
-                  className="flex-1 px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold transition-colors flex items-center justify-center gap-2 shadow-sm"
-                >
-                  <CheckCircle className="w-5 h-5" />
-                  تایید نهایی
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
+        <ReceiptConfirmationModal
+          isOpen={Boolean(previewReceiptData)}
+          onClose={() => setPreviewReceiptData(null)}
+          onConfirm={() => {
+            confirmReceiptSubmit(previewReceiptData);
+          }}
+          submitting={Boolean(submittingReceipt || submitting)}
+          receiptData={previewReceiptData}
+          persons={persons}
+          accounts={accounts}
+          cashboxes={cashboxes}
+          checkbooks={checkbooks}
+          invoices={invoices}
+          storeSettings={storeSettings}
+          formatCurrency={formatCurrency}
+          getPersonDisplayName={getPersonDisplayName}
+        />
       )}
       {/* Receipt Printing Modal */}
       {printingTransaction && (

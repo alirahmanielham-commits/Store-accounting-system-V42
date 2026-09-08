@@ -6,6 +6,7 @@ import {
   Smile, Link as LinkIcon, AlertCircle, Calendar, Hash, Tags,
   Layers, Filter, ChevronUp, User, Globe
 } from 'lucide-react';
+import { generateCiteableMessageId } from '../../services/crmService';
 
 // Mock Data
 
@@ -129,10 +130,10 @@ export default function SendMessageView({ showNotification, persons = [], person
 
       if (sendMode === 'single' || sendMode === 'bulk' || sendMode === 'scheduled') {
          if (manualNumbers) {
-            const numbers = manualNumbers.split(/[\\n,]/).map(n => n.trim()).filter(n => n);
+            const numbers = manualNumbers.split(/[\n,]/).map(n => n.trim()).filter(n => n);
             numbers.forEach(num => {
                messagesToSave.push({
-                  id: Math.random().toString(36).substring(2, 15),
+                  id: generateCiteableMessageId(),
                   recipientType: 'manual',
                   recipientNumber: num,
                   recipientName: 'شماره دستی',
@@ -148,7 +149,7 @@ export default function SendMessageView({ showNotification, persons = [], person
          
          selectedRecipients.forEach(rec => {
             messagesToSave.push({
-                  id: Math.random().toString(36).substring(2, 15),
+                  id: generateCiteableMessageId(),
                   recipientType: 'contact',
                   recipientId: rec.id,
                   recipientNumber: rec.phone,
@@ -165,7 +166,7 @@ export default function SendMessageView({ showNotification, persons = [], person
          
          groupPersons.forEach((rec: any) => {
             messagesToSave.push({
-                  id: Math.random().toString(36).substring(2, 15),
+                  id: generateCiteableMessageId(),
                   recipientType: 'contact',
                   recipientId: rec.id,
                   recipientNumber: rec.phone || rec.mobile,

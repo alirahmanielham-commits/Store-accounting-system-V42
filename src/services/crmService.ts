@@ -51,10 +51,78 @@ export interface QueueSystemSmsParams {
   currency?: string;
 }
 
+/**
+ * Generates a clean, citeable numeric ID for SMS records (e.g. 10001, 10002, ...).
+ * It scans existing records, localStorage cache, and sequences to monotonically increment.
+ */
+export const generateCiteableMessageId = (existingList?: { id?: string | number }[]): string => {
+  let maxNum = 10000;
+
+  // 1. Scan provided list
+  if (Array.isArray(existingList)) {
+    for (const item of existingList) {
+      if (item && item.id != null) {
+        const idStr = String(item.id).trim();
+        if (/^\d{1,8}$/.test(idStr)) {
+          const val = parseInt(idStr, 10);
+          if (val > maxNum && val < 90000000) {
+            maxNum = val;
+          }
+        }
+      }
+    }
+  }
+
+  // 2. Scan localStorage cached list of sms_messages
+  try {
+    const rawLocal = localStorage.getItem('sms_messages');
+    if (rawLocal) {
+      const parsed = JSON.parse(rawLocal);
+      if (Array.isArray(parsed)) {
+        for (const item of parsed) {
+          if (item && item.id != null) {
+            const idStr = String(item.id).trim();
+            if (/^\d{1,8}$/.test(idStr)) {
+              const val = parseInt(idStr, 10);
+              if (val > maxNum && val < 90000000) {
+                maxNum = val;
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  // 3. Scan last used sequence
+  try {
+    const storedSeq = localStorage.getItem('last_sms_citeable_id');
+    if (storedSeq && /^\d+$/.test(storedSeq)) {
+      const val = parseInt(storedSeq, 10);
+      if (val > maxNum && val < 90000000) {
+        maxNum = val;
+      }
+    }
+  } catch (e) {
+    // Ignore error
+  }
+
+  const nextId = maxNum + 1;
+  try {
+    localStorage.setItem('last_sms_citeable_id', String(nextId));
+  } catch (e) {
+    // Ignore error
+  }
+
+  return String(nextId);
+};
+
 export const normalizeSmsRecord = (data: any) => {
   const cleanNumber = String(data.recipientNumber || data.recipient || data.phone || data.mobile || '').trim().replace(/\s+/g, '');
   const body = String(data.messageBody || data.message || data.text || '');
-  const id = data.id || `sms_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`;
+  const id = (data.id && /^\d{1,8}$/.test(String(data.id).trim())) ? String(data.id).trim() : generateCiteableMessageId();
   const status = data.status || 'queued';
   const nowIso = new Date().toISOString();
 
@@ -132,6 +200,10 @@ export const deleteSmsMessage = async (id: string): Promise<void> => {
         operations: [{ key: 'sms_messages', type: 'delete', id }]
       })
     });
+    const local = await getLocalData('sms_messages', []);
+    if (Array.isArray(local)) {
+      await saveLocalData('sms_messages', local.filter((m: any) => String(m.id) !== String(id)));
+    }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('sms_messages_updated', { detail: { id, deleted: true } }));
       window.dispatchEvent(new CustomEvent('app_data_changed', { detail: { key: 'sms_messages' } }));
@@ -139,7 +211,37 @@ export const deleteSmsMessage = async (id: string): Promise<void> => {
   } catch (err) {
     console.error('Error deleting sms_message via batch, falling back:', err);
     const messages = await getSmsMessages();
-    await saveLocalData('sms_messages', messages.filter(m => m.id !== id));
+    await saveLocalData('sms_messages', messages.filter(m => String(m.id) !== String(id)));
+  }
+};
+
+export const deleteMultipleSmsMessages = async (ids: string[]): Promise<void> => {
+  if (!ids || ids.length === 0) return;
+  const idSet = new Set(ids.map(String));
+  try {
+    await fetch('/api/data/batch', {
+      method: 'POST',
+      headers: {
+        'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || ''),
+        'x-store-id': localStorage.getItem('activeStoreId') || 'default',
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        operations: ids.map(id => ({ key: 'sms_messages', type: 'delete', id }))
+      })
+    });
+    const local = await getLocalData('sms_messages', []);
+    if (Array.isArray(local)) {
+      await saveLocalData('sms_messages', local.filter((m: any) => !idSet.has(String(m.id))));
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('sms_messages_updated', { detail: { ids, deleted: true } }));
+      window.dispatchEvent(new CustomEvent('app_data_changed', { detail: { key: 'sms_messages' } }));
+    }
+  } catch (err) {
+    console.error('Error deleting multiple sms_messages via batch, falling back:', err);
+    const messages = await getSmsMessages();
+    await saveLocalData('sms_messages', messages.filter(m => !idSet.has(String(m.id))));
   }
 };
 

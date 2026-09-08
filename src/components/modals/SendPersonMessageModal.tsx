@@ -33,6 +33,7 @@ import {
 import { addDatabaseLog } from "../../services/coreService";
 import { addCommas, toPersianDigits, formatDateDisplay } from "../../utils/format";
 import { messagingManager } from "../../services/messaging/MessagingManager";
+import { generateCiteableMessageId } from "../../services/crmService";
 
 export interface SendPersonMessageModalProps {
   isOpen: boolean;
@@ -356,7 +357,7 @@ export default function SendPersonMessageModal({
 
       const nowIso = new Date().toISOString();
       const msgData = {
-        id: `sms_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+        id: generateCiteableMessageId(),
         recipientType: "contact",
         recipientId: person?.id ? String(person.id) : null,
         recipientNumber: cleanNumber,

@@ -212,7 +212,7 @@ export const allSidebarGroups: SidebarGroup[] = [
     icon: <MessageSquare className="w-5 h-5" />,
     items: [
       { id: "send_message", label: "ارسال پیام", roles: ["admin", "manager", "accountant"] },
-      { id: "sms_messages", label: "مدیریت پیام‌ها (sms_messages)", roles: ["admin", "manager", "accountant"] },
+      { id: "sms_messages", label: "مدیریت پیامک‌ها", roles: ["admin", "manager", "accountant"] },
       { id: "sms_templates", label: "مدیریت قالب‌ها", roles: ["admin", "manager"] },
       { id: "messaging_channels", label: "تنظیمات کانال‌ها", roles: ["admin"] },
       { id: "messaging_logs", label: "گزارشات ارسال", roles: ["admin", "manager"] },

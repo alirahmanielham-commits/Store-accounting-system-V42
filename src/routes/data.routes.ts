@@ -100,7 +100,12 @@ router.post('/api/data/batch', async (req, res) => {
             } else if (op.type === 'delete') {
                const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
                if (idx !== -1) {
-                  data[idx].isDeleted = true;
+                  if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
+                     data[idx].deleted_at = new Date().toISOString();
+                     data[idx].isDeleted = true;
+                  } else {
+                     data.splice(idx, 1);
+                  }
                   results.push({ id: op.id, status: 'deleted' });
                   sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'DELETE', userId: 'system', details: 'حذف رکورد گروهی', entityType: key, entityId: op.id, timestamp });
                }

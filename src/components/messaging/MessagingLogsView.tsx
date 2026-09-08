@@ -209,6 +209,15 @@ export default function MessagingLogsView({ showNotification }: { showNotificati
     if (showNotification) showNotification(`Retrying message ${logId}...`, "info");
   };
 
+  const handleDeleteSelected = () => {
+    if (selectedRows.size === 0) return;
+    if (window.confirm(`آیا از حذف ${selectedRows.size} گزارش پیامک اطمینان دارید؟ این عملیات غیرقابل بازگشت است.`)) {
+      setLogs(prev => prev.filter(l => !selectedRows.has(l.id)));
+      setSelectedRows(new Set());
+      if (showNotification) showNotification(`${selectedRows.size} گزارش با موفقیت حذف گردید.`, "success");
+    }
+  };
+
   const toggleRowSelection = (e: React.ChangeEvent<HTMLInputElement>, id: string) => {
     e.stopPropagation();
     const newSet = new Set(selectedRows);
@@ -542,8 +551,11 @@ export default function MessagingLogsView({ showNotification }: { showNotificati
                         <button className="text-sm font-medium bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
                           <RefreshCw className="w-4 h-4" /> Retry Selected
                         </button>
-                        <button className="text-sm font-medium bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5">
-                          <Trash2 className="w-4 h-4" /> Delete
+                        <button 
+                          onClick={handleDeleteSelected}
+                          className="text-sm font-medium bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                        >
+                          <Trash2 className="w-4 h-4" /> حذف انتخابی‌ها
                         </button>
                         <button 
                           onClick={() => setSelectedRows(new Set())}

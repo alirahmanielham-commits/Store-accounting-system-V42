@@ -7,6 +7,7 @@ import {
   XCircle,
   Clock,
   AlertCircle,
+  AlertTriangle,
   RefreshCw,
   Search,
   Filter,
@@ -58,6 +59,7 @@ import {
   Legend
 } from "recharts";
 import { toPersianDigits, addCommas } from "../../utils/format";
+import { generateCiteableMessageId, deleteSmsMessage, deleteMultipleSmsMessages } from "../../services/crmService";
 
 export interface SmsChannelOption {
   id: string;
@@ -290,6 +292,14 @@ export default function SmsMessagesManager({
   const [newStatus, setNewStatus] = useState<string>("pending");
   const [isSubmittingNew, setIsSubmittingNew] = useState<boolean>(false);
 
+  // Deletion Confirmation & Warning Modal State
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
+    type: "single" | "bulk";
+    message?: SmsMessageRecord;
+    bulkMessages?: SmsMessageRecord[];
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState<boolean>(false);
+
   // Load from API
   const fetchMessages = useCallback(async () => {
     setIsLoading(true);
@@ -298,7 +308,8 @@ export default function SmsMessagesManager({
       if (res.ok) {
         const data = await res.json();
         if (Array.isArray(data)) {
-          const sorted = [...data].sort((a, b) => {
+          const activeRecords = data.filter((m: any) => m && !m.isDeleted && !m.deleted_at);
+          const sorted = [...activeRecords].sort((a, b) => {
             const timeA = new Date(a.createdAt || 0).getTime();
             const timeB = new Date(b.createdAt || 0).getTime();
             return timeB - timeA;
@@ -374,7 +385,7 @@ export default function SmsMessagesManager({
     setIsLoading(true);
     const sampleData: SmsMessageRecord[] = [
       {
-        id: `SMS-${Date.now()}-1`,
+        id: "10001",
         campaignId: "CAMP-101",
         providerId: "kavenegar",
         templateId: "tpl_invoice_alert",
@@ -398,7 +409,7 @@ export default function SmsMessagesManager({
         createdAt: new Date(Date.now() - 16 * 60000).toISOString(),
       },
       {
-        id: `SMS-${Date.now()}-2`,
+        id: "10002",
         campaignId: null,
         providerId: "kavenegar",
         templateId: "tpl_cheque_reminder",
@@ -421,7 +432,7 @@ export default function SmsMessagesManager({
         createdAt: new Date(Date.now() - 2 * 3600000).toISOString(),
       },
       {
-        id: `SMS-${Date.now()}-3`,
+        id: "10003",
         campaignId: "CAMP-FEST",
         providerId: "kavenegar",
         recipientType: "manual",
@@ -441,7 +452,7 @@ export default function SmsMessagesManager({
         createdAt: new Date(Date.now() - 4 * 3600000).toISOString(),
       },
       {
-        id: `SMS-${Date.now()}-4`,
+        id: "10004",
         campaignId: null,
         providerId: "kavenegar",
         recipientType: "contact",
@@ -464,7 +475,7 @@ export default function SmsMessagesManager({
         createdAt: new Date(Date.now() - 6 * 3600000).toISOString(),
       },
       {
-        id: `SMS-${Date.now()}-5`,
+        id: "10005",
         campaignId: null,
         providerId: "kavenegar",
         recipientType: "contact",
@@ -483,7 +494,7 @@ export default function SmsMessagesManager({
         createdAt: new Date(Date.now() - 10 * 60000).toISOString(),
       },
       {
-        id: `SMS-${Date.now()}-6`,
+        id: "10006",
         campaignId: "CAMP-SCHEDULED",
         providerId: "kavenegar",
         recipientType: "contact",
@@ -563,10 +574,11 @@ export default function SmsMessagesManager({
       // Search term
       if (searchTerm.trim()) {
         const term = searchTerm.toLowerCase().trim();
+        const termDigits = term.replace(/[۰-۹]/g, (d) => String("۰۱۲۳۴۵۶۷۸۹".indexOf(d)));
         const bodyMatch = msg.messageBody?.toLowerCase().includes(term);
-        const numberMatch = msg.recipientNumber?.toLowerCase().includes(term);
+        const numberMatch = msg.recipientNumber?.toLowerCase().includes(term) || msg.recipientNumber?.toLowerCase().includes(termDigits);
         const nameMatch = msg.recipientName?.toLowerCase().includes(term);
-        const idMatch = msg.id?.toLowerCase().includes(term);
+        const idMatch = msg.id?.toLowerCase().includes(term) || msg.id?.toLowerCase().includes(termDigits);
         const provMatch = msg.providerId?.toLowerCase().includes(term);
         if (!bodyMatch && !numberMatch && !nameMatch && !idMatch && !provMatch) {
           return false;
@@ -658,52 +670,84 @@ export default function SmsMessagesManager({
     setSelectedIds(next);
   };
 
-  const handleDeleteSingle = async (id: string, e?: React.MouseEvent) => {
+  const openDeleteModalSingle = (msg: SmsMessageRecord, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    if (!window.confirm("آیا از حذف این پیامک از جدول sms_messages اطمینان دارید؟")) return;
+    setDeleteConfirmTarget({
+      type: "single",
+      message: msg,
+    });
+  };
+
+  const openDeleteModalFromDrawer = () => {
+    if (!selectedMessage) return;
+    setDeleteConfirmTarget({
+      type: "single",
+      message: selectedMessage,
+    });
+  };
+
+  const openDeleteModalBulk = () => {
+    if (selectedIds.size === 0) return;
+    const selectedMsgs = messages.filter((m) => selectedIds.has(m.id));
+    setDeleteConfirmTarget({
+      type: "bulk",
+      bulkMessages: selectedMsgs,
+    });
+  };
+
+  const confirmDeleteAction = async () => {
+    if (!deleteConfirmTarget) return;
+    setIsDeleting(true);
 
     try {
-      const operations = [{ key: "sms_messages", type: "delete", id }];
-      const res = await fetch("/api/data/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operations }),
-      });
-      if (res.ok) {
-        setMessages((prev) => prev.filter((m) => m.id !== id));
-        if (selectedMessage?.id === id) setSelectedMessage(null);
-        if (showNotification) showNotification("پیامک مورد نظر حذف گردید", "success");
+      if (deleteConfirmTarget.type === "single" && deleteConfirmTarget.message) {
+        const targetId = deleteConfirmTarget.message.id;
+        await deleteSmsMessage(targetId);
+        setMessages((prev) => prev.filter((m) => String(m.id) !== String(targetId)));
+        if (selectedMessage?.id === targetId) setSelectedMessage(null);
+        setSelectedIds((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+        if (showNotification) {
+          showNotification(`پیامک با شناسه ${toPersianDigits(targetId)} با موفقیت حذف گردید.`, "success");
+        }
+      } else if (deleteConfirmTarget.type === "bulk" && deleteConfirmTarget.bulkMessages) {
+        const idsToDelete = deleteConfirmTarget.bulkMessages.map((m) => m.id);
+        await deleteMultipleSmsMessages(idsToDelete);
+        const idSet = new Set(idsToDelete.map(String));
+        setMessages((prev) => prev.filter((m) => !idSet.has(String(m.id))));
+        setSelectedIds(new Set());
+        if (selectedMessage && idSet.has(String(selectedMessage.id))) {
+          setSelectedMessage(null);
+        }
+        if (showNotification) {
+          showNotification(`${toPersianDigits(idsToDelete.length)} پیامک با موفقیت حذف شدند.`, "success");
+        }
       }
+      setDeleteConfirmTarget(null);
     } catch (err) {
-      console.error(err);
-      if (showNotification) showNotification("خطا در حذف پیامک", "error");
+      console.error("Error confirming delete:", err);
+      if (showNotification) {
+        showNotification("خطا در حذف پیامک‌ها. لطفاً مجدداً تلاش نمایید.", "error");
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
-  const handleBulkDelete = async () => {
-    if (selectedIds.size === 0) return;
-    if (!window.confirm(`آیا از حذف ${toPersianDigits(selectedIds.size)} پیامک انتخابی اطمینان دارید؟`)) return;
-
-    try {
-      const operations = Array.from(selectedIds).map((id) => ({
-        key: "sms_messages",
-        type: "delete",
-        id,
-      }));
-      const res = await fetch("/api/data/batch", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ operations }),
-      });
-      if (res.ok) {
-        setMessages((prev) => prev.filter((m) => !selectedIds.has(m.id)));
-        setSelectedIds(new Set());
-        if (showNotification) showNotification("پیامک‌های انتخابی با موفقیت حذف شدند", "success");
-      }
-    } catch (err) {
-      console.error(err);
-      if (showNotification) showNotification("خطا در حذف گروهی پیامک‌ها", "error");
+  // Backwards compatibility alias
+  const handleDeleteSingle = (id: string, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    const msg = messages.find((m) => m.id === id);
+    if (msg) {
+      openDeleteModalSingle(msg, e);
     }
+  };
+
+  const handleBulkDelete = () => {
+    openDeleteModalBulk();
   };
 
   const handleBulkStatusChange = async (newStatusValue: string) => {
@@ -958,7 +1002,7 @@ export default function SmsMessagesManager({
     const url = URL.createObjectURL(blob);
     const link = document.createElement("a");
     link.setAttribute("href", url);
-    link.setAttribute("download", `sms_messages_export_${Date.now()}.csv`);
+    link.setAttribute("download", `sms_export_${Date.now()}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -974,8 +1018,9 @@ export default function SmsMessagesManager({
     }
 
     setIsSubmittingNew(true);
+    const citeableId = generateCiteableMessageId(messages);
     const newMsg: SmsMessageRecord = {
-      id: `SMS-${Date.now()}`,
+      id: citeableId,
       campaignId: null,
       providerId: "kavenegar",
       recipientType: "manual",
@@ -1005,7 +1050,7 @@ export default function SmsMessagesManager({
         setNewRecipientNumber("");
         setNewRecipientName("");
         setNewMessageBody("");
-        if (showNotification) showNotification("پیامک با موفقیت در جدول sms_messages ثبت گردید", "success");
+        if (showNotification) showNotification(`پیامک با موفقیت با شناسه ${toPersianDigits(newMsg.id)} ثبت گردید`, "success");
       }
     } catch (err) {
       console.error(err);
@@ -1027,15 +1072,15 @@ export default function SmsMessagesManager({
             <div>
               <div className="flex items-center gap-2">
                 <h1 className="text-xl md:text-2xl font-black text-slate-800">
-                  مدیریت پیامک‌ها (sms_messages)
+                  مدیریت پیامک‌ها
                 </h1>
-                <span className="bg-slate-200/80 text-slate-700 text-xs px-2.5 py-0.5 rounded-full font-mono font-semibold flex items-center gap-1">
-                  <Database className="w-3 h-3 text-indigo-600" />
-                  public.sms_messages
+                <span className="bg-emerald-50 text-emerald-700 border border-emerald-200 text-xs px-2.5 py-0.5 rounded-full font-bold flex items-center gap-1">
+                  <MessageSquare className="w-3 h-3 text-emerald-600" />
+                  سامانه پیامک و اطلاع‌رسانی
                 </span>
               </div>
               <p className="text-xs md:text-sm text-slate-500 mt-1">
-                نمایش زنده، وضعیت ارسال و مدیریت جامع رکوردهای پیامک از پایگاه داده
+                نمایش زنده، وضعیت ارسال و مدیریت جامع پیامک‌ها و صف پیام‌های سیستم
               </p>
             </div>
           </div>
@@ -1360,16 +1405,15 @@ export default function SmsMessagesManager({
           <div className="lg:col-span-3 bg-gradient-to-r from-slate-900 to-indigo-950 text-white p-6 rounded-2xl shadow-sm">
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="space-y-1">
-                <span className="text-xs font-mono text-indigo-300 font-bold uppercase tracking-wider flex items-center gap-1.5">
-                  <Database className="w-3.5 h-3.5" />
-                  PostgreSQL Query Execution
+                <span className="text-xs text-indigo-200 font-bold tracking-wider flex items-center gap-1.5">
+                  <Database className="w-3.5 h-3.5 text-indigo-400" />
+                  پایگاه داده و آرشیو پیام‌ها
                 </span>
-                <h4 className="text-base font-bold font-mono text-emerald-400">
-                  SELECT * FROM public.sms_messages ORDER BY created_at DESC;
+                <h4 className="text-base font-bold text-emerald-300">
+                  فهرست و بایگانی یکپارچه پیامک‌های سیستم
                 </h4>
                 <p className="text-xs text-slate-300">
-                  کلیه پیام‌های ثبت شده از طریق سیستم، وب‌سرویس‌ها، ماژول فروش، و فاکتورها در جدول
-                  اختصاصی sms_messages نگهداری و مدیریت می‌شوند.
+                  کلیه پیام‌های ثبت شده از طریق سیستم، وب‌سرویس‌ها، ماژول فروش، رسیدها و فاکتورها در این بخش نگهداری و مدیریت می‌شوند.
                 </p>
               </div>
 
@@ -1566,8 +1610,9 @@ export default function SmsMessagesManager({
                   </button>
 
                   <button
-                    onClick={handleBulkDelete}
+                    onClick={openDeleteModalBulk}
                     className="px-3 py-1.5 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold rounded-xl transition-colors flex items-center gap-1"
+                    title="حذف پیامک‌های انتخاب شده"
                   >
                     <Trash2 className="w-3.5 h-3.5" />
                     حذف انتخابی‌ها
@@ -1600,7 +1645,7 @@ export default function SmsMessagesManager({
                   </div>
                   <h4 className="text-base font-bold text-slate-700">پیامکی یافت نشد</h4>
                   <p className="text-xs text-slate-500 mt-1 max-w-sm text-center">
-                    هیچ رکوردی منطبق با فیلترها یا جستجوی شما در جدول public.sms_messages یافت نشد.
+                    هیچ رکوردی منطبق با فیلترها یا جستجوی شما در سامانه پیامک یافت نشد.
                   </p>
                   {messages.length === 0 && (
                     <button
@@ -1663,7 +1708,7 @@ export default function SmsMessagesManager({
                           <td className="px-4 py-3 font-mono text-[11px] text-slate-500">
                             <div className="flex items-center gap-1.5">
                               <span className="group-hover:text-indigo-600 font-bold transition-colors">
-                                {msg.id}
+                                {toPersianDigits(msg.id)}
                               </span>
                               <button
                                 onClick={(e) => {
@@ -1671,7 +1716,7 @@ export default function SmsMessagesManager({
                                   handleCopy(msg.id);
                                 }}
                                 className="opacity-0 group-hover:opacity-100 text-slate-400 hover:text-indigo-600 transition-opacity"
-                                title="کپی شناسه"
+                                title="کپی شناسه پیام"
                               >
                                 <Copy className="w-3 h-3" />
                               </button>
@@ -1787,9 +1832,9 @@ export default function SmsMessagesManager({
                               </button>
 
                               <button
-                                onClick={(e) => handleDeleteSingle(msg.id, e)}
+                                onClick={(e) => openDeleteModalSingle(msg, e)}
                                 className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
-                                title="حذف رکورد"
+                                title="حذف این پیامک"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -1814,7 +1859,7 @@ export default function SmsMessagesManager({
                 <span className="font-bold text-slate-800 font-mono">
                   {toPersianDigits(messages.length)}
                 </span>{" "}
-                پیامک ثبت‌شده در جدول public.sms_messages
+                پیامک ثبت‌شده در سامانه پیامک
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-[11px] text-slate-400">
@@ -1859,14 +1904,17 @@ export default function SmsMessagesManager({
                   </button>
                   <div>
                     <h2 className="text-base font-black text-slate-800">
-                      جزئیات پیامک (sms_messages)
+                      جزئیات کامل پیامک
                     </h2>
-                    <div className="flex items-center gap-1.5 text-xs text-slate-400 font-mono mt-0.5">
-                      <span>{selectedMessage.id}</span>
+                    <div className="flex items-center gap-1.5 text-xs text-slate-500 mt-0.5">
+                      <span className="text-slate-400">شناسه استناد:</span>
+                      <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded border border-slate-200">
+                        {toPersianDigits(selectedMessage.id)}
+                      </span>
                       <button
                         onClick={() => handleCopy(selectedMessage.id)}
                         className="hover:text-indigo-600 text-slate-400"
-                        title="کپی شناسه"
+                        title="کپی شناسه پیام"
                       >
                         <Copy className="w-3 h-3" />
                       </button>
@@ -1990,17 +2038,22 @@ export default function SmsMessagesManager({
                   </div>
                 </div>
 
-                {/* Database Metadata Grid (All columns of public.sms_messages) */}
+                {/* Message Technical & Record Metadata Grid */}
                 <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden shadow-sm">
                   <div className="p-4 bg-slate-50 border-b border-slate-100 flex items-center justify-between">
                     <span className="text-xs font-bold text-slate-700 flex items-center gap-1.5">
                       <Database className="w-3.5 h-3.5 text-indigo-600" />
-                      فیلدهای رکورد جدول (public.sms_messages)
+                      اطلاعات و مشخصات ثبتی پیامک
                     </span>
-                    <span className="text-[10px] font-mono text-slate-400">PostgreSQL</span>
+                    <span className="text-[10px] font-bold text-slate-500">اطلاعات سیستمی</span>
                   </div>
 
                   <div className="grid grid-cols-2 divide-x divide-x-reverse divide-y divide-slate-100 text-xs">
+                    <div className="p-3">
+                      <span className="text-[10px] font-bold text-slate-400 block mb-0.5">شناسه پیام (قابل استناد)</span>
+                      <span className="font-bold text-slate-800">{toPersianDigits(selectedMessage.id)}</span>
+                    </div>
+
                     <div className="p-3">
                       <span className="text-[10px] font-bold text-slate-400 block mb-0.5">نام گیرنده</span>
                       <span className="font-bold text-slate-800">{selectedMessage.recipientName || "-"}</span>
@@ -2116,11 +2169,12 @@ export default function SmsMessagesManager({
                 )}
 
                 <button
-                  onClick={() => handleDeleteSingle(selectedMessage.id)}
+                  onClick={openDeleteModalFromDrawer}
                   className="px-4 py-2.5 border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold rounded-xl transition-colors text-xs md:text-sm flex items-center gap-1.5"
+                  title="حذف این پیامک"
                 >
                   <Trash2 className="w-4 h-4" />
-                  <span>حذف رکورد</span>
+                  <span>حذف پیامک</span>
                 </button>
 
                 <button
@@ -2160,7 +2214,7 @@ export default function SmsMessagesManager({
                   </div>
                   <div>
                     <h3 className="font-black text-slate-800 text-base">ثبت و ارسال پیامک جدید</h3>
-                    <p className="text-xs text-slate-400 font-mono">در جدول public.sms_messages</p>
+                    <p className="text-xs text-slate-500">ارسال مستقیم یا افزودن به صف پیامک</p>
                   </div>
                 </div>
                 <button
@@ -2509,6 +2563,232 @@ export default function SmsMessagesManager({
                     </>
                   )}
                 </button>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 6. Delete Confirmation & Warning Modal */}
+      <AnimatePresence>
+        {deleteConfirmTarget && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
+            onClick={() => !isDeleting && setDeleteConfirmTarget(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden text-right relative"
+              dir="rtl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              {/* Top Accent Strip */}
+              <div className="h-2 bg-gradient-to-r from-rose-500 via-red-500 to-amber-500" />
+
+              <div className="p-6">
+                {/* Header */}
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0 shadow-xs">
+                      <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800">
+                        {deleteConfirmTarget.type === "single"
+                          ? "تأیید حذف پیامک"
+                          : `تأیید حذف گروهی ${toPersianDigits(deleteConfirmTarget.bulkMessages?.length || 0)} پیامک`}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {deleteConfirmTarget.type === "single" && deleteConfirmTarget.message
+                          ? `شناسه استناد پیام: ${toPersianDigits(deleteConfirmTarget.message.id)}`
+                          : "عملیات حذف قطعی پیامک‌های انتخابی از پایگاه داده"}
+                      </p>
+                    </div>
+                  </div>
+
+                  <button
+                    disabled={isDeleting}
+                    onClick={() => setDeleteConfirmTarget(null)}
+                    className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+                    title="بستن پنجره"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Primary Warning Notice */}
+                <div className="p-3.5 bg-rose-50/90 border border-rose-200 rounded-2xl flex items-start gap-3 mb-4">
+                  <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 mt-1" />
+                  <div className="text-xs text-rose-900 leading-relaxed">
+                    <strong className="block font-black text-rose-950 mb-0.5">
+                      هشدار مهم: این عملیات قطعی و غیرقابل بازگشت است!
+                    </strong>
+                    <span>
+                      پس از حذف، اطلاعات پیامک از صف ارسال و بایگانی پیام‌های سامانه به طور کامل پاک شده و سوابق و وضعیت تحویل آن دیگر در دسترس نخواهد بود.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Single Message Context */}
+                {deleteConfirmTarget.type === "single" && deleteConfirmTarget.message && (() => {
+                  const msg = deleteConfirmTarget.message;
+                  const statusInfo = STATUS_LABELS[msg.status] || {
+                    label: msg.status || "نامشخص",
+                    badgeClass: "bg-slate-100 text-slate-700 border-slate-200",
+                    dotClass: "bg-slate-400",
+                  };
+                  return (
+                    <div className="space-y-3 mb-5">
+                      {/* Contextual Advisory per status */}
+                      {(msg.status === "queued" || msg.status === "pending") && (
+                        <div className="p-3 bg-amber-50 border border-amber-200 rounded-xl text-xs text-amber-900 flex items-start gap-2">
+                          <Clock className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                          <div>
+                            <strong>پیامک در صف انتظار:</strong> این پیامک هنوز به اپراتور مخابراتی تحویل داده نشده است. با حذف آن، ارسال به گیرنده لغو خواهد شد.
+                          </div>
+                        </div>
+                      )}
+                      {(msg.status === "sent" || msg.status === "delivered") && (
+                        <div className="p-3 bg-blue-50 border border-blue-200 rounded-xl text-xs text-blue-900 flex items-start gap-2">
+                          <CheckCircle2 className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                          <div>
+                            <strong>پیامک ارسال‌شده:</strong> این پیامک قبلاً به گیرنده ارسال گردیده است. با حذف آن صرفاً سابقه ثبتی و گزارشات آن از نرم‌افزار شما پاک می‌گردد.
+                          </div>
+                        </div>
+                      )}
+                      {msg.status === "failed" && (
+                        <div className="p-3 bg-slate-100 border border-slate-200 rounded-xl text-xs text-slate-700 flex items-start gap-2">
+                          <AlertCircle className="w-4 h-4 text-slate-500 shrink-0 mt-0.5" />
+                          <div>
+                            <strong>پیامک ناموفق:</strong> این پیام با خطا متوقف شده و با حذف آن، سابقه این ارسال ناموفق و امکان تلاش مجدد (تلاش دوباره) پاک می‌گردد.
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Message Preview Box */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-4 text-xs space-y-2.5">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                          <div className="flex items-center gap-2">
+                            <User className="w-3.5 h-3.5 text-slate-400" />
+                            <span className="font-bold text-slate-800">{msg.recipientName || "نامشخص"}</span>
+                            <span className="text-slate-400 font-mono text-[11px]" dir="ltr">
+                              {toPersianDigits(msg.recipientNumber)}
+                            </span>
+                          </div>
+                          <span className={`px-2 py-0.5 border rounded-lg text-[10px] font-bold ${statusInfo.badgeClass}`}>
+                            {statusInfo.label}
+                          </span>
+                        </div>
+
+                        <div>
+                          <span className="text-[10px] font-bold text-slate-400 block mb-1">متن پیامک:</span>
+                          <div className="p-2.5 bg-white border border-slate-200 rounded-xl text-slate-700 text-xs leading-relaxed max-h-24 overflow-y-auto">
+                            {msg.messageBody || "بدون متن"}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center justify-between text-[11px] text-slate-500 pt-1">
+                          <span>تاریخ ثبت: {formatFullDateFa(msg.createdAt)}</span>
+                          <span>طول پیام: {toPersianDigits(msg.messageLength || msg.messageBody?.length || 0)} کاراکتر</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Bulk Messages Context */}
+                {deleteConfirmTarget.type === "bulk" && deleteConfirmTarget.bulkMessages && (() => {
+                  const msgs = deleteConfirmTarget.bulkMessages;
+                  const queuedCount = msgs.filter((m) => m.status === "queued" || m.status === "pending").length;
+                  const sentCount = msgs.filter((m) => m.status === "sent" || m.status === "delivered").length;
+                  const failedCount = msgs.filter((m) => m.status === "failed").length;
+
+                  return (
+                    <div className="space-y-3 mb-5">
+                      {/* Breakdown badges */}
+                      <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs space-y-2">
+                        <div className="font-bold text-slate-700">ترکیب وضعیت پیام‌های انتخابی:</div>
+                        <div className="flex flex-wrap gap-2 text-[11px]">
+                          {queuedCount > 0 && (
+                            <span className="px-2.5 py-1 bg-amber-50 text-amber-800 border border-amber-200 rounded-lg font-bold">
+                              {toPersianDigits(queuedCount)} پیام در صف انتظار
+                            </span>
+                          )}
+                          {sentCount > 0 && (
+                            <span className="px-2.5 py-1 bg-blue-50 text-blue-800 border border-blue-200 rounded-lg font-bold">
+                              {toPersianDigits(sentCount)} پیام ارسال‌شده/تحویل‌شده
+                            </span>
+                          )}
+                          {failedCount > 0 && (
+                            <span className="px-2.5 py-1 bg-rose-50 text-rose-800 border border-rose-200 rounded-lg font-bold">
+                              {toPersianDigits(failedCount)} پیام ناموفق
+                            </span>
+                          )}
+                        </div>
+                      </div>
+
+                      {/* Items sample list */}
+                      <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3 max-h-40 overflow-y-auto space-y-2">
+                        {msgs.slice(0, 5).map((m) => (
+                          <div key={m.id} className="p-2 bg-white border border-slate-200 rounded-xl text-xs flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2 truncate">
+                              <span className="font-bold text-slate-800">{m.recipientName || "نامشخص"}</span>
+                              <span className="text-slate-400 font-mono text-[10px]" dir="ltr">
+                                {toPersianDigits(m.recipientNumber)}
+                              </span>
+                            </div>
+                            <span className="text-slate-400 text-[10px] shrink-0 font-mono">
+                              شناسه: {toPersianDigits(m.id)}
+                            </span>
+                          </div>
+                        ))}
+                        {msgs.length > 5 && (
+                          <div className="text-center text-[11px] text-slate-400 py-1 font-bold">
+                            و {toPersianDigits(msgs.length - 5)} پیامک دیگر...
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Footer Buttons */}
+                <div className="flex items-center justify-end gap-3 pt-3 border-t border-slate-100">
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={() => setDeleteConfirmTarget(null)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors disabled:opacity-50"
+                  >
+                    انصراف و بازگشت
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={confirmDeleteAction}
+                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs md:text-sm shadow-md shadow-rose-200 transition-all flex items-center gap-2 disabled:opacity-50"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>در حال حذف پیامک...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>
+                          {deleteConfirmTarget.type === "single"
+                            ? "تأیید و حذف قطعی پیامک"
+                            : `تأیید و حذف ${toPersianDigits(deleteConfirmTarget.bulkMessages?.length || 0)} پیامک`}
+                        </span>
+                      </>
+                    )}
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

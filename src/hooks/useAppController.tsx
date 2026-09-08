@@ -190,6 +190,7 @@ import {
   saveStoreSettings,
   getSmsMessages,
   addSmsMessage,
+  generateCiteableMessageId,
   deleteSmsMessage,
   getPersonGroups,
   addPersonGroup,
@@ -749,7 +750,7 @@ const sendNotification = async (
     const status = extraMeta?.status || (isSent ? "sent" : "queued");
 
     const msgObj = {
-      id: `sms_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      id: generateCiteableMessageId(smsMessages),
       recipientNumber: cleanPhone,
       recipientName: extraMeta?.recipientName || "مشتری/مخاطب",
       recipientId: extraMeta?.recipientId ? String(extraMeta.recipientId) : null,
@@ -2719,9 +2720,12 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
       amount: Number(receiptAmount),
       date:
         convertToGregorian(receiptDate),
-description: receiptDescription,
+      rawDate: receiptDate,
+      displayDate: formatDateDisplay(receiptDate, storeSettings?.calendarType),
+      description: receiptDescription,
       note: receiptNote,
       receiptNumber: receiptNumber,
+      linkedInvoices: { ...receiptLinkedInvoices },
     };
 
     if (receiptMethod === "cash") {
@@ -2731,6 +2735,8 @@ description: receiptDescription,
       basePayload.checkNumber = receiptCheckNumber;
       basePayload.checkDueDate =
         convertToGregorian(receiptCheckDueDate);
+      basePayload.rawCheckDueDate = receiptCheckDueDate;
+      basePayload.displayCheckDueDate = formatDateDisplay(receiptCheckDueDate, storeSettings?.calendarType);
       if (type === "receive") {
         basePayload.checkBankName = receiptCheckBankName;
       } else {
@@ -2738,7 +2744,8 @@ description: receiptDescription,
       }
     }
 
-    confirmReceiptSubmit(basePayload);
+    // Show confirmation modal before final database commit
+    setPreviewReceiptData(basePayload);
   };
 
   const confirmReceiptSubmit = async (payload: any) => {
@@ -6991,6 +6998,8 @@ const renderTabContent = () => {
     setSalaryPersonId,
     fetchTransactions,
     fetchAccountingDocuments,
+    handleSubmitReceipt,
+    handleReceiptSubmit: handleSubmitReceipt,
     confirmReceiptSubmit,
     handleEditReceiptByCheck,
     handleSaveReceipt,
