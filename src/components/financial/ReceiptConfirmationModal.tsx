@@ -32,6 +32,8 @@ export interface ReceiptConfirmationModalProps {
     type: "receive" | "pay";
     method: "cash" | "check";
     personId: string | number;
+    personName?: string;
+    person?: any;
     amount: number;
     date: any;
     displayDate?: string;
@@ -84,13 +86,32 @@ export default function ReceiptConfirmationModal({
   const currency = storeSettings?.currency || "تومان";
 
   // Person lookup
-  const person = persons.find(
-    (p) => String(p.id) === String(receiptData.personId)
-  );
-  const personName =
-    (getPersonDisplayName && getPersonDisplayName(receiptData.personId, persons)) ||
-    person?.name ||
-    "نامشخص";
+  const person =
+    receiptData.person ||
+    persons.find((p) => String(p.id) === String(receiptData.personId));
+
+  let personName = receiptData.personName;
+  if (!personName || personName === "نامشخص") {
+    if (getPersonDisplayName) {
+      personName =
+        getPersonDisplayName(person) ||
+        getPersonDisplayName(receiptData.personId, persons);
+    }
+  }
+  if (!personName || personName === "نامشخص") {
+    if (person) {
+      personName =
+        person.alias?.trim() ||
+        person.name?.trim() ||
+        `${person.firstName || ""} ${person.lastName || ""}`.trim() ||
+        person.companyName?.trim() ||
+        person.title?.trim() ||
+        "نامشخص";
+    }
+  }
+  if (!personName || personName.trim() === "") {
+    personName = "نامشخص";
+  }
 
   // Cashbox / Bank lookup
   let resourceName = "";

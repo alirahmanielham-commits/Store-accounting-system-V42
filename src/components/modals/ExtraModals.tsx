@@ -50,7 +50,18 @@ export default function ExtraModals(props: any) {
     editingReceipt, updateTransaction, showNotification,
     editingProductId, products, saveProductData, fetchProducts,
     handleBarcodeScan,
-    handleAIAssist
+    handleAIAssist,
+    getPersonDisplayName,
+    renderPersonInfoBox,
+    activePersonsOnly,
+    mapPersonToOption,
+    customPersonFilter,
+    formatNumber,
+    receiptResourceType, setReceiptResourceType,
+    receiptResourceId, setReceiptResourceId,
+    receiptLinkedInvoices, setReceiptLinkedInvoices,
+    receiptNumber,
+    setIsPersonModalOpen,
   } = props;
 
   return (
@@ -63,32 +74,63 @@ export default function ExtraModals(props: any) {
         <ReceiveReceiptModal
           isOpen={isReceiveReceiptModalOpen}
           onClose={() => setIsReceiveReceiptModalOpen(false)}
+          receiptPersonId={receiptPersonId}
+          setReceiptPersonId={setReceiptPersonId}
           personId={receiptPersonId}
           setPersonId={setReceiptPersonId}
           invoiceId={receiptInvoiceId}
+          receiptAmount={receiptAmount}
+          setReceiptAmount={setReceiptAmount}
           amount={receiptAmount}
           setAmount={setReceiptAmount}
+          receiptMethod={receiptMethod}
+          setReceiptMethod={setReceiptMethod}
           method={receiptMethod}
           setMethod={setReceiptMethod}
+          receiptDate={receiptDate}
+          setReceiptDate={setReceiptDate}
           date={receiptDate}
           setDate={setReceiptDate}
+          receiptCheckNumber={receiptCheckNumber}
+          setReceiptCheckNumber={setReceiptCheckNumber}
           checkNumber={receiptCheckNumber}
           setCheckNumber={setReceiptCheckNumber}
+          receiptCheckDueDate={receiptCheckDueDate}
+          setReceiptCheckDueDate={setReceiptCheckDueDate}
           checkDueDate={receiptCheckDueDate}
           setCheckDueDate={setReceiptCheckDueDate}
+          receiptCheckBankName={receiptCheckBankName}
+          setReceiptCheckBankName={setReceiptCheckBankName}
           checkBankName={receiptCheckBankName}
           setCheckBankName={setReceiptCheckBankName}
+          receiptNote={receiptNote}
+          setReceiptNote={setReceiptNote}
           note={receiptNote}
           setNote={setReceiptNote}
           handleSubmitReceipt={handleReceiptSubmit}
           submittingReceipt={submittingReceipt}
           persons={persons}
+          getPersonDisplayName={getPersonDisplayName}
+          renderPersonInfoBox={renderPersonInfoBox}
+          activePersonsOnly={activePersonsOnly}
+          mapPersonToOption={mapPersonToOption}
+          customPersonFilter={customPersonFilter}
           formatCurrency={formatCurrency}
+          formatNumber={formatNumber}
           toPersianDigits={toPersianDigits}
           numToPersianWords={numToPersianWords}
           accounts={accounts}
           cashboxes={cashboxes}
           storeSettings={storeSettings}
+          receiptResourceType={receiptResourceType}
+          setReceiptResourceType={setReceiptResourceType}
+          receiptResourceId={receiptResourceId}
+          setReceiptResourceId={setReceiptResourceId}
+          receiptLinkedInvoices={receiptLinkedInvoices}
+          setReceiptLinkedInvoices={setReceiptLinkedInvoices}
+          receiptNumber={receiptNumber}
+          setIsPersonModalOpen={setIsPersonModalOpen}
+          invoices={invoices}
         />
       )}
 
@@ -96,33 +138,64 @@ export default function ExtraModals(props: any) {
         <PayReceiptModal
           isOpen={isPayReceiptModalOpen}
           onClose={() => setIsPayReceiptModalOpen(false)}
+          receiptPersonId={receiptPersonId}
+          setReceiptPersonId={setReceiptPersonId}
           personId={receiptPersonId}
           setPersonId={setReceiptPersonId}
           invoiceId={receiptInvoiceId}
+          receiptAmount={receiptAmount}
+          setReceiptAmount={setReceiptAmount}
           amount={receiptAmount}
           setAmount={setReceiptAmount}
+          receiptMethod={receiptMethod}
+          setReceiptMethod={setReceiptMethod}
           method={receiptMethod}
           setMethod={setReceiptMethod}
+          receiptDate={receiptDate}
+          setReceiptDate={setReceiptDate}
           date={receiptDate}
           setDate={setReceiptDate}
+          receiptCheckNumber={receiptCheckNumber}
+          setReceiptCheckNumber={setReceiptCheckNumber}
           checkNumber={receiptCheckNumber}
           setCheckNumber={setReceiptCheckNumber}
+          receiptCheckDueDate={receiptCheckDueDate}
+          setReceiptCheckDueDate={setReceiptCheckDueDate}
           checkDueDate={receiptCheckDueDate}
           setCheckDueDate={setReceiptCheckDueDate}
+          receiptCheckbookId={receiptCheckbookId}
+          setReceiptCheckbookId={setReceiptCheckbookId}
           checkbookId={receiptCheckbookId}
           setCheckbookId={setReceiptCheckbookId}
+          receiptNote={receiptNote}
+          setReceiptNote={setReceiptNote}
           note={receiptNote}
           setNote={setReceiptNote}
           handleSubmitReceipt={handleReceiptSubmit}
           submittingReceipt={submittingReceipt}
           persons={persons}
+          getPersonDisplayName={getPersonDisplayName}
+          renderPersonInfoBox={renderPersonInfoBox}
+          activePersonsOnly={activePersonsOnly}
+          mapPersonToOption={mapPersonToOption}
+          customPersonFilter={customPersonFilter}
           formatCurrency={formatCurrency}
+          formatNumber={formatNumber}
           toPersianDigits={toPersianDigits}
           numToPersianWords={numToPersianWords}
           accounts={accounts}
           cashboxes={cashboxes}
           checkbooks={checkbooks}
           storeSettings={storeSettings}
+          receiptResourceType={receiptResourceType}
+          setReceiptResourceType={setReceiptResourceType}
+          receiptResourceId={receiptResourceId}
+          setReceiptResourceId={setReceiptResourceId}
+          receiptLinkedInvoices={receiptLinkedInvoices}
+          setReceiptLinkedInvoices={setReceiptLinkedInvoices}
+          receiptNumber={receiptNumber}
+          setIsPersonModalOpen={setIsPersonModalOpen}
+          invoices={invoices}
         />
       )}
 

@@ -22,8 +22,7 @@ const CACHEABLE_KEYS = [
   'financial_years',
   'product_categories',
   'person_groups',
-  'ledger_accounts',
-  'doc_counters'
+  'ledger_accounts'
 ];
 
 export const invalidateCache = (key?: string) => {
@@ -302,58 +301,48 @@ export const generateDocNumber = async (docTypeKey: string): Promise<string> => 
     const lenObj = settings[lenKey as keyof CompanySettings];
     const len = lenObj && !isNaN(Number(lenObj)) ? Number(lenObj) : 6;
 
+    delete cache['doc_counters'];
     const counters = await getLocalData<Record<string, number>>('doc_counters', {});
     
-    let nextValue = start;
-    if (counters[docTypeKey] !== undefined) {
-        nextValue = counters[docTypeKey] + 1;
-        if (nextValue < start) {
-            nextValue = start;
-        }
-    } else {
-        let items: any[] = [];
-        if (docTypeKey === 'sale' || docTypeKey === 'purchase' || docTypeKey.includes('return') || docTypeKey === 'proforma') {
-          items = await getInvoices();
-          items = items.filter(i => docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? i.type === 'sale' : i.type === docTypeKey));
-        } else if (docTypeKey === 'warehouse_receipt' || docTypeKey === 'warehouse_remittance') {
-          items = await getInvoices();
-          items = items.filter(i => i.type === docTypeKey);
-        } else if (docTypeKey === 'receive_receipt' || docTypeKey === 'pay_receipt' || docTypeKey === 'salary') {
-          items = await getTransactions();
-          const typeMap: any = { 'receive_receipt': 'receive', 'pay_receipt': 'pay', 'salary': 'salary' };
-          items = items.filter(i => i.type === typeMap[docTypeKey]);
-        } else if (docTypeKey === 'check_issued') items = await getIssuedChecks();
-        else if (docTypeKey === 'check_received') items = await getReceivedChecks();
-        else if (docTypeKey === 'person') items = await getPersons();
-        else if (docTypeKey === 'product') items = await getProducts();
-        else if (docTypeKey === 'accounting_document') items = await getAccountingDocuments();
-        else if (docTypeKey === 'loan') items = await getLoans();
-        else if (docTypeKey === 'installment') items = await getInstallments();
+    let items: any[] = [];
+    if (docTypeKey === 'sale' || docTypeKey === 'purchase' || docTypeKey.includes('return') || docTypeKey === 'proforma') {
+      items = await getInvoices();
+      items = items.filter(i => docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? i.type === 'sale' : i.type === docTypeKey));
+    } else if (docTypeKey === 'warehouse_receipt' || docTypeKey === 'warehouse_remittance') {
+      items = await getInvoices();
+      items = items.filter(i => i.type === docTypeKey);
+    } else if (docTypeKey === 'receive_receipt' || docTypeKey === 'pay_receipt' || docTypeKey === 'salary') {
+      items = await getTransactions();
+      const typeMap: any = { 'receive_receipt': 'receive', 'pay_receipt': 'pay', 'salary': 'salary' };
+      items = items.filter(i => i.type === typeMap[docTypeKey]);
+    } else if (docTypeKey === 'check_issued') items = await getIssuedChecks();
+    else if (docTypeKey === 'check_received') items = await getReceivedChecks();
+    else if (docTypeKey === 'person') items = await getPersons();
+    else if (docTypeKey === 'product') items = await getProducts();
+    else if (docTypeKey === 'accounting_document') items = await getAccountingDocuments();
+    else if (docTypeKey === 'loan') items = await getLoans();
+    else if (docTypeKey === 'installment') items = await getInstallments();
 
-        let maxExisting = 0;
-        let idField = (docTypeKey === 'person' || docTypeKey === 'product') ? 'code' : 
-                      (docTypeKey === 'accounting_document' ? 'documentNumber' : 
-                      (docTypeKey.includes('receipt') || docTypeKey === 'salary' ? 'receiptNumber' : 'invoiceNumber'));
-        
-        if (docTypeKey === 'check_issued' || docTypeKey === 'check_received') idField = 'checkNumber';
+    let maxExisting = 0;
+    let idField = (docTypeKey === 'person' || docTypeKey === 'product') ? 'code' : 
+                  (docTypeKey === 'accounting_document' ? 'documentNumber' : 
+                  (docTypeKey.includes('receipt') || docTypeKey === 'salary' ? 'receiptNumber' : 'invoiceNumber'));
+    
+    if (docTypeKey === 'check_issued' || docTypeKey === 'check_received') idField = 'checkNumber';
 
-        items.forEach(item => {
-           let valStr = String(item[idField] || '');
-           if (prefix && valStr.startsWith(prefix)) {
-              valStr = valStr.substring(prefix.length);
-           }
-           let val = parseInt(valStr.replace(/\D/g, ''), 10);
-           if (!isNaN(val) && val > maxExisting) {
-               maxExisting = val;
-           }
-        });
-        
-        if (maxExisting >= start) {
-            nextValue = maxExisting + 1;
-        } else {
-            nextValue = start;
-        }
-    }
+    items.forEach(item => {
+       let valStr = String(item[idField] || '');
+       if (prefix && valStr.startsWith(prefix)) {
+          valStr = valStr.substring(prefix.length);
+       }
+       let val = parseInt(valStr.replace(/\D/g, ''), 10);
+       if (!isNaN(val) && val > maxExisting) {
+           maxExisting = val;
+       }
+    });
+
+    const counterVal = counters[docTypeKey] || 0;
+    const nextValue = Math.max(counterVal, maxExisting, start - 1) + 1;
 
     counters[docTypeKey] = nextValue;
     await saveLocalData('doc_counters', counters);

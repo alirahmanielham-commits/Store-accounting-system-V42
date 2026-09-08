@@ -28,12 +28,13 @@ import {
   AlertTriangle,
   RefreshCw,
   MessageCircle,
-  UserCheck
+  UserCheck,
+  Trash2
 } from "lucide-react";
 import { addDatabaseLog } from "../../services/coreService";
 import { addCommas, toPersianDigits, formatDateDisplay } from "../../utils/format";
 import { messagingManager } from "../../services/messaging/MessagingManager";
-import { generateCiteableMessageId } from "../../services/crmService";
+import { generateCiteableMessageId, deleteSmsMessage } from "../../services/crmService";
 
 export interface SendPersonMessageModalProps {
   isOpen: boolean;
@@ -73,6 +74,24 @@ export default function SendPersonMessageModal({
   const [systemTemplates, setSystemTemplates] = useState<any[]>([]);
   const [messageHistory, setMessageHistory] = useState<any[]>([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [messageToDelete, setMessageToDelete] = useState<any | null>(null);
+  const [isDeletingMessage, setIsDeletingMessage] = useState(false);
+
+  const confirmDeleteHistoryMessage = async () => {
+    if (!messageToDelete) return;
+    setIsDeletingMessage(true);
+    try {
+      await deleteSmsMessage(messageToDelete.id);
+      setMessageHistory((prev) => prev.filter((m) => String(m.id) !== String(messageToDelete.id)));
+      notify("پیامک با موفقیت از سوابق حذف شد", "success");
+      setMessageToDelete(null);
+    } catch (err) {
+      console.error("Error deleting message from history:", err);
+      notify("خطا در حذف پیامک از سوابق", "error");
+    } finally {
+      setIsDeletingMessage(false);
+    }
+  };
 
   const notify = (msg: string, type: "success" | "error" | "info" = "success") => {
     if (showNotification) {
@@ -1119,17 +1138,29 @@ export default function SendPersonMessageModal({
                             {item.status === "delivered" ? "تحویل شده" : item.status === "failed" ? "ناموفق" : "در صف ارسال"}
                           </span>
 
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setMessage(item.messageBody);
-                              setActiveTab("composer");
-                              notify("متن پیام در کادر ویرایشگر بارگذاری شد", "info");
-                            }}
-                            className="text-indigo-600 hover:text-indigo-700 font-black flex items-center gap-1 cursor-pointer"
-                          >
-                            <RotateCcw className="w-3 h-3" /> استفاده مجدد
-                          </button>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setMessageToDelete(item)}
+                              className="text-rose-500 hover:text-rose-700 hover:bg-rose-50 p-1.5 rounded-lg text-[11px] font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                              title="حذف این پیامک از سوابق"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                              <span>حذف</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setMessage(item.messageBody);
+                                setActiveTab("composer");
+                                notify("متن پیام در کادر ویرایشگر بارگذاری شد", "info");
+                              }}
+                              className="text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 p-1.5 rounded-lg text-[11px] font-black flex items-center gap-1 cursor-pointer transition-colors"
+                            >
+                              <RotateCcw className="w-3.5 h-3.5" /> استفاده مجدد
+                            </button>
+                          </div>
                         </div>
                       </div>
                     ))}
@@ -1219,6 +1250,109 @@ export default function SendPersonMessageModal({
           </div>
         </motion.div>
       </div>
+
+      {/* Delete History Message Confirmation Modal */}
+      <AnimatePresence>
+        {messageToDelete && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+            onClick={() => !isDeletingMessage && setMessageToDelete(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden text-right relative"
+              dir="rtl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-2 bg-gradient-to-r from-rose-500 to-red-600" />
+              <div className="p-6">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0 shadow-xs">
+                      <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-800">
+                        تأیید حذف پیامک از سوابق
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        حذف دائمی این پیامک از سوابق و تاریخچه مخاطب
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    disabled={isDeletingMessage}
+                    onClick={() => setMessageToDelete(null)}
+                    className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Primary Warning */}
+                <div className="p-3.5 bg-rose-50/90 border border-rose-200 rounded-2xl flex items-start gap-3 mb-4">
+                  <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 mt-1" />
+                  <div className="text-xs text-rose-900 leading-relaxed">
+                    <strong className="block font-black text-rose-950 mb-0.5">
+                      هشدار مهم: این عملیات قطعی و غیرقابل بازگشت است!
+                    </strong>
+                    <span>
+                      با حذف این مورد، سابقه این پیامک از بخش پیام‌های سیستم به طور کامل پاک شده و امکان بازیابی آن وجود نخواهد داشت.
+                    </span>
+                  </div>
+                </div>
+
+                {/* Message Details Preview */}
+                <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs space-y-2 mb-5">
+                  <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                    <span className="font-bold text-slate-700">گیرنده: {toPersianDigits(messageToDelete.recipientNumber || "")}</span>
+                    <span className="text-slate-400 font-sans text-[11px]">
+                      {formatDateDisplay(new Date(messageToDelete.createdAt || Date.now()), storeSettings?.calendarType)}
+                    </span>
+                  </div>
+                  <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200 max-h-24 overflow-y-auto leading-relaxed">
+                    {messageToDelete.messageBody || "بدون متن"}
+                  </div>
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    disabled={isDeletingMessage}
+                    onClick={() => setMessageToDelete(null)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    انصراف
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isDeletingMessage}
+                    onClick={confirmDeleteHistoryMessage}
+                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-200 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isDeletingMessage ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>در حال حذف...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>تأیید و حذف قطعی</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
     </AnimatePresence>,
     document.body
   );

@@ -5,8 +5,10 @@ import {
   BarChart3, List, Filter, ChevronDown, Download, AlertCircle, 
   Calendar as CalendarIcon, Smartphone, Mail, MessageSquare, Bell,
   MoreVertical, FileText, ChevronRight, MapPin, Server, Copy, Eye,
-  Trash2, X, ChevronLeft
+  Trash2, X, ChevronLeft, AlertTriangle
 } from "lucide-react";
+import { deleteSmsMessage, deleteMultipleSmsMessages } from "../../services/crmService";
+import { toPersianDigits } from "../../utils/format";
 import { 
   LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, 
   XAxis, YAxis, CartesianGrid, Tooltip as RechartsTooltip, ResponsiveContainer, Legend 
@@ -209,12 +211,62 @@ export default function MessagingLogsView({ showNotification }: { showNotificati
     if (showNotification) showNotification(`Retrying message ${logId}...`, "info");
   };
 
-  const handleDeleteSelected = () => {
+  const [deleteConfirmTarget, setDeleteConfirmTarget] = useState<{
+    type: "single" | "bulk";
+    log?: MessageLog;
+    bulkLogs?: MessageLog[];
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  const openDeleteModalSingle = (log: MessageLog, e?: React.MouseEvent) => {
+    if (e) e.stopPropagation();
+    setDeleteConfirmTarget({ type: "single", log });
+  };
+
+  const openDeleteModalBulk = () => {
     if (selectedRows.size === 0) return;
-    if (window.confirm(`آیا از حذف ${selectedRows.size} گزارش پیامک اطمینان دارید؟ این عملیات غیرقابل بازگشت است.`)) {
-      setLogs(prev => prev.filter(l => !selectedRows.has(l.id)));
-      setSelectedRows(new Set());
-      if (showNotification) showNotification(`${selectedRows.size} گزارش با موفقیت حذف گردید.`, "success");
+    const selectedLogsList = logs.filter((l) => selectedRows.has(l.id));
+    setDeleteConfirmTarget({ type: "bulk", bulkLogs: selectedLogsList });
+  };
+
+  const confirmDeleteAction = async () => {
+    if (!deleteConfirmTarget) return;
+    setIsDeleting(true);
+    try {
+      if (deleteConfirmTarget.type === "single" && deleteConfirmTarget.log) {
+        const targetId = deleteConfirmTarget.log.id;
+        await deleteSmsMessage(targetId);
+        setLogs((prev) => prev.filter((l) => String(l.id) !== String(targetId)));
+        if (selectedLog?.id === targetId) setSelectedLog(null);
+        setSelectedRows((prev) => {
+          const next = new Set(prev);
+          next.delete(targetId);
+          return next;
+        });
+        if (showNotification) {
+          showNotification(`پیام با شناسه ${toPersianDigits(targetId)} با موفقیت حذف شد.`, "success");
+        }
+      } else if (deleteConfirmTarget.type === "bulk" && deleteConfirmTarget.bulkLogs) {
+        const idsToDelete = deleteConfirmTarget.bulkLogs.map((l) => l.id);
+        await deleteMultipleSmsMessages(idsToDelete);
+        const idSet = new Set(idsToDelete.map(String));
+        setLogs((prev) => prev.filter((l) => !idSet.has(String(l.id))));
+        setSelectedRows(new Set());
+        if (selectedLog && idSet.has(String(selectedLog.id))) {
+          setSelectedLog(null);
+        }
+        if (showNotification) {
+          showNotification(`${toPersianDigits(idsToDelete.length)} پیام با موفقیت حذف گردید.`, "success");
+        }
+      }
+      setDeleteConfirmTarget(null);
+    } catch (err) {
+      console.error("Error deleting messages:", err);
+      if (showNotification) {
+        showNotification("خطا در حذف پیام‌ها. لطفاً مجدداً تلاش نمایید.", "error");
+      }
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -552,10 +604,10 @@ export default function MessagingLogsView({ showNotification }: { showNotificati
                           <RefreshCw className="w-4 h-4" /> Retry Selected
                         </button>
                         <button 
-                          onClick={handleDeleteSelected}
-                          className="text-sm font-medium bg-white/20 hover:bg-white/30 px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5"
+                          onClick={openDeleteModalBulk}
+                          className="text-sm font-medium bg-rose-600 hover:bg-rose-700 text-white px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm"
                         >
-                          <Trash2 className="w-4 h-4" /> حذف انتخابی‌ها
+                          <Trash2 className="w-4 h-4" /> حذف انتخابی‌ها ({toPersianDigits(selectedRows.size)})
                         </button>
                         <button 
                           onClick={() => setSelectedRows(new Set())}
@@ -664,18 +716,32 @@ export default function MessagingLogsView({ showNotification }: { showNotificati
                               )}
                             </td>
                             <td className="px-6 py-4 text-right">
-                              <div className="flex items-center justify-end gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                              <div className="flex items-center justify-end gap-1.5 opacity-90 group-hover:opacity-100 transition-opacity">
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    setSelectedLog(log);
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
+                                  title="مشاهده جزئیات پیام"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
                                 {log.status === 'failed' && (
                                   <button 
                                     onClick={(e) => handleRetry(e, log.id)}
                                     className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                    title="Retry"
+                                    title="تلاش مجدد"
                                   >
                                     <RefreshCw className="w-4 h-4" />
                                   </button>
                                 )}
-                                <button className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors">
-                                  <MoreVertical className="w-4 h-4" />
+                                <button 
+                                  onClick={(e) => openDeleteModalSingle(log, e)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                  title="حذف این پیامک"
+                                >
+                                  <Trash2 className="w-4 h-4" />
                                 </button>
                               </div>
                             </td>
@@ -875,19 +941,141 @@ export default function MessagingLogsView({ showNotification }: { showNotificati
               </div>
 
               {/* Actions Footer */}
-              <div className="p-4 border-t border-slate-200 bg-white flex gap-3">
+              <div className="p-4 border-t border-slate-200 bg-white flex items-center gap-3">
                 {selectedLog.status === 'failed' && (
-                  <button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2">
-                    <RefreshCw className="w-4 h-4" /> Retry Delivery
+                  <button className="flex-1 bg-indigo-600 hover:bg-indigo-700 text-white font-medium py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 text-xs md:text-sm">
+                    <RefreshCw className="w-4 h-4" /> تلاش مجدد ارسال
                   </button>
                 )}
-                <button className={`flex-1 font-medium py-2.5 rounded-xl transition-colors shadow-sm flex items-center justify-center gap-2 border ${
-                  selectedLog.status === 'failed' ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50' : 'bg-indigo-600 border-transparent hover:bg-indigo-700 text-white'
-                }`}>
-                  <FileText className="w-4 h-4" /> View Full Receipt
+                <button
+                  type="button"
+                  onClick={() => openDeleteModalSingle(selectedLog)}
+                  className="bg-white border border-rose-200 text-rose-600 hover:bg-rose-50 font-bold py-2.5 px-4 rounded-xl transition-colors shadow-xs flex items-center justify-center gap-2 text-xs md:text-sm cursor-pointer"
+                  title="حذف این پیامک"
+                >
+                  <Trash2 className="w-4 h-4" />
+                  <span>حذف پیام</span>
+                </button>
+                <button 
+                  type="button"
+                  onClick={() => setSelectedLog(null)}
+                  className="flex-1 font-bold py-2.5 rounded-xl transition-colors shadow-xs flex items-center justify-center gap-2 border bg-slate-100 hover:bg-slate-200 text-slate-700 border-transparent text-xs md:text-sm cursor-pointer"
+                >
+                  بستن
                 </button>
               </div>
 
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* Delete Confirmation Modal with Clear Warning */}
+      <AnimatePresence>
+        {deleteConfirmTarget && (
+          <div
+            className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs"
+            onClick={() => !isDeleting && setDeleteConfirmTarget(null)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden text-right relative"
+              dir="rtl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-2 bg-gradient-to-r from-rose-500 to-red-600" />
+              <div className="p-6">
+                <div className="flex items-start justify-between gap-4 mb-4">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-rose-50 border border-rose-200 flex items-center justify-center text-rose-600 shrink-0 shadow-xs">
+                      <AlertTriangle className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-800">
+                        {deleteConfirmTarget.type === "bulk"
+                          ? `تأیید حذف گروهی ${toPersianDigits(deleteConfirmTarget.bulkLogs?.length || 0)} پیامک`
+                          : "تأیید حذف پیامک"}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        حذف دائمی از سوابق و لاگ‌های پیام‌رسانی
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    disabled={isDeleting}
+                    onClick={() => setDeleteConfirmTarget(null)}
+                    className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                {/* Primary Warning */}
+                <div className="p-3.5 bg-rose-50/90 border border-rose-200 rounded-2xl flex items-start gap-3 mb-4">
+                  <div className="w-2.5 h-2.5 rounded-full bg-rose-500 shrink-0 mt-1" />
+                  <div className="text-xs text-rose-900 leading-relaxed">
+                    <strong className="block font-black text-rose-950 mb-0.5">
+                      هشدار مهم: این عملیات قطعی و غیرقابل بازگشت است!
+                    </strong>
+                    <span>
+                      {deleteConfirmTarget.type === "bulk"
+                        ? `با تأیید شما، تمامی ${toPersianDigits(deleteConfirmTarget.bulkLogs?.length || 0)} پیام انتخاب شده به طور دائم از بانک داده و سوابق سامانه پاک خواهند شد.`
+                        : "با حذف این پیام، اطلاعات آن از آرشیو پیام‌ها و گزارش‌های سامانه پاک شده و امکان بازیابی آن وجود ندارد."}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Message Details Preview (for single delete) */}
+                {deleteConfirmTarget.type === "single" && deleteConfirmTarget.log && (
+                  <div className="bg-slate-50 border border-slate-200 rounded-2xl p-3.5 text-xs space-y-2 mb-5">
+                    <div className="flex items-center justify-between pb-2 border-b border-slate-200">
+                      <span className="font-bold text-slate-700">
+                        گیرنده: {deleteConfirmTarget.log.recipient.name} ({toPersianDigits(deleteConfirmTarget.log.recipient.contact)})
+                      </span>
+                      <span className="text-slate-400 font-sans text-[11px]">
+                        {new Date(deleteConfirmTarget.log.createdAt).toLocaleDateString("fa-IR")}
+                      </span>
+                    </div>
+                    <div className="text-[11px] text-slate-600 bg-white p-2.5 rounded-xl border border-slate-200 max-h-24 overflow-y-auto leading-relaxed">
+                      {deleteConfirmTarget.log.content || "بدون متن"}
+                    </div>
+                  </div>
+                )}
+
+                {/* Actions */}
+                <div className="flex items-center justify-end gap-3 pt-2 border-t border-slate-100">
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={() => setDeleteConfirmTarget(null)}
+                    className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-xl text-xs transition-colors disabled:opacity-50 cursor-pointer"
+                  >
+                    انصراف
+                  </button>
+
+                  <button
+                    type="button"
+                    disabled={isDeleting}
+                    onClick={confirmDeleteAction}
+                    className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white font-bold rounded-xl text-xs shadow-md shadow-rose-200 transition-all flex items-center gap-2 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isDeleting ? (
+                      <>
+                        <RefreshCw className="w-4 h-4 animate-spin" />
+                        <span>در حال حذف...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Trash2 className="w-4 h-4" />
+                        <span>تأیید و حذف قطعی</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+              </div>
             </motion.div>
           </div>
         )}

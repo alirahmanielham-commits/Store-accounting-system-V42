@@ -18,7 +18,8 @@ import {
   addDatabaseLog, 
   getSystemLogs, 
   addSystemLog,
-  ensureFiscalYearId
+  ensureFiscalYearId,
+  invalidateCache
 } from './coreService';
 import { CompanySettings } from '../types';
 import { convertToGregorian } from '../utils/format';
@@ -116,10 +117,34 @@ export const addTransaction = async (transaction: any) => {
   const now = Date.now();
   
   let finalTx = { ...transaction };
-  if (!finalTx.receiptNumber) {
-     const docTypeMap: any = { 'receive': 'receive_receipt', 'pay': 'pay_receipt', 'salary': 'salary' };
+  const docTypeMap: any = { 'receive': 'receive_receipt', 'pay': 'pay_receipt', 'salary': 'salary' };
+  const table = mapTransactionTypeToTable(finalTx.type);
+
+  // Concurrency & Uniqueness Guard:
+  // Fetch fresh existing transactions directly to prevent duplicates across multiple browsers/systems
+  const existingTableTxs = await getLocalData<any[]>(table, []);
+  const isDuplicateNumber = Boolean(
+    finalTx.receiptNumber &&
+    existingTableTxs.some(
+      (t) => t.type === finalTx.type && String(t.receiptNumber).trim().toLowerCase() === String(finalTx.receiptNumber).trim().toLowerCase()
+    )
+  );
+
+  if (!finalTx.receiptNumber || isDuplicateNumber) {
      if (docTypeMap[finalTx.type]) {
+        invalidateCache('doc_counters');
         finalTx.receiptNumber = await generateDocNumber(docTypeMap[finalTx.type]);
+        
+        // Safety loop: ensure newly generated number is strictly unique against table
+        let safetyAttempts = 0;
+        while (
+          existingTableTxs.some(
+            (t) => t.type === finalTx.type && String(t.receiptNumber).trim().toLowerCase() === String(finalTx.receiptNumber).trim().toLowerCase()
+          ) && safetyAttempts < 20
+        ) {
+           finalTx.receiptNumber = await generateDocNumber(docTypeMap[finalTx.type]);
+           safetyAttempts++;
+        }
      }
   }
 
@@ -155,7 +180,6 @@ export const addTransaction = async (transaction: any) => {
     }
   }
 
-  const table = mapTransactionTypeToTable(newTransaction.type);
   operations.push({ type: 'append', key: table, data: newTransaction });
   await batchLocalData(operations);
   

@@ -1,5 +1,5 @@
 import { autoGenerateRentCommitments } from "../services/hrService";
-import { suspendAppDataChanged, resumeAppDataChanged } from "../services/coreService";
+import { suspendAppDataChanged, resumeAppDataChanged, invalidateCache } from "../services/coreService";
 import CustomDatePicker from "../components/ui/CustomDatePicker";
 import { SystemUpdatePage } from "../components/admin/SystemUpdatePage";
 import { PersonalNotesManager } from "../components/notes/PersonalNotesManager";
@@ -648,19 +648,39 @@ const getRoleBadgeClasses = (roleId?: string) => {
         : "bg-purple-50 text-purple-800 border-purple-100";
   };
 
-const mapPersonToOption = (p: any) => ({
-    value: p.id.toString(),
-    label:
-      (p.personCode ? "[" + p.personCode + "] " : "") +
-      (p.alias || p.name) +
-      " (" +
-      getRoleName(p.role) +
-      ")",
-    imageUrl: p.imageUrl,
-    searchStr: `${p.alias || ""} ${p.name || ""} ${p.title || ""} ${p.firstName || ""} ${p.lastName || ""} ${p.phone || ""} ${p.nationalId || ""} ${p.personCode || ""} ${p.companyName || ""} ${p.fatherName || ""}`,
-  });
+  const formatPersonName = (person: any, personsList?: any[]): string => {
+    if (!person) return "نامشخص";
+    if (typeof person === "string" || typeof person === "number") {
+      const list = personsList || persons || [];
+      const found = list.find((p: any) => p && String(p.id) === String(person));
+      if (found) return formatPersonName(found);
+      return "نامشخص";
+    }
+    if (person.alias?.trim()) return person.alias.trim();
+    if (person.name?.trim()) return person.name.trim();
+    const fullName = `${person.firstName || ''} ${person.lastName || ''}`.trim();
+    if (fullName) return fullName;
+    if (person.companyName?.trim()) return person.companyName.trim();
+    if (person.title?.trim()) return person.title.trim();
+    return "نامشخص";
+  };
 
-const activePersonsOnly = (persons || []).filter((p) => p.isActive !== false);
+  const mapPersonToOption = (p: any) => {
+    const displayName = formatPersonName(p);
+    return {
+      value: p.id.toString(),
+      label:
+        (p.personCode ? "[" + p.personCode + "] " : "") +
+        (displayName !== "نامشخص" ? displayName : "طرف‌حساب") +
+        " (" +
+        getRoleName(p.role) +
+        ")",
+      imageUrl: p.imageUrl,
+      searchStr: `${displayName} ${p.alias || ""} ${p.name || ""} ${p.title || ""} ${p.firstName || ""} ${p.lastName || ""} ${p.phone || ""} ${p.nationalId || ""} ${p.personCode || ""} ${p.companyName || ""} ${p.fatherName || ""}`,
+    };
+  };
+
+  const activePersonsOnly = (persons || []).filter((p) => p.isActive !== false);
 
 const filteredPersons = (persons || []).filter((p) => {
     // 0. Role Filter
@@ -2713,10 +2733,15 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
     const formattedNum = String(nextNum).padStart(numLength, "0");
     const receiptNumber = `${receiptPrefix}${formattedNum}`;
 
+    const personObj = (persons || []).find((p: any) => String(p.id) === String(receiptPersonId));
+    const resolvedPersonName = formatPersonName(personObj) !== "نامشخص" ? formatPersonName(personObj) : formatPersonName(receiptPersonId, persons);
+
     const basePayload: any = {
       type,
       method: receiptMethod,
       personId: receiptPersonId,
+      personName: resolvedPersonName,
+      person: personObj,
       amount: Number(receiptAmount),
       date:
         convertToGregorian(receiptDate),
@@ -2764,12 +2789,27 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
     try {
       updateAppProcessing("مرحله ۱ از ۳: اعتبارسنجی اطلاعات مالی و طرف‌حساب...");
 
+      // Concurrency check before persisting:
+      // Ensure receipt number is not already taken by another user/browser tab in the background
+      let finalReceiptNumber = payload.receiptNumber;
+      const freshTransactions = await getTransactions();
+      const isTaken = freshTransactions.some(
+        (t: any) => t.type === payload.type && String(t.receiptNumber).trim().toLowerCase() === String(finalReceiptNumber).trim().toLowerCase()
+      );
+      if (isTaken) {
+        invalidateCache('doc_counters');
+        const docTypeMap: any = { 'receive': 'receive_receipt', 'pay': 'pay_receipt', 'salary': 'salary' };
+        finalReceiptNumber = await generateDocNumber(docTypeMap[payload.type]);
+        payload.receiptNumber = finalReceiptNumber;
+      }
+
       const txPayload = {
         ...payload,
+        receiptNumber: finalReceiptNumber,
         linkedInvoices: receiptLinkedInvoices,
         skipAccounting: payload.method === "check"
       };
-      let createdReceiptObj: any = { ...payload };
+      let createdReceiptObj: any = { ...payload, receiptNumber: finalReceiptNumber };
 
       if (payload.method === "check") {
         updateAppProcessing(
@@ -4287,19 +4327,12 @@ const handleFastBarcodeScan = (code: string) => {
     );
   };
 
-const getPersonDisplayName = (person: any) => {
-    if (!person) return "نامشخص";
-    if (person.alias) return person.alias;
-    if (person.name) return person.name;
-    if (person.firstName || person.lastName) return `${person.firstName || ''} ${person.lastName || ''}`.trim();
-    if (person.companyName) return person.companyName;
-    return "نامشخص";
+  const getPersonDisplayName = (person: any, personsList?: any[]) => {
+    return formatPersonName(person, personsList || persons);
   };
 
-const getPersonDisplayNameById = (personId: string | number | undefined) => {
-    if (!personId) return "نامشخص";
-    const person = persons.find((p) => p.id.toString() === personId.toString());
-    return getPersonDisplayName(person);
+  const getPersonDisplayNameById = (personId: string | number | undefined) => {
+    return formatPersonName(personId, persons);
   };
 
 const renderPersonLink = (
@@ -6381,10 +6414,25 @@ const renderPersonInfoBox = (
     );
     if (!person) return null;
     const bal = calculatePersonBalance(personId);
+    const personName = formatPersonName(person);
     return (
       <div
         className={`mt-2 text-xs font-bold w-full ${themeClass} border rounded-lg p-3 flex flex-col gap-2`}
       >
+        <div className="flex items-center justify-between pb-2 border-b border-black/5">
+          <div className="flex items-center gap-1.5 font-black text-slate-800 text-sm">
+            <User className="w-4 h-4 text-indigo-600 shrink-0" />
+            <span>{personName}</span>
+            {person.personCode && (
+              <span className="text-[11px] font-mono font-bold text-slate-500 bg-white/80 px-1.5 py-0.5 rounded border border-black/5">
+                کد: {toPersianDigits(person.personCode)}
+              </span>
+            )}
+          </div>
+          <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700">
+            {getRoleName(person.role)}
+          </span>
+        </div>
         {(person.phone || person.address) && (
           <div className="flex flex-col gap-1.5 pb-2 border-b border-black/5">
             {person.phone && (
@@ -6789,6 +6837,8 @@ const renderTabContent = () => {
     getRoleBadgeClasses,
     mapPersonToOption,
     activePersonsOnly,
+    customPersonFilter,
+    renderPersonInfoBox,
     filteredPersons,
     transactions,
     setTransactions,

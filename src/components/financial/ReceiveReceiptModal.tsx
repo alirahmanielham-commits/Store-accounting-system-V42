@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { getReceivedChecks } from "../../services/dataService";
 import { motion } from "framer-motion";
-import { RefreshCw, Save, ArrowDownLeft, ArrowUpRight, CheckCircle, FileText, Calendar, Building2, User, UserPlus, Wallet, DollarSign, CreditCard, Printer, X, CheckSquare } from "lucide-react";
+import { RefreshCw, Save, ArrowDownLeft, ArrowUpRight, CheckCircle, FileText, Calendar, Building2, User, UserPlus, Wallet, DollarSign, CreditCard, Printer, X, CheckSquare, Phone } from "lucide-react";
 import Select from "react-select";
 import CurrencyInput from "../common/CurrencyInput";
 import CustomDatePicker from "../ui/CustomDatePicker";
@@ -131,6 +131,51 @@ const isReceive = true;
         const themeBadge = isReceive
           ? "bg-emerald-100 text-emerald-800"
           : "bg-rose-100 text-rose-800";
+
+        const effectivePersonId = receiptPersonId || (props as any).personId || "";
+        const effectiveSetPersonId = setReceiptPersonId || (props as any).setPersonId || (() => {});
+
+        const resolvePersonName = (p: any): string => {
+          if (!p) return "نامشخص";
+          if (typeof getPersonDisplayName === "function") {
+            const d = getPersonDisplayName(p, persons);
+            if (d && d !== "نامشخص") return d;
+          }
+          const fullName = `${p.firstName || ""} ${p.lastName || ""}`.trim();
+          return (
+            p.alias?.trim() ||
+            p.name?.trim() ||
+            fullName ||
+            p.companyName?.trim() ||
+            p.title?.trim() ||
+            "نامشخص"
+          );
+        };
+
+        const selectedPerson = (persons || []).find(
+          (p: any) => p && String(p.id) === String(effectivePersonId)
+        );
+
+        const selectedPersonLabel = selectedPerson
+          ? (selectedPerson.personCode ? `[${selectedPerson.personCode}] ` : "") + resolvePersonName(selectedPerson)
+          : "";
+
+        const effectiveActivePersons = (activePersonsOnly && activePersonsOnly.length > 0)
+          ? activePersonsOnly
+          : (persons || []).filter((p: any) => p.isActive !== false);
+
+        const defaultMapPersonToOption = (p: any) => {
+          const dName = resolvePersonName(p);
+          const roleText = p.role === "customer" ? "مشتری" : p.role === "supplier" ? "تأمین‌کننده" : "طرف‌حساب";
+          return {
+            value: String(p.id),
+            label: (p.personCode ? `[${p.personCode}] ` : "") + dName + " (" + roleText + ")",
+            imageUrl: p.imageUrl,
+            searchStr: `${dName} ${p.phone || ""} ${p.nationalId || ""}`,
+          };
+        };
+
+        const effectiveMapPerson = mapPersonToOption || defaultMapPersonToOption;
 
         return (
           <div className="w-full font-sans" dir="rtl">
@@ -271,84 +316,55 @@ const isReceive = true;
                       <div className="flex-1">
                         <Select
                           isRtl
-                      value={
-                        receiptPersonId
-                          ? {
-                              value: receiptPersonId,
-                              label: persons.find(
-                                (p) =>
-                                  p.id.toString() ===
-                                  receiptPersonId.toString(),
-                              )?.personCode
-                                ? "[" +
-                                  persons.find(
-                                    (p) =>
-                                      p.id.toString() ===
-                                      receiptPersonId.toString(),
-                                  )?.personCode +
-                                  "] " +
-                                  (persons.find(
-                                    (p) =>
-                                      p.id.toString() ===
-                                      receiptPersonId.toString(),
-                                  )?.alias ||
-                                    persons.find(
-                                      (p) =>
-                                        p.id.toString() ===
-                                        receiptPersonId.toString(),
-                                    )?.name)
-                                : persons.find(
-                                    (p) =>
-                                      p.id.toString() ===
-                                      receiptPersonId.toString(),
-                                  )?.alias ||
-                                  persons.find(
-                                    (p) =>
-                                      p.id.toString() ===
-                                      receiptPersonId.toString(),
-                                  )?.name,
+                          value={
+                            effectivePersonId && selectedPerson
+                              ? {
+                                  value: String(effectivePersonId),
+                                  label: selectedPersonLabel,
+                                }
+                              : null
+                          }
+                          onChange={(option: any) => {
+                            effectiveSetPersonId(option ? option.value : "");
+                            if (typeof setReceiptLinkedInvoices === "function") {
+                              setReceiptLinkedInvoices({});
                             }
-                          : null
-                      }
-                      onChange={(option: any) => {
-                        setReceiptPersonId(option ? option.value : "");
-                        setReceiptLinkedInvoices({});
-                      }}
-                      options={(activePersonsOnly || []).map(mapPersonToOption) as any}
-                      filterOption={customPersonFilter}
-                      formatOptionLabel={(option: any) => (
-                        <div className="flex items-center gap-3">
-                          {option.imageUrl ? (
-                            <img
-                              src={option.imageUrl}
-                              alt={option.label}
-                              className="w-8 h-8 rounded-full object-cover shadow-sm border border-slate-200"
-                            />
-                          ) : (
-                            <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center">
-                              <User className="w-4 h-4 text-slate-400" />
+                          }}
+                          options={effectiveActivePersons.map(effectiveMapPerson) as any}
+                          filterOption={customPersonFilter}
+                          formatOptionLabel={(option: any) => (
+                            <div className="flex items-center gap-3">
+                              {option.imageUrl ? (
+                                <img
+                                  src={option.imageUrl}
+                                  alt={option.label}
+                                  className="w-8 h-8 rounded-full object-cover shadow-sm border border-slate-200"
+                                />
+                              ) : (
+                                <div className="w-8 h-8 rounded-full bg-slate-50 border border-slate-100 flex items-center justify-center">
+                                  <User className="w-4 h-4 text-slate-400" />
+                                </div>
+                              )}
+                              <span className="font-bold text-slate-700">
+                                {option.label}
+                              </span>
                             </div>
                           )}
-                          <span className="font-bold text-slate-700">
-                            {option.label}
-                          </span>
-                        </div>
-                      )}
-                      placeholder="انتخاب یا جستجوی نام شخص..."
-                      noOptionsMessage={() => "شخصی یافت نشد"}
-                      isClearable
-                      styles={{
-                        control: (base) => ({
-                          ...base,
-                          borderRadius: "0.75rem",
-                          borderColor: "#E5E7EB",
-                          padding: "2px",
-                          boxShadow: "none",
-                          "&:hover": {
-                            borderColor: isReceive ? "#34D399" : "#FB7185",
-                          },
-                        }),
-                      }}
+                          placeholder="انتخاب یا جستجوی نام شخص..."
+                          noOptionsMessage={() => "شخصی یافت نشد"}
+                          isClearable
+                          styles={{
+                            control: (base) => ({
+                              ...base,
+                              borderRadius: "0.75rem",
+                              borderColor: "#E5E7EB",
+                              padding: "2px",
+                              boxShadow: "none",
+                              "&:hover": {
+                                borderColor: isReceive ? "#34D399" : "#FB7185",
+                              },
+                            }),
+                          }}
                         />
                       </div>
                       <button
@@ -363,14 +379,40 @@ const isReceive = true;
                     <input
                       type="hidden"
                       required
-                      value={receiptPersonId}
+                      value={effectivePersonId}
                       onChange={() => {}}
                     />
-                    {receiptPersonId &&
-                      renderPersonInfoBox(
-                        receiptPersonId,
-                        `${isReceive ? "bg-emerald-50/50 border-emerald-100/50" : "bg-rose-50/50 border-rose-100/50"} text-slate-600`,
-                      )}
+                    {effectivePersonId && (
+                      typeof renderPersonInfoBox === "function" ? (
+                        renderPersonInfoBox(
+                          effectivePersonId,
+                          `${isReceive ? "bg-emerald-50/50 border-emerald-100/50" : "bg-rose-50/50 border-rose-100/50"} text-slate-600`
+                        )
+                      ) : selectedPerson ? (
+                        <div className={`mt-2 text-xs font-bold w-full ${isReceive ? "bg-emerald-50/50 border-emerald-100/50" : "bg-rose-50/50 border-rose-100/50"} text-slate-600 border rounded-lg p-3 flex flex-col gap-2`}>
+                          <div className="flex items-center justify-between pb-2 border-b border-black/5">
+                            <div className="flex items-center gap-1.5 font-black text-slate-800 text-sm">
+                              <User className="w-4 h-4 text-indigo-600 shrink-0" />
+                              <span>{resolvePersonName(selectedPerson)}</span>
+                              {selectedPerson.personCode && (
+                                <span className="text-[11px] font-mono font-bold text-slate-500 bg-white/80 px-1.5 py-0.5 rounded border border-black/5">
+                                  کد: {toPersianDigits ? toPersianDigits(selectedPerson.personCode) : selectedPerson.personCode}
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[11px] px-2 py-0.5 rounded-full font-bold bg-slate-100 text-slate-700">
+                              {selectedPerson.role === "customer" ? "مشتری" : selectedPerson.role === "supplier" ? "تأمین‌کننده" : "طرف‌حساب"}
+                            </span>
+                          </div>
+                          {selectedPerson.phone && (
+                            <div className="flex items-center gap-1.5 opacity-90 font-medium">
+                              <Phone className="w-3.5 h-3.5" />
+                              <span dir="ltr">{selectedPerson.phone}</span>
+                            </div>
+                          )}
+                        </div>
+                      ) : null
+                    )}
                   </div>
 
                   <div>
