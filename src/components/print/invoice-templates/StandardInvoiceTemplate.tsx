@@ -189,14 +189,63 @@ export default function StandardInvoiceTemplate({
   const isClassic = printSettings.designType === 'classic';
   const paperSize = printSettings.paperSize || 'a4';
   const isA5 = paperSize === 'a5';
+  const isBold = isA5 || printSettings?.boldBorders;
+
+  // Customizable columns
+  const defaultCols = {
+    rowIndex: true,
+    productCode: false,
+    productName: true,
+    quantity: true,
+    unit: true,
+    unitPrice: true,
+    grossAmount: true,
+    discountPercent: true,
+    discountAmount: true,
+    tax: true,
+    totalPrice: true,
+  };
+  const cols = { ...defaultCols, ...printSettings?.columns };
+
+  const totalColCount = 
+    (cols.rowIndex ? 1 : 0) +
+    (cols.productCode ? 1 : 0) +
+    1 + // productName
+    (cols.quantity ? 1 : 0) +
+    (cols.unit ? 1 : 0) +
+    (cols.unitPrice ? 1 : 0) +
+    (cols.grossAmount ? 1 : 0) +
+    (cols.discountPercent ? 1 : 0) +
+    (cols.discountAmount ? 1 : 0) +
+    (cols.tax ? 1 : 0) +
+    (cols.totalPrice ? 1 : 0);
+
+  const leadingColSpan = (cols.rowIndex ? 1 : 0) + (cols.productCode ? 1 : 0) + 1;
+
+  // Border & styling tokens for prominent, dark lines
+  const boxBorderClass = isBold
+    ? "border-2 border-slate-700 print:border-slate-800"
+    : (isClassic ? "border-2 border-slate-600" : "border border-slate-300 print:border-slate-400");
+  const cellBorderClass = isBold
+    ? "border-l border-slate-400 print:border-slate-600"
+    : (isClassic ? "border-l border-slate-400" : "border-l border-slate-200 print:border-slate-300");
+  const innerDividerClass = isBold
+    ? "border-slate-400 print:border-slate-600"
+    : (isClassic ? "border-slate-400" : "border-slate-200 print:border-slate-300");
+  const tableHeadClass = isBold
+    ? "bg-slate-100 text-slate-900 font-black border-y-2 border-slate-700 print:border-slate-800"
+    : "bg-slate-100/80 text-slate-800 font-bold border-y border-slate-300";
+  const tableFootClass = isBold
+    ? "bg-slate-100 text-slate-900 font-black border-b-2 border-slate-700 print:border-slate-800"
+    : "bg-slate-100/70 text-slate-800 font-black border-b-2 border-slate-300";
 
   return (
-    <div className={`bg-white text-slate-800 font-sans ${isA5 ? 'text-[10px]' : 'text-xs sm:text-sm'}`} dir="rtl">
+    <div className={`bg-white text-slate-800 font-sans ${isA5 ? 'text-[9.5px]' : 'text-xs sm:text-sm'}`} dir="rtl">
       <style>{`
         @media print {
           @page {
             size: ${isA5 ? 'A5' : 'A4'} portrait;
-            margin: 6mm;
+            margin: ${isA5 ? '4mm' : '6mm'};
           }
           body {
             -webkit-print-color-adjust: exact !important;
@@ -220,7 +269,7 @@ export default function StandardInvoiceTemplate({
         <thead className="print-table-header">
           {/* Main Invoice Header (Store & Customer) */}
           <tr>
-            <th colSpan={9} className="font-normal p-0 border-0">
+            <th colSpan={totalColCount} className="font-normal p-0 border-0">
               <div className={`flex justify-between items-start ${isA5 ? 'mb-3 pb-2' : 'mb-5 pb-4'} ${isClassic ? 'border-b border-slate-400' : 'border-b border-slate-200'}`}>
                 
                 {/* Store branding */}
@@ -385,20 +434,44 @@ export default function StandardInvoiceTemplate({
           </tr>
 
           {/* Table Columns Header */}
-          <tr className={`bg-slate-100/80 text-slate-700 font-bold border-y border-slate-200 ${isA5 ? 'text-[9px]' : 'text-[11px]'}`}>
-            <th className="py-2 px-2 text-center w-8 border-l border-slate-200">#</th>
-            <th className="py-2 px-3 border-l border-slate-200">شرح کالا / خدمات</th>
-            <th className="py-2 px-2 text-center border-l border-slate-200 w-16">تعداد / مقدار</th>
-            <th className="py-2 px-2 text-left border-l border-slate-200 w-24">مبلغ واحد (فی)</th>
-            <th className="py-2 px-2 text-left border-l border-slate-200 w-24">مبلغ ناخالص</th>
-            <th className="py-2 px-1 text-center border-l border-slate-200 w-14">تخفیف (%)</th>
-            <th className="py-2 px-2 text-left border-l border-slate-200 w-20">مبلغ تخفیف</th>
-            <th className="py-2 px-2 text-left border-l border-slate-200 w-18">مالیات</th>
-            <th className="py-2 px-3 text-left w-28">مبلغ خالص نهایی</th>
+          <tr className={`${tableHeadClass} ${isA5 ? 'text-[9px]' : 'text-[11px]'}`}>
+            {cols.rowIndex && (
+              <th className={`py-2 px-1.5 text-center w-8 ${cellBorderClass}`}>#</th>
+            )}
+            {cols.productCode && (
+              <th className={`py-2 px-2 text-center w-16 ${cellBorderClass}`}>کد کالا</th>
+            )}
+            <th className={`py-2 px-3 ${cellBorderClass}`}>شرح کالا / خدمات</th>
+            {cols.quantity && (
+              <th className={`py-2 px-2 text-center ${cellBorderClass} w-16`}>
+                {cols.unit ? "تعداد / مقدار" : "تعداد"}
+              </th>
+            )}
+            {cols.unit && (
+              <th className={`py-2 px-1.5 text-center ${cellBorderClass} w-12`}>واحد</th>
+            )}
+            {cols.unitPrice && (
+              <th className={`py-2 px-2 text-left ${cellBorderClass} w-24`}>مبلغ واحد (فی)</th>
+            )}
+            {cols.grossAmount && (
+              <th className={`py-2 px-2 text-left ${cellBorderClass} w-24`}>مبلغ ناخالص</th>
+            )}
+            {cols.discountPercent && (
+              <th className={`py-2 px-1 text-center ${cellBorderClass} w-14`}>تخفیف (%)</th>
+            )}
+            {cols.discountAmount && (
+              <th className={`py-2 px-2 text-left ${cellBorderClass} w-20`}>مبلغ تخفیف</th>
+            )}
+            {cols.tax && (
+              <th className={`py-2 px-2 text-left ${cellBorderClass} w-18`}>مالیات</th>
+            )}
+            {cols.totalPrice && (
+              <th className="py-2 px-3 text-left w-28">مبلغ خالص نهایی</th>
+            )}
           </tr>
         </thead>
         
-        <tbody className={`divide-y divide-slate-100 border-b border-slate-200 ${isA5 ? 'text-[9.5px]' : 'text-[11px]'}`}>
+        <tbody className={`divide-y ${isBold ? 'divide-slate-300 print:divide-slate-400' : 'divide-slate-100'} border-b ${innerDividerClass} ${isA5 ? 'text-[9.5px]' : 'text-[11px]'}`}>
           {(data.items || []).map((item: any, idx: number) => {
             const qty = Number(item.quantity) || 0;
             const unitPrice = Number(item.unitPrice) || 0;
@@ -414,54 +487,82 @@ export default function StandardInvoiceTemplate({
               : (rowAfterDisc + rowTax);
 
             return (
-              <tr key={idx} className="print-avoid-break hover:bg-slate-50/40 transition-colors">
-                <td className="py-2 px-2 text-center font-bold text-slate-400 border-l border-slate-100">
-                  {toPersianDigits(idx + 1)}
-                </td>
-                <td className="py-2 px-3 border-l border-slate-100">
-                  <div className="font-bold text-slate-800">{item.productName}</div>
-                  {item.productCode && (
-                    <div className="text-[8.5px] text-slate-400 font-mono mt-0.5">
+              <tr key={idx} className="print-avoid-break hover:bg-slate-50/40 transition-colors print:hover:bg-transparent">
+                {cols.rowIndex && (
+                  <td className={`py-1.5 px-1.5 text-center font-bold text-slate-600 ${cellBorderClass}`}>
+                    {toPersianDigits(idx + 1)}
+                  </td>
+                )}
+                {cols.productCode && (
+                  <td className={`py-1.5 px-2 text-center font-mono text-slate-700 ${cellBorderClass}`}>
+                    {toPersianDigits(item.productCode || "-")}
+                  </td>
+                )}
+                <td className={`py-1.5 px-3 ${cellBorderClass}`}>
+                  <div className="font-black text-slate-900">{item.productName}</div>
+                  {!cols.productCode && item.productCode && (
+                    <div className="text-[8.5px] text-slate-500 font-mono mt-0.5">
                       کد: {toPersianDigits(item.productCode)}
                     </div>
                   )}
                 </td>
-                <td className="py-2 px-2 text-center font-bold text-slate-800 border-l border-slate-100 whitespace-nowrap">
-                  <span>{toPersianDigits(item.quantity)}</span>{" "}
-                  <span className="text-[8.5px] font-normal text-slate-400">
+                {cols.quantity && (
+                  <td className={`py-1.5 px-2 text-center font-black text-slate-900 ${cellBorderClass} whitespace-nowrap`}>
+                    <span>{toPersianDigits(item.quantity)}</span>{" "}
+                    {!cols.unit && (
+                      <span className="text-[8.5px] font-normal text-slate-500">
+                        {item.selectedUnit || item.unit || "عدد"}
+                      </span>
+                    )}
+                  </td>
+                )}
+                {cols.unit && (
+                  <td className={`py-1.5 px-1.5 text-center text-slate-700 ${cellBorderClass}`}>
                     {item.selectedUnit || item.unit || "عدد"}
-                  </span>
-                </td>
-                <td className="py-2 px-2 text-left font-medium text-slate-700 border-l border-slate-100 accounting-num" dir="ltr">
-                  {toPersianDigits(addCommas(unitPrice))}
-                </td>
-                <td className="py-2 px-2 text-left font-medium text-slate-700 border-l border-slate-100 accounting-num" dir="ltr">
-                  {toPersianDigits(addCommas(rowGross))}
-                </td>
-                <td className="py-2 px-1 text-center font-bold text-slate-600 border-l border-slate-100">
-                  {rowDiscPct > 0 ? (
-                    <span className="text-rose-600 font-bold">٪{toPersianDigits(rowDiscPct)}</span>
-                  ) : (
-                    <span className="text-slate-300">-</span>
-                  )}
-                </td>
-                <td className="py-2 px-2 text-left font-medium text-slate-600 border-l border-slate-100 accounting-num" dir="ltr">
-                  {rowDiscAmount > 0 ? (
-                    <span className="text-rose-600 font-bold">{toPersianDigits(addCommas(rowDiscAmount))}</span>
-                  ) : (
-                    <span className="text-slate-300">-</span>
-                  )}
-                </td>
-                <td className="py-2 px-2 text-left font-medium text-slate-600 border-l border-slate-100 accounting-num" dir="ltr">
-                  {rowTax > 0 ? (
-                    <span className="text-indigo-600 font-bold">{toPersianDigits(addCommas(rowTax))}</span>
-                  ) : (
-                    <span className="text-slate-300">۰</span>
-                  )}
-                </td>
-                <td className="py-2 px-3 text-left font-black text-slate-900 accounting-num" dir="ltr">
-                  {toPersianDigits(addCommas(rowFinal))}
-                </td>
+                  </td>
+                )}
+                {cols.unitPrice && (
+                  <td className={`py-1.5 px-2 text-left font-bold text-slate-800 ${cellBorderClass} accounting-num`} dir="ltr">
+                    {toPersianDigits(addCommas(unitPrice))}
+                  </td>
+                )}
+                {cols.grossAmount && (
+                  <td className={`py-1.5 px-2 text-left font-bold text-slate-800 ${cellBorderClass} accounting-num`} dir="ltr">
+                    {toPersianDigits(addCommas(rowGross))}
+                  </td>
+                )}
+                {cols.discountPercent && (
+                  <td className={`py-1.5 px-1 text-center font-bold text-slate-700 ${cellBorderClass}`}>
+                    {rowDiscPct > 0 ? (
+                      <span className="text-rose-700 font-bold">٪{toPersianDigits(rowDiscPct)}</span>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </td>
+                )}
+                {cols.discountAmount && (
+                  <td className={`py-1.5 px-2 text-left font-bold text-slate-700 ${cellBorderClass} accounting-num`} dir="ltr">
+                    {rowDiscAmount > 0 ? (
+                      <span className="text-rose-700 font-bold">{toPersianDigits(addCommas(rowDiscAmount))}</span>
+                    ) : (
+                      <span className="text-slate-400">-</span>
+                    )}
+                  </td>
+                )}
+                {cols.tax && (
+                  <td className={`py-1.5 px-2 text-left font-bold text-slate-700 ${cellBorderClass} accounting-num`} dir="ltr">
+                    {rowTax > 0 ? (
+                      <span className="text-indigo-800 font-bold">{toPersianDigits(addCommas(rowTax))}</span>
+                    ) : (
+                      <span className="text-slate-400">۰</span>
+                    )}
+                  </td>
+                )}
+                {cols.totalPrice && (
+                  <td className="py-1.5 px-3 text-left font-black text-slate-950 accounting-num" dir="ltr">
+                    {toPersianDigits(addCommas(rowFinal))}
+                  </td>
+                )}
               </tr>
             );
           })}
@@ -469,37 +570,54 @@ export default function StandardInvoiceTemplate({
 
         {/* TABLE TOTALS FOOTER ROW (جمع‌های سطری و تعداد) */}
         <tfoot>
-          <tr className={`bg-slate-100/70 border-b-2 border-slate-300 font-black text-slate-800 ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
-            <td colSpan={2} className="py-2 px-3 border-l border-slate-200">
+          <tr className={`${tableFootClass} ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+            <td colSpan={leadingColSpan} className={`py-2 px-3 ${cellBorderClass}`}>
               <div className="flex items-center justify-between">
                 <span>جمع کل اقلام ردیف‌ها:</span>
-                <span className="text-indigo-700 font-extrabold px-1.5 py-0.5 bg-indigo-50 border border-indigo-100 rounded">
+                <span className="text-indigo-900 font-extrabold px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
                   {toPersianDigits(data.items?.length || 0)} سطر کالا
                 </span>
               </div>
             </td>
-            <td className="py-2 px-2 text-center text-indigo-900 border-l border-slate-200">
-              <span className="font-black">{toPersianDigits(totalQuantity)}</span>
-            </td>
-            <td className="py-2 px-2 text-center text-slate-400 border-l border-slate-200">---</td>
-            <td className="py-2 px-2 text-left accounting-num border-l border-slate-200" dir="ltr">
-              {toPersianDigits(addCommas(rawItemsTotal))}
-            </td>
-            <td className="py-2 px-1 text-center text-slate-400 border-l border-slate-200">---</td>
-            <td className="py-2 px-2 text-left text-rose-700 accounting-num border-l border-slate-200" dir="ltr">
-              {totalRowDiscounts > 0 ? toPersianDigits(addCommas(totalRowDiscounts)) : "۰"}
-            </td>
-            <td className="py-2 px-2 text-left text-indigo-700 accounting-num border-l border-slate-200" dir="ltr">
-              {totalTax > 0 ? toPersianDigits(addCommas(totalTax)) : "۰"}
-            </td>
-            <td className="py-2 px-3 text-left text-slate-900 accounting-num" dir="ltr">
-              {toPersianDigits(addCommas(finalTotal))}
-            </td>
+            {cols.quantity && (
+              <td className={`py-2 px-2 text-center text-indigo-950 ${cellBorderClass} font-black`}>
+                <span>{toPersianDigits(totalQuantity)}</span>
+              </td>
+            )}
+            {cols.unit && (
+              <td className={`py-2 px-1.5 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+            )}
+            {cols.unitPrice && (
+              <td className={`py-2 px-2 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+            )}
+            {cols.grossAmount && (
+              <td className={`py-2 px-2 text-left accounting-num ${cellBorderClass} font-black text-slate-900`} dir="ltr">
+                {toPersianDigits(addCommas(rawItemsTotal))}
+              </td>
+            )}
+            {cols.discountPercent && (
+              <td className={`py-2 px-1 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+            )}
+            {cols.discountAmount && (
+              <td className={`py-2 px-2 text-left text-rose-700 accounting-num ${cellBorderClass} font-black`} dir="ltr">
+                {totalRowDiscounts > 0 ? toPersianDigits(addCommas(totalRowDiscounts)) : "۰"}
+              </td>
+            )}
+            {cols.tax && (
+              <td className={`py-2 px-2 text-left text-indigo-800 accounting-num ${cellBorderClass} font-black`} dir="ltr">
+                {totalTax > 0 ? toPersianDigits(addCommas(totalTax)) : "۰"}
+              </td>
+            )}
+            {cols.totalPrice && (
+              <td className="py-2 px-3 text-left text-slate-950 accounting-num font-black" dir="ltr">
+                {toPersianDigits(addCommas(finalTotal))}
+              </td>
+            )}
           </tr>
 
           {/* FINANCIAL SUMMARY, NOTES, AND SIGNATURES */}
           <tr>
-            <td colSpan={9} className="p-0 border-0 pt-4">
+            <td colSpan={totalColCount} className="p-0 border-0 pt-4">
               
               {/* Summary Area */}
               <div className={`flex flex-col md:flex-row justify-between items-start gap-4 print-avoid-break ${isA5 ? 'mb-3' : 'mb-6'}`}>
@@ -507,23 +625,23 @@ export default function StandardInvoiceTemplate({
                 {/* Left: Notes, Amount in Words, Payment terms */}
                 <div className="flex-1 w-full space-y-3">
                   {/* Amount in Persian Words */}
-                  <div className={`p-3 rounded-xl border border-indigo-100 bg-indigo-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
-                    <span className="text-indigo-600 font-bold ml-1">مبلغ به حروف:</span>
+                  <div className={`p-3 rounded-xl ${boxBorderClass} bg-indigo-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
+                    <span className="text-indigo-900 font-bold ml-1">مبلغ به حروف:</span>
                     <span className="font-black text-indigo-950 leading-relaxed">
                       {numToPersianWords(Math.round(finalTotal))} {currencyLabel} تمام
                     </span>
                   </div>
 
                   {/* Payment Details */}
-                  <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/30 ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+                  <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-xl ${boxBorderClass} bg-slate-50/40 ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
                     <div>
-                      <span className="text-slate-400 font-medium block">نحوه تسویه:</span>
+                      <span className="text-slate-500 font-medium block">نحوه تسویه:</span>
                       <span className="font-bold text-slate-800">
                         {data.paymentMethod === "cash" ? "نقدی" : data.paymentMethod === "credit" ? "نسیه" : "ترکیبی / واریز"}
                       </span>
                     </div>
                     <div>
-                      <span className="text-slate-400 font-medium block">وضعیت پرداخت:</span>
+                      <span className="text-slate-500 font-medium block">وضعیت پرداخت:</span>
                       <span className={`font-black ${
                         paidAmount >= finalTotal ? 'text-emerald-700' :
                         paidAmount > 0 ? 'text-amber-700' : 'text-rose-700'
@@ -535,9 +653,9 @@ export default function StandardInvoiceTemplate({
 
                   {/* Notes */}
                   {printSettings.showNotes && (data.description || data.note) && (
-                    <div className={`p-2.5 rounded-xl border border-slate-200/70 bg-white ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
-                      <span className="text-slate-400 font-bold block mb-0.5">توضیحات فاکتور:</span>
-                      <div className="text-slate-700 font-medium leading-relaxed whitespace-pre-line">
+                    <div className={`p-2.5 rounded-xl ${boxBorderClass} bg-white ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+                      <span className="text-slate-600 font-bold block mb-0.5">توضیحات فاکتور:</span>
+                      <div className="text-slate-800 font-medium leading-relaxed whitespace-pre-line">
                         {data.description || data.note}
                       </div>
                     </div>
@@ -545,8 +663,8 @@ export default function StandardInvoiceTemplate({
                 </div>
 
                 {/* Right: Step-by-Step Financial Breakdown Box */}
-                <div className={`w-full md:w-80 shrink-0 border border-slate-200 rounded-xl overflow-hidden bg-slate-50/30 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
-                  <div className="p-3 border-b border-slate-200/60 font-black text-slate-700 bg-slate-100/50">
+                <div className={`w-full md:w-80 shrink-0 ${boxBorderClass} rounded-xl overflow-hidden bg-slate-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
+                  <div className={`p-2.5 border-b ${innerDividerClass} font-black text-slate-800 bg-slate-100`}>
                     خلاصه محاسبات مالی
                   </div>
                   <div className="p-3 space-y-2">
@@ -632,27 +750,27 @@ export default function StandardInvoiceTemplate({
 
               {/* Allocated Transactions Area */}
               {printSettings.showTransactions && allocatedTransactions.length > 0 && (
-                <div className={`rounded-xl border border-slate-200 overflow-hidden ${isA5 ? 'mb-3' : 'mb-6'} print-avoid-break`}>
-                  <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 font-bold text-slate-700 text-[10px]">
+                <div className={`rounded-xl ${boxBorderClass} overflow-hidden ${isA5 ? 'mb-3' : 'mb-6'} print-avoid-break`}>
+                  <div className={`bg-slate-100 px-3 py-1.5 border-b ${innerDividerClass} font-bold text-slate-800 text-[10px]`}>
                     تراکنش‌های مالی مرتبط با این فاکتور
                   </div>
                   <table className="w-full text-right text-[10px]">
-                    <thead className="bg-slate-100/50 border-b border-slate-200 text-slate-500">
+                    <thead className={`bg-slate-100/70 border-b ${innerDividerClass} text-slate-700 font-bold`}>
                       <tr>
-                        <th className="py-1.5 px-3 border-l border-slate-200">تاریخ</th>
-                        <th className="py-1.5 px-3 border-l border-slate-200">نوع</th>
-                        <th className="py-1.5 px-3 border-l border-slate-200">روش</th>
-                        <th className="py-1.5 px-3 border-l border-slate-200">شماره/پیگیری</th>
+                        <th className={`py-1.5 px-3 ${cellBorderClass}`}>تاریخ</th>
+                        <th className={`py-1.5 px-3 ${cellBorderClass}`}>نوع</th>
+                        <th className={`py-1.5 px-3 ${cellBorderClass}`}>روش</th>
+                        <th className={`py-1.5 px-3 ${cellBorderClass}`}>شماره/پیگیری</th>
                         <th className="py-1.5 px-3 text-left">مبلغ ({currencyLabel})</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-slate-100">
+                    <tbody className={`divide-y ${isBold ? 'divide-slate-300' : 'divide-slate-100'}`}>
                       {allocatedTransactions.map((tx: any, idx: number) => (
                         <tr key={idx}>
-                          <td className="py-1 px-3 border-l border-slate-100">{getInvoiceDateOnly(tx.jalaliDate || tx.date)}</td>
-                          <td className="py-1 px-3 border-l border-slate-100">{tx.type === "receive" ? "دریافت" : "پرداخت"}</td>
-                          <td className="py-1 px-3 border-l border-slate-100">{tx.method === "cash" ? "نقدی" : tx.method === "check" ? "چک" : "کارت‌خوان/سند"}</td>
-                          <td className="py-1 px-3 border-l border-slate-100 font-mono">{toPersianDigits(tx.checkNumber || tx.receiptNumber || "-")}</td>
+                          <td className={`py-1 px-3 ${cellBorderClass}`}>{getInvoiceDateOnly(tx.jalaliDate || tx.date)}</td>
+                          <td className={`py-1 px-3 ${cellBorderClass}`}>{tx.type === "receive" ? "دریافت" : "پرداخت"}</td>
+                          <td className={`py-1 px-3 ${cellBorderClass}`}>{tx.method === "cash" ? "نقدی" : tx.method === "check" ? "چک" : "کارت‌خوان/سند"}</td>
+                          <td className={`py-1 px-3 ${cellBorderClass} font-mono`}>{toPersianDigits(tx.checkNumber || tx.receiptNumber || "-")}</td>
                           <td className="py-1 px-3 text-left font-bold text-slate-900 accounting-num" dir="ltr">{toPersianDigits(addCommas(tx.linkedInvoices[data.id] || tx.amount || 0))}</td>
                         </tr>
                       ))}
@@ -663,14 +781,14 @@ export default function StandardInvoiceTemplate({
 
               {/* Signatures */}
               {printSettings.showSignatures && (
-                <div className={`grid grid-cols-2 gap-8 text-center text-slate-700 font-bold print-avoid-break ${isA5 ? 'mt-4 mb-2 text-[9.5px]' : 'mt-8 mb-4 text-[11px]'}`}>
+                <div className={`grid grid-cols-2 gap-8 text-center text-slate-800 font-bold print-avoid-break ${isA5 ? 'mt-4 mb-2 text-[9.5px]' : 'mt-8 mb-4 text-[11px]'}`}>
                   <div className="flex flex-col items-center">
-                    <span className="text-slate-500">مهر و امضای فروشنده</span>
-                    <div className={`w-3/4 border-b border-dashed border-slate-300 ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
+                    <span className="text-slate-600">مهر و امضای فروشنده</span>
+                    <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
                   </div>
                   <div className="flex flex-col items-center">
-                    <span className="text-slate-500">مهر و امضای خریدار</span>
-                    <div className={`w-3/4 border-b border-dashed border-slate-300 ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
+                    <span className="text-slate-600">مهر و امضای خریدار</span>
+                    <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
                   </div>
                 </div>
               )}

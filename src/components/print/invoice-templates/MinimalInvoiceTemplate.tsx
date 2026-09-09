@@ -23,6 +23,43 @@ export default function MinimalInvoiceTemplate({
 }: InvoicePrintTemplateProps) {
   const paperSize = printSettings?.paperSize || 'a4';
   const isA5 = paperSize === 'a5';
+  const isBold = isA5 || printSettings?.boldBorders;
+
+  // Customizable columns
+  const defaultCols = {
+    rowIndex: true,
+    productCode: false,
+    productName: true,
+    quantity: true,
+    unit: true,
+    unitPrice: true,
+    grossAmount: true,
+    discountPercent: true,
+    discountAmount: true,
+    tax: true,
+    totalPrice: true,
+  };
+  const cols = { ...defaultCols, ...printSettings?.columns };
+
+  // Leading colspan for summary row in items table
+  const leadingColSpan = (cols.rowIndex ? 1 : 0) + (cols.productCode ? 1 : 0) + 1; // 1 for productName
+
+  // Border & styling tokens for prominent, dark lines in print and A5
+  const boxBorderClass = isBold
+    ? "border-2 border-slate-700 print:border-slate-800"
+    : "border border-slate-300 print:border-slate-400";
+  const innerDividerClass = isBold
+    ? "border-slate-400 print:border-slate-600"
+    : "border-slate-200 print:border-slate-300";
+  const cellBorderClass = isBold
+    ? "border-l border-slate-400 print:border-slate-600"
+    : "border-l border-slate-200 print:border-slate-300";
+  const tableHeadClass = isBold
+    ? "bg-slate-100 text-slate-900 font-black border-b-2 border-slate-700 print:border-slate-800"
+    : "bg-slate-50 text-slate-700 font-bold border-b border-slate-300";
+  const tableFootClass = isBold
+    ? "bg-slate-100 text-slate-900 font-black border-t-2 border-slate-700 print:border-slate-800"
+    : "bg-slate-100/70 text-slate-800 font-bold border-t-2 border-slate-300";
 
   const isSale = data.type === "sale" || data.type === "sale_return";
   const isReturn = data.type === "sale_return" || data.type === "purchase_return";
@@ -193,7 +230,7 @@ export default function MinimalInvoiceTemplate({
     <div
       className={`bg-white text-slate-800 font-sans mx-auto transition-all ${
         isA5
-          ? 'max-w-[148mm] min-h-[210mm] p-4 text-[10px]'
+          ? 'max-w-[148mm] min-h-[210mm] p-3 text-[9.5px]'
           : 'max-w-[210mm] min-h-[297mm] p-8 text-xs'
       }`}
       dir="rtl"
@@ -202,7 +239,7 @@ export default function MinimalInvoiceTemplate({
         @media print {
           @page {
             size: ${isA5 ? 'A5' : 'A4'} portrait;
-            margin: 6mm;
+            margin: ${isA5 ? '4mm' : '6mm'};
           }
           body {
             -webkit-print-color-adjust: exact !important;
@@ -223,7 +260,7 @@ export default function MinimalInvoiceTemplate({
       `}</style>
 
       {/* ======================= HEADER SECTION ======================= */}
-      <div className={`border-b border-slate-200 ${isA5 ? 'pb-3 mb-3' : 'pb-5 mb-5'}`}>
+      <div className={`border-b-2 ${innerDividerClass} ${isA5 ? 'pb-3 mb-3' : 'pb-5 mb-5'}`}>
         <div className="flex justify-between items-start gap-4">
           
           {/* Seller / Store Branding */}
@@ -330,8 +367,8 @@ export default function MinimalInvoiceTemplate({
       </div>
 
       {/* ======================= BUYER & PARTY INFO ======================= */}
-      <div className={`rounded-xl border border-slate-200/90 bg-slate-50/40 ${isA5 ? 'p-2.5 mb-3' : 'p-3.5 mb-5'}`}>
-        <div className="flex items-center justify-between border-b border-slate-200/60 pb-1.5 mb-2">
+      <div className={`rounded-xl ${boxBorderClass} bg-slate-50/40 ${isA5 ? 'p-2.5 mb-3' : 'p-3.5 mb-5'}`}>
+        <div className={`flex items-center justify-between border-b ${innerDividerClass} pb-1.5 mb-2`}>
           <div className="flex items-center gap-1.5 text-slate-700 font-black text-[11px]">
             <User className="w-3.5 h-3.5 text-slate-500" />
             <span>مشخصات خریدار / مشتری</span>
@@ -392,22 +429,46 @@ export default function MinimalInvoiceTemplate({
       </div>
 
       {/* ======================= ITEMS TABLE ======================= */}
-      <div className={`border border-slate-200 rounded-xl overflow-hidden ${isA5 ? 'mb-3' : 'mb-5'}`}>
+      <div className={`${boxBorderClass} rounded-xl overflow-hidden ${isA5 ? 'mb-3' : 'mb-5'}`}>
         <table className="w-full text-right border-collapse" style={{ borderCollapse: 'collapse' }}>
           <thead>
-            <tr className={`bg-slate-50 text-slate-600 font-bold border-b border-slate-200 ${isA5 ? 'text-[9px]' : 'text-[11px]'}`}>
-              <th className="py-2 px-2 text-center w-8 border-l border-slate-200">#</th>
-              <th className="py-2 px-3 border-l border-slate-200">شرح کالا یا خدمات</th>
-              <th className="py-2 px-2 text-center border-l border-slate-200 w-16">مقدار / تعداد</th>
-              <th className="py-2 px-2 text-left border-l border-slate-200 w-24">مبلغ واحد (فی)</th>
-              <th className="py-2 px-2 text-left border-l border-slate-200 w-24">مبلغ ناخالص</th>
-              <th className="py-2 px-1 text-center border-l border-slate-200 w-14">تخفیف (%)</th>
-              <th className="py-2 px-2 text-left border-l border-slate-200 w-20">مبلغ تخفیف</th>
-              <th className="py-2 px-2 text-left border-l border-slate-200 w-18">مالیات</th>
-              <th className="py-2 px-3 text-left w-28">مبلغ خالص نهایی</th>
+            <tr className={`${tableHeadClass} ${isA5 ? 'text-[9px]' : 'text-[11px]'}`}>
+              {cols.rowIndex && (
+                <th className={`py-2 px-1.5 text-center w-8 ${cellBorderClass}`}>#</th>
+              )}
+              {cols.productCode && (
+                <th className={`py-2 px-2 text-center w-16 ${cellBorderClass}`}>کد کالا</th>
+              )}
+              <th className={`py-2 px-3 ${cellBorderClass}`}>شرح کالا یا خدمات</th>
+              {cols.quantity && (
+                <th className={`py-2 px-2 text-center ${cellBorderClass} w-16`}>
+                  {cols.unit ? "مقدار / تعداد" : "تعداد"}
+                </th>
+              )}
+              {cols.unit && (
+                <th className={`py-2 px-1.5 text-center ${cellBorderClass} w-12`}>واحد</th>
+              )}
+              {cols.unitPrice && (
+                <th className={`py-2 px-2 text-left ${cellBorderClass} w-24`}>مبلغ واحد (فی)</th>
+              )}
+              {cols.grossAmount && (
+                <th className={`py-2 px-2 text-left ${cellBorderClass} w-24`}>مبلغ ناخالص</th>
+              )}
+              {cols.discountPercent && (
+                <th className={`py-2 px-1 text-center ${cellBorderClass} w-14`}>تخفیف (%)</th>
+              )}
+              {cols.discountAmount && (
+                <th className={`py-2 px-2 text-left ${cellBorderClass} w-20`}>مبلغ تخفیف</th>
+              )}
+              {cols.tax && (
+                <th className={`py-2 px-2 text-left ${cellBorderClass} w-18`}>مالیات</th>
+              )}
+              {cols.totalPrice && (
+                <th className="py-2 px-3 text-left w-28">مبلغ خالص نهایی</th>
+              )}
             </tr>
           </thead>
-          <tbody className={`divide-y divide-slate-100 ${isA5 ? 'text-[9.5px]' : 'text-[11px]'}`}>
+          <tbody className={`divide-y ${isBold ? 'divide-slate-300 print:divide-slate-400' : 'divide-slate-100'} ${isA5 ? 'text-[9.5px]' : 'text-[11px]'}`}>
             {(data.items || []).map((item: any, idx: number) => {
               const qty = Number(item.quantity) || 0;
               const unitPrice = Number(item.unitPrice) || 0;
@@ -423,54 +484,82 @@ export default function MinimalInvoiceTemplate({
                 : (rowAfterDisc + rowTax);
 
               return (
-                <tr key={idx} className="hover:bg-slate-50/40 transition-colors">
-                  <td className="py-2 px-2 text-center font-bold text-slate-400 border-l border-slate-100">
-                    {toPersianDigits(idx + 1)}
-                  </td>
-                  <td className="py-2 px-3 border-l border-slate-100">
-                    <div className="font-bold text-slate-800">{item.productName}</div>
-                    {item.productCode && (
-                      <div className="text-[8.5px] text-slate-400 font-mono">
+                <tr key={idx} className="hover:bg-slate-50/40 transition-colors print:hover:bg-transparent">
+                  {cols.rowIndex && (
+                    <td className={`py-1.5 px-1.5 text-center font-bold text-slate-600 ${cellBorderClass}`}>
+                      {toPersianDigits(idx + 1)}
+                    </td>
+                  )}
+                  {cols.productCode && (
+                    <td className={`py-1.5 px-2 text-center font-mono text-slate-700 ${cellBorderClass}`}>
+                      {toPersianDigits(item.productCode || "-")}
+                    </td>
+                  )}
+                  <td className={`py-1.5 px-3 ${cellBorderClass}`}>
+                    <div className="font-black text-slate-900">{item.productName}</div>
+                    {!cols.productCode && item.productCode && (
+                      <div className="text-[8.5px] text-slate-500 font-mono">
                         کد: {toPersianDigits(item.productCode)}
                       </div>
                     )}
                   </td>
-                  <td className="py-2 px-2 text-center font-bold text-slate-800 border-l border-slate-100 whitespace-nowrap">
-                    <span>{toPersianDigits(item.quantity)}</span>{" "}
-                    <span className="text-[8.5px] font-normal text-slate-400">
+                  {cols.quantity && (
+                    <td className={`py-1.5 px-2 text-center font-black text-slate-900 ${cellBorderClass} whitespace-nowrap`}>
+                      <span>{toPersianDigits(item.quantity)}</span>{" "}
+                      {!cols.unit && (
+                        <span className="text-[8.5px] font-normal text-slate-500">
+                          {item.selectedUnit || item.unit || "عدد"}
+                        </span>
+                      )}
+                    </td>
+                  )}
+                  {cols.unit && (
+                    <td className={`py-1.5 px-1.5 text-center text-slate-700 ${cellBorderClass}`}>
                       {item.selectedUnit || item.unit || "عدد"}
-                    </span>
-                  </td>
-                  <td className="py-2 px-2 text-left font-medium text-slate-700 border-l border-slate-100 accounting-num" dir="ltr">
-                    {toPersianDigits(addCommas(unitPrice))}
-                  </td>
-                  <td className="py-2 px-2 text-left font-medium text-slate-700 border-l border-slate-100 accounting-num" dir="ltr">
-                    {toPersianDigits(addCommas(rowGross))}
-                  </td>
-                  <td className="py-2 px-1 text-center font-bold text-slate-600 border-l border-slate-100">
-                    {rowDiscPct > 0 ? (
-                      <span className="text-rose-600 font-bold">٪{toPersianDigits(rowDiscPct)}</span>
-                    ) : (
-                      <span className="text-slate-300">-</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-2 text-left font-medium text-slate-600 border-l border-slate-100 accounting-num" dir="ltr">
-                    {rowDiscAmount > 0 ? (
-                      <span className="text-rose-600 font-bold">{toPersianDigits(addCommas(rowDiscAmount))}</span>
-                    ) : (
-                      <span className="text-slate-300">-</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-2 text-left font-medium text-slate-600 border-l border-slate-100 accounting-num" dir="ltr">
-                    {rowTax > 0 ? (
-                      <span className="text-indigo-600 font-bold">{toPersianDigits(addCommas(rowTax))}</span>
-                    ) : (
-                      <span className="text-slate-300">۰</span>
-                    )}
-                  </td>
-                  <td className="py-2 px-3 text-left font-black text-slate-900 accounting-num" dir="ltr">
-                    {toPersianDigits(addCommas(rowFinal))}
-                  </td>
+                    </td>
+                  )}
+                  {cols.unitPrice && (
+                    <td className={`py-1.5 px-2 text-left font-bold text-slate-800 ${cellBorderClass} accounting-num`} dir="ltr">
+                      {toPersianDigits(addCommas(unitPrice))}
+                    </td>
+                  )}
+                  {cols.grossAmount && (
+                    <td className={`py-1.5 px-2 text-left font-bold text-slate-800 ${cellBorderClass} accounting-num`} dir="ltr">
+                      {toPersianDigits(addCommas(rowGross))}
+                    </td>
+                  )}
+                  {cols.discountPercent && (
+                    <td className={`py-1.5 px-1 text-center font-bold text-slate-700 ${cellBorderClass}`}>
+                      {rowDiscPct > 0 ? (
+                        <span className="text-rose-700 font-bold">٪{toPersianDigits(rowDiscPct)}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                  )}
+                  {cols.discountAmount && (
+                    <td className={`py-1.5 px-2 text-left font-bold text-slate-700 ${cellBorderClass} accounting-num`} dir="ltr">
+                      {rowDiscAmount > 0 ? (
+                        <span className="text-rose-700 font-bold">{toPersianDigits(addCommas(rowDiscAmount))}</span>
+                      ) : (
+                        <span className="text-slate-400">-</span>
+                      )}
+                    </td>
+                  )}
+                  {cols.tax && (
+                    <td className={`py-1.5 px-2 text-left font-bold text-slate-700 ${cellBorderClass} accounting-num`} dir="ltr">
+                      {rowTax > 0 ? (
+                        <span className="text-indigo-800 font-bold">{toPersianDigits(addCommas(rowTax))}</span>
+                      ) : (
+                        <span className="text-slate-400">۰</span>
+                      )}
+                    </td>
+                  )}
+                  {cols.totalPrice && (
+                    <td className="py-1.5 px-3 text-left font-black text-slate-950 accounting-num" dir="ltr">
+                      {toPersianDigits(addCommas(rowFinal))}
+                    </td>
+                  )}
                 </tr>
               );
             })}
@@ -478,32 +567,49 @@ export default function MinimalInvoiceTemplate({
 
           {/* TABLE TOTALS FOOTER ROW (جمع‌های سطری و تعداد) */}
           <tfoot>
-            <tr className={`bg-slate-100/70 border-t-2 border-slate-200 font-black text-slate-800 ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
-              <td colSpan={2} className="py-2 px-3 border-l border-slate-200">
+            <tr className={`${tableFootClass} ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+              <td colSpan={leadingColSpan} className={`py-2 px-3 ${cellBorderClass}`}>
                 <div className="flex items-center justify-between">
                   <span>جمع کل اقلام ردیف‌ها:</span>
-                  <span className="text-indigo-700 font-extrabold px-1.5 py-0.5 bg-indigo-50 border border-indigo-100 rounded">
+                  <span className="text-indigo-900 font-extrabold px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
                     {toPersianDigits(data.items?.length || 0)} سطر کالا
                   </span>
                 </div>
               </td>
-              <td className="py-2 px-2 text-center text-indigo-900 border-l border-slate-200">
-                <span className="font-black">{toPersianDigits(totalQuantity)}</span>
-              </td>
-              <td className="py-2 px-2 text-center text-slate-400 border-l border-slate-200">---</td>
-              <td className="py-2 px-2 text-left accounting-num border-l border-slate-200" dir="ltr">
-                {toPersianDigits(addCommas(rawItemsTotal))}
-              </td>
-              <td className="py-2 px-1 text-center text-slate-400 border-l border-slate-200">---</td>
-              <td className="py-2 px-2 text-left text-rose-700 accounting-num border-l border-slate-200" dir="ltr">
-                {totalRowDiscounts > 0 ? toPersianDigits(addCommas(totalRowDiscounts)) : "۰"}
-              </td>
-              <td className="py-2 px-2 text-left text-indigo-700 accounting-num border-l border-slate-200" dir="ltr">
-                {totalTax > 0 ? toPersianDigits(addCommas(totalTax)) : "۰"}
-              </td>
-              <td className="py-2 px-3 text-left text-slate-900 accounting-num" dir="ltr">
-                {toPersianDigits(addCommas(finalTotal))}
-              </td>
+              {cols.quantity && (
+                <td className={`py-2 px-2 text-center text-indigo-950 ${cellBorderClass} font-black`}>
+                  <span>{toPersianDigits(totalQuantity)}</span>
+                </td>
+              )}
+              {cols.unit && (
+                <td className={`py-2 px-1.5 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+              )}
+              {cols.unitPrice && (
+                <td className={`py-2 px-2 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+              )}
+              {cols.grossAmount && (
+                <td className={`py-2 px-2 text-left accounting-num ${cellBorderClass} font-black text-slate-900`} dir="ltr">
+                  {toPersianDigits(addCommas(rawItemsTotal))}
+                </td>
+              )}
+              {cols.discountPercent && (
+                <td className={`py-2 px-1 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+              )}
+              {cols.discountAmount && (
+                <td className={`py-2 px-2 text-left text-rose-700 accounting-num ${cellBorderClass} font-black`} dir="ltr">
+                  {totalRowDiscounts > 0 ? toPersianDigits(addCommas(totalRowDiscounts)) : "۰"}
+                </td>
+              )}
+              {cols.tax && (
+                <td className={`py-2 px-2 text-left text-indigo-800 accounting-num ${cellBorderClass} font-black`} dir="ltr">
+                  {totalTax > 0 ? toPersianDigits(addCommas(totalTax)) : "۰"}
+                </td>
+              )}
+              {cols.totalPrice && (
+                <td className="py-2 px-3 text-left text-slate-950 accounting-num font-black" dir="ltr">
+                  {toPersianDigits(addCommas(finalTotal))}
+                </td>
+              )}
             </tr>
           </tfoot>
         </table>
@@ -516,23 +622,23 @@ export default function MinimalInvoiceTemplate({
         <div className="flex-1 w-full space-y-3">
           
           {/* Amount in Persian Words */}
-          <div className={`p-3 rounded-xl border border-indigo-100 bg-indigo-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
-            <span className="text-indigo-600 font-bold ml-1">مبلغ به حروف:</span>
+          <div className={`p-3 rounded-xl ${boxBorderClass} bg-indigo-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
+            <span className="text-indigo-900 font-bold ml-1">مبلغ به حروف:</span>
             <span className="font-black text-indigo-950 leading-relaxed">
               {numToPersianWords(Math.round(finalTotal))} {currencyLabel} تمام
             </span>
           </div>
 
           {/* Payment Terms & Status */}
-          <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-xl border border-slate-200/80 bg-slate-50/30 ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+          <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-xl ${boxBorderClass} bg-slate-50/40 ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
             <div>
-              <span className="text-slate-400 font-medium block">روش تسویه:</span>
+              <span className="text-slate-500 font-medium block">روش تسویه:</span>
               <span className="font-bold text-slate-800">
                 {data.paymentMethod === "cash" ? "نقدی" : data.paymentMethod === "credit" ? "نسیه (اعتباری)" : data.paymentMethod === "cheque" ? "چک" : "ترکیبی / واریز"}
               </span>
             </div>
             <div>
-              <span className="text-slate-400 font-medium block">وضعیت پرداخت:</span>
+              <span className="text-slate-500 font-medium block">وضعیت پرداخت:</span>
               <span className={`font-black ${
                 paidAmount >= finalTotal ? 'text-emerald-700' :
                 paidAmount > 0 ? 'text-amber-700' : 'text-rose-700'
@@ -544,9 +650,9 @@ export default function MinimalInvoiceTemplate({
 
           {/* Notes / Remarks if present */}
           {printSettings.showNotes && (data.description || data.note) && (
-            <div className={`p-2.5 rounded-xl border border-slate-200/70 bg-white ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
-              <span className="text-slate-400 font-bold block mb-0.5">توضیحات و شرایط فاکتور:</span>
-              <p className="text-slate-700 font-medium leading-relaxed whitespace-pre-line">
+            <div className={`p-2.5 rounded-xl ${boxBorderClass} bg-white ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+              <span className="text-slate-600 font-black block mb-0.5">توضیحات و شرایط فاکتور:</span>
+              <p className="text-slate-800 font-medium leading-relaxed whitespace-pre-line">
                 {data.description || data.note}
               </p>
             </div>
@@ -554,9 +660,9 @@ export default function MinimalInvoiceTemplate({
         </div>
 
         {/* Right Side: Step-by-Step Financial Breakdown Box */}
-        <div className={`w-full md:w-80 shrink-0 border border-slate-200 rounded-xl overflow-hidden bg-slate-50/30 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
+        <div className={`w-full md:w-80 shrink-0 ${boxBorderClass} rounded-xl overflow-hidden bg-slate-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
           
-          <div className="p-3 border-b border-slate-200/60 font-black text-slate-700 bg-slate-100/50">
+          <div className={`p-2.5 border-b ${innerDividerClass} font-black text-slate-800 bg-slate-100`}>
             خلاصه مالی و تفکیک مبالغ
           </div>
 
@@ -661,33 +767,33 @@ export default function MinimalInvoiceTemplate({
 
       {/* ======================= ALLOCATED TRANSACTIONS TABLE ======================= */}
       {printSettings.showTransactions && allocatedTransactions.length > 0 && (
-        <div className={`border border-slate-200 rounded-xl overflow-hidden print-avoid-break ${isA5 ? 'mb-3' : 'mb-5'}`}>
-          <div className="bg-slate-50 px-3 py-1.5 border-b border-slate-200 font-bold text-slate-700 text-[10px]">
+        <div className={`${boxBorderClass} rounded-xl overflow-hidden print-avoid-break ${isA5 ? 'mb-3' : 'mb-5'}`}>
+          <div className={`bg-slate-100 px-3 py-1.5 border-b ${innerDividerClass} font-bold text-slate-800 text-[10px]`}>
             تراکنش‌های واریزی و دریافتی مرتبط با این فاکتور
           </div>
           <table className="w-full text-right text-[10px]">
-            <thead className="bg-slate-100/50 border-b border-slate-200 text-slate-500">
+            <thead className={`bg-slate-100/70 border-b ${innerDividerClass} text-slate-700 font-bold`}>
               <tr>
-                <th className="py-1.5 px-3 border-l border-slate-200">تاریخ</th>
-                <th className="py-1.5 px-3 border-l border-slate-200">نوع تراکنش</th>
-                <th className="py-1.5 px-3 border-l border-slate-200">روش پرداخت</th>
-                <th className="py-1.5 px-3 border-l border-slate-200">شماره ارجاع / پیگیری</th>
+                <th className={`py-1.5 px-3 ${cellBorderClass}`}>تاریخ</th>
+                <th className={`py-1.5 px-3 ${cellBorderClass}`}>نوع تراکنش</th>
+                <th className={`py-1.5 px-3 ${cellBorderClass}`}>روش پرداخت</th>
+                <th className={`py-1.5 px-3 ${cellBorderClass}`}>شماره ارجاع / پیگیری</th>
                 <th className="py-1.5 px-3 text-left">مبلغ ({currencyLabel})</th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-slate-100">
+            <tbody className={`divide-y ${isBold ? 'divide-slate-300' : 'divide-slate-100'}`}>
               {allocatedTransactions.map((tx: any, idx: number) => (
                 <tr key={idx}>
-                  <td className="py-1 px-3 border-l border-slate-100 font-medium">
+                  <td className={`py-1 px-3 ${cellBorderClass} font-medium`}>
                     {getInvoiceDateOnly(tx.jalaliDate || tx.date)}
                   </td>
-                  <td className="py-1 px-3 border-l border-slate-100">
+                  <td className={`py-1 px-3 ${cellBorderClass}`}>
                     {tx.type === "receive" ? "دریافت از مشتری" : "پرداخت"}
                   </td>
-                  <td className="py-1 px-3 border-l border-slate-100">
+                  <td className={`py-1 px-3 ${cellBorderClass}`}>
                     {tx.method === "cash" ? "نقدی" : tx.method === "check" ? "چک" : "کارت‌خوان / حواله"}
                   </td>
-                  <td className="py-1 px-3 border-l border-slate-100 font-mono">
+                  <td className={`py-1 px-3 ${cellBorderClass} font-mono`}>
                     {toPersianDigits(tx.checkNumber || tx.receiptNumber || tx.trackingNumber || "-")}
                   </td>
                   <td className="py-1 px-3 text-left font-bold text-slate-900 accounting-num" dir="ltr">
@@ -702,14 +808,14 @@ export default function MinimalInvoiceTemplate({
 
       {/* ======================= SIGNATURES AREA ======================= */}
       {printSettings.showSignatures && (
-        <div className={`grid grid-cols-2 gap-8 text-center text-slate-700 font-bold print-avoid-break ${isA5 ? 'mt-4 mb-2 text-[9.5px]' : 'mt-8 mb-4 text-[11px]'}`}>
+        <div className={`grid grid-cols-2 gap-8 text-center text-slate-800 font-bold print-avoid-break ${isA5 ? 'mt-4 mb-2 text-[9.5px]' : 'mt-8 mb-4 text-[11px]'}`}>
           <div className="flex flex-col items-center">
-            <span className="text-slate-500">مهر و امضای فروشنده / صادرکننده</span>
-            <div className={`w-3/4 border-b border-dashed border-slate-300 ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
+            <span className="text-slate-600">مهر و امضای فروشنده / صادرکننده</span>
+            <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
           </div>
           <div className="flex flex-col items-center">
-            <span className="text-slate-500">مهر و امضای خریدار / تحویل‌گیرنده</span>
-            <div className={`w-3/4 border-b border-dashed border-slate-300 ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
+            <span className="text-slate-600">مهر و امضای خریدار / تحویل‌گیرنده</span>
+            <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
           </div>
         </div>
       )}

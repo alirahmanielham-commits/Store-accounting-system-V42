@@ -1,9 +1,10 @@
 import React, { useState } from "react";
-import { X, Printer, CheckCircle, Eye, Wallet, Settings, AlertTriangle, Ban, FileText, AlertCircle } from "lucide-react";
+import { X, Printer, CheckCircle, Eye, Wallet, Settings, AlertTriangle, Ban, FileText, AlertCircle, Columns, SlidersHorizontal, ChevronDown, Check } from "lucide-react";
 import InvoicePrintTemplate from "../print/InvoicePrintTemplate";
 import WarehousePrintTemplate from "../print/WarehousePrintTemplate";
 import ReceiptPrintTemplate from "../print/ReceiptPrintTemplate";
 import ReceiptConfirmationModal from "../financial/ReceiptConfirmationModal";
+import { InvoicePrintSettings, InvoiceColumnSettings } from "../print/invoice-templates/InvoicePrintTypes";
 
 export default function PreviewModals(props: any) {
   const {
@@ -21,16 +22,99 @@ export default function PreviewModals(props: any) {
   const isVoided = currentInvoice?.status === "voided" || currentInvoice?.isVoided === true;
   const isDraft = currentInvoice?.status === "draft" || currentInvoice?.isDraft === true;
 
-  const [printSettings, setPrintSettings] = useState({
+  const [showColumnDropdown, setShowColumnDropdown] = useState(false);
+
+  const [printSettings, setPrintSettings] = useState<InvoicePrintSettings>({
     showStoreLogo: true,
     showSignatures: true,
     showTransactions: true,
     showBalance: true,
     showNotes: true,
     showFooter: true,
-    designType: storeSettings?.invoicePrintFormat || 'minimal',
-    paperSize: 'a4'
+    boldBorders: false,
+    designType: (storeSettings?.invoicePrintFormat as any) || 'minimal',
+    paperSize: 'a4',
+    columns: {
+      rowIndex: true,
+      productCode: false,
+      productName: true,
+      quantity: true,
+      unit: true,
+      unitPrice: true,
+      grossAmount: true,
+      discountPercent: true,
+      discountAmount: true,
+      tax: true,
+      totalPrice: true,
+    }
   });
+
+  const toggleColumn = (key: keyof InvoiceColumnSettings) => {
+    setPrintSettings(prev => ({
+      ...prev,
+      columns: {
+        ...prev.columns,
+        [key]: !prev.columns?.[key]
+      }
+    }));
+  };
+
+  const setColumnPreset = (preset: 'all' | 'compact' | 'standard') => {
+    if (preset === 'all') {
+      setPrintSettings(prev => ({
+        ...prev,
+        columns: {
+          rowIndex: true,
+          productCode: true,
+          productName: true,
+          quantity: true,
+          unit: true,
+          unitPrice: true,
+          grossAmount: true,
+          discountPercent: true,
+          discountAmount: true,
+          tax: true,
+          totalPrice: true,
+        }
+      }));
+    } else if (preset === 'compact') {
+      setPrintSettings(prev => ({
+        ...prev,
+        columns: {
+          rowIndex: true,
+          productCode: false,
+          productName: true,
+          quantity: true,
+          unit: false,
+          unitPrice: true,
+          grossAmount: false,
+          discountPercent: false,
+          discountAmount: false,
+          tax: false,
+          totalPrice: true,
+        }
+      }));
+    } else {
+      setPrintSettings(prev => ({
+        ...prev,
+        columns: {
+          rowIndex: true,
+          productCode: false,
+          productName: true,
+          quantity: true,
+          unit: true,
+          unitPrice: true,
+          grossAmount: true,
+          discountPercent: true,
+          discountAmount: true,
+          tax: true,
+          totalPrice: true,
+        }
+      }));
+    }
+  };
+
+  const activeColumnCount = Object.values(printSettings.columns || {}).filter(Boolean).length;
 
   return (
     <>
@@ -38,7 +122,7 @@ export default function PreviewModals(props: any) {
       {(viewingInvoice || previewInvoiceData) && (
         <div className="fixed inset-0 z-[99999] flex flex-col bg-slate-900/50 backdrop-blur-sm print:bg-transparent print:backdrop-blur-none print-section" dir="rtl">
           <div className="flex-1 w-full max-w-5xl mx-auto my-0 sm:my-4 bg-slate-100 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden print:w-full print:max-w-none print:m-0 print:rounded-none print:shadow-none print:bg-white relative">
-            <div className="bg-white border-b border-slate-200 p-4 flex items-center justify-between print:hidden shrink-0 z-10">
+            <div className="bg-white border-b border-slate-200 p-4 flex items-center justify-between print:hidden shrink-0 z-20">
               <div className="flex items-center gap-3">
                 <h3 className="text-lg font-black text-slate-800">
                   {viewingInvoice ? "پیش‌نمایش سند" : "تایید نهایی و پیش‌نمایش سند"}
@@ -55,42 +139,216 @@ export default function PreviewModals(props: any) {
                     پیش‌نویس (غیر رسمی)
                   </span>
                 )}
-                <div className="hidden sm:flex items-center gap-3 bg-slate-50 p-2 rounded-lg border border-slate-200">
-                  <div className="flex items-center gap-1.5 text-xs font-bold text-slate-600">
+                
+                {/* Desktop Print Settings Bar */}
+                <div className="hidden lg:flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
+                  <div className="flex items-center gap-1 text-xs font-bold text-slate-600 px-1">
                     <Settings className="w-3.5 h-3.5" />
-                    <span>تنظیمات چاپ:</span>
+                    <span>تنظیمات:</span>
                   </div>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input type="checkbox" checked={printSettings.showStoreLogo} onChange={(e) => setPrintSettings(s => ({...s, showStoreLogo: e.target.checked}))} className="rounded text-indigo-600" />
+
+                  {/* Columns Selector Dropdown */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-lg transition-colors shadow-xs"
+                    >
+                      <Columns className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>ستون‌های جدول ({toPersianDigits(activeColumnCount)})</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showColumnDropdown ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showColumnDropdown && (
+                      <div className="absolute top-full right-0 mt-1.5 w-64 bg-white rounded-xl shadow-xl border border-slate-200 p-3 z-50 text-right">
+                        <div className="flex items-center justify-between pb-2 mb-2 border-b border-slate-100">
+                          <span className="text-xs font-black text-slate-800">انتخاب ستون‌های جدول چاپ</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowColumnDropdown(false)}
+                            className="text-slate-400 hover:text-slate-600 p-0.5"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Quick Presets */}
+                        <div className="flex items-center gap-1 mb-2.5 pb-2 border-b border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => setColumnPreset('standard')}
+                            className="flex-1 py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
+                          >
+                            استاندارد
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setColumnPreset('compact')}
+                            className="flex-1 py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
+                          >
+                            خلاصه
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setColumnPreset('all')}
+                            className="flex-1 py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
+                          >
+                            تمام ستون‌ها
+                          </button>
+                        </div>
+
+                        <div className="space-y-1.5 max-h-56 overflow-y-auto pl-1">
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">شماره ردیف (#)</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.rowIndex}
+                              onChange={() => toggleColumn('rowIndex')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">کد کالا</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.productCode}
+                              onChange={() => toggleColumn('productCode')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">تعداد / مقدار</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.quantity}
+                              onChange={() => toggleColumn('quantity')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">واحد سنجش</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.unit}
+                              onChange={() => toggleColumn('unit')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">قیمت فی واحد</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.unitPrice}
+                              onChange={() => toggleColumn('unitPrice')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">مبلغ ناخالص</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.grossAmount}
+                              onChange={() => toggleColumn('grossAmount')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">درصد تخفیف (%)</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.discountPercent}
+                              onChange={() => toggleColumn('discountPercent')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">مبلغ تخفیف</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.discountAmount}
+                              onChange={() => toggleColumn('discountAmount')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">مالیات و ارزش افزوده</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.tax}
+                              onChange={() => toggleColumn('tax')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+
+                          <label className="flex items-center justify-between text-xs py-1 px-1.5 rounded hover:bg-slate-50 cursor-pointer">
+                            <span className="text-slate-700 font-medium">مبلغ خالص نهایی</span>
+                            <input
+                              type="checkbox"
+                              checked={!!printSettings.columns?.totalPrice}
+                              onChange={() => toggleColumn('totalPrice')}
+                              className="rounded text-indigo-600 focus:ring-0"
+                            />
+                          </label>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Bold Borders Toggle */}
+                  <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer bg-white border border-slate-200 hover:border-slate-300 px-2 py-1 rounded-lg shadow-xs">
+                    <input
+                      type="checkbox"
+                      checked={!!printSettings.boldBorders || printSettings.paperSize === 'a5'}
+                      onChange={(e) => setPrintSettings(s => ({ ...s, boldBorders: e.target.checked }))}
+                      className="rounded text-indigo-600 focus:ring-0"
+                    />
+                    <span>خطوط پررنگ</span>
+                  </label>
+
+                  {/* Standard toggles */}
+                  <label className="flex items-center gap-1 text-xs cursor-pointer px-1">
+                    <input type="checkbox" checked={printSettings.showStoreLogo} onChange={(e) => setPrintSettings(s => ({...s, showStoreLogo: e.target.checked}))} className="rounded text-indigo-600 focus:ring-0" />
                     <span>لوگو</span>
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input type="checkbox" checked={printSettings.showSignatures} onChange={(e) => setPrintSettings(s => ({...s, showSignatures: e.target.checked}))} className="rounded text-indigo-600" />
+                  <label className="flex items-center gap-1 text-xs cursor-pointer px-1">
+                    <input type="checkbox" checked={printSettings.showSignatures} onChange={(e) => setPrintSettings(s => ({...s, showSignatures: e.target.checked}))} className="rounded text-indigo-600 focus:ring-0" />
                     <span>امضاها</span>
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input type="checkbox" checked={printSettings.showTransactions} onChange={(e) => setPrintSettings(s => ({...s, showTransactions: e.target.checked}))} className="rounded text-indigo-600" />
+                  <label className="flex items-center gap-1 text-xs cursor-pointer px-1">
+                    <input type="checkbox" checked={printSettings.showTransactions} onChange={(e) => setPrintSettings(s => ({...s, showTransactions: e.target.checked}))} className="rounded text-indigo-600 focus:ring-0" />
                     <span>تراکنش‌ها</span>
                   </label>
-                  <label className="flex items-center gap-1.5 text-xs cursor-pointer">
-                    <input type="checkbox" checked={printSettings.showBalance} onChange={(e) => setPrintSettings(s => ({...s, showBalance: e.target.checked}))} className="rounded text-indigo-600" />
+                  <label className="flex items-center gap-1 text-xs cursor-pointer px-1">
+                    <input type="checkbox" checked={printSettings.showBalance} onChange={(e) => setPrintSettings(s => ({...s, showBalance: e.target.checked}))} className="rounded text-indigo-600 focus:ring-0" />
                     <span>مانده</span>
                   </label>
+
                   <select 
                     value={printSettings.paperSize}
-                    onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value}))}
-                    className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none"
+                    onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value as 'a4' | 'a5'}))}
+                    className="text-xs bg-white font-bold text-slate-700 border border-slate-200 rounded-lg px-2 py-1 outline-none shadow-xs"
                   >
                     <option value="a4">سایز A4</option>
-                    <option value="a5">سایز A5</option>
+                    <option value="a5">سایز A5 (بهینه‌شده)</option>
                   </select>
+
                   <select 
                     value={printSettings.designType}
-                    onChange={(e) => setPrintSettings(s => ({...s, designType: e.target.value}))}
-                    className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none"
+                    onChange={(e) => setPrintSettings(s => ({...s, designType: e.target.value as any}))}
+                    className="text-xs bg-white font-bold text-slate-700 border border-slate-200 rounded-lg px-2 py-1 outline-none shadow-xs"
                   >
-                    <option value="classic">کلاسیک</option>
-                    <option value="modern">مدرن</option>
+                    <option value="minimal">طراحی مینیمال (پیشنهادی)</option>
+                    <option value="modern">طراحی مدرن</option>
+                    <option value="classic">طراحی کلاسیک</option>
+                    <option value="official">طراحی رسمی</option>
                   </select>
                 </div>
               </div>
@@ -125,41 +383,60 @@ export default function PreviewModals(props: any) {
               </div>
             )}
             
-            {/* Mobile Print Settings */}
-            <div className="sm:hidden bg-slate-50 border-b border-slate-200 p-3 shrink-0 print:hidden overflow-x-auto flex items-center gap-4 whitespace-nowrap">
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+            {/* Mobile / Tablet Print Settings */}
+            <div className="lg:hidden bg-slate-50 border-b border-slate-200 p-2.5 shrink-0 print:hidden overflow-x-auto flex items-center gap-3 whitespace-nowrap">
+              <button
+                type="button"
+                onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg shrink-0"
+              >
+                <Columns className="w-3.5 h-3.5 text-indigo-500" />
+                <span>ستون‌ها ({toPersianDigits(activeColumnCount)})</span>
+              </button>
+
+              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
+                <input
+                  type="checkbox"
+                  checked={!!printSettings.boldBorders || printSettings.paperSize === 'a5'}
+                  onChange={(e) => setPrintSettings(s => ({ ...s, boldBorders: e.target.checked }))}
+                  className="rounded text-indigo-600"
+                />
+                <span className="font-bold">خطوط پررنگ</span>
+              </label>
+
+              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
                 <input type="checkbox" checked={printSettings.showStoreLogo} onChange={(e) => setPrintSettings(s => ({...s, showStoreLogo: e.target.checked}))} className="rounded text-indigo-600" />
                 <span>لوگو</span>
               </label>
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
                 <input type="checkbox" checked={printSettings.showSignatures} onChange={(e) => setPrintSettings(s => ({...s, showSignatures: e.target.checked}))} className="rounded text-indigo-600" />
                 <span>امضاها</span>
               </label>
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
                 <input type="checkbox" checked={printSettings.showTransactions} onChange={(e) => setPrintSettings(s => ({...s, showTransactions: e.target.checked}))} className="rounded text-indigo-600" />
                 <span>تراکنش‌ها</span>
               </label>
-              <label className="flex items-center gap-1.5 text-xs cursor-pointer">
+              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
                 <input type="checkbox" checked={printSettings.showBalance} onChange={(e) => setPrintSettings(s => ({...s, showBalance: e.target.checked}))} className="rounded text-indigo-600" />
                 <span>مانده</span>
               </label>
               <select 
                 value={printSettings.paperSize}
-                onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value}))}
-                className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none"
+                onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value as 'a4' | 'a5'}))}
+                className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none shrink-0 font-medium"
               >
                 <option value="a4">سایز A4</option>
                 <option value="a5">سایز A5</option>
               </select>
               <select 
                 value={printSettings.designType}
-                onChange={(e) => setPrintSettings(s => ({...s, designType: e.target.value}))}
-                className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none font-medium text-slate-700"
+                onChange={(e) => setPrintSettings(s => ({...s, designType: e.target.value as any}))}
+                className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none font-medium text-slate-700 shrink-0"
               >
-                <option value="minimal">طراحی مینیمال (پیشنهادی)</option>
-                <option value="modern">طراحی مدرن</option>
-                <option value="classic">طراحی کلاسیک</option>
-                <option value="official">طراحی رسمی (مالیاتی)</option>
+                <option value="minimal">مینیمال</option>
+                <option value="modern">مدرن</option>
+                <option value="classic">کلاسیک</option>
+                <option value="official">رسمی</option>
               </select>
             </div>
 
