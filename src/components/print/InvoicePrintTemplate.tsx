@@ -7,7 +7,22 @@ import CompactInvoiceTemplate from "./invoice-templates/CompactInvoiceTemplate";
 import { InvoicePrintTemplateProps } from "./invoice-templates/InvoicePrintTypes";
 
 export default function InvoicePrintTemplate(props: InvoicePrintTemplateProps) {
-  const format = props.storeSettings?.invoicePrintFormat || 'standard';
+  const designType = props.printSettings?.designType;
+  const storeFormat = props.storeSettings?.invoicePrintFormat || 'standard';
+
+  let format = storeFormat;
+  if (designType === 'minimal') {
+    format = 'minimal';
+  } else if (designType === 'official') {
+    format = 'official';
+  } else if (designType === 'compact') {
+    format = 'compact';
+  } else if (designType === 'thermal') {
+    format = 'thermal';
+  } else if (designType === 'modern' || designType === 'classic') {
+    format = 'standard';
+  }
+
   const isVoided = props.data?.status === 'voided' || props.data?.isVoided === true;
   const isDraft = props.data?.status === 'draft' || props.data?.isDraft === true;
 

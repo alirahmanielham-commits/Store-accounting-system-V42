@@ -28,8 +28,8 @@ export default function PreviewModals(props: any) {
     showBalance: true,
     showNotes: true,
     showFooter: true,
-    designType: 'classic', // classic or modern
-    paperSize: 'a4' // a4 or a5
+    designType: storeSettings?.invoicePrintFormat || 'minimal',
+    paperSize: 'a4'
   });
 
   return (
@@ -154,10 +154,12 @@ export default function PreviewModals(props: any) {
               <select 
                 value={printSettings.designType}
                 onChange={(e) => setPrintSettings(s => ({...s, designType: e.target.value}))}
-                className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none"
+                className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none font-medium text-slate-700"
               >
-                <option value="classic">کلاسیک</option>
-                <option value="modern">مدرن</option>
+                <option value="minimal">طراحی مینیمال (پیشنهادی)</option>
+                <option value="modern">طراحی مدرن</option>
+                <option value="classic">طراحی کلاسیک</option>
+                <option value="official">طراحی رسمی (مالیاتی)</option>
               </select>
             </div>
 
