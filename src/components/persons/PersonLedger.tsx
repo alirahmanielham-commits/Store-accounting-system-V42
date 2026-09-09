@@ -86,6 +86,65 @@ export default function PersonLedger(props: any) {
     return cleaned || typeName || "رویداد مالی";
   };
 
+  const getLedgerDateOnly = (dateInput: any) => {
+    if (!dateInput || dateInput === "-") return "-";
+    const isGregorian = storeSettings?.calendarType?.startsWith('gregorian');
+    const targetCal = isGregorian ? 'gregorian' : 'jalali';
+    let formatted = formatDateDisplay(dateInput, targetCal);
+    if (!formatted || formatted === "-") return "-";
+    // Strictly strip any hour/minute time patterns (e.g. " 14:30", " 14:30:25", " ساعت 14:30")
+    formatted = formatted.replace(/\s+(?:ساعت\s*)?[0-9۰-۹]{1,2}:[0-9۰-۹]{2}(?::[0-9۰-۹]{2})?/g, '').trim();
+    if (formatted.includes(' ')) {
+      const parts = formatted.split(/\s+/);
+      if (parts[0].includes('/') || parts[0].includes('-')) {
+        formatted = parts[0];
+      }
+    }
+    return toPersianDigits(formatted);
+  };
+
+  const renderFormattedAmount = (
+    amount: number | string | undefined | null,
+    options?: {
+      colorClass?: string;
+      paperSize?: 'A4' | 'A5';
+      showDashOnZero?: boolean;
+    }
+  ) => {
+    const num = Number(amount) || 0;
+    if (num === 0) {
+      if (options?.showDashOnZero) {
+        return <span className="text-slate-300 font-normal">---</span>;
+      }
+      return <span className="text-slate-500 font-medium">۰</span>;
+    }
+
+    const formatted = toPersianDigits(formatNumber(Math.abs(num)));
+    const charLen = formatted.length;
+    
+    // Auto-fit font size according to string length and paper size to strictly avoid overflow
+    let sizeClass = "";
+    if (options?.paperSize === 'A5') {
+      if (charLen >= 15) sizeClass = "text-[7px]";
+      else if (charLen >= 12) sizeClass = "text-[7.5px]";
+      else sizeClass = "text-[8.5px]";
+    } else {
+      if (charLen >= 15) sizeClass = "text-[8.5px]";
+      else if (charLen >= 12) sizeClass = "text-[9.5px]";
+      else sizeClass = "text-[10.5px]";
+    }
+
+    return (
+      <span
+        dir="ltr"
+        title={formatted}
+        className={`accounting-num inline-block w-full text-left font-extrabold whitespace-nowrap overflow-hidden text-ellipsis ${sizeClass} ${options?.colorClass || 'text-slate-900'}`}
+      >
+        {formatted}
+      </span>
+    );
+  };
+
   const handleDownloadPdf = (size: 'A4' | 'A5') => {
     const element = document.getElementById("person-ledger-printable-content") || document.getElementById("person-ledger-printable-area");
     if (!element) return;
@@ -709,7 +768,7 @@ export default function PersonLedger(props: any) {
                                         </div>
                                         <div className="flex items-center gap-1.5">
                                           <span className="text-slate-500 font-bold shrink-0">کد شناسایی:</span>
-                                          <span className="font-mono font-bold text-slate-700">
+                                          <span className="font-sans font-bold text-slate-700">
                                             {toPersianDigits(selectedPerson.personCode || selectedPerson.id || "---")}
                                           </span>
                                         </div>
@@ -730,21 +789,27 @@ export default function PersonLedger(props: any) {
                                       {/* Balance Summary */}
                                       <div className={`bg-slate-50/80 rounded-lg border border-slate-200 ${printPaperSize === 'A5' ? 'p-2 space-y-1' : 'p-3 space-y-1.5'}`}>
                                         <div className="flex items-center justify-between">
-                                          <span className="text-slate-500 font-bold">مجموع فاکتورها (بدهی):</span>
-                                          <span className="font-mono font-bold text-slate-900">
-                                            {toPersianDigits(formatNumber(totalDebits))} {storeSettings.currency || 'تومان'}
+                                          <span className="text-slate-500 font-bold shrink-0">مجموع فاکتورها (بدهی):</span>
+                                          <span className="accounting-num font-extrabold text-slate-900 text-left" dir="ltr">
+                                            {toPersianDigits(formatNumber(totalDebits))} <span className="text-[10px] text-slate-500 font-normal mr-1">{storeSettings.currency || 'ریال'}</span>
                                           </span>
                                         </div>
                                         <div className="flex items-center justify-between">
-                                          <span className="text-slate-500 font-bold">مجموع پرداختی‌ها (بستانکاری):</span>
-                                          <span className="font-mono font-bold text-slate-900">
-                                            {toPersianDigits(formatNumber(totalCredits))} {storeSettings.currency || 'تومان'}
+                                          <span className="text-slate-500 font-bold shrink-0">مجموع پرداختی‌ها (بستانکاری):</span>
+                                          <span className="accounting-num font-extrabold text-slate-900 text-left" dir="ltr">
+                                            {toPersianDigits(formatNumber(totalCredits))} <span className="text-[10px] text-slate-500 font-normal mr-1">{storeSettings.currency || 'ریال'}</span>
                                           </span>
                                         </div>
                                         <div className={`flex items-center justify-between border-t border-slate-200 pt-1 ${isOwed ? 'text-rose-700' : isClr ? 'text-slate-700' : 'text-emerald-700'}`}>
-                                          <span className="font-black">مانده حساب نهایی:</span>
-                                          <span className={`font-mono font-black ${printPaperSize === 'A5' ? 'text-[11px]' : 'text-sm'}`}>
-                                            {isClr ? "تسویه کامل (بی‌حساب)" : `${toPersianDigits(formatNumber(Math.abs(finalBalance)))} ${storeSettings.currency || 'تومان'} (${isOwed ? 'بدهکار' : 'بستانکار'})`}
+                                          <span className="font-black shrink-0">مانده حساب نهایی:</span>
+                                          <span className={`accounting-num font-black text-left ${printPaperSize === 'A5' ? 'text-[11px]' : 'text-sm'}`} dir="ltr">
+                                            {isClr ? "تسویه کامل (بی‌حساب)" : (
+                                              <>
+                                                {toPersianDigits(formatNumber(Math.abs(finalBalance)))}{" "}
+                                                <span className="text-[10px] text-slate-500 font-normal mr-1">{storeSettings.currency || 'ریال'}</span>{" "}
+                                                <span className="text-[10px] font-bold">({isOwed ? 'بدهکار' : 'بستانکار'})</span>
+                                              </>
+                                            )}
                                           </span>
                                         </div>
                                       </div>
@@ -755,13 +820,13 @@ export default function PersonLedger(props: any) {
                                   <div className="overflow-visible w-full">
                                     <table className="w-full text-right border-collapse table-fixed border border-slate-700 print:border-slate-800">
                                       <colgroup>
-                                        <col style={{ width: printPaperSize === 'A5' ? "5.5%" : "4.5%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "14%" : "13%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "41%" : "43.5%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "13%" : "13%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "13%" : "13%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "10%" : "10%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "3.5%" : "3%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "4.5%" : "3.5%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "11.5%" : "10%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "26%" : "29.5%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "18.5%" : "18%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "18.5%" : "18%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "18%" : "18%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "3%" : "3%" }} />
                                       </colgroup>
                                       <thead>
                                         <tr className="bg-slate-800 text-white print:bg-slate-200 print:text-slate-900 font-bold border-b border-slate-700">
@@ -774,16 +839,16 @@ export default function PersonLedger(props: any) {
                                           <th className={`border border-slate-700 text-right ${printPaperSize === 'A5' ? 'py-1 px-1.5 text-[8.5px]' : 'py-2 px-2 text-[10px]'}`}>
                                             عنوان و شرح جزئیات رویداد مالی
                                           </th>
-                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1.5 text-[10px]'}`}>
+                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1 text-[10px]'}`}>
                                             بدهکار (افزایش)
                                           </th>
-                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1.5 text-[10px]'}`}>
+                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1 text-[10px]'}`}>
                                             بستانکار (کاهش)
                                           </th>
-                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1.5 text-[10px]'}`}>
+                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1 text-[10px]'}`}>
                                             مانده
                                           </th>
-                                          <th className={`border border-slate-700 text-center ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8.5px]' : 'py-2 px-1 text-[10px]'}`}>
+                                          <th className={`border border-slate-700 text-center ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8.5px]' : 'py-2 px-0.5 text-[10px]'}`}>
                                             تشخیص
                                           </th>
                                         </tr>
@@ -799,26 +864,25 @@ export default function PersonLedger(props: any) {
                                               className="break-inside-avoid print-avoid-break hover:bg-slate-50 transition-colors"
                                             >
                                               {/* ردیف */}
-                                              <td className={`border border-slate-400 text-center align-middle font-mono font-bold text-slate-700 ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8.5px]' : 'py-1.5 px-1 text-[10px]'}`}>
+                                              <td className={`border border-slate-400 text-center align-middle font-bold text-slate-700 ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8.5px]' : 'py-1.5 px-1 text-[10px]'}`}>
                                                 {toPersianDigits(index + 1)}
                                               </td>
 
-                                              {/* تاریخ و ارجاع */}
+                                              {/* تاریخ و سند (فقط تاریخ بدون ساعت) */}
                                               <td className={`border border-slate-400 align-middle ${printPaperSize === 'A5' ? 'py-1 px-1' : 'py-1.5 px-1.5'}`}>
                                                 <div className="flex flex-col leading-tight gap-0.5 text-right overflow-hidden">
                                                   <span className={`font-bold text-slate-800 whitespace-nowrap truncate ${printPaperSize === 'A5' ? 'text-[8px]' : 'text-[9.5px]'}`}>
-                                                    {formatDateDisplay(
-                                                      entry.date || (entry as any).jalaliDate,
-                                                      storeSettings?.calendarType
+                                                    {getLedgerDateOnly(
+                                                      entry.date || (entry as any).jalaliDate
                                                     )}
                                                   </span>
-                                                  <span className={`text-slate-500 font-mono whitespace-nowrap truncate ${printPaperSize === 'A5' ? 'text-[7.5px]' : 'text-[8.5px]'}`}>
+                                                  <span className={`text-slate-500 font-sans font-bold whitespace-nowrap truncate ${printPaperSize === 'A5' ? 'text-[7.5px]' : 'text-[8.5px]'}`}>
                                                     #{toPersianDigits(entry.refId)}
                                                   </span>
                                                 </div>
                                               </td>
 
-                                              {/* شرح جزئیات مالی (تک‌خطی و متوازن، بدون چندخطی شدن ردیف) */}
+                                              {/* شرح جزئیات مالی */}
                                               <td className={`border border-slate-400 align-middle ${printPaperSize === 'A5' ? 'py-1 px-1.5' : 'py-1.5 px-2'}`}>
                                                 <div className="flex items-center gap-1.5 min-w-0 w-full overflow-hidden">
                                                   <span
@@ -845,30 +909,47 @@ export default function PersonLedger(props: any) {
                                                 </div>
                                               </td>
 
-                                              {/* مبلغ بدهکار */}
-                                              <td className={`border border-slate-400 text-left align-middle font-mono font-bold whitespace-nowrap ${
-                                                printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-1.5 px-1.5 text-[10.5px]'
-                                              } ${entry.debit > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
-                                                {entry.debit > 0 ? toPersianDigits(formatNumber(entry.debit)) : "---"}
+                                              {/* مبلغ بدهکار (فونت زیبای حسابداری بدون بیرون‌زدگی) */}
+                                              <td className={`border border-slate-400 text-left align-middle ${
+                                                printPaperSize === 'A5' ? 'py-1 px-1' : 'py-1.5 px-1'
+                                              }`}>
+                                                {renderFormattedAmount(entry.debit, {
+                                                  paperSize: printPaperSize,
+                                                  showDashOnZero: true,
+                                                  colorClass: entry.debit > 0 ? 'text-slate-900' : 'text-slate-400'
+                                                })}
                                               </td>
 
-                                              {/* مبلغ بستانکار */}
-                                              <td className={`border border-slate-400 text-left align-middle font-mono font-bold whitespace-nowrap ${
-                                                printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-1.5 px-1.5 text-[10.5px]'
-                                              } ${entry.credit > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
-                                                {entry.credit > 0 ? toPersianDigits(formatNumber(entry.credit)) : "---"}
+                                              {/* مبلغ بستانکار (فونت زیبای حسابداری بدون بیرون‌زدگی) */}
+                                              <td className={`border border-slate-400 text-left align-middle ${
+                                                printPaperSize === 'A5' ? 'py-1 px-1' : 'py-1.5 px-1'
+                                              }`}>
+                                                {renderFormattedAmount(entry.credit, {
+                                                  paperSize: printPaperSize,
+                                                  showDashOnZero: true,
+                                                  colorClass: entry.credit > 0 ? 'text-slate-900' : 'text-slate-400'
+                                                })}
                                               </td>
 
                                               {/* مانده نهایی */}
-                                              <td className={`border border-slate-400 text-left align-middle font-mono font-extrabold whitespace-nowrap ${
-                                                printPaperSize === 'A5' ? 'py-1 px-1 text-[9px]' : 'py-1.5 px-1.5 text-[11px]'
-                                              } text-slate-900`}>
-                                                {isBalZero ? "تسویه" : toPersianDigits(formatNumber(Math.abs(entry.runningBalance)))}
+                                              <td className={`border border-slate-400 text-left align-middle ${
+                                                printPaperSize === 'A5' ? 'py-1 px-1' : 'py-1.5 px-1'
+                                              }`}>
+                                                {isBalZero ? (
+                                                  <span className={`font-bold text-slate-500 block text-left ${printPaperSize === 'A5' ? 'text-[8px]' : 'text-[9.5px]'}`}>
+                                                    تسویه
+                                                  </span>
+                                                ) : (
+                                                  renderFormattedAmount(Math.abs(entry.runningBalance), {
+                                                    paperSize: printPaperSize,
+                                                    colorClass: 'text-slate-900'
+                                                  })
+                                                )}
                                               </td>
 
                                               {/* تشخیص */}
                                               <td className={`border border-slate-400 text-center align-middle font-bold whitespace-nowrap ${
-                                                printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8px]' : 'py-1.5 px-1 text-[9.5px]'
+                                                printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8px]' : 'py-1.5 px-0.5 text-[9.5px]'
                                               } ${isBalZero ? 'text-slate-400' : (isDeb ? 'text-rose-700' : 'text-emerald-700')}`}>
                                                 {isBalZero ? "-" : (isDeb ? "بد" : "بس")}
                                               </td>
@@ -878,22 +959,26 @@ export default function PersonLedger(props: any) {
                                       </tbody>
                                       <tfoot>
                                         <tr className="bg-slate-100 print:bg-slate-100 font-extrabold border-t-2 border-slate-700">
-                                          <td colSpan={2} className={`border border-slate-600 text-center ${printPaperSize === 'A5' ? 'py-1 text-[8.5px]' : 'py-1.5 text-[10px]'}`}>
+                                          <td colSpan={2} className={`border border-slate-600 text-center ${printPaperSize === 'A5' ? 'py-1 text-[8px]' : 'py-1.5 text-[9.5px]'}`}>
                                             جمع کل دوره
                                           </td>
-                                          <td className={`border border-slate-600 text-right px-2 font-bold text-slate-700 ${printPaperSize === 'A5' ? 'py-1 text-[8.5px]' : 'py-1.5 text-[10px]'}`}>
+                                          <td className={`border border-slate-600 text-right px-1.5 font-bold text-slate-700 truncate ${printPaperSize === 'A5' ? 'py-1 text-[8px]' : 'py-1.5 text-[9.5px]'}`}>
                                             گردش حساب و مانده نهایی طرف حساب
                                           </td>
-                                          <td className={`border border-slate-600 text-left font-mono font-bold whitespace-nowrap text-slate-900 ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-1.5 px-1.5 text-[10.5px]'}`}>
-                                            {totalDebits > 0 ? toPersianDigits(formatNumber(totalDebits)) : "۰"}
+                                          <td className={`border border-slate-600 text-left align-middle ${printPaperSize === 'A5' ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
+                                            {renderFormattedAmount(totalDebits, { paperSize: printPaperSize, colorClass: 'text-slate-900' })}
                                           </td>
-                                          <td className={`border border-slate-600 text-left font-mono font-bold whitespace-nowrap text-slate-900 ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-1.5 px-1.5 text-[10.5px]'}`}>
-                                            {totalCredits > 0 ? toPersianDigits(formatNumber(totalCredits)) : "۰"}
+                                          <td className={`border border-slate-600 text-left align-middle ${printPaperSize === 'A5' ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
+                                            {renderFormattedAmount(totalCredits, { paperSize: printPaperSize, colorClass: 'text-slate-900' })}
                                           </td>
-                                          <td className={`border border-slate-600 text-left font-mono font-extrabold whitespace-nowrap text-slate-900 ${printPaperSize === 'A5' ? 'py-1 px-1 text-[9px]' : 'py-1.5 px-1.5 text-[11px]'}`}>
-                                            {finalBalance === 0 ? "تسویه" : toPersianDigits(formatNumber(Math.abs(finalBalance)))}
+                                          <td className={`border border-slate-600 text-left align-middle ${printPaperSize === 'A5' ? 'py-1 px-1' : 'py-1.5 px-1'}`}>
+                                            {finalBalance === 0 ? (
+                                              <span className={`font-bold text-slate-600 block text-left ${printPaperSize === 'A5' ? 'text-[8px]' : 'text-[9.5px]'}`}>تسویه</span>
+                                            ) : (
+                                              renderFormattedAmount(Math.abs(finalBalance), { paperSize: printPaperSize, colorClass: isOwed ? 'text-rose-700' : 'text-emerald-700' })
+                                            )}
                                           </td>
-                                          <td className={`border border-slate-600 text-center font-bold whitespace-nowrap ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8px]' : 'py-1.5 px-1 text-[9.5px]'} ${finalBalance === 0 ? 'text-slate-500' : (isOwed ? 'text-rose-700' : 'text-emerald-700')}`}>
+                                          <td className={`border border-slate-600 text-center font-bold whitespace-nowrap ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8px]' : 'py-1.5 px-1 text-[9px]'} ${finalBalance === 0 ? 'text-slate-500' : (isOwed ? 'text-rose-700' : 'text-emerald-700')}`}>
                                             {finalBalance === 0 ? "-" : (isOwed ? "بد" : "بس")}
                                           </td>
                                         </tr>
@@ -1232,9 +1317,9 @@ export default function PersonLedger(props: any) {
                                           return (
                                             <div key={index} className="bg-white p-4 rounded-2xl shadow-sm border border-slate-100 flex flex-col gap-2 relative">
                                               <div className="flex justify-between items-center mb-1">
-                                                <span className="text-xs font-bold text-slate-400">#{index + 1}</span>
+                                                <span className="text-xs font-bold text-slate-400">#{toPersianDigits(index + 1)}</span>
                                                 <span className="text-xs font-bold text-slate-500 bg-slate-50 px-2 py-1 rounded-lg border border-slate-100">
-                                                  {formatDateDisplay(entry.date, storeSettings?.calendarType)}
+                                                  {getLedgerDateOnly(entry.date)}
                                                 </span>
                                               </div>
                                               
@@ -1243,18 +1328,18 @@ export default function PersonLedger(props: any) {
                                               <div className="grid grid-cols-2 gap-2 text-xs mb-2">
                                                 <div className="flex flex-col gap-1 p-2 bg-rose-50 rounded-xl">
                                                   <span className="text-rose-600 font-bold opacity-70">بدهکار</span>
-                                                  <span className="font-black text-rose-700">{entry.debit > 0 ? toPersianDigits(formatNumber(entry.debit)) : "-"}</span>
+                                                  <span className="accounting-num font-black text-rose-700 text-left" dir="ltr">{entry.debit > 0 ? toPersianDigits(formatNumber(entry.debit)) : "-"}</span>
                                                 </div>
                                                 <div className="flex flex-col gap-1 p-2 bg-emerald-50 rounded-xl">
                                                   <span className="text-emerald-600 font-bold opacity-70">بستانکار</span>
-                                                  <span className="font-black text-emerald-700">{entry.credit > 0 ? toPersianDigits(formatNumber(entry.credit)) : "-"}</span>
+                                                  <span className="accounting-num font-black text-emerald-700 text-left" dir="ltr">{entry.credit > 0 ? toPersianDigits(formatNumber(entry.credit)) : "-"}</span>
                                                 </div>
                                               </div>
                                               
                                               <div className="flex justify-between items-center bg-slate-50 p-2 rounded-xl mt-1">
                                                 <span className="text-xs font-bold text-slate-500">مانده</span>
                                                 <div className="flex items-center gap-1.5">
-                                                  <span className="font-black text-slate-800">
+                                                  <span className="accounting-num font-black text-slate-800 text-left" dir="ltr">
                                                     {toPersianDigits(formatNumber(Math.abs(entry.runningBalance)))}
                                                   </span>
                                                   <span className={`text-[10px] font-black px-1.5 py-0.5 rounded-md ${isBalancePos ? "bg-rose-100 text-rose-700" : isBalanceNeg ? "bg-emerald-100 text-emerald-700" : "bg-slate-200 text-slate-600"}`}>
@@ -1385,10 +1470,9 @@ export default function PersonLedger(props: any) {
                                                     className="text-gray-700 font-bold flex items-center justify-start gap-2 text-[13px] max-w-fit pr-0 print:text-xs"
                                                     dir="rtl"
                                                   >
-                                                    <span className="whitespace-nowrap">
-                                                      {formatDateDisplay(
+                                                    <span className="whitespace-nowrap font-medium">
+                                                      {getLedgerDateOnly(
                                                         entry.date || (entry as any).jalaliDate,
-                                                        storeSettings?.calendarType
                                                       )}
                                                     </span>
                                                     <Calendar className="w-3.5 h-3.5 text-indigo-500/70" />
@@ -1455,30 +1539,30 @@ export default function PersonLedger(props: any) {
                                                 </div>
                                               </td>
                                               <td className="border-2 border-slate-700 py-3 px-4 text-left align-top print:py-3 print:px-2">
-                                                <span
-                                                  className={`font-black text-[14px] print:text-[12px] ${entry.debit > 0 ? "text-indigo-600" : "text-gray-300 font-medium"}`}
-                                                >
-                                                  {entry.debit > 0
-                                                    ? toPersianDigits(
-                                                        formatNumber(
-                                                          entry.debit,
-                                                        ),
-                                                      )
-                                                    : "---"}
-                                                </span>
+                                                {entry.debit > 0 ? (
+                                                  <span
+                                                    dir="ltr"
+                                                    title={toPersianDigits(formatNumber(entry.debit))}
+                                                    className="accounting-num inline-block w-full text-left font-black text-[14px] print:text-[12px] text-indigo-600 whitespace-nowrap overflow-hidden text-ellipsis"
+                                                  >
+                                                    {toPersianDigits(formatNumber(entry.debit))}
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-gray-300 font-medium">---</span>
+                                                )}
                                               </td>
                                               <td className="border-2 border-slate-700 py-3 px-4 text-left align-top print:py-3 print:px-2">
-                                                <span
-                                                  className={`font-black text-[14px] print:text-[12px] ${entry.credit > 0 ? "text-emerald-600" : "text-gray-300 font-medium"}`}
-                                                >
-                                                  {entry.credit > 0
-                                                    ? toPersianDigits(
-                                                        formatNumber(
-                                                          entry.credit,
-                                                        ),
-                                                      )
-                                                    : "---"}
-                                                </span>
+                                                {entry.credit > 0 ? (
+                                                  <span
+                                                    dir="ltr"
+                                                    title={toPersianDigits(formatNumber(entry.credit))}
+                                                    className="accounting-num inline-block w-full text-left font-black text-[14px] print:text-[12px] text-emerald-600 whitespace-nowrap overflow-hidden text-ellipsis"
+                                                  >
+                                                    {toPersianDigits(formatNumber(entry.credit))}
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-gray-300 font-medium">---</span>
+                                                )}
                                               </td>
                                               <td className="border-2 border-slate-700 py-3 px-6 text-left align-top print:py-3 print:px-2">
                                                 <div
@@ -1493,7 +1577,11 @@ export default function PersonLedger(props: any) {
                                                       صفر
                                                     </span>
                                                   ) : (
-                                                    <span className="text-[15px] print:text-[13px] tracking-tight">
+                                                    <span
+                                                      dir="ltr"
+                                                      title={toPersianDigits(formatNumber(Math.abs(entry.runningBalance)))}
+                                                      className="accounting-num inline-block w-full text-left font-black text-[15px] print:text-[13px] whitespace-nowrap overflow-hidden text-ellipsis tracking-tight"
+                                                    >
                                                       {toPersianDigits(
                                                         formatNumber(
                                                           Math.abs(
@@ -1519,11 +1607,15 @@ export default function PersonLedger(props: any) {
                                         <td colSpan={3} className="border-2 border-slate-700 py-3 px-6 text-left text-slate-700">
                                           جمع کل ({filteredLedgerEntries.length} رکورد):
                                         </td>
-                                        <td className="border-2 border-slate-700 py-3 px-4 text-left text-indigo-600 text-[15px]">
-                                          {toPersianDigits(formatNumber(totalDebit))}
+                                        <td className="border-2 border-slate-700 py-3 px-4 text-left text-indigo-600">
+                                          <span dir="ltr" className="accounting-num font-black text-[15px] block text-left whitespace-nowrap overflow-hidden text-ellipsis">
+                                            {toPersianDigits(formatNumber(totalDebit))}
+                                          </span>
                                         </td>
-                                        <td className="border-2 border-slate-700 py-3 px-4 text-left text-emerald-600 text-[15px]">
-                                          {toPersianDigits(formatNumber(totalCredit))}
+                                        <td className="border-2 border-slate-700 py-3 px-4 text-left text-emerald-600">
+                                          <span dir="ltr" className="accounting-num font-black text-[15px] block text-left whitespace-nowrap overflow-hidden text-ellipsis">
+                                            {toPersianDigits(formatNumber(totalCredit))}
+                                          </span>
                                         </td>
                                         <td className="border-2 border-slate-700 py-3 px-6 text-left">
                                           <div
@@ -1538,7 +1630,7 @@ export default function PersonLedger(props: any) {
                                                 صفر
                                               </span>
                                             ) : (
-                                              <span className="text-[15px] tracking-tight">
+                                              <span dir="ltr" className="accounting-num font-black text-[15px] block text-left tracking-tight whitespace-nowrap overflow-hidden text-ellipsis">
                                                 {toPersianDigits(formatNumber(Math.abs(totalBalance)))}
                                               </span>
                                             )}
