@@ -4,6 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import DateObject from "react-date-object";
 import * as lucide from 'lucide-react';
 import { MessageSquare } from 'lucide-react';
+import html2pdf from "html2pdf.js";
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 
 export default function PersonLedger(props: any) {
@@ -68,6 +69,36 @@ export default function PersonLedger(props: any) {
   const [filterEndDate, setFilterEndDate] = useState("");
   const [includeOpening, setIncludeOpening] = useState(true);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+  const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A5'>('A4');
+
+  const cleanDescription = (desc: string, typeName: string) => {
+    if (!desc || desc === "-") return typeName || "رویداد مالی";
+    let cleaned = String(desc).trim();
+    if (cleaned.startsWith('{') && cleaned.endsWith('}')) {
+      try {
+        const parsed = JSON.parse(cleaned);
+        if (parsed.description) cleaned = parsed.description;
+      } catch (e) {}
+    }
+    if (typeName && cleaned.startsWith(typeName)) {
+      cleaned = cleaned.substring(typeName.length).replace(/^[\s:–\-]+/, '');
+    }
+    return cleaned || typeName || "رویداد مالی";
+  };
+
+  const handleDownloadPdf = (size: 'A4' | 'A5') => {
+    const element = document.getElementById("person-ledger-printable-content") || document.getElementById("person-ledger-printable-area");
+    if (!element) return;
+    const person = (persons || []).find((p: any) => p?.id?.toString() === ledgerPersonId?.toString());
+    const opt = {
+      margin: size === 'A5' ? 4 : 7,
+      filename: `کارت_حساب_${person?.name || "طرف_حساب"}_${size}.pdf`,
+      image: { type: "jpeg" as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false },
+      jsPDF: { unit: "mm" as const, format: size.toLowerCase() as any, orientation: "portrait" as const },
+    };
+    html2pdf().set(opt).from(element).save();
+  };
 
   const currentPerson = ledgerPersonId
     ? persons?.find((p: any) => String(p.id) === String(ledgerPersonId))
@@ -142,6 +173,8 @@ export default function PersonLedger(props: any) {
                           fetchTransactions={fetchTransactions}
                           fetchAccountingDocuments={fetchAccountingDocuments}
                           fetchPersons={fetchPersons}
+                          setPrintPaperSize={setPrintPaperSize}
+                          printPaperSize={printPaperSize}
                         />
                       </div>
                     </div>
@@ -501,323 +534,384 @@ export default function PersonLedger(props: any) {
                         <div className="space-y-6">
                           {printingPersonLedger && createPortal(
                             <div
-                              id="person-ledger-printable-area"
-                              className="fixed inset-0 z-[9999] bg-white text-black p-8 print-section overflow-visible flex flex-col font-sans"
+                              id="person-ledger-print-overlay"
+                              className="fixed inset-0 z-[9999] bg-slate-900/80 backdrop-blur-xs flex flex-col items-center overflow-y-auto print:overflow-visible print:bg-white print:p-0 print:m-0 print:block print-section font-sans"
                               dir="rtl"
                             >
-                              <div className="border border-slate-300 p-6 rounded-2xl mb-8 bg-white shadow-sm print:shadow-none print:border-slate-400 print:bg-white print:p-4">
-                                <div className="flex justify-between items-start border-b border-slate-200 pb-6 mb-6 print:pb-4 print:mb-4">
-                                  <div className="text-right">
-                                    <h1 className="text-2xl font-black text-slate-900 print:text-xl">
-                                      {storeSettings.storeName ||
-                                        "سیستم مدیریت"}
-                                    </h1>
-                                    <h2 className="text-lg font-bold text-indigo-700 mt-1 print:text-base print:text-slate-700">
-                                      کارت حساب (دفتر معین) ویژه اشخاص
-                                    </h2>
+                              {/* Dynamic Print Styles for A4 and A5 */}
+                              <style dangerouslySetInnerHTML={{ __html: `
+                                @media print {
+                                  @page {
+                                    size: ${printPaperSize === 'A5' ? 'A5 portrait' : 'A4 portrait'};
+                                    margin: ${printPaperSize === 'A5' ? '4mm' : '7mm'};
+                                  }
+                                  html, body {
+                                    width: ${printPaperSize === 'A5' ? '148mm' : '210mm'} !important;
+                                    background: #ffffff !important;
+                                    margin: 0 !important;
+                                    padding: 0 !important;
+                                    -webkit-print-color-adjust: exact !important;
+                                    print-color-adjust: exact !important;
+                                  }
+                                  #person-ledger-print-overlay {
+                                    position: static !important;
+                                    background: #ffffff !important;
+                                    padding: 0 !important;
+                                    margin: 0 !important;
+                                    overflow: visible !important;
+                                    display: block !important;
+                                    width: 100% !important;
+                                    height: auto !important;
+                                  }
+                                  #person-ledger-printable-area {
+                                    padding: 0 !important;
+                                    margin: 0 auto !important;
+                                    width: 100% !important;
+                                    max-width: 100% !important;
+                                    display: block !important;
+                                    background: #ffffff !important;
+                                    box-shadow: none !important;
+                                  }
+                                  #person-ledger-printable-content {
+                                    width: 100% !important;
+                                    max-width: 100% !important;
+                                    margin: 0 auto !important;
+                                    padding: 0 !important;
+                                    border: none !important;
+                                    box-shadow: none !important;
+                                    border-radius: 0 !important;
+                                  }
+                                  .print-avoid-break {
+                                    page-break-inside: avoid !important;
+                                    break-inside: avoid !important;
+                                  }
+                                }
+                              `}} />
+
+                              {/* Top Action Bar (Screen Only) */}
+                              <div className="w-full max-w-5xl bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-50 shadow-md flex flex-wrap items-center justify-between gap-4 print:hidden my-0">
+                                <div className="flex items-center gap-3">
+                                  <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+                                    <Printer className="w-5 h-5" />
                                   </div>
-                                  <div className="text-left select-none text-sm font-semibold text-slate-500 bg-slate-50 border border-slate-200 px-3 py-1.5 rounded-lg print:bg-transparent print:border-none print:p-0">
-                                    تاریخ چاپ:{" "}
-                                    <span className="font-bold text-slate-700 print:text-black">
-                                      {formatDateDisplay(new Date(), storeSettings?.calendarType)}
-                                    </span>
+                                  <div>
+                                    <h3 className="font-extrabold text-slate-800 text-sm">
+                                      پیش‌نمایش چاپ کارت حساب: {getPersonDisplayName(selectedPerson)}
+                                    </h3>
+                                    <p className="text-xs text-slate-400">
+                                      فرمت چاپ را انتخاب کرده و پرینت یا فایل PDF دریافت کنید.
+                                    </p>
                                   </div>
                                 </div>
 
-                                <div className="grid grid-cols-2 gap-6 text-sm print:gap-4 print:text-xs">
-                                  <div className="space-y-3 font-medium bg-slate-50 p-4 rounded-xl border border-slate-200 print:bg-transparent print:border-slate-300 print:p-3">
-                                    <div className="flex items-center gap-3 mb-4 border-b border-slate-200 pb-3 print:mb-2 print:pb-2">
-                                      {selectedPerson.imageUrl && (
-                                        <img
-                                          src={selectedPerson.imageUrl}
-                                          alt={getPersonDisplayName(
-                                            selectedPerson,
-                                          )}
-                                          className="w-12 h-12 rounded-full object-cover border-2 border-white shadow-sm shrink-0 print:w-10 print:h-10"
-                                        />
-                                      )}
-                                      <p>
-                                        <span className="text-slate-500 w-24 inline-block font-bold print:w-20">
-                                          نام طرف حساب:
-                                        </span>{" "}
-                                        <span className="font-extrabold text-lg text-slate-900 print:text-base">
-                                          {getPersonDisplayName(selectedPerson)}{" "}
-                                          {selectedPerson.personCode
-                                            ? `[${selectedPerson.personCode}]`
-                                            : ""}
-                                        </span>
-                                      </p>
-                                    </div>
-                                                                        <p className="flex items-center justify-between">
-                                      <div className="flex items-center">
-                                        <span className="text-slate-500 w-24 inline-block font-bold print:w-20">
-                                          تلفن تماس:
-                                        </span>{" "}
-                                        <span className="text-slate-900 font-bold bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0 print:bg-transparent font-sans" dir="ltr">
-                                          {toPersianDigits(
-                                            selectedPerson.phone
-                                              ? selectedPerson.phone
-                                              : "---",
-                                          )}
-                                        </span>
-                                      </div>
-                                      {selectedPerson.phone && (
-                                        <button
-                                          type="button"
-                                          onClick={() => setIsMessageModalOpen(true)}
-                                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded-lg transition-colors flex items-center gap-1 print:hidden cursor-pointer"
-                                          title="ارسال پیام به این شماره"
-                                        >
-                                          <MessageSquare className="w-3 h-3" />
-                                          ارسال پیام
-                                        </button>
-                                      )}
-                                    </p>
-                                    {selectedPerson.contacts && selectedPerson.contacts.length > 0 && selectedPerson.contacts.map((contact, idx) => (
-                                      <p key={idx} className="flex items-center justify-between">
-                                        <div className="flex items-center">
-                                          <span className="text-slate-500 w-24 inline-block font-bold print:w-20 text-xs">
-                                            {contact.type === 'mobile' ? 'موبایل' : contact.type === 'phone' ? 'تلفن ثابت' : contact.type === 'fax' ? 'فکس' : 'دیگر'}:
-                                          </span>{" "}
-                                          <span className="text-slate-900 font-bold bg-white px-2 py-0.5 rounded border border-slate-200 shadow-sm print:border-none print:shadow-none print:p-0 print:bg-transparent text-xs font-sans" dir="ltr">
-                                            {toPersianDigits(contact.number)} {contact.title ? `(${contact.title})` : ''}
-                                          </span>
-                                        </div>
-                                        {(contact.type === 'mobile' || contact.type === 'phone') && (
-                                          <button
-                                            type="button"
-                                            onClick={() => setIsMessageModalOpen(true)}
-                                            className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded-md transition-colors flex items-center gap-1 print:hidden cursor-pointer"
-                                            title="ارسال پیام به این شماره"
-                                          >
-                                            <MessageSquare className="w-3 h-3" />
-                                            پیام
-                                          </button>
-                                        )}
-                                      </p>
-                                    ))}
-                                    <p className="flex items-center">
-                                      <span className="text-slate-500 w-24 inline-block font-bold print:w-20">
-                                        آدرس:
-                                      </span>{" "}
-                                      <span className="text-slate-900 font-medium">
-                                        {selectedPerson.address || "---"}
-                                      </span>
-                                    </p>
+                                <div className="flex items-center gap-2">
+                                  {/* Paper size toggles */}
+                                  <div className="bg-slate-100 p-1 rounded-xl flex items-center gap-1 border border-slate-200 text-xs font-bold">
+                                    <button
+                                      type="button"
+                                      onClick={() => setPrintPaperSize('A4')}
+                                      className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                                        printPaperSize === 'A4'
+                                          ? 'bg-white text-indigo-600 shadow-sm border border-slate-200'
+                                          : 'text-slate-600 hover:text-slate-900'
+                                      }`}
+                                    >
+                                      <span>کاغذ A4</span>
+                                      <span className="text-[10px] text-slate-400 font-mono">۲۱۰×۲۹۷</span>
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setPrintPaperSize('A5')}
+                                      className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1.5 ${
+                                        printPaperSize === 'A5'
+                                          ? 'bg-white text-indigo-600 shadow-sm border border-slate-200'
+                                          : 'text-slate-600 hover:text-slate-900'
+                                      }`}
+                                    >
+                                      <span>کاغذ A5</span>
+                                      <span className="text-[10px] text-slate-400 font-mono">۱۴۸×۲۱۰</span>
+                                    </button>
                                   </div>
 
-                                  <div className="space-y-3 font-medium bg-indigo-50/50 p-4 rounded-xl border border-indigo-100 print:bg-transparent print:border-slate-300 print:p-3">
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-slate-600 font-bold">
-                                        جمع مبالغ فاکتورها:
-                                      </span>{" "}
-                                      <span className="text-slate-900 font-extrabold text-base bg-white px-2 py-1 rounded shadow-sm border border-slate-100 print:border-none print:shadow-none print:p-0 print:bg-transparent print:text-sm">
-                                        {toPersianDigits(
-                                          formatNumber(totalDebits),
-                                        )}{" "}
-                                        <span className="text-[10px] text-slate-400">
-                                          {storeSettings.currency}
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <div className="flex items-center justify-between">
-                                      <span className="text-slate-600 font-bold">
-                                        جمع پرداختی‌ها:
-                                      </span>{" "}
-                                      <span className="text-slate-900 font-extrabold text-base bg-white px-2 py-1 rounded shadow-sm border border-slate-100 print:border-none print:shadow-none print:p-0 print:bg-transparent print:text-sm">
-                                        {toPersianDigits(
-                                          formatNumber(totalCredits),
-                                        )}{" "}
-                                        <span className="text-[10px] text-slate-400">
-                                          {storeSettings.currency}
-                                        </span>
-                                      </span>
-                                    </div>
-                                    <div className="pt-3 border-t border-indigo-200 flex items-center justify-between mt-2 print:border-slate-300">
-                                      <span className="text-indigo-900 font-black text-lg print:text-slate-800 print:text-base">
-                                        مانده نهایی حساب:
-                                      </span>{" "}
-                                      <span
-                                        className={`text-lg font-black tracking-tight ${isClr ? "text-slate-800" : isOwed ? "text-rose-700" : "text-emerald-700"} print:text-base`}
-                                      >
-                                        {isClr ? (
-                                          <span className="bg-slate-200 text-slate-700 px-3 py-1 rounded-lg text-sm shadow-sm print:border print:border-slate-300 print:shadow-none print:bg-transparent">
-                                            تسویه کامل
-                                          </span>
-                                          ) : (
-                                          <div className="flex items-center gap-2">
-                                            <span
-                                              className={`text-xs font-bold px-2 py-1 rounded shadow-sm print:border print:shadow-none print:bg-transparent ${isOwed ? "bg-rose-100 text-rose-700 print:border-slate-300 print:text-slate-800" : "bg-emerald-100 text-emerald-700 print:border-slate-300 print:text-slate-800"}`}
-                                            >
-                                              {isOwed
-                                                ? "بدهی شخص"
-                                                : "طلب شخص از ما"}
-                                            </span>
-                                            <span>
-                                              {toPersianDigits(
-                                                formatNumber(
-                                                  Math.abs(finalBalance),
-                                                ),
-                                              )}{" "}
-                                              <span className="text-xs font-bold">
-                                                {storeSettings.currency}
-                                              </span>{" "}
-                                            </span>
-                                          </div>
-                                        )}
-                                      </span>
-                                    </div>
-                                  </div>
+                                  {/* Print Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => window.print()}
+                                    className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-200 cursor-pointer"
+                                  >
+                                    <Printer className="w-4 h-4" />
+                                    <span>چاپ نهایی</span>
+                                  </button>
+
+                                  {/* Download PDF Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleDownloadPdf(printPaperSize)}
+                                    className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-sky-200 cursor-pointer"
+                                  >
+                                    <Download className="w-4 h-4" />
+                                    <span>دانلود PDF</span>
+                                  </button>
+
+                                  {/* Close Button */}
+                                  <button
+                                    type="button"
+                                    onClick={() => setPrintingPersonLedger(false)}
+                                    className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer mr-1"
+                                    title="بستن پیش‌نمایش"
+                                  >
+                                    <X className="w-5 h-5" />
+                                  </button>
                                 </div>
                               </div>
 
-                              <div className="overflow-visible">
-                                <table className="w-full text-right min-w-[0px] text-[11px] print:text-[11px] mb-8 border-collapse">
-                                  <thead>
-                                    <tr className="bg-indigo-600 text-white font-bold text-[10px] uppercase tracking-wider print:bg-slate-200 print:text-slate-800">
-                                      <th className="py-3 px-2 text-center w-8 border-2 border-slate-800 print:border-slate-800">
-                                        ردیف
-                                      </th>
-                                      <th className="py-3 px-2 text-right w-24 border-2 border-slate-800 print:border-slate-800">
-                                        تاریخ و ارجاع
-                                      </th>
-                                      <th className="py-3 px-2 text-right border-2 border-slate-800 print:border-slate-800">
-                                        عنوان و شرح جزئیات رویداد مالی
-                                      </th>
-                                      <th className="py-3 px-2 text-left w-28 border-2 border-slate-800 print:border-slate-800">
-                                        مبلغ (افزایش بدهی)
-                                      </th>
-                                      <th className="py-3 px-2 text-left w-28 border-2 border-slate-800 print:border-slate-800">
-                                        پرداختی (کاهش بدهی)
-                                      </th>
-                                      <th className="py-3 px-2 text-left w-32 border-2 border-slate-800 print:border-slate-800">
-                                        مانده نهایی
-                                      </th>
-                                      <th className="py-3 px-2 text-center w-12 border-2 border-slate-800 print:border-slate-800">
-                                        تشخیص
-                                      </th>
-                                    </tr>
-                                  </thead>
-                                  <tbody className="font-medium font-sans bg-white">
-                                    {ledgerEntries.map((entry, index) => {
-                                      const isDeb = entry.runningBalance > 0;
-                                      const isCred = entry.runningBalance < 0;
-                                      const isBalZero =
-                                        entry.runningBalance === 0;
-                                      return (
-                                        <tr
-                                          key={index}
-                                          className={`break-inside-avoid border-b border-slate-200 transition-colors ${
-                                            isDeb ? "bg-rose-50/40 print:bg-rose-50/50" : isCred ? "bg-emerald-50/40 print:bg-emerald-50/50" : "bg-white print:bg-white"
-                                          } hover:bg-indigo-50/50`}
-                                        >
-                                          <td className="border-2 border-slate-700 py-3 px-2 text-center align-top">
-                                            <div className="w-5 h-5 rounded border border-slate-300 bg-white shadow-sm flex items-center justify-center mx-auto text-[9px] font-bold shrink-0 text-slate-600">
-                                              {toPersianDigits(index + 1)}
-                                            </div>
-                                          </td>
-                                          <td className="border-2 border-slate-700 py-3 px-2 align-top">
-                                            <div className="flex flex-col gap-1.5 text-right relative">
-                                              <span
-                                                className="text-slate-900 font-bold flex items-center justify-start gap-1 text-[11px] pr-0"
-                                                dir="rtl"
-                                              >
-                                                <span className="whitespace-nowrap flex items-center gap-1.5">
-                                                  <span>
+                              {/* Printable Paper Area */}
+                              <div
+                                id="person-ledger-printable-area"
+                                className="p-4 md:p-8 flex justify-center w-full print:p-0 print:m-0"
+                              >
+                                <div
+                                  id="person-ledger-printable-content"
+                                  className={`bg-white text-slate-900 shadow-2xl print:shadow-none border border-slate-300 print:border-none transition-all rounded-xl print:rounded-none ${
+                                    printPaperSize === 'A5'
+                                      ? "w-[148mm] min-h-[210mm] p-3.5 text-[9.5px]"
+                                      : "w-[210mm] min-h-[297mm] p-6 text-[11px]"
+                                  } print:w-full print:max-w-none print:p-0 print:m-0`}
+                                >
+                                  {/* Header Info Block */}
+                                  <div className={`border border-slate-300 rounded-xl ${printPaperSize === 'A5' ? 'p-3 mb-3' : 'p-4 mb-5'} bg-white`}>
+                                    <div className={`flex justify-between items-start border-b border-slate-200 ${printPaperSize === 'A5' ? 'pb-2 mb-2' : 'pb-3 mb-3'}`}>
+                                      <div className="text-right">
+                                        <h1 className={`font-black text-slate-900 ${printPaperSize === 'A5' ? 'text-base' : 'text-xl'}`}>
+                                          {storeSettings.storeName || "سیستم مدیریت"}
+                                        </h1>
+                                        <h2 className={`font-bold text-indigo-700 mt-0.5 ${printPaperSize === 'A5' ? 'text-xs' : 'text-sm'}`}>
+                                          کارت حساب (دفتر معین) طرف حساب
+                                        </h2>
+                                      </div>
+                                      <div className={`text-left text-slate-500 font-semibold ${printPaperSize === 'A5' ? 'text-[9px]' : 'text-xs'}`}>
+                                        تاریخ گزارش:{" "}
+                                        <span className="font-bold text-slate-800">
+                                          {formatDateDisplay(new Date(), storeSettings?.calendarType)}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    {/* Two Column Person & Balance Summary */}
+                                    <div className={`grid grid-cols-2 ${printPaperSize === 'A5' ? 'gap-2 text-[9px]' : 'gap-4 text-xs'}`}>
+                                      {/* Person Info */}
+                                      <div className={`bg-slate-50/80 rounded-lg border border-slate-200 ${printPaperSize === 'A5' ? 'p-2 space-y-1' : 'p-3 space-y-1.5'}`}>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-slate-500 font-bold shrink-0">طرف حساب:</span>
+                                          <span className={`font-black text-slate-900 truncate ${printPaperSize === 'A5' ? 'text-[10.5px]' : 'text-sm'}`}>
+                                            {getPersonDisplayName(selectedPerson)}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-slate-500 font-bold shrink-0">کد شناسایی:</span>
+                                          <span className="font-mono font-bold text-slate-700">
+                                            {toPersianDigits(selectedPerson.personCode || selectedPerson.id || "---")}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="text-slate-500 font-bold shrink-0">تلفن تماس:</span>
+                                          <span className="font-sans font-bold text-slate-800" dir="ltr">
+                                            {toPersianDigits(selectedPerson.phone || "---")}
+                                          </span>
+                                        </div>
+                                        {selectedPerson.address && (
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="text-slate-500 font-bold shrink-0">نشانی:</span>
+                                            <span className="text-slate-700 truncate">{toPersianDigits(selectedPerson.address)}</span>
+                                          </div>
+                                        )}
+                                      </div>
+
+                                      {/* Balance Summary */}
+                                      <div className={`bg-slate-50/80 rounded-lg border border-slate-200 ${printPaperSize === 'A5' ? 'p-2 space-y-1' : 'p-3 space-y-1.5'}`}>
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-slate-500 font-bold">مجموع فاکتورها (بدهی):</span>
+                                          <span className="font-mono font-bold text-slate-900">
+                                            {toPersianDigits(formatNumber(totalDebits))} {storeSettings.currency || 'تومان'}
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center justify-between">
+                                          <span className="text-slate-500 font-bold">مجموع پرداختی‌ها (بستانکاری):</span>
+                                          <span className="font-mono font-bold text-slate-900">
+                                            {toPersianDigits(formatNumber(totalCredits))} {storeSettings.currency || 'تومان'}
+                                          </span>
+                                        </div>
+                                        <div className={`flex items-center justify-between border-t border-slate-200 pt-1 ${isOwed ? 'text-rose-700' : isClr ? 'text-slate-700' : 'text-emerald-700'}`}>
+                                          <span className="font-black">مانده حساب نهایی:</span>
+                                          <span className={`font-mono font-black ${printPaperSize === 'A5' ? 'text-[11px]' : 'text-sm'}`}>
+                                            {isClr ? "تسویه کامل (بی‌حساب)" : `${toPersianDigits(formatNumber(Math.abs(finalBalance)))} ${storeSettings.currency || 'تومان'} (${isOwed ? 'بدهکار' : 'بستانکار'})`}
+                                          </span>
+                                        </div>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  {/* Clean, Fixed-Width, Non-Wrapping Ledger Table */}
+                                  <div className="overflow-visible w-full">
+                                    <table className="w-full text-right border-collapse table-fixed border border-slate-700 print:border-slate-800">
+                                      <colgroup>
+                                        <col style={{ width: printPaperSize === 'A5' ? "5.5%" : "4.5%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "14%" : "13%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "41%" : "43.5%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "13%" : "13%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "13%" : "13%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "10%" : "10%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "3.5%" : "3%" }} />
+                                      </colgroup>
+                                      <thead>
+                                        <tr className="bg-slate-800 text-white print:bg-slate-200 print:text-slate-900 font-bold border-b border-slate-700">
+                                          <th className={`border border-slate-700 text-center ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8.5px]' : 'py-2 px-1 text-[10px]'}`}>
+                                            ردیف
+                                          </th>
+                                          <th className={`border border-slate-700 text-right ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1.5 text-[10px]'}`}>
+                                            تاریخ و سند
+                                          </th>
+                                          <th className={`border border-slate-700 text-right ${printPaperSize === 'A5' ? 'py-1 px-1.5 text-[8.5px]' : 'py-2 px-2 text-[10px]'}`}>
+                                            عنوان و شرح جزئیات رویداد مالی
+                                          </th>
+                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1.5 text-[10px]'}`}>
+                                            بدهکار (افزایش)
+                                          </th>
+                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1.5 text-[10px]'}`}>
+                                            بستانکار (کاهش)
+                                          </th>
+                                          <th className={`border border-slate-700 text-left ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-2 px-1.5 text-[10px]'}`}>
+                                            مانده
+                                          </th>
+                                          <th className={`border border-slate-700 text-center ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8.5px]' : 'py-2 px-1 text-[10px]'}`}>
+                                            تشخیص
+                                          </th>
+                                        </tr>
+                                      </thead>
+                                      <tbody className="font-medium font-sans bg-white divide-y divide-slate-300">
+                                        {ledgerEntries.map((entry, index) => {
+                                          const isDeb = entry.runningBalance > 0;
+                                          const isCred = entry.runningBalance < 0;
+                                          const isBalZero = entry.runningBalance === 0;
+                                          return (
+                                            <tr
+                                              key={index}
+                                              className="break-inside-avoid print-avoid-break hover:bg-slate-50 transition-colors"
+                                            >
+                                              {/* ردیف */}
+                                              <td className={`border border-slate-400 text-center align-middle font-mono font-bold text-slate-700 ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8.5px]' : 'py-1.5 px-1 text-[10px]'}`}>
+                                                {toPersianDigits(index + 1)}
+                                              </td>
+
+                                              {/* تاریخ و ارجاع */}
+                                              <td className={`border border-slate-400 align-middle ${printPaperSize === 'A5' ? 'py-1 px-1' : 'py-1.5 px-1.5'}`}>
+                                                <div className="flex flex-col leading-tight gap-0.5 text-right overflow-hidden">
+                                                  <span className={`font-bold text-slate-800 whitespace-nowrap truncate ${printPaperSize === 'A5' ? 'text-[8px]' : 'text-[9.5px]'}`}>
                                                     {formatDateDisplay(
-                                                       entry.date || (entry as any).jalaliDate,
-                                                       storeSettings?.calendarType
+                                                      entry.date || (entry as any).jalaliDate,
+                                                      storeSettings?.calendarType
                                                     )}
                                                   </span>
-                                                  {entry.rawItem?.createdAt && (
-                                                    <span className="text-[9px] text-slate-500 font-medium bg-slate-100 px-1.5 py-0.5 rounded-md print:bg-transparent print:p-0" dir="ltr">
-                                                      {toPersianDigits(new Date(entry.rawItem.createdAt).toLocaleTimeString(storeSettings?.calendarType === 'gregorian' ? 'en-US' : 'fa-IR', { hour: '2-digit', minute: '2-digit', hour12: false }))}
-                                                    </span>
-                                                  )}
-                                                </span>
-                                              </span>
-                                              <span className="text-[10px] text-indigo-700 font-bold border border-indigo-100 bg-indigo-50 px-1.5 py-0.5 rounded flex items-center gap-1 w-max shadow-sm print:border-slate-300 print:bg-transparent print:text-slate-700 print:shadow-none">
-                                                {toPersianDigits(entry.refId)}
-                                              </span>
-                                            </div>
+                                                  <span className={`text-slate-500 font-mono whitespace-nowrap truncate ${printPaperSize === 'A5' ? 'text-[7.5px]' : 'text-[8.5px]'}`}>
+                                                    #{toPersianDigits(entry.refId)}
+                                                  </span>
+                                                </div>
+                                              </td>
+
+                                              {/* شرح جزئیات مالی (تک‌خطی و متوازن، بدون چندخطی شدن ردیف) */}
+                                              <td className={`border border-slate-400 align-middle ${printPaperSize === 'A5' ? 'py-1 px-1.5' : 'py-1.5 px-2'}`}>
+                                                <div className="flex items-center gap-1.5 min-w-0 w-full overflow-hidden">
+                                                  <span
+                                                    className={`shrink-0 font-extrabold rounded border whitespace-nowrap ${
+                                                      printPaperSize === 'A5' ? 'text-[7.5px] px-1 py-0.2' : 'text-[9px] px-1.5 py-0.5'
+                                                    } ${
+                                                      entry.credit > 0
+                                                        ? "bg-emerald-50 text-emerald-800 border-emerald-300 print:border-slate-400 print:bg-slate-100"
+                                                        : entry.debit > 0
+                                                          ? "bg-rose-50 text-rose-800 border-rose-300 print:border-slate-400 print:bg-slate-100"
+                                                          : "bg-slate-100 text-slate-800 border-slate-300 print:border-slate-400 print:bg-slate-100"
+                                                    }`}
+                                                  >
+                                                    {entry.type}
+                                                  </span>
+                                                  <span
+                                                    className={`text-slate-800 font-medium truncate min-w-0 flex-1 whitespace-nowrap overflow-hidden text-ellipsis text-right ${
+                                                      printPaperSize === 'A5' ? 'text-[8.5px]' : 'text-[10px]'
+                                                    }`}
+                                                    title={entry.desc}
+                                                  >
+                                                    {toPersianDigits(cleanDescription(entry.desc, entry.type))}
+                                                  </span>
+                                                </div>
+                                              </td>
+
+                                              {/* مبلغ بدهکار */}
+                                              <td className={`border border-slate-400 text-left align-middle font-mono font-bold whitespace-nowrap ${
+                                                printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-1.5 px-1.5 text-[10.5px]'
+                                              } ${entry.debit > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                {entry.debit > 0 ? toPersianDigits(formatNumber(entry.debit)) : "---"}
+                                              </td>
+
+                                              {/* مبلغ بستانکار */}
+                                              <td className={`border border-slate-400 text-left align-middle font-mono font-bold whitespace-nowrap ${
+                                                printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-1.5 px-1.5 text-[10.5px]'
+                                              } ${entry.credit > 0 ? 'text-slate-900' : 'text-slate-400'}`}>
+                                                {entry.credit > 0 ? toPersianDigits(formatNumber(entry.credit)) : "---"}
+                                              </td>
+
+                                              {/* مانده نهایی */}
+                                              <td className={`border border-slate-400 text-left align-middle font-mono font-extrabold whitespace-nowrap ${
+                                                printPaperSize === 'A5' ? 'py-1 px-1 text-[9px]' : 'py-1.5 px-1.5 text-[11px]'
+                                              } text-slate-900`}>
+                                                {isBalZero ? "تسویه" : toPersianDigits(formatNumber(Math.abs(entry.runningBalance)))}
+                                              </td>
+
+                                              {/* تشخیص */}
+                                              <td className={`border border-slate-400 text-center align-middle font-bold whitespace-nowrap ${
+                                                printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8px]' : 'py-1.5 px-1 text-[9.5px]'
+                                              } ${isBalZero ? 'text-slate-400' : (isDeb ? 'text-rose-700' : 'text-emerald-700')}`}>
+                                                {isBalZero ? "-" : (isDeb ? "بد" : "بس")}
+                                              </td>
+                                            </tr>
+                                          );
+                                        })}
+                                      </tbody>
+                                      <tfoot>
+                                        <tr className="bg-slate-100 print:bg-slate-100 font-extrabold border-t-2 border-slate-700">
+                                          <td colSpan={2} className={`border border-slate-600 text-center ${printPaperSize === 'A5' ? 'py-1 text-[8.5px]' : 'py-1.5 text-[10px]'}`}>
+                                            جمع کل دوره
                                           </td>
-                                          <td className="border-2 border-slate-700 py-3 px-2 align-top max-w-sm">
-                                            <div className="flex flex-wrap items-center gap-1.5">
-                                              <span
-                                                className={`font-extrabold text-[10px] px-2 py-0.5 rounded border shadow-sm print:shadow-none whitespace-nowrap ${
-                                                  entry.credit > 0
-                                                    ? "bg-emerald-50 text-emerald-700 border-emerald-200 print:border-slate-300 print:bg-transparent print:text-slate-800"
-                                                    : entry.debit > 0
-                                                      ? "bg-rose-50 text-rose-700 border-rose-200 print:border-slate-300 print:bg-transparent print:text-slate-800"
-                                                      : "bg-slate-100 text-slate-700 border-slate-200 print:border-slate-300 print:bg-transparent print:text-slate-800"
-                                                }`}
-                                              >
-                                                {entry.type}
-                                              </span>
-                                              <span className="text-slate-800 text-[11px] whitespace-normal break-words text-justify">
-                                                {toPersianDigits(entry.desc)}
-                                              </span>
-                                            </div>
+                                          <td className={`border border-slate-600 text-right px-2 font-bold text-slate-700 ${printPaperSize === 'A5' ? 'py-1 text-[8.5px]' : 'py-1.5 text-[10px]'}`}>
+                                            گردش حساب و مانده نهایی طرف حساب
                                           </td>
-                                          <td
-                                            className={`py-3 px-2 text-left align-top border-2 border-slate-700 ${entry.debit > 0 ? "bg-rose-50/30 print:bg-transparent" : ""}`}
-                                          >
-                                            <span
-                                              className={`font-black text-[12px] ${entry.debit > 0 ? "text-rose-700 print:text-slate-900" : "text-slate-400 font-medium"}`}
-                                            >
-                                              {entry.debit > 0
-                                                ? toPersianDigits(
-                                                    formatNumber(entry.debit),
-                                                  )
-                                                : "---"}
-                                            </span>
+                                          <td className={`border border-slate-600 text-left font-mono font-bold whitespace-nowrap text-slate-900 ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-1.5 px-1.5 text-[10.5px]'}`}>
+                                            {totalDebits > 0 ? toPersianDigits(formatNumber(totalDebits)) : "۰"}
                                           </td>
-                                          <td
-                                            className={`py-3 px-2 text-left align-top border-2 border-slate-700 ${entry.credit > 0 ? "bg-emerald-50/30 print:bg-transparent" : ""}`}
-                                          >
-                                            <span
-                                              className={`font-black text-[12px] ${entry.credit > 0 ? "text-emerald-700 print:text-slate-900" : "text-slate-400 font-medium"}`}
-                                            >
-                                              {entry.credit > 0
-                                                ? toPersianDigits(
-                                                    formatNumber(entry.credit),
-                                                  )
-                                                : "---"}
-                                            </span>
+                                          <td className={`border border-slate-600 text-left font-mono font-bold whitespace-nowrap text-slate-900 ${printPaperSize === 'A5' ? 'py-1 px-1 text-[8.5px]' : 'py-1.5 px-1.5 text-[10.5px]'}`}>
+                                            {totalCredits > 0 ? toPersianDigits(formatNumber(totalCredits)) : "۰"}
                                           </td>
-                                          <td className="border-2 border-slate-700 py-3 px-2 text-left align-top">
-                                            <div
-                                              className={`flex items-center justify-end gap-1 font-extrabold ${isBalZero ? "text-slate-500" : "text-slate-900"}`}
-                                            >
-                                              {isBalZero ? (
-                                                <span className="bg-slate-100 border border-slate-200 px-2 py-1 rounded text-xs text-slate-600 shadow-sm print:border-slate-300 print:bg-transparent print:shadow-none">
-                                                  صفر
-                                                </span>
-                                              ) : (
-                                                <span className="text-[13px] tracking-tight">
-                                                  {toPersianDigits(
-                                                    formatNumber(
-                                                      Math.abs(
-                                                        entry.runningBalance,
-                                                      ),
-                                                    ),
-                                                  )}
-                                                </span>
-                                              )}
-                                            </div>
+                                          <td className={`border border-slate-600 text-left font-mono font-extrabold whitespace-nowrap text-slate-900 ${printPaperSize === 'A5' ? 'py-1 px-1 text-[9px]' : 'py-1.5 px-1.5 text-[11px]'}`}>
+                                            {finalBalance === 0 ? "تسویه" : toPersianDigits(formatNumber(Math.abs(finalBalance)))}
                                           </td>
-                                          <td className="border-2 border-slate-700 py-3 px-2 text-center align-top font-bold text-[11px] text-slate-800">
-                                            {!isBalZero && (
-                                              <span className={`${isDeb ? "text-rose-600" : "text-emerald-600"}`}>{isDeb ? "بد" : "بس"}</span>
-                                            )}
+                                          <td className={`border border-slate-600 text-center font-bold whitespace-nowrap ${printPaperSize === 'A5' ? 'py-1 px-0.5 text-[8px]' : 'py-1.5 px-1 text-[9.5px]'} ${finalBalance === 0 ? 'text-slate-500' : (isOwed ? 'text-rose-700' : 'text-emerald-700')}`}>
+                                            {finalBalance === 0 ? "-" : (isOwed ? "بد" : "بس")}
                                           </td>
                                         </tr>
-                                      );
-                                    })}
-                                  </tbody>
-                                </table>
-                                <div className="mt-8 text-center text-xs text-gray-500 border-t border-gray-200 pt-4">
-                                  امضاء و مهر (صرفاً جهت اطلاع)
+                                      </tfoot>
+                                    </table>
+                                  </div>
+
+                                  {/* Signatures Footer */}
+                                  <div className={`border-t border-slate-300 grid grid-cols-2 text-center text-slate-600 ${printPaperSize === 'A5' ? 'mt-4 pt-3 text-[9px]' : 'mt-6 pt-4 text-xs'}`}>
+                                    <div>
+                                      <span className="font-bold">امضاء و تایید صادرکننده:</span>
+                                      <div className={`border-b border-dashed border-slate-300 mx-auto ${printPaperSize === 'A5' ? 'w-24 mt-6' : 'w-36 mt-8'}`} />
+                                    </div>
+                                    <div>
+                                      <span className="font-bold">امضاء و تایید طرف حساب:</span>
+                                      <div className={`border-b border-dashed border-slate-300 mx-auto ${printPaperSize === 'A5' ? 'w-24 mt-6' : 'w-36 mt-8'}`} />
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
                             </div>
@@ -1316,7 +1410,7 @@ export default function PersonLedger(props: any) {
                                                   </span>
                                                   <span className="text-gray-700 text-[12px] print:text-[11px] whitespace-normal font-medium break-words text-justify">
                                                     {toPersianDigits(
-                                                      entry.desc,
+                                                      cleanDescription(entry.desc, entry.type),
                                                     )}
                                                   </span>
                                                   {ledgerTab === "detailed" &&

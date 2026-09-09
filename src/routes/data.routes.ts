@@ -21,6 +21,33 @@ import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications
 import * as schema from '../db/schema';
 
 const router = Router();
+
+let serverInvoiceLock = Promise.resolve();
+const acquireServerInvoiceLock = (): Promise<() => void> => {
+  let release: () => void;
+  const nextLock = new Promise<void>((res) => {
+    release = res;
+  });
+  const currentLock = serverInvoiceLock;
+  serverInvoiceLock = serverInvoiceLock.then(() => nextLock);
+  return currentLock.then(() => release);
+};
+
+const INVOICE_TABLE_KEYS = ['invoices', 'sales_invoices', 'purchase_invoices', 'sale_returns', 'purchase_returns'];
+const TABLE_DOC_TYPES: Record<string, string> = {
+  sales_invoices: 'sale',
+  purchase_invoices: 'purchase',
+  sale_returns: 'sale_return',
+  purchase_returns: 'purchase_return',
+  invoices: 'sale',
+};
+const DEFAULT_DOC_PREFIXES: Record<string, string> = {
+  sale: "INV-",
+  purchase: "PUR-",
+  proforma: "PF-",
+  sale_return: "RTN-S-",
+  purchase_return: "RTN-P-",
+};
 router.post('/api/data/users', async (req, res, next) => {
     try {
       const users = req.body;
@@ -131,7 +158,82 @@ router.post('/api/data/:key/append', async (req, res) => {
       return res.status(400).json({ error: 'Validation failed', details: (validationResult as any).error?.errors });
     }
 
+    let releaseServerLock: (() => void) | null = null;
     try {
+      if (INVOICE_TABLE_KEYS.includes(key)) {
+        releaseServerLock = await acquireServerInvoiceLock();
+        try {
+          const docType = newItem.type || TABLE_DOC_TYPES[key] || 'sale';
+
+          let existingInvs: any[] = [];
+          if (isPgActive() && getActivePgPool()) {
+            try {
+              const r1 = await getActivePgPool().query(`SELECT id, "invoiceNumber", type FROM "${key}" WHERE "invoiceNumber" IS NOT NULL`);
+              existingInvs = r1.rows || [];
+              if (key !== 'invoices') {
+                const r2 = await getActivePgPool().query(`SELECT id, "invoiceNumber", type FROM "invoices" WHERE "invoiceNumber" IS NOT NULL`);
+                existingInvs = existingInvs.concat(r2.rows || []);
+              }
+            } catch(e) {}
+          } else {
+            const d1 = (await getDbData(key)) || [];
+            const d2 = key !== 'invoices' ? ((await getDbData('invoices')) || []) : [];
+            existingInvs = [...(Array.isArray(d1) ? d1 : []), ...(Array.isArray(d2) ? d2 : [])];
+          }
+
+          const rawInvNum = String(newItem.invoiceNumber || '').trim();
+          const isPlaceholder = !rawInvNum || rawInvNum.includes('خودکار') || rawInvNum.includes('تولید خودکار');
+          const isDuplicate = existingInvs.some(inv => 
+            inv && String(inv.id) !== String(newItem.id) &&
+            (inv.type === docType || (!inv.type && docType === 'sale')) &&
+            String(inv.invoiceNumber || '').trim().toLowerCase() === rawInvNum.toLowerCase()
+          );
+
+          if (isPlaceholder || isDuplicate) {
+            const settings = (await getDbData('settings')) || {};
+            const counters = (await getDbData('doc_counters')) || {};
+            const prefixKey = `prefix_${docType}`;
+            const startKey = `start_${docType}`;
+            const lenKey = `len_${docType}`;
+
+            const prefix = (settings[prefixKey] !== undefined && settings[prefixKey] !== null && settings[prefixKey] !== '')
+              ? String(settings[prefixKey])
+              : (DEFAULT_DOC_PREFIXES[docType] || '');
+            const start = Number(settings[startKey] ?? 1000);
+            const len = Number(settings[lenKey] ?? 6);
+
+            let maxVal = 0;
+            existingInvs.forEach(inv => {
+              if (inv && (inv.type === docType || (!inv.type && docType === 'sale'))) {
+                let valStr = String(inv.invoiceNumber || '');
+                if (prefix && valStr.startsWith(prefix)) valStr = valStr.substring(prefix.length);
+                const val = parseInt(valStr.replace(/\D/g, ''), 10);
+                if (!isNaN(val) && val > maxVal) maxVal = val;
+              }
+            });
+
+            const counterVal = Number(counters[docType]) || 0;
+            let nextVal = Math.max(counterVal, maxVal, start - 1) + 1;
+            let candidate = `${prefix}${String(nextVal).padStart(len, '0')}`;
+
+            while (existingInvs.some(inv => 
+              inv && String(inv.id) !== String(newItem.id) &&
+              (inv.type === docType || (!inv.type && docType === 'sale')) &&
+              String(inv.invoiceNumber || '').trim().toLowerCase() === candidate.toLowerCase()
+            )) {
+              nextVal++;
+              candidate = `${prefix}${String(nextVal).padStart(len, '0')}`;
+            }
+
+            newItem.invoiceNumber = candidate;
+            counters[docType] = nextVal;
+            await setDbData('doc_counters', counters);
+          }
+        } catch (lockErr) {
+          console.error('Error during invoice number verification/correction:', lockErr);
+        }
+      }
+
       if (!newItem.id) newItem.id = Math.random().toString(36).substring(2, 15);
       
       if (isPgActive() && getActivePgPool()) {
@@ -210,6 +312,8 @@ router.post('/api/data/:key/append', async (req, res) => {
       tableSchemas.delete(req.params.key);
       tableSchemas.delete('system_logs');
       res.status(500).json({ error: err.message });
+    } finally {
+      if (releaseServerLock) releaseServerLock();
     }
   });
 

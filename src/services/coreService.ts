@@ -286,7 +286,35 @@ export const parseToGregorianDate = (dateStr: string | number | Date, calendarTy
   return isNaN(checkDate.getTime()) ? null : checkDate;
 };
 
-export const generateDocNumber = async (docTypeKey: string): Promise<string> => {
+export const DEFAULT_DOC_PREFIXES: Record<string, string> = {
+  sale: "INV-",
+  purchase: "PUR-",
+  proforma: "PF-",
+  warehouse_receipt: "REC-",
+  warehouse_remittance: "REM-",
+  sale_return: "RTN-S-",
+  purchase_return: "RTN-P-",
+};
+
+export const incrementInvoiceNumber = (currentNumber: string, docTypeKey: string): string => {
+  const str = String(currentNumber || '').trim();
+  const digitsMatch = str.match(/(\d+)$/);
+  if (digitsMatch) {
+    const prefix = str.substring(0, str.length - digitsMatch[1].length);
+    const num = parseInt(digitsMatch[1], 10);
+    const nextNum = isNaN(num) ? 1001 : num + 1;
+    const len = digitsMatch[1].length;
+    return `${prefix}${String(nextNum).padStart(len, '0')}`;
+  }
+  const defaultPrefix = DEFAULT_DOC_PREFIXES[docTypeKey] || '';
+  const num = parseInt(str.replace(/\D/g, ''), 10);
+  const nextNum = isNaN(num) ? 1001 : num + 1;
+  return `${defaultPrefix}${String(nextNum).padStart(6, '0')}`;
+};
+
+let docNumberGenLock = Promise.resolve();
+
+const internalGenerateDocNumber = async (docTypeKey: string): Promise<string> => {
   try {
     const settings = await getStoreSettings();
     if (!settings) return Date.now().toString().slice(-6);
@@ -295,19 +323,27 @@ export const generateDocNumber = async (docTypeKey: string): Promise<string> => 
     const startKey = `start_${docTypeKey}`;
     const lenKey = `len_${docTypeKey}`;
 
-    const prefix = settings[prefixKey as keyof CompanySettings] !== undefined ? String(settings[prefixKey as keyof CompanySettings]) : '';
+    const configuredPrefix = settings[prefixKey as keyof CompanySettings];
+    const prefix = (configuredPrefix !== undefined && configuredPrefix !== null && configuredPrefix !== '')
+      ? String(configuredPrefix)
+      : (DEFAULT_DOC_PREFIXES[docTypeKey] ?? '');
     const startObj = settings[startKey as keyof CompanySettings];
     const start = startObj && !isNaN(Number(startObj)) ? Number(startObj) : 1000;
     const lenObj = settings[lenKey as keyof CompanySettings];
     const len = lenObj && !isNaN(Number(lenObj)) ? Number(lenObj) : 6;
 
     delete cache['doc_counters'];
-    const counters = await getLocalData<Record<string, number>>('doc_counters', {});
+    const counters = await getLocalData<Record<string, number>>('doc_counters', {}, { _nocache: Date.now() });
     
     let items: any[] = [];
     if (docTypeKey === 'sale' || docTypeKey === 'purchase' || docTypeKey.includes('return') || docTypeKey === 'proforma') {
-      items = await getInvoices();
-      items = items.filter(i => docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? i.type === 'sale' : i.type === docTypeKey));
+      const targetTable = mapInvoiceTypeToTable(docTypeKey);
+      const [targetData, generalInvs] = await Promise.all([
+        getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
+        getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
+      ]);
+      const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
+      items = combined.filter(i => i && !i.isDeleted && (docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? (i.type === 'sale' || !i.type) : i.type === docTypeKey)));
     } else if (docTypeKey === 'warehouse_receipt' || docTypeKey === 'warehouse_remittance') {
       items = await getInvoices();
       items = items.filter(i => i.type === docTypeKey);
@@ -355,11 +391,23 @@ export const generateDocNumber = async (docTypeKey: string): Promise<string> => 
   }
 };
 
+export const generateDocNumber = (docTypeKey: string): Promise<string> => {
+  return new Promise<string>((resolve) => {
+    docNumberGenLock = docNumberGenLock.then(
+      () => internalGenerateDocNumber(docTypeKey).then(resolve).catch(() => resolve(Date.now().toString().slice(-6))),
+      () => internalGenerateDocNumber(docTypeKey).then(resolve).catch(() => resolve(Date.now().toString().slice(-6)))
+    );
+  });
+};
+
 export const updateDocCounter = async (docTypeKey: string, generatedNumber: string | number) => {
     try {
         const settings = await getStoreSettings();
         const prefixKey = `prefix_${docTypeKey}`;
-        const prefix = settings && settings[prefixKey as keyof CompanySettings] !== undefined ? String(settings[prefixKey as keyof CompanySettings]) : '';
+        const configuredPrefix = settings && settings[prefixKey as keyof CompanySettings];
+        const prefix = (configuredPrefix !== undefined && configuredPrefix !== null && configuredPrefix !== '')
+          ? String(configuredPrefix)
+          : (DEFAULT_DOC_PREFIXES[docTypeKey] ?? '');
         
         let valStr = String(generatedNumber || '');
         if (prefix && valStr.startsWith(prefix)) {
@@ -368,7 +416,8 @@ export const updateDocCounter = async (docTypeKey: string, generatedNumber: stri
         const val = parseInt(valStr.replace(/\D/g, ''), 10);
         
         if (!isNaN(val)) {
-            const counters = await getLocalData<Record<string, number>>('doc_counters', {});
+            delete cache['doc_counters'];
+            const counters = await getLocalData<Record<string, number>>('doc_counters', {}, { _nocache: Date.now() });
             if (counters[docTypeKey] === undefined || val > counters[docTypeKey]) {
                 counters[docTypeKey] = val;
                 await saveLocalData('doc_counters', counters);

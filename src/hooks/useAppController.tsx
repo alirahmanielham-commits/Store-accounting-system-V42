@@ -4819,11 +4819,17 @@ const getInvoiceNumber = (typeOverride?: string) => {
       if (checkInvNum && !checkInvNum.includes("خودکار") && !checkInvNum.includes("تولید خودکار")) {
         const isDuplicate = invoices.some(i => 
           i.id?.toString() !== editingInvoiceId?.toString() &&
-          i.type === "sale" &&
-          i.invoiceNumber?.trim() === checkInvNum
+          (i.type === "sale" || !i.type) &&
+          String(i.invoiceNumber || "").trim().toLowerCase() === checkInvNum.toLowerCase()
         );
         if (isDuplicate) {
-          validationErrors.push(`• گیت ۲: شماره فاکتور فروش (${checkInvNum}) تکراری بوده و قبلاً ثبت شده است.`);
+          if (invoiceMode === "auto" && !editingInvoiceId) {
+            // در حالت شماره‌گذاری خودکار، در ثبت‌های همزمان اجازه می‌دهیم موتور تخصیص شماره یکتا را تعیین کند
+            if (customPayload) customPayload.invoiceNumber = "";
+            finalInvoiceNumber = "";
+          } else {
+            validationErrors.push(`• گیت ۲: شماره فاکتور فروش (${checkInvNum}) تکراری بوده و قبلاً ثبت شده است.`);
+          }
         }
       }
 
@@ -4989,10 +4995,15 @@ const getInvoiceNumber = (typeOverride?: string) => {
         const isDuplicate = invoices.some(i => 
           i.id?.toString() !== editingInvoiceId?.toString() &&
           i.type === "purchase" &&
-          i.invoiceNumber?.trim() === checkInvNum
+          String(i.invoiceNumber || "").trim().toLowerCase() === checkInvNum.toLowerCase()
         );
         if (isDuplicate) {
-          validationErrors.push(`• گیت ۲: شماره فاکتور خرید (${checkInvNum}) تکراری بوده و قبلاً ثبت شده است.`);
+          if (invoiceMode === "auto" && !editingInvoiceId) {
+            if (customPayload) customPayload.invoiceNumber = "";
+            finalInvoiceNumber = "";
+          } else {
+            validationErrors.push(`• گیت ۲: شماره فاکتور خرید (${checkInvNum}) تکراری بوده و قبلاً ثبت شده است.`);
+          }
         }
       }
 
@@ -5074,6 +5085,30 @@ const getInvoiceNumber = (typeOverride?: string) => {
         setSubmitting(false);
         stopAppProcessing();
         return false;
+      }
+    }
+
+    // ---- Return Invoices (Sale Return & Purchase Return) Duplicate Gate ----
+    if (!isDraft && (actualType === "sale_return" || actualType === "purchase_return")) {
+      const checkInvNum = (customPayload?.invoiceNumber || finalInvoiceNumber || "").trim();
+      if (checkInvNum && !checkInvNum.includes("خودکار") && !checkInvNum.includes("تولید خودکار")) {
+        const isDuplicate = invoices.some(i => 
+          i.id?.toString() !== editingInvoiceId?.toString() &&
+          i.type === actualType &&
+          String(i.invoiceNumber || "").trim().toLowerCase() === checkInvNum.toLowerCase()
+        );
+        if (isDuplicate) {
+          if (invoiceMode === "auto" && !editingInvoiceId) {
+            if (customPayload) customPayload.invoiceNumber = "";
+            finalInvoiceNumber = "";
+          } else {
+            const returnTitle = actualType === "sale_return" ? "برگشت از فروش" : "برگشت از خرید";
+            customAlert(`خطا در اعتبارسنجی فاکتور:\n\n• شماره فاکتور ${returnTitle} (${checkInvNum}) تکراری بوده و قبلاً در سیستم ثبت شده است.`);
+            setSubmitting(false);
+            stopAppProcessing();
+            return false;
+          }
+        }
       }
     }
 
@@ -5392,7 +5427,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
               resourceType: (paymentAccount as any).type === "bank" ? "bank" : "cashbox",
               resourceId: invoicePaymentAccountId,
               method: "cash",
-              description: `بابت تسویه فاکتور خرید شماره ${payload.invoiceNumber || invId}`,
+              description: `بابت تسویه فاکتور خرید شماره ${addedInvoice?.invoiceNumber || payload.invoiceNumber || invId}`,
               currency: payload.currency || "تومان",
               linkedInvoices: { [invId]: paidAmt }
             };
@@ -5572,7 +5607,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
             typeof formatNumber === "function"
               ? formatNumber(payload.totalAmount)
               : payload.totalAmount;
-          const invNum = String(payload.invoiceNumber || "");
+          const invNum = String(addedInvoice?.invoiceNumber || payload.invoiceNumber || "");
           const curStr = storeSettings?.currency || "تومان";
           const dateStr = formatDateDisplay(new Date(), storeSettings?.calendarType);
 

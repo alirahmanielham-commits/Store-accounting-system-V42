@@ -904,6 +904,566 @@
       "entityId": "0e4b177e-a189-4b74-b5a7-cf2f2c83b6a5",
       "changes": "{\"id\":\"0e4b177e-a189-4b74-b5a7-cf2f2c83b6a5\",\"code\":\"2001\",\"title\":\"حسابهای پرداختنی\",\"nature\":\"credit\",\"level\":\"subsidiary\"}",
       "timestamp": 1788654732752
+    },
+    {
+      "id": "hsaeaz95x34",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "lc754yejq1m",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان برگشت از فروش 0\",\"items\":[],\"invoiceNumber\":\"RTN-S-001000\",\"id\":\"lc754yejq1m\"}",
+      "timestamp": 1788902654493
+    },
+    {
+      "id": "yh2p44q8aqb",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "jjqmyc53vw",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان برگشت از فروش 1\",\"items\":[],\"invoiceNumber\":\"RTN-S-001001\",\"id\":\"jjqmyc53vw\"}",
+      "timestamp": 1788902654495
+    },
+    {
+      "id": "tzdnyrt362",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "5lqgr2z95z6",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان برگشت از فروش 2\",\"items\":[],\"invoiceNumber\":\"RTN-S-001002\",\"id\":\"5lqgr2z95z6\"}",
+      "timestamp": 1788902654496
+    },
+    {
+      "id": "3hmtucvra0w",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "sxh7enxip2g",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان برگشت از فروش 3\",\"items\":[],\"invoiceNumber\":\"RTN-S-001003\",\"id\":\"sxh7enxip2g\"}",
+      "timestamp": 1788902654498
+    },
+    {
+      "id": "03w0hvhmnfs8",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "375b9mo2vu",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان برگشت از خرید 0\",\"items\":[],\"invoiceNumber\":\"RTN-P-001000\",\"id\":\"375b9mo2vu\"}",
+      "timestamp": 1788902654503
+    },
+    {
+      "id": "khjvblg9gs",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "jjgr74845cn",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان برگشت از خرید 1\",\"items\":[],\"invoiceNumber\":\"RTN-P-001001\",\"id\":\"jjgr74845cn\"}",
+      "timestamp": 1788902654504
+    },
+    {
+      "id": "zc1opvhkw2k",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "rbssf14xlc",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان برگشت از خرید 2\",\"items\":[],\"invoiceNumber\":\"RTN-P-001002\",\"id\":\"rbssf14xlc\"}",
+      "timestamp": 1788902654506
+    },
+    {
+      "id": "rbfcdjwvigc",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "edtil45i5ev",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان برگشت از خرید 3\",\"items\":[],\"invoiceNumber\":\"RTN-P-001003\",\"id\":\"edtil45i5ev\"}",
+      "timestamp": 1788902654507
+    },
+    {
+      "id": "oy1wpventli",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sales_invoices",
+      "entityId": "gz50w4nwc8",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 0\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"INV-001000\",\"id\":\"gz50w4nwc8\"}",
+      "timestamp": 1788902666605
+    },
+    {
+      "id": "cc3i17lu34r",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sales_invoices",
+      "entityId": "jwcdcq2xg9e",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 1\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"INV-001001\",\"id\":\"jwcdcq2xg9e\"}",
+      "timestamp": 1788902666618
+    },
+    {
+      "id": "f0069u935s",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sales_invoices",
+      "entityId": "l9gz67ho5s",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 2\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"INV-001002\",\"id\":\"l9gz67ho5s\"}",
+      "timestamp": 1788902666619
+    },
+    {
+      "id": "1ncda2b4w65",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sales_invoices",
+      "entityId": "sqghc2i0o4s",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 3\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"INV-001003\",\"id\":\"sqghc2i0o4s\"}",
+      "timestamp": 1788902666620
+    },
+    {
+      "id": "sw0yea17acc",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sales_invoices",
+      "entityId": "1o9pno3aket",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 4\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"INV-001004\",\"id\":\"1o9pno3aket\"}",
+      "timestamp": 1788902666621
+    },
+    {
+      "id": "b7zjxlbrw7w",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_invoices",
+      "entityId": "kk9mxpoi0m",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 0\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"PUR-001000\",\"id\":\"kk9mxpoi0m\"}",
+      "timestamp": 1788902666632
+    },
+    {
+      "id": "3jv22l36j8m",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_invoices",
+      "entityId": "jxewbrmpsr",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 1\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"PUR-001001\",\"id\":\"jxewbrmpsr\"}",
+      "timestamp": 1788902666634
+    },
+    {
+      "id": "56c8ru0n9hh",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_invoices",
+      "entityId": "rn16xin365",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 2\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"PUR-001002\",\"id\":\"rn16xin365\"}",
+      "timestamp": 1788902666636
+    },
+    {
+      "id": "ehuz4dhul89",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_invoices",
+      "entityId": "s40c43g4fe",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 3\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"PUR-001003\",\"id\":\"s40c43g4fe\"}",
+      "timestamp": 1788902666638
+    },
+    {
+      "id": "abppp2zjgpq",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_invoices",
+      "entityId": "xp4ix79j6s",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 4\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"PUR-001004\",\"id\":\"xp4ix79j6s\"}",
+      "timestamp": 1788902666639
+    },
+    {
+      "id": "pxp9vo7ykhi",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "qv8tgwj8x6o",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 0\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-S-001004\",\"id\":\"qv8tgwj8x6o\"}",
+      "timestamp": 1788902666646
+    },
+    {
+      "id": "17tlkg0sohg",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "8z87ps329ah",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 1\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-S-001005\",\"id\":\"8z87ps329ah\"}",
+      "timestamp": 1788902666648
+    },
+    {
+      "id": "p6xuhto1v1",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "9ew69g38pew",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 2\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-S-001006\",\"id\":\"9ew69g38pew\"}",
+      "timestamp": 1788902666649
+    },
+    {
+      "id": "hfwycarpovh",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "ovsxvfaoxmn",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 3\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-S-001007\",\"id\":\"ovsxvfaoxmn\"}",
+      "timestamp": 1788902666650
+    },
+    {
+      "id": "qiyc83upure",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "sale_returns",
+      "entityId": "gig19ghjt1q",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 4\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-S-001008\",\"id\":\"gig19ghjt1q\"}",
+      "timestamp": 1788902666651
+    },
+    {
+      "id": "kk217nfq3n",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "fplgvm9bmnb",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 0\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-P-001004\",\"id\":\"fplgvm9bmnb\"}",
+      "timestamp": 1788902666656
+    },
+    {
+      "id": "rg6gfepziu",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "pgd1q9pf7xk",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 1\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-P-001005\",\"id\":\"pgd1q9pf7xk\"}",
+      "timestamp": 1788902666657
+    },
+    {
+      "id": "wyktt1rv0so",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "wr61qwqgq8",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 2\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-P-001006\",\"id\":\"wr61qwqgq8\"}",
+      "timestamp": 1788902666658
+    },
+    {
+      "id": "cznqgpbkmx",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "x4gt8tfb30k",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 3\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-P-001007\",\"id\":\"x4gt8tfb30k\"}",
+      "timestamp": 1788902666659
+    },
+    {
+      "id": "tosbt4dc4pp",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "purchase_returns",
+      "entityId": "5f2sgp9gjfc",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 4\",\"date\":\"2026-09-08\",\"items\":[],\"invoiceNumber\":\"RTN-P-001008\",\"id\":\"5f2sgp9gjfc\"}",
+      "timestamp": 1788902666660
+    },
+    {
+      "id": "m1xz7ndool",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sales_invoices",
+      "entityId": "gz50w4nwc8",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 0\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"INV-001000\",\"id\":\"gz50w4nwc8\",\"items\":[]}",
+      "timestamp": 1788902671153
+    },
+    {
+      "id": "ureyuvsiq6m",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sales_invoices",
+      "entityId": "jwcdcq2xg9e",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 1\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"INV-001001\",\"id\":\"jwcdcq2xg9e\",\"items\":[]}",
+      "timestamp": 1788902671153
+    },
+    {
+      "id": "trt2epasej",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sales_invoices",
+      "entityId": "l9gz67ho5s",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 2\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"INV-001002\",\"id\":\"l9gz67ho5s\",\"items\":[]}",
+      "timestamp": 1788902671153
+    },
+    {
+      "id": "rgq3jr9zb9k",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sales_invoices",
+      "entityId": "sqghc2i0o4s",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 3\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"INV-001003\",\"id\":\"sqghc2i0o4s\",\"items\":[]}",
+      "timestamp": 1788902671153
+    },
+    {
+      "id": "kxf5p27ndxq",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sales_invoices",
+      "entityId": "1o9pno3aket",
+      "changes": "{\"type\":\"sale\",\"title\":\"تست همزمان فاکتور فروش 4\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"INV-001004\",\"id\":\"1o9pno3aket\",\"items\":[]}",
+      "timestamp": 1788902671153
+    },
+    {
+      "id": "cp1a2m5vgyr",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_invoices",
+      "entityId": "kk9mxpoi0m",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 0\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"PUR-001000\",\"id\":\"kk9mxpoi0m\",\"items\":[]}",
+      "timestamp": 1788902671166
+    },
+    {
+      "id": "5elqn1ex68h",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_invoices",
+      "entityId": "jxewbrmpsr",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 1\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"PUR-001001\",\"id\":\"jxewbrmpsr\",\"items\":[]}",
+      "timestamp": 1788902671166
+    },
+    {
+      "id": "zsb82ak6gn",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_invoices",
+      "entityId": "rn16xin365",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 2\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"PUR-001002\",\"id\":\"rn16xin365\",\"items\":[]}",
+      "timestamp": 1788902671166
+    },
+    {
+      "id": "0jf2r8s1f8fi",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_invoices",
+      "entityId": "s40c43g4fe",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 3\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"PUR-001003\",\"id\":\"s40c43g4fe\",\"items\":[]}",
+      "timestamp": 1788902671166
+    },
+    {
+      "id": "wk7ivdlouw",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_invoices",
+      "entityId": "xp4ix79j6s",
+      "changes": "{\"type\":\"purchase\",\"title\":\"تست همزمان فاکتور خرید 4\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"PUR-001004\",\"id\":\"xp4ix79j6s\",\"items\":[]}",
+      "timestamp": 1788902671166
+    },
+    {
+      "id": "2etbagprfyb",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "lc754yejq1m",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان برگشت از فروش 0\",\"invoiceNumber\":\"RTN-S-001000\",\"id\":\"lc754yejq1m\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "ds5ydi9v8va",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "jjqmyc53vw",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان برگشت از فروش 1\",\"invoiceNumber\":\"RTN-S-001001\",\"id\":\"jjqmyc53vw\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "ojpdb51siif",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "5lqgr2z95z6",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان برگشت از فروش 2\",\"invoiceNumber\":\"RTN-S-001002\",\"id\":\"5lqgr2z95z6\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "i91kvokpoy9",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "sxh7enxip2g",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان برگشت از فروش 3\",\"invoiceNumber\":\"RTN-S-001003\",\"id\":\"sxh7enxip2g\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "69qxsa8apzg",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "qv8tgwj8x6o",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 0\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-S-001004\",\"id\":\"qv8tgwj8x6o\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "3mu1dvh2f45",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "8z87ps329ah",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 1\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-S-001005\",\"id\":\"8z87ps329ah\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "m7jhn6qxwz",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "9ew69g38pew",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 2\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-S-001006\",\"id\":\"9ew69g38pew\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "w78kd75hqg",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "ovsxvfaoxmn",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 3\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-S-001007\",\"id\":\"ovsxvfaoxmn\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "emgzkzolst",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "sale_returns",
+      "entityId": "gig19ghjt1q",
+      "changes": "{\"type\":\"sale_return\",\"title\":\"تست همزمان فاکتور برگشت از فروش 4\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-S-001008\",\"id\":\"gig19ghjt1q\",\"items\":[]}",
+      "timestamp": 1788902671178
+    },
+    {
+      "id": "0w83eozz7o3g",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "375b9mo2vu",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان برگشت از خرید 0\",\"invoiceNumber\":\"RTN-P-001000\",\"id\":\"375b9mo2vu\",\"items\":[]}",
+      "timestamp": 1788902671187
+    },
+    {
+      "id": "gv6qrdgbqp",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "jjgr74845cn",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان برگشت از خرید 1\",\"invoiceNumber\":\"RTN-P-001001\",\"id\":\"jjgr74845cn\",\"items\":[]}",
+      "timestamp": 1788902671187
+    },
+    {
+      "id": "y8w496pbo7j",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "rbssf14xlc",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان برگشت از خرید 2\",\"invoiceNumber\":\"RTN-P-001002\",\"id\":\"rbssf14xlc\",\"items\":[]}",
+      "timestamp": 1788902671187
+    },
+    {
+      "id": "ux5t7pta1vn",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "edtil45i5ev",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان برگشت از خرید 3\",\"invoiceNumber\":\"RTN-P-001003\",\"id\":\"edtil45i5ev\",\"items\":[]}",
+      "timestamp": 1788902671187
+    },
+    {
+      "id": "mcan05n2fhd",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "fplgvm9bmnb",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 0\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-P-001004\",\"id\":\"fplgvm9bmnb\",\"items\":[]}",
+      "timestamp": 1788902671187
+    },
+    {
+      "id": "mzizlm0gew7",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "pgd1q9pf7xk",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 1\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-P-001005\",\"id\":\"pgd1q9pf7xk\",\"items\":[]}",
+      "timestamp": 1788902671187
+    },
+    {
+      "id": "okur4qqw4w",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "wr61qwqgq8",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 2\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-P-001006\",\"id\":\"wr61qwqgq8\",\"items\":[]}",
+      "timestamp": 1788902671187
+    },
+    {
+      "id": "pftyfxnjqxq",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "x4gt8tfb30k",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 3\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-P-001007\",\"id\":\"x4gt8tfb30k\",\"items\":[]}",
+      "timestamp": 1788902671187
+    },
+    {
+      "id": "6v68j7qgp5w",
+      "action": "DELETE",
+      "userId": "system",
+      "details": "حذف رکورد",
+      "entityType": "purchase_returns",
+      "entityId": "5f2sgp9gjfc",
+      "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 4\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-P-001008\",\"id\":\"5f2sgp9gjfc\",\"items\":[]}",
+      "timestamp": 1788902671187
     }
   ],
   "person_roles": [
@@ -957,7 +1517,11 @@
     "calendarType": "jalali"
   },
   "doc_counters": {
-    "person": 300002
+    "person": 300002,
+    "sale_return": 1008,
+    "purchase_return": 1008,
+    "sale": 1004,
+    "purchase": 1004
   },
   "financial_years": [
     {
@@ -1395,5 +1959,13 @@
       "id": "test1",
       "contractNumber": "123"
     }
-  ]
+  ],
+  "sale_return_items": [],
+  "sale_returns": [],
+  "purchase_return_items": [],
+  "purchase_returns": [],
+  "sales_invoice_items": [],
+  "sales_invoices": [],
+  "purchase_invoice_items": [],
+  "purchase_invoices": []
 }

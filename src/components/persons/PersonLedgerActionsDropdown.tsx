@@ -21,6 +21,8 @@ function PersonLedgerActionsDropdown({
   fetchTransactions,
   fetchAccountingDocuments,
   fetchPersons,
+  setPrintPaperSize,
+  printPaperSize = 'A4',
 }: any) {
   const [isOpen, setIsOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -34,6 +36,37 @@ function PersonLedgerActionsDropdown({
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  const handlePrint = (size: 'A4' | 'A5') => {
+    setIsOpen(false);
+    if (setPrintPaperSize) setPrintPaperSize(size);
+    setPrintingPersonLedger(true);
+    setTimeout(() => {
+      window.print();
+    }, 400);
+  };
+
+  const handleDownloadPdf = (size: 'A4' | 'A5') => {
+    setIsOpen(false);
+    if (setPrintPaperSize) setPrintPaperSize(size);
+    setPrintingPersonLedger(true);
+    setTimeout(() => {
+      const element = document.getElementById("person-ledger-printable-content") || document.getElementById("person-ledger-printable-area");
+      if (!element) {
+        setPrintingPersonLedger(false);
+        return;
+      }
+      const person = (persons || []).find((p: any) => p?.id?.toString() === ledgerPersonId?.toString());
+      const opt = {
+        margin: size === 'A5' ? 4 : 7,
+        filename: `کارت_حساب_${person?.name || "شخص"}_${size}.pdf`,
+        image: { type: "jpeg" as const, quality: 0.98 },
+        html2canvas: { scale: 2, useCORS: true, logging: false },
+        jsPDF: { unit: "mm" as const, format: size.toLowerCase() as any, orientation: "portrait" as const },
+      };
+      html2pdf().set(opt).from(element).save();
+    }, 400);
+  };
 
   if (!ledgerPersonId) return null;
 
@@ -147,46 +180,46 @@ function PersonLedgerActionsDropdown({
               ارسال پیامک مانده حساب
             </button>
             
-            <div className="text-xs font-bold text-slate-400 px-3 pb-2 pt-2 border-b border-t border-slate-50 my-1">گزارش‌گیری</div>
+            <div className="text-xs font-bold text-slate-400 px-3 pb-2 pt-2 border-b border-t border-slate-50 my-1">گزارش‌گیری و چاپ</div>
             <button
-              onClick={() => {
-                setIsOpen(false);
-                setPrintingPersonLedger(true);
-                setTimeout(() => {
-                  window.print();
-                  setTimeout(() => setPrintingPersonLedger(false), 500);
-                }, 300);
-              }}
-              className="w-full text-right px-3 py-2 text-sm rounded-xl hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 font-semibold flex items-center gap-2 transition-colors"
+              onClick={() => handlePrint('A4')}
+              className="w-full text-right px-3 py-2 text-xs rounded-xl hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 font-bold flex items-center justify-between transition-colors"
             >
-              <div className="w-6 h-6 rounded-md bg-indigo-100 flex items-center justify-center"><Printer className="w-3.5 h-3.5 text-indigo-600" /></div> 
-              چاپ کارت حساب
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-indigo-100 flex items-center justify-center"><Printer className="w-3.5 h-3.5 text-indigo-600" /></div> 
+                <span>چاپ کارت حساب (A4)</span>
+              </div>
+              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">استاندارد</span>
             </button>
             <button
-              onClick={() => {
-                setIsOpen(false);
-                setPrintingPersonLedger(true);
-                setTimeout(() => {
-                  const element = document.getElementById("person-ledger-printable-area");
-                  if (!element) {
-                    setPrintingPersonLedger(false);
-                    return;
-                  }
-                  const person = (persons || []).find((p: any) => p?.id?.toString() === ledgerPersonId?.toString());
-                  const opt = {
-                    margin: 10,
-                    filename: `صورتحساب_${person?.name || "شخص"}.pdf`,
-                    image: { type: "jpeg" as const, quality: 0.98 },
-                    html2canvas: { scale: 2, useCORS: true },
-                    jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
-                  };
-                  html2pdf().set(opt).from(element).save().then(() => setPrintingPersonLedger(false));
-                }, 300);
-              }}
-              className="w-full text-right px-3 py-2 text-sm rounded-xl hover:bg-sky-50 text-slate-700 hover:text-sky-700 font-semibold flex items-center gap-2 transition-colors"
+              onClick={() => handlePrint('A5')}
+              className="w-full text-right px-3 py-2 text-xs rounded-xl hover:bg-violet-50 text-slate-700 hover:text-violet-700 font-bold flex items-center justify-between transition-colors"
             >
-              <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center"><Download className="w-3.5 h-3.5 text-sky-600" /></div> 
-              دانلود PDF
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-violet-100 flex items-center justify-center"><Printer className="w-3.5 h-3.5 text-violet-600" /></div> 
+                <span>چاپ کارت حساب (A5)</span>
+              </div>
+              <span className="text-[10px] bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded font-mono">فشرده</span>
+            </button>
+            <button
+              onClick={() => handleDownloadPdf('A4')}
+              className="w-full text-right px-3 py-2 text-xs rounded-xl hover:bg-sky-50 text-slate-700 hover:text-sky-700 font-bold flex items-center justify-between transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center"><Download className="w-3.5 h-3.5 text-sky-600" /></div> 
+                <span>دانلود PDF (A4)</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">PDF</span>
+            </button>
+            <button
+              onClick={() => handleDownloadPdf('A5')}
+              className="w-full text-right px-3 py-2 text-xs rounded-xl hover:bg-sky-50 text-slate-700 hover:text-sky-700 font-bold flex items-center justify-between transition-colors"
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-md bg-sky-100 flex items-center justify-center"><Download className="w-3.5 h-3.5 text-sky-600" /></div> 
+                <span>دانلود PDF (A5)</span>
+              </div>
+              <span className="text-[10px] text-slate-400 font-mono">PDF</span>
             </button>
             <button
               onClick={async () => {
