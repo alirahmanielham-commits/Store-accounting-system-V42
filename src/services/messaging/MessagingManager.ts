@@ -18,25 +18,29 @@ export class MessagingManager {
     this.providers = [];
 
     for (const config of dbConfigurations) {
-      if (!config.isEnabled) continue;
+      const isEnabled = config.isEnabled !== undefined ? config.isEnabled : (config.isActive !== undefined ? config.isActive : true);
+      if (!isEnabled) continue;
 
       let provider: MessageProvider | null = null;
       
       try {
-        const parsedConfig = typeof config.config === 'string' ? JSON.parse(config.config) : (config.config || {});
+        const parsedConfig = typeof config.config === 'string' ? JSON.parse(config.config) : (config.config || config.metadata || {});
+        const type = config.type || config.channelType;
+        const priority = config.priority !== undefined ? config.priority : (type === 'gsm' ? 1 : 99);
         
-        switch (config.type) {
+        switch (type) {
           case 'sms_panel':
-            provider = new InternetSmsProvider(config.id, config.priority, parsedConfig);
+          case 'sms':
+            provider = new InternetSmsProvider(config.id, priority, parsedConfig);
             break;
           case 'telegram':
-            provider = new TelegramProvider(config.id, config.priority, parsedConfig);
+            provider = new TelegramProvider(config.id, priority, parsedConfig);
             break;
           case 'whatsapp':
-            provider = new WhatsAppProvider(config.id, config.priority, parsedConfig);
+            provider = new WhatsAppProvider(config.id, priority, parsedConfig);
             break;
           case 'gsm':
-            provider = new GsmModemProvider(config.id, config.priority, parsedConfig);
+            provider = new GsmModemProvider(config.id, priority, parsedConfig);
             break;
         }
 
@@ -48,8 +52,12 @@ export class MessagingManager {
       }
     }
 
-    // Sort providers by highest priority first (higher number = higher priority, or lower number = higher priority)
-    // Let's assume lower number = higher priority (e.g., Priority 1 is first)
+    // If no provider is loaded or enabled, default to active GSM USB Provider
+    if (this.providers.length === 0) {
+      this.providers.push(new GsmModemProvider('default-gsm-usb', 1, { port: 'Web Serial', baudRate: 115200 }));
+    }
+
+    // Sort providers by highest priority first (lower number = higher priority)
     this.providers.sort((a, b) => a.priority - b.priority);
   }
 

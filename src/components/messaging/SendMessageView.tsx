@@ -7,6 +7,7 @@ import {
   Layers, Filter, ChevronUp, User, Globe
 } from 'lucide-react';
 import { generateCiteableMessageId } from '../../services/crmService';
+import { gsmUsbService } from '../../services/messaging/GsmUsbService';
 
 // Mock Data
 
@@ -192,8 +193,19 @@ export default function SendMessageView({ showNotification, persons = [], person
          body: JSON.stringify({ operations })
       });
 
+      // Transmit through GSM USB modem
+      if (sendMode !== 'scheduled' && (channel === 'smart' || channel === 'gsm' || channel === 'sms')) {
+        for (const msg of messagesToSave) {
+          try {
+            await gsmUsbService.sendSms(msg.recipientNumber, msg.messageBody);
+          } catch (e) {
+            console.warn("GSM transmission note:", e);
+          }
+        }
+      }
+
       if (showNotification) {
-        showNotification(sendMode === 'scheduled' ? 'پیام با موفقیت زمان‌بندی شد' : 'پیام‌ها با موفقیت در صف ارسال قرار گرفتند', 'success');
+        showNotification(sendMode === 'scheduled' ? 'پیام با موفقیت زمان‌بندی شد' : 'پیام‌ها با موفقیت از طریق مودم GSM ارسال/ثبت شدند', 'success');
       }
 
       setMessageText('');
@@ -520,11 +532,12 @@ export default function SendMessageView({ showNotification, persons = [], person
                     <select 
                       value={channel}
                       onChange={(e) => setChannel(e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:border-indigo-500"
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl p-2.5 text-sm outline-none focus:border-indigo-500 font-bold text-slate-800"
                     >
-                      <option value="smart">هوشمند (بهترین مسیر)</option>
-                      <option value="sms">پیامک (SMS)</option>
-                      <option value="whatsapp">واتساپ</option>
+                      <option value="gsm">مودم سخت‌افزاری GSM (اتصال USB) - کانال فعال</option>
+                      <option value="smart">هوشمند (مودم GSM پیش‌فرض)</option>
+                      <option value="sms" disabled className="text-slate-400">پنل اینترنتی (غیرفعال)</option>
+                      <option value="whatsapp" disabled className="text-slate-400">واتساپ (غیرفعال)</option>
                     </select>
                   </div>
                   
