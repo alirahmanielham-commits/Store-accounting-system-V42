@@ -253,9 +253,16 @@ export default function ExtraModals(props: any) {
           accounts={accounts}
           cashboxes={cashboxes}
           checkbooks={checkbooks}
+          invoices={invoices}
           storeSettings={storeSettings}
           showNotification={showNotification}
           confirmAction={confirmAction}
+          getPersonDisplayName={getPersonDisplayName}
+          formatCurrency={formatCurrency}
+          formatNumber={formatNumber}
+          toPersianDigits={toPersianDigits}
+          numToPersianWords={numToPersianWords}
+          formatDateDisplay={props.formatDateDisplay}
           onSave={async (data: any) => {
              if (props.handleSaveReceipt) {
                await props.handleSaveReceipt(data);

@@ -444,9 +444,83 @@ export const updateTransaction = async (id: string | number, updated: any) => {
   if (activeYear) updatedData.fiscalYearId = activeYear.id;
   try {
      const table = mapTransactionTypeToTable(updatedData.type);
+
+     // Balance Bank and Cashbox resources before and after transaction edit
+     try {
+       const allTxs = await getTransactions();
+       const oldTx = allTxs.find(t => String(t.id) === String(id));
+       const operations: any[] = [];
+
+       // Rollback old cash/bank balance effect
+       if (oldTx && oldTx.method !== 'check') {
+         const oldAmt = Number(oldTx.amount) || 0;
+         const oldResType = oldTx.resourceType || (oldTx.accountId ? 'bank' : oldTx.cashboxId ? 'cashbox' : '');
+         const oldResId = oldTx.resourceId || oldTx.accountId || oldTx.cashboxId;
+
+         if (oldResType === 'bank' && oldResId) {
+           const accounts = await getLocalData<any[]>('accounts', []);
+           const idx = accounts.findIndex(a => String(a.id) === String(oldResId));
+           if (idx !== -1) {
+             let bal = Number(accounts[idx].balance) || 0;
+             bal = oldTx.type === 'receive' ? bal - oldAmt : bal + oldAmt;
+             operations.push({ type: 'update', key: 'accounts', id: accounts[idx].id, data: { balance: bal } });
+           }
+         } else if (oldResType === 'cashbox' && oldResId) {
+           const cashboxes = await getLocalData<any[]>('cashboxes', []);
+           const idx = cashboxes.findIndex(c => String(c.id) === String(oldResId));
+           if (idx !== -1) {
+             let bal = Number(cashboxes[idx].balance) || 0;
+             bal = oldTx.type === 'receive' ? bal - oldAmt : bal + oldAmt;
+             operations.push({ type: 'update', key: 'cashboxes', id: cashboxes[idx].id, data: { balance: bal } });
+           }
+         }
+       }
+
+       // Apply new cash/bank balance effect
+       if (updatedData.method !== 'check') {
+         const newAmt = Number(updatedData.amount) || 0;
+         const newResType = updatedData.resourceType || (updatedData.accountId ? 'bank' : updatedData.cashboxId ? 'cashbox' : '');
+         const newResId = updatedData.resourceId || updatedData.accountId || updatedData.cashboxId;
+
+         if (newResType === 'bank' && newResId) {
+           const accounts = await getLocalData<any[]>('accounts', []);
+           const idx = accounts.findIndex(a => String(a.id) === String(newResId));
+           if (idx !== -1) {
+             const existingOp = operations.find(o => o.key === 'accounts' && String(o.id) === String(newResId));
+             let bal = existingOp ? Number(existingOp.data.balance) : (Number(accounts[idx].balance) || 0);
+             bal = updatedData.type === 'receive' ? bal + newAmt : bal - newAmt;
+             if (existingOp) {
+               existingOp.data.balance = bal;
+             } else {
+               operations.push({ type: 'update', key: 'accounts', id: accounts[idx].id, data: { balance: bal } });
+             }
+           }
+         } else if (newResType === 'cashbox' && newResId) {
+           const cashboxes = await getLocalData<any[]>('cashboxes', []);
+           const idx = cashboxes.findIndex(c => String(c.id) === String(newResId));
+           if (idx !== -1) {
+             const existingOp = operations.find(o => o.key === 'cashboxes' && String(o.id) === String(newResId));
+             let bal = existingOp ? Number(existingOp.data.balance) : (Number(cashboxes[idx].balance) || 0);
+             bal = updatedData.type === 'receive' ? bal + newAmt : bal - newAmt;
+             if (existingOp) {
+               existingOp.data.balance = bal;
+             } else {
+               operations.push({ type: 'update', key: 'cashboxes', id: cashboxes[idx].id, data: { balance: bal } });
+             }
+           }
+         }
+       }
+
+       if (operations.length > 0) {
+         await batchLocalData(operations);
+       }
+     } catch (err) {
+       console.error("Error balancing bank/cashbox on updateTransaction:", err);
+     }
+
      const newTx = await updateLocalData(table, id, updatedData);
      if (typeof addSystemLog !== 'undefined') {
-       await addSystemLog('UPDATE_' + 'Transaction'.toUpperCase(), `ویرایش رکورد در ${table}`, 'Transaction', newTx.id);
+       await addSystemLog('UPDATE_' + 'Transaction'.toUpperCase(), `ویرایش رسید / سند در ${table}`, 'Transaction', newTx.id);
      }
 
      // Auto-update corresponding accounting document
@@ -454,7 +528,7 @@ export const updateTransaction = async (id: string | number, updated: any) => {
        const accountingDocs = await getAccountingDocuments();
        const existingDoc = accountingDocs.find((d: any) => (d.sourceType === 'receipt' || d.sourceType === 'payment') && String(d.sourceId) === String(id));
        
-       if (existingDoc) {
+       if (true) {
          const ledgerAccounts = await getLedgerAccounts();
          const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
 
@@ -661,11 +735,33 @@ export const updateTransaction = async (id: string | number, updated: any) => {
                    ledgerAccountId: resourceLedgerId});
              }
          }
-         await updateAccountingDocument(existingDoc.id, {
-            ...existingDoc,
-            date: updated.date || existingDoc.date,
-            description: docDescription,
-            items});
+         if (existingDoc && updated.recreateAccountingDoc) {
+            await deleteAccountingDocument(existingDoc.id);
+            await addAccountingDocument({
+               sourceId: newTx.id,
+               sourceType: updated.type === 'receive' ? 'receipt' : 'payment',
+               date: updated.date || new Date().toISOString(),
+               description: docDescription,
+               items,
+               status: 'approved'
+            });
+         } else if (existingDoc) {
+            await updateAccountingDocument(existingDoc.id, {
+               ...existingDoc,
+               date: updated.date || existingDoc.date,
+               description: docDescription,
+               items
+            });
+         } else {
+            await addAccountingDocument({
+               sourceId: newTx.id,
+               sourceType: updated.type === 'receive' ? 'receipt' : 'payment',
+               date: updated.date || new Date().toISOString(),
+               description: docDescription,
+               items,
+               status: 'approved'
+            });
+         }
        }
      } catch (e) {
        console.error("Failed to update auto accounting doc for transaction:", e);

@@ -5,6 +5,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { Loan, Installment, Account, Cashbox } from '../../types';
 import { useReactToPrint } from 'react-to-print';
 import { getAccounts, getCashboxes } from '../../services/dataService';
+import { queueSystemSms } from '../../services/crmService';
+import { renderSmsTemplate } from '../../utils/smsTemplateRenderer';
 
 interface Props {
   loans: Loan[];
@@ -150,6 +152,39 @@ export default function LoansPayment({ loans, installments, persons, formatCurre
       }
 
       showNotification('قسط با موفقیت پرداخت شد.', 'success');
+
+      // SMS Notification if notify_on_installment is enabled
+      const shouldSendSms = storeSettings?.notify_on_installment !== false && storeSettings?.notify_method && storeSettings.notify_method !== 'none';
+      if (shouldSendSms && selectedLoan) {
+        const borrower = persons.find(p => String(p.id) === String(selectedLoan.personId));
+        if (borrower && (borrower.phone || borrower.mobile)) {
+          const pPhone = String(borrower.phone || borrower.mobile).trim();
+          const amtStr = formatCurrency(selectedInst.amount);
+          const loanNum = selectedLoan.loanNumber || selectedLoan.id;
+          const defaultMsg = `${borrower.name} گرامی، قسط شماره ${selectedInst.installmentNumber} وام ${loanNum} به مبلغ ${amtStr} در تاریخ ${today} با موفقیت دریافت و تسویه شد.`;
+          const msg = storeSettings?.smsTemplateInstallment
+            ? renderSmsTemplate(storeSettings.smsTemplateInstallment, {
+                name: borrower.name,
+                phone: pPhone,
+                installment_number: selectedInst.installmentNumber,
+                loan_number: loanNum,
+                amount: amtStr,
+                date: today,
+                currency: storeSettings?.currency || 'تومان',
+                store_name: storeSettings?.store_name || '',
+              })
+            : defaultMsg;
+          queueSystemSms({
+            recipientName: borrower.name,
+            recipientNumber: pPhone,
+            recipientId: borrower.id,
+            messageBody: msg,
+            source: 'loan_installment',
+            status: 'sent',
+          }).catch(console.error);
+        }
+      }
+
       setIsModalOpen(false);
     } catch(err) {
       showNotification('خطا در پرداخت قسط', 'error');

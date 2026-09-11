@@ -1,4 +1,5 @@
 import { toPersianDigits, getDaysRemaining } from "./utils";
+import { renderSmsTemplate } from "../../../utils/smsTemplateRenderer";
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
@@ -208,11 +209,16 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
                               {sendNotification && payer?.phone && storeSettings?.smsTemplateCheck && (
                                 <button
                                   onClick={async () => {
-                                    let msg = storeSettings.smsTemplateCheck
-                                      .replace(/{name}/g, payer.name)
-                                      .replace(/{amount}/g, Number(c.amount).toLocaleString())
-                                      .replace(/{check_number}/g, c.checkNumber)
-                                      .replace(/{due_date}/g, c.dueDate);
+                                    let msg = renderSmsTemplate(storeSettings.smsTemplateCheck, {
+                                      name: payer.name,
+                                      phone: payer.phone,
+                                      amount: Number(c.amount).toLocaleString(),
+                                      currency: storeSettings?.currency || 'تومان',
+                                      check_number: c.checkNumber,
+                                      bank_name: c.bankName || '',
+                                      due_date: c.dueDate,
+                                      store_name: storeSettings?.store_name || '',
+                                    });
                                     await sendNotification(msg, payer.phone, storeSettings?.notify_method);
                                     if(showNotification) showNotification('پیامک یادآوری با موفقیت ارسال شد', 'success');
                                   }}

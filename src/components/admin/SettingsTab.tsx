@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
+import { SmsTemplateEditor } from './SmsTemplateEditor';
 
 export default function SettingsTab(props: any) {
   const {
@@ -35,6 +36,10 @@ export default function SettingsTab(props: any) {
     Store, DollarSign, FileText, CheckCircle, Smartphone, MapPin, Printer, Key, Mail, Building, Calculator, Plus, X, List, Hash, Tag, Activity, ArrowRight, ArrowLeft, Download
 
   } = lucide;
+
+  const [smsCategoryFilter, setSmsCategoryFilter] = useState<'all' | 'invoices' | 'treasury' | 'warehouse' | 'checks' | 'loans'>('all');
+  const [smsSearchQuery, setSmsSearchQuery] = useState('');
+
   return (
                   <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -1414,70 +1419,467 @@ export default function SettingsTab(props: any) {
                                 </div>
                               </div>
 
-                              <div className="border-t border-gray-100 pt-8">
-                                <h3 className="text-lg font-black text-gray-800 mb-6 flex items-center gap-2">
-                                  <CheckSquare className="w-5 h-5 text-indigo-500" />
-                                  رویدادهای خودکار اطلاع‌رسانی
-                                </h3>
-                                <div className="grid md:grid-cols-2 gap-4">
-                                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors shadow-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={
-                                        settingsForm.notify_on_invoice || false
-                                      }
-                                      onChange={(e) =>
-                                        setSettingsForm({
-                                          ...settingsForm,
-                                          notify_on_invoice: e.target.checked,
-                                        })
-                                      }
-                                      className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-gray-800 font-bold">
-                                      ارسال فاکتور خرید/فروش برای مشتری
-                                    </span>
-                                  </label>
+                              <div className="border-t border-gray-100 pt-8" id="sms-notification-triggers-section">
+                                <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
+                                  <div>
+                                    <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                                      <CheckSquare className="w-5 h-5 text-indigo-600" />
+                                      رویدادهای خودکار ارسال پیامک بر اساس بخش‌های سیستم
+                                    </h3>
+                                    <p className="text-xs text-gray-500 mt-1">
+                                      فعال یا غیرفعال‌سازی ارسال پیامک برای هر یک از بخش‌های ۱۲ گانه سیستم
+                                    </p>
+                                  </div>
 
-                                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors shadow-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={
-                                        settingsForm.notify_on_receipt || false
-                                      }
-                                      onChange={(e) =>
+                                  <div className="flex items-center gap-2 flex-wrap">
+                                    <button
+                                      type="button"
+                                      id="btn-enable-all-sms"
+                                      onClick={() => {
                                         setSettingsForm({
                                           ...settingsForm,
-                                          notify_on_receipt: e.target.checked,
-                                        })
-                                      }
-                                      className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-gray-800 font-bold">
-                                      ارسال رسید ثبت دریافتی / پرداختی
-                                    </span>
-                                  </label>
+                                          notify_on_purchase_invoice: true,
+                                          notify_on_sale_invoice: true,
+                                          notify_on_return_invoices: true,
+                                          notify_on_sale_return: true,
+                                          notify_on_purchase_return: true,
+                                          notify_on_receive: true,
+                                          notify_on_payment: true,
+                                          notify_on_warehouse_receipt: true,
+                                          notify_on_warehouse_remittance: true,
+                                          notify_on_invoice_due: true,
+                                          notify_on_receivable_check: true,
+                                          notify_on_payable_check: true,
+                                          notify_on_debtors: true,
+                                          notify_on_installment: true,
+                                          notify_on_invoice: true,
+                                          notify_on_receipt: true,
+                                          smsDebtThresholdEnabled: true,
+                                        });
+                                      }}
+                                      className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                                    >
+                                      <CheckCircle className="w-3.5 h-3.5" />
+                                      فعال‌سازی همه
+                                    </button>
 
-                                  <label className="flex items-center gap-3 p-4 border border-gray-200 rounded-xl hover:bg-gray-50 cursor-pointer transition-colors shadow-sm">
-                                    <input
-                                      type="checkbox"
-                                      checked={
-                                        settingsForm.notify_on_balance || false
-                                      }
-                                      onChange={(e) =>
+                                    <button
+                                      type="button"
+                                      id="btn-disable-all-sms"
+                                      onClick={() => {
                                         setSettingsForm({
                                           ...settingsForm,
-                                          notify_on_balance: e.target.checked,
-                                        })
-                                      }
-                                      className="w-5 h-5 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
-                                    />
-                                    <span className="text-gray-800 font-bold">
-                                      گزارش مانده حساب (پس از هر تراکنش)
-                                    </span>
-                                  </label>
+                                          notify_on_purchase_invoice: false,
+                                          notify_on_sale_invoice: false,
+                                          notify_on_return_invoices: false,
+                                          notify_on_sale_return: false,
+                                          notify_on_purchase_return: false,
+                                          notify_on_receive: false,
+                                          notify_on_payment: false,
+                                          notify_on_warehouse_receipt: false,
+                                          notify_on_warehouse_remittance: false,
+                                          notify_on_invoice_due: false,
+                                          notify_on_receivable_check: false,
+                                          notify_on_payable_check: false,
+                                          notify_on_debtors: false,
+                                          notify_on_installment: false,
+                                          notify_on_invoice: false,
+                                          notify_on_receipt: false,
+                                        });
+                                      }}
+                                      className="px-3 py-1.5 bg-gray-100 text-gray-700 hover:bg-gray-200 border border-gray-200 rounded-lg text-xs font-bold transition flex items-center gap-1.5 shadow-sm"
+                                    >
+                                      <X className="w-3.5 h-3.5" />
+                                      غیرفعال‌سازی همه
+                                    </button>
+                                  </div>
                                 </div>
+
+                                {(() => {
+                                  const allNotificationItems = [
+                                    {
+                                      id: 'notify_on_purchase_invoice',
+                                      title: 'فاکتور خرید',
+                                      category: 'invoices',
+                                      categoryLabel: 'فاکتورها',
+                                      desc: 'ارسال خودکار پیامک هنگام ثبت، تایید یا ویرایش فاکتور خرید اقلام به طرف حساب یا مدیر سیستم.',
+                                      icon: lucide.ShoppingBag || FileText,
+                                      colorClass: 'from-amber-500 to-orange-600',
+                                      badgeClass: 'bg-amber-50 text-amber-700 border-amber-200',
+                                      checked: !!settingsForm.notify_on_purchase_invoice,
+                                      toggle: () => {
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_purchase_invoice: !settingsForm.notify_on_purchase_invoice,
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_sale_invoice',
+                                      title: 'فاکتور فروش',
+                                      category: 'invoices',
+                                      categoryLabel: 'فاکتورها',
+                                      desc: 'ارسال خودکار پیامک صورتحساب شامل شماره فاکتور، مبلغ کل و لینک مشاهده به خریدار.',
+                                      icon: lucide.FileText || FileText,
+                                      colorClass: 'from-blue-500 to-indigo-600',
+                                      badgeClass: 'bg-blue-50 text-blue-700 border-blue-200',
+                                      checked: settingsForm.notify_on_sale_invoice !== undefined ? !!settingsForm.notify_on_sale_invoice : (settingsForm.notify_on_invoice !== undefined ? !!settingsForm.notify_on_invoice : true),
+                                      toggle: () => {
+                                        const nextVal = !(settingsForm.notify_on_sale_invoice !== undefined ? settingsForm.notify_on_sale_invoice : true);
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_sale_invoice: nextVal,
+                                          notify_on_invoice: nextVal,
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_return_invoices',
+                                      title: 'فاکتور برگشت از خرید و برگشت از فروش',
+                                      category: 'invoices',
+                                      categoryLabel: 'فاکتورها',
+                                      desc: 'ارسال پیامک تایید مرجوعی کالا در برگشت از فروش برای خریدار و برگشت از خرید برای تأمین‌کننده.',
+                                      icon: lucide.RotateCcw || Activity,
+                                      colorClass: 'from-rose-500 to-pink-600',
+                                      badgeClass: 'bg-rose-50 text-rose-700 border-rose-200',
+                                      checked: !!settingsForm.notify_on_return_invoices,
+                                      toggle: () => {
+                                        const nextVal = !settingsForm.notify_on_return_invoices;
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_return_invoices: nextVal,
+                                          notify_on_sale_return: nextVal,
+                                          notify_on_purchase_return: nextVal,
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_receive',
+                                      title: 'دریافت',
+                                      category: 'treasury',
+                                      categoryLabel: 'خزانه‌داری و مالی',
+                                      desc: 'ارسال پیامک تایید رسید دریافت وجه نقد، حواله بانکی یا تراکنش پوز به پرداخت‌کننده وجه.',
+                                      icon: lucide.ArrowDownLeft || ArrowRight,
+                                      colorClass: 'from-emerald-500 to-teal-600',
+                                      badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-200',
+                                      checked: settingsForm.notify_on_receive !== undefined ? !!settingsForm.notify_on_receive : (settingsForm.notify_on_receipt !== undefined ? !!settingsForm.notify_on_receipt : true),
+                                      toggle: () => {
+                                        const nextVal = !(settingsForm.notify_on_receive !== undefined ? settingsForm.notify_on_receive : true);
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_receive: nextVal,
+                                          notify_on_receipt: nextVal,
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_payment',
+                                      title: 'پرداخت',
+                                      category: 'treasury',
+                                      categoryLabel: 'خزانه‌داری و مالی',
+                                      desc: 'ارسال پیامک رسید پرداخت وجه، تسویه بدهی یا صدور سند پرداختی به دریافت‌کننده وجه.',
+                                      icon: lucide.ArrowUpRight || ArrowLeft,
+                                      colorClass: 'from-violet-500 to-purple-600',
+                                      badgeClass: 'bg-violet-50 text-violet-700 border-violet-200',
+                                      checked: settingsForm.notify_on_payment !== undefined ? !!settingsForm.notify_on_payment : (settingsForm.notify_on_receipt !== undefined ? !!settingsForm.notify_on_receipt : true),
+                                      toggle: () => {
+                                        const nextVal = !(settingsForm.notify_on_payment !== undefined ? settingsForm.notify_on_payment : true);
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_payment: nextVal,
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_warehouse_receipt',
+                                      title: 'رسید ورود به انبار',
+                                      category: 'warehouse',
+                                      categoryLabel: 'انبارداری و کالا',
+                                      desc: 'ارسال پیامک تایید ثبت ورود کالا به انبار به انباردار، مدیر بازرگانی یا تحویل‌دهنده کالا.',
+                                      icon: lucide.PackagePlus || Box,
+                                      colorClass: 'from-cyan-500 to-blue-600',
+                                      badgeClass: 'bg-cyan-50 text-cyan-700 border-cyan-200',
+                                      checked: !!settingsForm.notify_on_warehouse_receipt,
+                                      toggle: () => {
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_warehouse_receipt: !settingsForm.notify_on_warehouse_receipt,
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_warehouse_remittance',
+                                      title: 'رسید خروج',
+                                      category: 'warehouse',
+                                      categoryLabel: 'انبارداری و کالا',
+                                      desc: 'ارسال پیامک صدور حواله خروج کالا و تحویل بار به تحویل‌گیرنده کالا یا راننده حمل بار.',
+                                      icon: lucide.Truck || Box,
+                                      colorClass: 'from-sky-500 to-indigo-600',
+                                      badgeClass: 'bg-sky-50 text-sky-700 border-sky-200',
+                                      checked: !!settingsForm.notify_on_warehouse_remittance,
+                                      toggle: () => {
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_warehouse_remittance: !settingsForm.notify_on_warehouse_remittance,
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_invoice_due',
+                                      title: 'سررسید فاکتور',
+                                      category: 'invoices',
+                                      categoryLabel: 'فاکتورها',
+                                      desc: 'ارسال پیامک یادآوری موعد تسویه فاکتورهای نسیه و مهلت‌دار به مشتریان قبل یا در روز سررسید.',
+                                      icon: lucide.CalendarClock || Activity,
+                                      colorClass: 'from-orange-500 to-amber-600',
+                                      badgeClass: 'bg-orange-50 text-orange-700 border-orange-200',
+                                      checked: settingsForm.notify_on_invoice_due !== undefined ? !!settingsForm.notify_on_invoice_due : true,
+                                      toggle: () => {
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_invoice_due: !(settingsForm.notify_on_invoice_due !== undefined ? settingsForm.notify_on_invoice_due : true),
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_receivable_check',
+                                      title: 'چک دریافتنی',
+                                      category: 'checks',
+                                      categoryLabel: 'اسناد تجاری و چک',
+                                      desc: 'ارسال پیامک تایید ثبت چک دریافتی و یادآوری موعد سررسید وصول چک صیادی به مشتری و خزانه‌دار.',
+                                      icon: lucide.CheckCircle2 || CheckCircle,
+                                      colorClass: 'from-teal-500 to-emerald-600',
+                                      badgeClass: 'bg-teal-50 text-teal-700 border-teal-200',
+                                      checked: settingsForm.notify_on_receivable_check !== undefined ? !!settingsForm.notify_on_receivable_check : true,
+                                      toggle: () => {
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_receivable_check: !(settingsForm.notify_on_receivable_check !== undefined ? settingsForm.notify_on_receivable_check : true),
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_payable_check',
+                                      title: 'چک پرداختنی',
+                                      category: 'checks',
+                                      categoryLabel: 'اسناد تجاری و چک',
+                                      desc: 'ارسال پیامک صدور چک و هشدار موعد سررسید پاس شدن چک‌های صادره به مدیر جهت تامین موجودی حساب.',
+                                      icon: lucide.CreditCard || DollarSign,
+                                      colorClass: 'from-indigo-500 to-purple-600',
+                                      badgeClass: 'bg-indigo-50 text-indigo-700 border-indigo-200',
+                                      checked: settingsForm.notify_on_payable_check !== undefined ? !!settingsForm.notify_on_payable_check : true,
+                                      toggle: () => {
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_payable_check: !(settingsForm.notify_on_payable_check !== undefined ? settingsForm.notify_on_payable_check : true),
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_debtors',
+                                      title: 'بدهکاران',
+                                      category: 'treasury',
+                                      categoryLabel: 'خزانه‌داری و مالی',
+                                      desc: 'ارسال خودکار پیامک هشدار عبور از سقف مجاز اعتبار و پیامک‌های دوره‌ای پیگیری مطالبات بدهکاران.',
+                                      icon: lucide.AlertTriangle || AlertTriangle,
+                                      colorClass: 'from-red-500 to-rose-600',
+                                      badgeClass: 'bg-red-50 text-red-700 border-red-200',
+                                      checked: settingsForm.notify_on_debtors !== undefined ? !!settingsForm.notify_on_debtors : (settingsForm.smsDebtThresholdEnabled !== undefined ? !!settingsForm.smsDebtThresholdEnabled : true),
+                                      toggle: () => {
+                                        const nextVal = !(settingsForm.notify_on_debtors !== undefined ? settingsForm.notify_on_debtors : true);
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_debtors: nextVal,
+                                          smsDebtThresholdEnabled: nextVal,
+                                        });
+                                      }
+                                    },
+                                    {
+                                      id: 'notify_on_installment',
+                                      title: 'قسط',
+                                      category: 'loans',
+                                      categoryLabel: 'اقساط و وام',
+                                      desc: 'ارسال پیامک تایید پرداخت هر قسط، پیامک یادآوری موعد سررسید اقساط و پیامک اخطار معوقات وام.',
+                                      icon: lucide.Coins || Calculator,
+                                      colorClass: 'from-amber-600 to-yellow-600',
+                                      badgeClass: 'bg-amber-50 text-amber-800 border-amber-200',
+                                      checked: settingsForm.notify_on_installment !== undefined ? !!settingsForm.notify_on_installment : true,
+                                      toggle: () => {
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          notify_on_installment: !(settingsForm.notify_on_installment !== undefined ? settingsForm.notify_on_installment : true),
+                                        });
+                                      }
+                                    },
+                                  ];
+
+                                  const filteredItems = allNotificationItems.filter(item => {
+                                    const matchesCategory = smsCategoryFilter === 'all' || item.category === smsCategoryFilter;
+                                    const matchesSearch = !smsSearchQuery.trim() || 
+                                      item.title.includes(smsSearchQuery.trim()) || 
+                                      item.desc.includes(smsSearchQuery.trim()) ||
+                                      item.categoryLabel.includes(smsSearchQuery.trim());
+                                    return matchesCategory && matchesSearch;
+                                  });
+
+                                  const activeCount = allNotificationItems.filter(it => it.checked).length;
+
+                                  return (
+                                    <div className="space-y-4">
+                                      {/* Filter Bar */}
+                                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 p-3 rounded-xl border border-gray-200">
+                                        <div className="flex items-center gap-1.5 flex-wrap">
+                                          {[
+                                            { id: 'all', label: `همه (${allNotificationItems.length})` },
+                                            { id: 'invoices', label: 'فاکتورها (۴)' },
+                                            { id: 'treasury', label: 'مالی و خزانه‌داری (۳)' },
+                                            { id: 'warehouse', label: 'انبارداری (۲)' },
+                                            { id: 'checks', label: 'اسناد و چک (۲)' },
+                                            { id: 'loans', label: 'اقساط (۱)' },
+                                          ].map(tab => (
+                                            <button
+                                              key={tab.id}
+                                              type="button"
+                                              onClick={() => setSmsCategoryFilter(tab.id as any)}
+                                              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                                                smsCategoryFilter === tab.id
+                                                  ? 'bg-indigo-600 text-white shadow-sm'
+                                                  : 'bg-white text-gray-600 hover:bg-gray-100 border border-gray-200'
+                                              }`}
+                                            >
+                                              {tab.label}
+                                            </button>
+                                          ))}
+                                        </div>
+
+                                        <div className="flex items-center gap-3">
+                                          <div className="text-xs font-bold text-gray-500">
+                                            {activeCount} بخش از {allNotificationItems.length} فعال
+                                          </div>
+                                          <div className="relative">
+                                            <input
+                                              type="text"
+                                              value={smsSearchQuery}
+                                              onChange={(e) => setSmsSearchQuery(e.target.value)}
+                                              placeholder="جستجوی بخش..."
+                                              className="text-xs px-3 py-1.5 pr-8 border border-gray-300 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:outline-none bg-white w-36 sm:w-44"
+                                            />
+                                            <lucide.Search className="w-3.5 h-3.5 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2" />
+                                          </div>
+                                        </div>
+                                      </div>
+
+                                      {/* Grid of 12 Section Cards */}
+                                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
+                                        {filteredItems.map(item => {
+                                          const IconComp = item.icon;
+                                          return (
+                                            <div
+                                              key={item.id}
+                                              id={`sms-card-${item.id}`}
+                                              onClick={item.toggle}
+                                              className={`relative p-4 rounded-xl border transition-all duration-200 cursor-pointer select-none flex flex-col justify-between ${
+                                                item.checked
+                                                  ? 'bg-white border-indigo-200 shadow-sm ring-1 ring-indigo-50 hover:shadow-md'
+                                                  : 'bg-gray-50/70 border-gray-200 opacity-80 hover:opacity-100 hover:bg-white'
+                                              }`}
+                                            >
+                                              <div>
+                                                {/* Top Row: Icon + Category + Switch */}
+                                                <div className="flex items-center justify-between gap-2 mb-3">
+                                                  <div className="flex items-center gap-2.5">
+                                                    <div className={`w-9 h-9 rounded-lg bg-gradient-to-tr ${item.colorClass} text-white flex items-center justify-center shadow-sm shrink-0`}>
+                                                      <IconComp className="w-4.5 h-4.5" />
+                                                    </div>
+                                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${item.badgeClass}`}>
+                                                      {item.categoryLabel}
+                                                    </span>
+                                                  </div>
+
+                                                  {/* iOS-style Toggle */}
+                                                  <div
+                                                    className={`w-11 h-6 rounded-full p-0.5 transition-colors duration-200 ease-in-out shrink-0 ${
+                                                      item.checked ? 'bg-indigo-600' : 'bg-gray-300'
+                                                    }`}
+                                                  >
+                                                    <div
+                                                      className={`bg-white w-5 h-5 rounded-full shadow-md transform transition-transform duration-200 ease-in-out ${
+                                                        item.checked ? '-translate-x-5' : 'translate-x-0'
+                                                      }`}
+                                                    />
+                                                  </div>
+                                                </div>
+
+                                                {/* Title */}
+                                                <h4 className="text-sm font-extrabold text-gray-900 mb-1.5 flex items-center gap-1.5">
+                                                  {item.title}
+                                                </h4>
+
+                                                {/* Description */}
+                                                <p className="text-xs text-gray-500 leading-relaxed min-h-[36px]">
+                                                  {item.desc}
+                                                </p>
+                                              </div>
+
+                                              {/* Bottom Status Indicator */}
+                                              <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+                                                <span className="text-[11px] text-gray-400">
+                                                  وضعیت ارسال:
+                                                </span>
+                                                <span className={`inline-flex items-center gap-1 text-xs font-bold ${
+                                                  item.checked ? 'text-emerald-600' : 'text-gray-400'
+                                                }`}>
+                                                  <span className={`w-2 h-2 rounded-full ${item.checked ? 'bg-emerald-500 animate-pulse' : 'bg-gray-300'}`} />
+                                                  {item.checked ? 'فعال (ارسال پیامک)' : 'غیرفعال'}
+                                                </span>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                      </div>
+
+                                      {/* Extra balance report option */}
+                                      <div className="p-3 bg-white border border-gray-200 rounded-xl flex items-center justify-between shadow-sm">
+                                        <div className="flex items-center gap-3">
+                                          <div className="w-8 h-8 rounded-lg bg-gray-100 text-gray-600 flex items-center justify-center">
+                                            <lucide.Wallet className="w-4 h-4" />
+                                          </div>
+                                          <div>
+                                            <span className="text-xs font-bold text-gray-800">
+                                              ارسال مانده حساب در متن پیامک‌ها
+                                            </span>
+                                            <p className="text-[11px] text-gray-500">
+                                              درج خودکار آخرین مانده حساب شخص در انتهای پیامک‌های صادره (بدهکار / بستانکار)
+                                            </p>
+                                          </div>
+                                        </div>
+                                        <label className="flex items-center gap-2 cursor-pointer">
+                                          <input
+                                            type="checkbox"
+                                            checked={settingsForm.notify_on_balance || false}
+                                            onChange={(e) =>
+                                              setSettingsForm({
+                                                ...settingsForm,
+                                                notify_on_balance: e.target.checked,
+                                              })
+                                            }
+                                            className="w-4 h-4 text-indigo-600 rounded border-gray-300 focus:ring-indigo-500"
+                                          />
+                                          <span className="text-xs font-bold text-gray-700">فعال</span>
+                                        </label>
+                                      </div>
+                                    </div>
+                                  );
+                                })()}
                               </div>
+
+                              {/* Advanced SMS Templates Editor with Dynamic Variables Dropdown */}
+                              <SmsTemplateEditor
+                                settingsForm={settingsForm}
+                                setSettingsForm={setSettingsForm}
+                                storeName={settingsForm.store_name}
+                                currency={settingsForm.currency}
+                              />
 
                               <div className="border-t border-gray-100 pt-8">
                                 <div className="flex items-center justify-between mb-6">

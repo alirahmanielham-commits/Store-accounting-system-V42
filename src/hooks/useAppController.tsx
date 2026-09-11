@@ -23,6 +23,7 @@ import DataReconciliation from "../components/DataReconciliation";
 import { useStore } from '../store';
 import React, { useState, useEffect, useMemo, useRef } from "react";
 import { globalDateFormatter } from "../utils/dateFormatter";
+import { renderSmsTemplate } from "../utils/smsTemplateRenderer";
 import { startAppProcessing, updateAppProcessing, stopAppProcessing } from "../utils/processingHelper";
 import { useLocation, useNavigate } from "react-router-dom";
 import ProductsTab from "../components/products/ProductsTab";
@@ -1805,6 +1806,21 @@ const [settingsForm, setSettingsForm] = useState<any>({
     print_signature_1: "",
     print_signature_2: "",
     print_signature_3: "",
+    // SMS Notification Toggles by section
+    notify_on_purchase_invoice: false,
+    notify_on_sale_invoice: true,
+    notify_on_return_invoices: false,
+    notify_on_sale_return: false,
+    notify_on_purchase_return: false,
+    notify_on_receive: true,
+    notify_on_payment: true,
+    notify_on_warehouse_receipt: false,
+    notify_on_warehouse_remittance: false,
+    notify_on_invoice_due: true,
+    notify_on_receivable_check: true,
+    notify_on_payable_check: true,
+    notify_on_debtors: true,
+    notify_on_installment: true,
   });
 
 const [submittingSettings, setSubmittingSettings] = useState(false);
@@ -2513,8 +2529,9 @@ const fetchAccountingDocuments = async () => {
   };
 
 const checkDebtThreshold = async (personId: string | number) => {
+    const isDebtorsSmsActive = (storeSettings?.notify_on_debtors ?? true) && (storeSettings?.smsDebtThresholdEnabled !== false);
     if (
-      !storeSettings?.smsDebtThresholdEnabled ||
+      !isDebtorsSmsActive ||
       storeSettings.smsDebtThresholdAmount === undefined ||
       !storeSettings?.notify_method ||
       storeSettings.notify_method === "none"
@@ -2955,32 +2972,66 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
             ? formatNumber(payload.amount)
             : payload.amount;
         const isRec = typeTmp === "receive";
+        const isCheck = payload.method === "check";
         const curStr = storeSettings?.currency || "تومان";
         const recNum = String(createdReceiptObj?.receiptNumber || payload.receiptNumber || "");
         const dateStr = formatDateDisplay(new Date(), storeSettings?.calendarType);
 
+        let shouldSend = false;
+        if (isCheck) {
+          shouldSend = isRec
+            ? !!(storeSettings?.notify_on_receivable_check ?? storeSettings?.notify_on_receive ?? storeSettings?.notify_on_receipt ?? true)
+            : !!(storeSettings?.notify_on_payable_check ?? storeSettings?.notify_on_payment ?? storeSettings?.notify_on_receipt ?? true);
+        } else {
+          shouldSend = isRec
+            ? !!(storeSettings?.notify_on_receive ?? storeSettings?.notify_on_receipt ?? true)
+            : !!(storeSettings?.notify_on_payment ?? storeSettings?.notify_on_receipt ?? true);
+        }
+
+        const templateVars = {
+          name: receiptPerson.name,
+          phone: pPhone,
+          amount: String(amt),
+          currency: curStr,
+          receipt_number: recNum,
+          date: dateStr,
+          check_number: payload.checkNumber || '',
+          bank_name: payload.checkBankName || '',
+          due_date: payload.checkDueDate || '',
+          store_name: storeSettings?.store_name || '',
+        };
+
         let msg = "";
         if (isRec) {
-          msg = `${receiptPerson.name} گرامی، رسید دریافت شماره ${recNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} با موفقیت در سیستم ثبت گردید. با تشکر.`;
-          if (storeSettings?.smsTemplateReceipt) {
-            msg = storeSettings.smsTemplateReceipt
-              .replace(/{name}/g, receiptPerson.name)
-              .replace(/{amount}/g, String(amt))
-              .replace(/{receipt_number}/g, recNum)
-              .replace(/{date}/g, dateStr);
+          if (isCheck) {
+            msg = storeSettings?.smsTemplateCheck
+              ? renderSmsTemplate(storeSettings.smsTemplateCheck, templateVars)
+              : `${receiptPerson.name} گرامی، چک دریافتی شماره ${payload.checkNumber || ''} عهده بانک ${payload.checkBankName || ''} به مبلغ ${amt} ${curStr} (سررسید ${payload.checkDueDate || ''}) در سیستم ثبت گردید. با تشکر.`;
+          } else {
+            msg = storeSettings?.smsTemplateReceipt
+              ? renderSmsTemplate(storeSettings.smsTemplateReceipt, templateVars)
+              : `${receiptPerson.name} گرامی، رسید دریافت شماره ${recNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} با موفقیت در سیستم ثبت گردید. با تشکر.`;
           }
         } else {
-          msg = `${receiptPerson.name} گرامی، رسید پرداخت شماره ${recNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت و به حساب شما منظور گردید.`;
+          if (isCheck) {
+            msg = storeSettings?.smsTemplatePayableCheck
+              ? renderSmsTemplate(storeSettings.smsTemplatePayableCheck, templateVars)
+              : `${receiptPerson.name} گرامی، چک صادره شماره ${payload.checkNumber || ''} به مبلغ ${amt} ${curStr} (سررسید ${payload.checkDueDate || ''}) در سیستم ثبت و صادر گردید.`;
+          } else {
+            msg = storeSettings?.smsTemplatePayment
+              ? renderSmsTemplate(storeSettings.smsTemplatePayment, templateVars)
+              : `${receiptPerson.name} گرامی، رسید پرداخت شماره ${recNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت و به حساب شما منظور گردید.`;
+          }
         }
 
         sendNotification(
           msg, 
           pPhone, 
-          storeSettings?.notify_on_receipt ? storeSettings?.notify_method : undefined,
+          shouldSend ? storeSettings?.notify_method : undefined,
           {
             recipientName: receiptPerson.name,
             recipientId: receiptPerson.id,
-            source: isRec ? "receipt" : "payment",
+            source: isCheck ? "cheque_alert" : (isRec ? "receipt" : "payment"),
           }
         );
       }
@@ -3033,15 +3084,15 @@ const handleSaveReceipt = async (updatedFields: any) => {
       await updateTransaction(editingReceipt.id, updatedFields);
 
       // Keep related checks in sync
-      if (editingReceipt.method === "check") {
-        const checkNum = editingReceipt.checkNumber;
-        const receiptNo = editingReceipt.receiptNumber;
-        if (editingReceipt.type === "receive") {
+      if (editingReceipt.method === "check" || updatedFields.method === "check") {
+        const checkNum = updatedFields.checkNumber || editingReceipt.checkNumber;
+        const receiptNo = updatedFields.receiptNumber || editingReceipt.receiptNumber;
+        if (editingReceipt.type === "receive" || updatedFields.type === "receive") {
           const matchedCheck = receivedChecks.find(
             (c) => c.receiptNumber === receiptNo || c.checkNumber === checkNum,
           );
           if (matchedCheck) {
-            await updateReceivedCheck(matchedCheck.id, {
+            const updatedCheckData = {
               ...matchedCheck,
               checkNumber:
                 updatedFields.checkNumber || matchedCheck.checkNumber,
@@ -3049,15 +3100,16 @@ const handleSaveReceipt = async (updatedFields: any) => {
               amount: updatedFields.amount || matchedCheck.amount,
               payerId: updatedFields.personId || matchedCheck.payerId,
               dueDate: updatedFields.checkDueDate || matchedCheck.dueDate,
-              receiveDate: updatedFields.jalaliDate || matchedCheck.receiveDate,
-            });
+              receiveDate: updatedFields.jalaliDate || updatedFields.date || matchedCheck.receiveDate,
+            };
+            await updateReceivedCheck(matchedCheck.id, updatedCheckData);
           }
         } else {
           const matchedCheck = issuedChecks.find(
             (c) => c.receiptNumber === receiptNo || c.checkNumber === checkNum,
           );
           if (matchedCheck) {
-            await updateIssuedCheck(matchedCheck.id, {
+            const updatedCheckData = {
               ...matchedCheck,
               checkNumber:
                 updatedFields.checkNumber || matchedCheck.checkNumber,
@@ -3066,17 +3118,28 @@ const handleSaveReceipt = async (updatedFields: any) => {
               amount: updatedFields.amount || matchedCheck.amount,
               payeeId: updatedFields.personId || matchedCheck.payeeId,
               dueDate: updatedFields.checkDueDate || matchedCheck.dueDate,
-              issueDate: updatedFields.jalaliDate || matchedCheck.issueDate,
-            });
+              issueDate: updatedFields.jalaliDate || updatedFields.date || matchedCheck.issueDate,
+            };
+            await updateIssuedCheck(matchedCheck.id, updatedCheckData);
           }
         }
       }
 
+      await Promise.all([
+        fetchTransactions(),
+        fetchAccounts(),
+        fetchCashboxes(),
+        fetchPersons(),
+        fetchInvoices(),
+        fetchAccountingDocuments(),
+        fetchChecks(),
+      ]);
+
       showNotification(
-        "تغییرات با موفقیت روی رسید ذخیره گردید و اسناد مربوطه بروز شدند.",
+        "تغییرات با موفقیت روی رسید ذخیره گردید و اسناد حسابداری مرتبط و مانده‌ها بازسازی و اصلاح شدند.",
         "success",
       );
-      checkDebtThreshold(editingReceipt.personId).catch(console.error);
+      checkDebtThreshold(updatedFields.personId || editingReceipt.personId).catch(console.error);
     } catch (err) {
       console.error(err);
       customAlert("خطا در بروزرسانی سند رسید.");
@@ -3558,6 +3621,20 @@ const fetchSettings = async () => {
           prefix_sale: savedData.prefix_sale ?? "INV-",
           prefix_receive_receipt: savedData.prefix_receive_receipt ?? "RD-",
           prefix_pay_receipt: savedData.prefix_pay_receipt ?? "PD-",
+          notify_on_purchase_invoice: savedData.notify_on_purchase_invoice ?? savedData.notify_on_invoice ?? false,
+          notify_on_sale_invoice: savedData.notify_on_sale_invoice ?? savedData.notify_on_invoice ?? true,
+          notify_on_return_invoices: savedData.notify_on_return_invoices ?? savedData.notify_on_invoice ?? false,
+          notify_on_sale_return: savedData.notify_on_sale_return ?? savedData.notify_on_invoice ?? false,
+          notify_on_purchase_return: savedData.notify_on_purchase_return ?? savedData.notify_on_invoice ?? false,
+          notify_on_receive: savedData.notify_on_receive ?? savedData.notify_on_receipt ?? true,
+          notify_on_payment: savedData.notify_on_payment ?? savedData.notify_on_receipt ?? true,
+          notify_on_warehouse_receipt: savedData.notify_on_warehouse_receipt ?? false,
+          notify_on_warehouse_remittance: savedData.notify_on_warehouse_remittance ?? false,
+          notify_on_invoice_due: savedData.notify_on_invoice_due ?? true,
+          notify_on_receivable_check: savedData.notify_on_receivable_check ?? true,
+          notify_on_payable_check: savedData.notify_on_payable_check ?? true,
+          notify_on_debtors: savedData.notify_on_debtors ?? savedData.smsDebtThresholdEnabled ?? true,
+          notify_on_installment: savedData.notify_on_installment ?? true,
         };
         setStoreSettings(mergedSettings);
         globalDateFormatter.updateConfig({
@@ -5597,7 +5674,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
           : `${successTypeName} با موفقیت ثبت شد!`,
       );
       if (
-        (payload.type === "sale" || payload.type === "purchase" || payload.type === "sale_return" || payload.type === "purchase_return") &&
+        (payload.type === "sale" || payload.type === "purchase" || payload.type === "sale_return" || payload.type === "purchase_return" || payload.type === "warehouse_receipt" || payload.type === "warehouse_remittance") &&
         !isDraft
       ) {
         const person = persons.find((p) => String(p.id) === String(payload.customerId));
@@ -5613,32 +5690,61 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
           let msg = "";
           let smsSource = "sale_invoice";
+          let shouldNotify = false;
+
+          const templateVars = {
+            name: person.name,
+            phone: pPhone,
+            amount: String(amt),
+            currency: curStr,
+            invoice_number: invNum,
+            date: dateStr,
+            due_date: payload.dueDate || '',
+            store_name: storeSettings?.store_name || '',
+          };
 
           if (payload.type === "sale") {
             smsSource = "sale_invoice";
-            msg = `مشتری گرامی ${person.name}، فاکتور فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت گردید. با تشکر از خرید شما.`;
-            if (storeSettings?.smsTemplateInvoice) {
-              msg = storeSettings.smsTemplateInvoice
-                .replace(/{name}/g, person.name)
-                .replace(/{amount}/g, String(amt))
-                .replace(/{invoice_number}/g, invNum)
-                .replace(/{date}/g, dateStr);
-            }
+            shouldNotify = !!(storeSettings?.notify_on_sale_invoice ?? storeSettings?.notify_on_invoice ?? true);
+            msg = storeSettings?.smsTemplateInvoice
+              ? renderSmsTemplate(storeSettings.smsTemplateInvoice, templateVars)
+              : `مشتری گرامی ${person.name}، فاکتور فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت گردید. با تشکر از خرید شما.`;
           } else if (payload.type === "purchase") {
             smsSource = "purchase_invoice";
-            msg = `تأمین‌کننده گرامی ${person.name}، فاکتور خرید شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت گردید.`;
+            shouldNotify = !!(storeSettings?.notify_on_purchase_invoice ?? storeSettings?.notify_on_invoice ?? false);
+            msg = storeSettings?.smsTemplatePurchase
+              ? renderSmsTemplate(storeSettings.smsTemplatePurchase, templateVars)
+              : `تأمین‌کننده گرامی ${person.name}، فاکتور خرید شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت گردید.`;
           } else if (payload.type === "sale_return") {
             smsSource = "sale_return";
-            msg = `مشتری گرامی ${person.name}، فاکتور برگشت از فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت و از حساب شما کسر گردید.`;
+            shouldNotify = !!(storeSettings?.notify_on_return_invoices ?? storeSettings?.notify_on_sale_return ?? storeSettings?.notify_on_invoice ?? false);
+            msg = storeSettings?.smsTemplateReturn
+              ? renderSmsTemplate(storeSettings.smsTemplateReturn, templateVars)
+              : `مشتری گرامی ${person.name}، فاکتور برگشت از فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} ثبت و از حساب شما کسر گردید.`;
           } else if (payload.type === "purchase_return") {
             smsSource = "purchase_return";
-            msg = `همکار گرامی ${person.name}، فاکتور برگشت از خرید شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت گردید.`;
+            shouldNotify = !!(storeSettings?.notify_on_return_invoices ?? storeSettings?.notify_on_purchase_return ?? storeSettings?.notify_on_invoice ?? false);
+            msg = storeSettings?.smsTemplateReturn
+              ? renderSmsTemplate(storeSettings.smsTemplateReturn, templateVars)
+              : `همکار گرامی ${person.name}، فاکتور برگشت از خرید شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت گردید.`;
+          } else if (payload.type === "warehouse_receipt") {
+            smsSource = "warehouse_receipt";
+            shouldNotify = !!(storeSettings?.notify_on_warehouse_receipt ?? false);
+            msg = storeSettings?.smsTemplateWarehouseReceipt
+              ? renderSmsTemplate(storeSettings.smsTemplateWarehouseReceipt, templateVars)
+              : `همکار گرامی ${person.name}، رسید ورود به انبار شماره ${invNum} در تاریخ ${dateStr} در سیستم با موفقیت ثبت گردید.`;
+          } else if (payload.type === "warehouse_remittance") {
+            smsSource = "warehouse_remittance";
+            shouldNotify = !!(storeSettings?.notify_on_warehouse_remittance ?? false);
+            msg = storeSettings?.smsTemplateWarehouseRemittance
+              ? renderSmsTemplate(storeSettings.smsTemplateWarehouseRemittance, templateVars)
+              : `همکار گرامی ${person.name}، حواله خروج از انبار (رسید خروج) شماره ${invNum} در تاریخ ${dateStr} در سیستم ثبت و تحویل شد.`;
           }
 
           sendNotification(
             msg, 
             pPhone, 
-            storeSettings?.notify_on_invoice ? storeSettings?.notify_method : undefined,
+            shouldNotify ? storeSettings?.notify_method : undefined,
             {
               recipientName: person.name,
               recipientId: person.id,
@@ -5910,18 +6016,24 @@ const handleExecuteTransferAndSubmit = async () => {
           const curStr = storeSettings?.currency || "تومان";
           const dateStr = formatDateDisplay(new Date(), storeSettings?.calendarType);
 
-          let msg = `مشتری گرامی ${person.name}، فاکتور فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت شد. با تشکر از خرید شما.`;
-          if (storeSettings?.smsTemplateInvoice) {
-            msg = storeSettings.smsTemplateInvoice
-              .replace(/{name}/g, person.name)
-              .replace(/{amount}/g, String(amt))
-              .replace(/{invoice_number}/g, invNum)
-              .replace(/{date}/g, dateStr);
-          }
+          const templateVars = {
+            name: person.name,
+            phone: pPhone,
+            amount: String(amt),
+            currency: curStr,
+            invoice_number: invNum,
+            date: dateStr,
+            store_name: storeSettings?.store_name || '',
+          };
+
+          let msg = storeSettings?.smsTemplateInvoice
+            ? renderSmsTemplate(storeSettings.smsTemplateInvoice, templateVars)
+            : `مشتری گرامی ${person.name}، فاکتور فروش شماره ${invNum} به مبلغ ${amt} ${curStr} در تاریخ ${dateStr} در سیستم ثبت شد. با تشکر از خرید شما.`;
+          const shouldSendSaleSms = !!(storeSettings?.notify_on_sale_invoice ?? storeSettings?.notify_on_invoice ?? true);
           sendNotification(
             msg, 
             pPhone, 
-            storeSettings?.notify_on_invoice ? storeSettings?.notify_method : undefined,
+            shouldSendSaleSms ? storeSettings?.notify_method : undefined,
             {
               recipientName: person.name,
               recipientId: person.id,
