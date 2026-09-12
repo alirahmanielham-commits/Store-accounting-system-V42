@@ -1544,6 +1544,46 @@
       "entityId": "4",
       "changes": "{\"id\":\"4\"}",
       "timestamp": 1789200870957
+    },
+    {
+      "id": "pyyf6pk8g4s",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "test-123",
+      "changes": "{\"id\":\"test-123\",\"checkId\":\"1\",\"checkType\":\"issued\",\"oldStatus\":\"pending\",\"newStatus\":\"cashed\",\"userId\":\"system\",\"createdAt\":\"2026-09-12T08:00:00.000Z\"}",
+      "timestamp": 1789201086650
+    },
+    {
+      "id": "ftrmjuqznl",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "test_node_append",
+      "changes": "{\"id\":\"test_node_append\",\"checkId\":\"check_123\",\"checkType\":\"issued\",\"oldStatus\":\"issued\",\"newStatus\":\"cashed\",\"description\":\"تست ثبت وضعیت\",\"createdAt\":\"2026-09-12T09:50:06.451Z\"}",
+      "timestamp": 1789206606592
+    },
+    {
+      "id": "l1vd00n8gah",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "issued_checks",
+      "entityId": "chk_1789206658816",
+      "changes": "{\"id\":\"chk_1789206658816\",\"checkNumber\":\"987654\",\"amount\":12000000,\"payeeId\":\"person_1\",\"issueDate\":\"2026-04-10\",\"dueDate\":\"2026-05-10\",\"status\":\"issued\",\"reason\":\"خرید مواد اولیه\",\"description\":\"تست صدور چک\",\"createdAt\":1789206658816,\"updatedAt\":1789206658816}",
+      "timestamp": 1789206658950
+    },
+    {
+      "id": "mpttp30hrye",
+      "action": "UPDATE",
+      "userId": "system",
+      "details": "ویرایش رکورد",
+      "entityType": "issued_checks",
+      "entityId": "chk_1789206658816",
+      "changes": "{\"id\":\"chk_1789206658816\",\"checkNumber\":\"987654\",\"amount\":12000000,\"payeeId\":\"person_1\",\"issueDate\":\"2026-04-10\",\"dueDate\":\"2026-05-10\",\"status\":\"cashed\",\"reason\":\"خرید مواد اولیه\",\"description\":\"تست صدور چک\",\"createdAt\":1789206658816,\"updatedAt\":1789206658816}",
+      "timestamp": 1789206658970
     }
   ],
   "person_roles": [
@@ -2106,6 +2146,39 @@
     },
     {
       "id": "4"
+    },
+    {
+      "id": "test-123",
+      "checkId": "1",
+      "checkType": "issued",
+      "oldStatus": "pending",
+      "newStatus": "cashed",
+      "userId": "system",
+      "createdAt": "2026-09-12T08:00:00.000Z"
+    },
+    {
+      "id": "test_node_append",
+      "checkId": "check_123",
+      "checkType": "issued",
+      "oldStatus": "issued",
+      "newStatus": "cashed",
+      "description": "تست ثبت وضعیت",
+      "createdAt": "2026-09-12T09:50:06.451Z"
+    }
+  ],
+  "issued_checks": [
+    {
+      "id": "chk_1789206658816",
+      "checkNumber": "987654",
+      "amount": 12000000,
+      "payeeId": "person_1",
+      "issueDate": "2026-04-10",
+      "dueDate": "2026-05-10",
+      "status": "cashed",
+      "reason": "خرید مواد اولیه",
+      "description": "تست صدور چک",
+      "createdAt": 1789206658816,
+      "updatedAt": 1789206658816
     }
   ]
 }

@@ -82,6 +82,24 @@ export const mapInvoiceTypeToTable = (type: string) => {
   }
 };
 
+export const getAuthHeaders = (): Record<string, string> => {
+  let token = '';
+  let storeId = 'default';
+  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+    try {
+      token = window.localStorage.getItem('access_token') || '';
+      storeId = window.localStorage.getItem('activeStoreId') || 'default';
+    } catch (_) {}
+  }
+  return {
+    'Authorization': 'Bearer ' + token,
+    'x-store-id': storeId,
+    'Cache-Control': 'no-cache, no-store, must-revalidate',
+    'Pragma': 'no-cache',
+    'Expires': '0'
+  };
+};
+
 export const getLocalData = async <T>(key: string, defaultValue: T, queryParams: Record<string, string | number> = {}, retries = 3): Promise<T> => {
   const qs = new URLSearchParams(Object.entries(queryParams).map(([k, v]) => [k, String(v)])).toString();
   const url = qs ? `/api/data/${key}?${qs}` : `/api/data/${key}`;
@@ -97,13 +115,7 @@ export const getLocalData = async <T>(key: string, defaultValue: T, queryParams:
     const fetchUrl = url.includes('?') ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
     const res = await fetch(fetchUrl, {
       cache: 'no-store',
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || ''), 
-        'x-store-id': localStorage.getItem('activeStoreId') || 'default',
-
-        'Cache-Control': 'no-cache, no-store, must-revalidate',
-        'Pragma': 'no-cache',
-        'Expires': '0'
-      }
+      headers: getAuthHeaders()
     });
     if (!res.ok) {
       if (res.status === 401) {
@@ -150,9 +162,7 @@ export const saveLocalData = async <T>(key: string, data: T, retries = 3): Promi
     const processedData = await ensureFiscalYearId(key, data);
     const res = await fetch(`/api/data/${key}`, {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || ''), 
-        'x-store-id': localStorage.getItem('activeStoreId') || 'default',
- 'Content-Type': 'application/json' },
+      headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
       body: JSON.stringify(processedData)
     });
     if (!res.ok) {
@@ -176,9 +186,7 @@ export const updateLocalData = async <T>(key: string, id: string | number, data:
   const processedData = await ensureFiscalYearId(key, data);
   const res = await fetch(`/api/data/${key}/${id}`, {
     method: 'PUT',
-    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || ''), 
-        'x-store-id': localStorage.getItem('activeStoreId') || 'default',
- 'Content-Type': 'application/json' },
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(processedData)
   });
   if (!res.ok) {
@@ -202,9 +210,7 @@ export const appendLocalData = async <T>(key: string, data: T): Promise<T> => {
   const processedData = await ensureFiscalYearId(key, data);
   const res = await fetch(`/api/data/${key}/append`, {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || ''), 
-        'x-store-id': localStorage.getItem('activeStoreId') || 'default',
- 'Content-Type': 'application/json' },
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify(processedData)
   });
   if (!res.ok) {
@@ -236,9 +242,7 @@ export const batchLocalData = async (operations: any[]): Promise<any> => {
   }
   const res = await fetch(`/api/data/batch`, {
     method: 'POST',
-    headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || ''), 
-        'x-store-id': localStorage.getItem('activeStoreId') || 'default',
- 'Content-Type': 'application/json' },
+    headers: { ...getAuthHeaders(), 'Content-Type': 'application/json' },
     body: JSON.stringify({ operations: processedOps })
   });
   if (!res.ok) {

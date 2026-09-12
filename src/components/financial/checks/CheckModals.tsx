@@ -6,7 +6,7 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer, BarChart, Ca
 import { 
   CreditCard, Plus, Edit2, Trash2, CheckCircle, Clock, X, Save, 
   ArrowDownLeft, BookOpen, ArrowUpRight, Calendar, Building2, HelpCircle, AlertTriangle, Search, TrendingUp, DollarSign, Percent, BarChart as BarChartIcon, ChevronDown, Printer, History, Activity, User, Send
-, ArrowLeft} from 'lucide-react';
+, ArrowLeft, FileText } from 'lucide-react';
 import DatePickerModule, { Calendar as RMCalendar } from "react-multi-date-picker";
 import CustomDatePicker from "../../ui/CustomDatePicker";
 const DatePicker = CustomDatePicker;
@@ -122,8 +122,19 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-black text-gray-700 mb-1">شناسه صیادی (۱۶ رقم) *</label>
-                    <input required type="text" value={icSayadId || ''} onChange={e => setIcSayadId(e.target.value)} pattern="\\d{16}" title="شناسه صیادی باید دقیقاً ۱۶ رقم باشد" className="w-full border rounded-xl px-4 py-2 text-sm font-mono text-center focus:ring-2 focus:ring-indigo-500" dir="ltr" placeholder="1234567890123456" />
+                    <label className="block text-xs font-black text-gray-700 mb-1">شناسه صیادی (۱۶ رقم)</label>
+                    <input 
+                      type="text" 
+                      value={icSayadId || ''} 
+                      onChange={e => {
+                        const clean = e.target.value.replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]).replace(/\D/g, '').slice(0, 16);
+                        setIcSayadId(clean);
+                      }} 
+                      maxLength={16}
+                      className="w-full border rounded-xl px-4 py-2 text-sm font-mono text-center focus:ring-2 focus:ring-indigo-500" 
+                      dir="ltr" 
+                      placeholder="1234567890123456" 
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-black text-gray-700 mb-1">بابت *</label>
@@ -311,8 +322,19 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
 
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-xs font-black text-gray-700 mb-1">شناسه صیادی (۱۶ رقم) *</label>
-                    <input required type="text" value={rcSayadId || ''} onChange={e => setRcSayadId(e.target.value)} pattern="\\d{16}" title="شناسه صیادی باید دقیقاً ۱۶ رقم باشد" className="w-full border rounded-xl px-4 py-2 text-sm font-mono text-center focus:ring-2 focus:ring-indigo-500" dir="ltr" placeholder="1234567890123456" />
+                    <label className="block text-xs font-black text-gray-700 mb-1">شناسه صیادی (۱۶ رقم)</label>
+                    <input 
+                      type="text" 
+                      value={rcSayadId || ''} 
+                      onChange={e => {
+                        const clean = e.target.value.replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]).replace(/\D/g, '').slice(0, 16);
+                        setRcSayadId(clean);
+                      }} 
+                      maxLength={16}
+                      className="w-full border rounded-xl px-4 py-2 text-sm font-mono text-center focus:ring-2 focus:ring-indigo-500" 
+                      dir="ltr" 
+                      placeholder="1234567890123456" 
+                    />
                   </div>
                   <div>
                     <label className="block text-xs font-black text-gray-700 mb-1">بابت *</label>
@@ -635,6 +657,13 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                      <span className="text-gray-500 block mb-1">طرف حساب:</span>
                      <span className="font-bold text-gray-900">{persons.find(p => p.id === historyCheck.payerId || p.id === historyCheck.payeeId)?.name || historyCheck.payerId || historyCheck.payeeId}</span>
                   </div>
+                  {(historyCheck.receiptNumber || historyCheck.transactionId) && (
+                    <div className="col-span-2 flex items-center gap-2 bg-indigo-50 border border-indigo-100 rounded-lg p-2.5 text-xs text-indigo-900">
+                      <FileText className="w-4 h-4 text-indigo-600 shrink-0" />
+                      <span className="text-gray-600">سند/تراکنش متصل به چک:</span>
+                      <span className="font-mono font-bold text-indigo-700">{historyCheck.receiptNumber ? `رسید #${historyCheck.receiptNumber}` : `شناسه تراکنش: ${historyCheck.transactionId}`}</span>
+                    </div>
+                  )}
                 </div>
 
                 <h4 className="font-black text-sm text-gray-800 mb-4 pb-2 border-b flex items-center gap-2"><Activity className="w-4 h-4 text-gray-400" /> گردش وضعیت</h4>
@@ -646,25 +675,43 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                   ) : (
                     <div className="relative border-r-2 border-slate-100 pr-4 space-y-6 max-h-[40vh] overflow-y-auto print:max-h-none print:overflow-visible my-2">
                        {historyData.map((h: any, i: number) => {
-                          const dateObj = new Date(h.createdAt || h.date || Date.now());
-                          const formattedDate = formatDateDisplay(dateObj, storeSettings?.calendarType);
-                          const formattedTime = dateObj.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+                          let formattedDate = '-';
+                          let formattedTime = '';
+                          try {
+                            const rawVal = h.createdAt || h.date;
+                            if (rawVal) {
+                              if (typeof rawVal === 'string' && (rawVal.includes('/') || rawVal.includes('-')) && !rawVal.includes('T')) {
+                                formattedDate = rawVal;
+                              } else {
+                                const dateObj = new Date(rawVal);
+                                if (!isNaN(dateObj.getTime())) {
+                                  formattedDate = formatDateDisplay(dateObj, storeSettings?.calendarType);
+                                  formattedTime = dateObj.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+                                } else {
+                                  formattedDate = String(rawVal);
+                                }
+                              }
+                            }
+                          } catch (_) {
+                            formattedDate = '-';
+                          }
                           
-                          const getStatusLbl = (st) => {
-                            if(st === 'draft') return 'پیش‌نویس';
+                          const getStatusLbl = (st: string) => {
+                            if(st === 'draft' || st === 'blank') return 'برگه خام / پیش‌نویس';
                             if(st === 'issued') return 'صادر شده';
                             if(st === 'received') return 'دریافت شده';
                             if(st === 'deposited') return 'واگذار به بانک';
-                            if(st === 'cashed') return 'پاس شده';
+                            if(st === 'cashed') return 'پاس شده / وصول شده';
                             if(st === 'bounced') return 'برگشت خورده';
-                            if(st === 're_assigned') return 'خرج شده';
+                            if(st === 're_assigned' || st === 'assigned') return 'خرج شده به شخص';
+                            if(st === 'bounced_assigned') return 'برگشت چک خرج شده';
                             if(st === 'returned') return 'عودت داده شده';
                             if(st === 'cancelled') return 'باطل شده';
                             return st;
                           };
                           
                           const oldL = h.oldStatus ? getStatusLbl(h.oldStatus) : null;
-                          const newL = (h.newStatus || h.status) ? getStatusLbl(h.newStatus || h.status) : 'عملیات';
+                          const newL = (h.newStatus || h.status) ? getStatusLbl(h.newStatus || h.status) : 'ثبت عملیات';
                           
                           let userName = h.userId || h.user || 'سیستم';
 
@@ -676,7 +723,7 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                                    {oldL ? <><span className="text-gray-500">{oldL}</span> <span className="mx-1">➜</span> <span className="text-blue-600">{newL}</span></> : newL}
                                  </span>
                                  <div dir="ltr" className="flex gap-2 items-center text-gray-500 font-mono text-[10px]">
-                                    <span>{formattedTime}</span>
+                                    {formattedTime && <span>{formattedTime}</span>}
                                     <span>{formattedDate}</span>
                                  </div>
                               </div>
@@ -691,6 +738,13 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                                   <span className="text-[9px] font-bold text-slate-600 truncate max-w-[80px]">{userName}</span>
                                 </div>
                               </div>
+                              {(h.receiptNumber || h.transactionId) && (
+                                <div className="mt-2 flex items-center gap-1.5 text-[11px] text-emerald-800 bg-emerald-50/80 border border-emerald-200 px-2.5 py-1 rounded-md w-fit font-mono">
+                                  <FileText className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span className="font-sans font-bold text-[10px] text-slate-600">تراکنش/سند متصل:</span>
+                                  <span>{h.receiptNumber ? `رسید #${h.receiptNumber}` : `شناسه تراکنش: ${h.transactionId}`}</span>
+                                </div>
+                              )}
                             </div>
                           );
                       })}

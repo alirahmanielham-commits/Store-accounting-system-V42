@@ -9,7 +9,7 @@ import {
 import { 
   getIssuedChecks, getReceivedChecks, updateReceivedCheck, getPersons, 
   getCheckHistoryLogs, updateIssuedCheck, addCheckHistoryLog, 
-  getTransactions, getCheckbooks, getAccounts 
+  getTransactions, getCheckbooks, getAccounts, addTransaction, rollbackCashedTransaction
 } from "../../../services/dataService";
 import { getUsers } from "../../../services/userService";
 import { formatDateDisplay } from "../../../utils/format";
@@ -138,7 +138,7 @@ export default function CheckCardPage({
       
       const [ps, hst, trs, cbs, accs, usrs] = await Promise.all([
         getPersons(),
-        getCheckHistoryLogs(currentCheckId),
+        getCheckHistoryLogs(currentCheckId, checkType, found),
         getTransactions(),
         getCheckbooks(),
         getAccounts(),
@@ -217,7 +217,46 @@ export default function CheckCardPage({
     setSaving(true);
     try {
       const oldState = check.status;
-      let updatedCheck = { ...check, status: newState };
+      
+      let newTx: any = null;
+      if (newState === 'cashed' && oldState !== 'cashed') {
+        const bankAccId = check.bankAccountId || check.accountId || accounts[0]?.id;
+        if (bankAccId) {
+          try {
+            newTx = await addTransaction({
+              type: checkType === 'issued' ? 'pay' : 'receive',
+              resourceType: 'bank',
+              resourceId: bankAccId,
+              amount: check.amount,
+              isCheckCashing: true,
+              personId: check.payeeId || check.payerId,
+              checkId: check.id,
+              date: new Date().toISOString(),
+              method: 'check',
+              receiptNumber: check.receiptNumber || check.checkNumber,
+              checkNumber: check.checkNumber,
+              description: checkType === 'issued'
+                ? `تسویه و پاس شدن برگه چک صادره شماره ${check.checkNumber}`
+                : `وصول و نقد شدن چک دریافتی شماره ${check.checkNumber}`
+            });
+          } catch (txErr) {
+            console.error('Error creating transaction for cashed check:', txErr);
+          }
+        }
+      } else if (oldState === 'cashed' && newState !== 'cashed') {
+        try {
+          await rollbackCashedTransaction(check.checkNumber, checkType === 'issued' ? check.payeeId : check.payerId, checkType === 'issued' ? 'issued' : 'receive');
+        } catch (rbErr) {
+          console.warn('Error rolling back cashed transaction:', rbErr);
+        }
+      }
+
+      let updatedCheck = { 
+        ...check, 
+        status: newState,
+        transactionId: newTx ? newTx.id : (newState !== 'cashed' && oldState === 'cashed' ? null : check.transactionId),
+        receiptNumber: newTx?.receiptNumber || check.receiptNumber || check.checkNumber
+      };
       
       if (checkType === 'issued') {
         await updateIssuedCheck(check.id, updatedCheck);
@@ -232,6 +271,9 @@ export default function CheckCardPage({
           oldStatus: oldState,
           newStatus: newState,
           userId: currentUser,
+          transactionId: updatedCheck.transactionId,
+          receiptNumber: updatedCheck.receiptNumber,
+          description: `تغییر وضعیت به ${stateLabels[newState] || newState}`
         });
       } catch (logErr) {
         console.warn('History log warning:', logErr);
@@ -596,6 +638,15 @@ export default function CheckCardPage({
                     <p className="text-slate-700 leading-loose bg-amber-50/50 p-4 rounded-xl border border-amber-100 min-h-[100px]">{check.description || 'توضیحی ثبت نشده است.'}</p>
                   </div>
                 </div>
+                {(check.receiptNumber || check.transactionId) && (
+                  <div className="mx-6 mb-6 p-4 bg-indigo-50/60 border border-indigo-100 rounded-xl flex items-center gap-3">
+                    <FileText className="w-5 h-5 text-indigo-600 shrink-0" />
+                    <div>
+                      <span className="text-xs text-indigo-900/70 block">سند یا تراکنش متصل به پرونده:</span>
+                      <span className="font-mono font-bold text-sm text-indigo-950">{check.receiptNumber ? `رسید #${check.receiptNumber}` : `شناسه تراکنش: ${check.transactionId}`}</span>
+                    </div>
+                  </div>
+                )}
               </div>
 
             </div>
@@ -631,6 +682,18 @@ export default function CheckCardPage({
                                {oV && <span className="px-3 py-1.5 bg-slate-100 text-slate-600 rounded-lg font-bold border border-slate-200">{stateLabels[oV] || oV}</span>}
                                {oV && nV && <ArrowRight className="w-5 h-5 text-slate-300" />}
                                {nV && <span className={`px-3 py-1.5 rounded-lg font-black border ${stateColors[nV] || 'bg-slate-100 text-slate-800'}`}>{stateLabels[nV] || nV}</span>}
+                             </div>
+                           )}
+                           {log.description && (
+                             <div className="mt-4 p-3 bg-white rounded-xl border border-slate-200 text-sm text-slate-700 leading-relaxed">
+                               {log.description}
+                             </div>
+                           )}
+                           {(log.receiptNumber || log.transactionId) && (
+                             <div className="mt-3 flex items-center gap-2 text-xs text-indigo-700 bg-indigo-50 border border-indigo-100 px-3 py-1.5 rounded-lg w-fit font-mono">
+                               <FileText className="w-4 h-4 text-indigo-500" />
+                               <span className="font-sans font-bold">شناسه سند/تراکنش مرتبط:</span>
+                               <span>{log.receiptNumber ? `رسید #${log.receiptNumber}` : `شناسه: ${log.transactionId}`}</span>
                              </div>
                            )}
                            <div className="text-sm text-slate-500 mt-6 flex items-center gap-2 pt-4 border-t border-slate-200 border-dashed">
@@ -741,7 +804,13 @@ export default function CheckCardPage({
                     در صورتی که این چک دارای سند حسابداری متصل در سیستم است (مانند سند واگذاری، وصول، یا برگشت)، می‌توانید آن را مشاهده کنید.
                   </p>
                   <button onClick={() => {
-                    const doc = transactions?.find(t => t.linkedCheckId === check.id || t.items?.some(i => i.description?.includes(check.checkNumber)));
+                    const doc = transactions?.find(t => 
+                      String(t.linkedCheckId) === String(check.id) || 
+                      String(t.checkId) === String(check.id) || 
+                      (check.transactionId && String(t.id) === String(check.transactionId)) || 
+                      (check.receiptNumber && String(t.receiptNumber) === String(check.receiptNumber)) || 
+                      t.items?.some(i => i.description?.includes(check.checkNumber))
+                    );
                     if (doc && onViewAccountingDoc) onViewAccountingDoc(doc);
                     else showNotification('سند حسابداری برای این چک یافت نشد.', 'info');
                   }} className="w-full sm:w-auto flex items-center justify-center gap-3 px-8 py-4 bg-white text-indigo-700 border-2 border-indigo-200 hover:border-indigo-400 hover:bg-indigo-50 rounded-xl transition-all font-bold text-lg shadow-sm">

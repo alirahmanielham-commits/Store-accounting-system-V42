@@ -63,14 +63,31 @@ export const validateData = (key: string, data: any) => {
   return schema.safeParse(data);
 };
 
-const sayadIdRegex = /^\d{16}$/;
+const cleanSayadId = (val: any) => {
+  if (val === null || val === undefined) return null;
+  const str = String(val).replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]).replace(/[\s-]/g, '').trim();
+  if (str === '') return null;
+  return str;
+};
+
+const cleanDigitsAndCommas = (val: any) => {
+  if (typeof val === 'number') return val;
+  if (!val) return 0;
+  const cleaned = String(val).replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]).replace(/,/g, '').trim();
+  return Number(cleaned) || 0;
+};
+
+const cleanTextNumber = (val: any) => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]).trim();
+};
 
 export const issuedCheckSchema = z.object({
   id: z.string().or(z.number()).optional(),
-  checkNumber: z.string().min(1, "شماره چک الزامی است"),
-  sayadId: z.string().regex(sayadIdRegex, "شناسه صیادی باید دقیقاً ۱۶ رقم باشد").optional().nullable().or(z.literal("")),
+  checkNumber: z.preprocess(cleanTextNumber, z.string().min(1, "شماره چک الزامی است")),
+  sayadId: z.preprocess(cleanSayadId, z.string().regex(/^\d{16}$/, "شناسه صیادی باید دقیقاً ۱۶ رقم باشد").nullable().optional()),
   reason: z.string().optional().nullable(),
-  amount: z.union([z.number(), z.string()]).refine(val => Number(val) >= 0, "مبلغ چک نامعتبر است"),
+  amount: z.preprocess(cleanDigitsAndCommas, z.number().min(0, "مبلغ چک نامعتبر است")),
   issueDate: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
   payeeId: z.string().or(z.number()).optional().nullable(),
@@ -79,10 +96,10 @@ export const issuedCheckSchema = z.object({
 
 export const receivedCheckSchema = z.object({
   id: z.string().or(z.number()).optional(),
-  checkNumber: z.string().min(1, "شماره چک الزامی است"),
-  sayadId: z.string().regex(sayadIdRegex, "شناسه صیادی باید دقیقاً ۱۶ رقم باشد").optional().nullable().or(z.literal("")),
+  checkNumber: z.preprocess(cleanTextNumber, z.string().min(1, "شماره چک الزامی است")),
+  sayadId: z.preprocess(cleanSayadId, z.string().regex(/^\d{16}$/, "شناسه صیادی باید دقیقاً ۱۶ رقم باشد").nullable().optional()),
   reason: z.string().optional().nullable(),
-  amount: z.union([z.number(), z.string()]).refine(val => Number(val) >= 0, "مبلغ چک نامعتبر است"),
+  amount: z.preprocess(cleanDigitsAndCommas, z.number().min(0, "مبلغ چک نامعتبر است")),
   receiveDate: z.string().optional().nullable(),
   dueDate: z.string().optional().nullable(),
   payerId: z.string().or(z.number()).optional().nullable(),

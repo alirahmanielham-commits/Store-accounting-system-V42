@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { addIssuedCheck, updateIssuedCheck, addReceivedCheck, updateReceivedCheck, addCheckAuditLog, addTransaction } from '../../../services/dataService';
 import { IssuedCheck, ReceivedCheck } from '../../../types';
 
@@ -51,8 +51,31 @@ export function useCheckForm(
   const [depositAccountId, setDepositAccountId] = useState('');
   const [assignedVendorId, setAssignedVendorId] = useState('');
 
-  const currentCheckForStatus = updatingCheckType === 'issued' ? issuedChecks.find(c => c.id === updatingCheckId) : receivedChecks.find(c => c.id === updatingCheckId);
+  const currentCheckForStatus = updatingCheckType === 'issued' 
+    ? issuedChecks.find(c => String(c.id) === String(updatingCheckId)) 
+    : receivedChecks.find(c => String(c.id) === String(updatingCheckId));
   const currentActualStatus = currentCheckForStatus?.status || (updatingCheckType === 'issued' ? 'issued' : 'received');
+
+  useEffect(() => {
+    if (updatingCheckId) {
+      if (updatingCheckType === 'issued') {
+        const chk = issuedChecks.find(c => String(c.id) === String(updatingCheckId));
+        if (chk && chk.bankAccountId) {
+          setDepositAccountId(String(chk.bankAccountId));
+        }
+      } else {
+        const chk = receivedChecks.find(c => String(c.id) === String(updatingCheckId)) as any;
+        if (chk) {
+          if (chk.depositAccountId || chk.accountId) {
+            setDepositAccountId(String(chk.depositAccountId || chk.accountId));
+          }
+          if (chk.assignedToId || chk.assignedVendorId) {
+            setAssignedVendorId(String(chk.assignedToId || chk.assignedVendorId));
+          }
+        }
+      }
+    }
+  }, [updatingCheckId, updatingCheckType, issuedChecks, receivedChecks]);
 
   const getValidTransitions = (type: 'issued' | 'received', currentStatus: string) => {
     if (type === 'issued') {
@@ -195,7 +218,7 @@ export function useCheckForm(
     if (!updatingCheckId) return;
 
     if (updatingCheckType === 'issued') {
-      const existing = issuedChecks.find(c => c.id === updatingCheckId);
+      const existing = issuedChecks.find(c => String(c.id) === String(updatingCheckId));
       if (existing) {
         const wasAlreadyCashed = existing.status === 'cashed';
         
@@ -204,9 +227,53 @@ export function useCheckForm(
           return;
         }
 
-        await addCheckAuditLog({ checkId: existing.id, checkType: 'issued', action: 'status_change', oldValues: { status: existing.status }, newValues: { status: statusVal }, userId: currentUser });
+        let newTx: any = null;
+        if (statusVal === 'cashed' && !wasAlreadyCashed && depositAccountId) {
+          try {
+            newTx = await addTransaction({
+              type: 'pay',
+              resourceType: 'bank',
+              resourceId: depositAccountId,
+              amount: existing.amount,
+              isCheckCashing: true,
+              personId: existing.payeeId,
+              checkId: existing.id,
+              date: new Date().toISOString(),
+              method: 'check',
+              receiptNumber: existing.receiptNumber || existing.checkNumber,
+              checkNumber: existing.checkNumber,
+              description: `تسویه و پاس شدن برگه چک صادره شماره ${existing.checkNumber} به ذینفع`
+            });
+          } catch (txErr) {
+            console.error('Error creating transaction for cashed check:', txErr);
+          }
+        } else if (wasAlreadyCashed && statusVal !== 'cashed') {
+          try {
+            await rollbackCashedTransaction(existing.checkNumber, existing.payeeId, 'issued');
+          } catch (rbErr) {
+            console.warn('Error rolling back cashed transaction:', rbErr);
+          }
+        }
+
+        await addCheckAuditLog({ 
+          checkId: existing.id, 
+          checkType: 'issued', 
+          action: 'status_change', 
+          oldValues: { status: existing.status, transactionId: existing.transactionId }, 
+          newValues: { status: statusVal, transactionId: newTx ? newTx.id : (statusVal !== 'cashed' && wasAlreadyCashed ? null : existing.transactionId) }, 
+          userId: currentUser 
+        });
+
         try {
-          await updateIssuedCheck(updatingCheckId.toString(), { ...existing, status: statusVal as any, bankAccountId: statusVal === 'cashed' ? depositAccountId : existing.bankAccountId });
+          await updateIssuedCheck(updatingCheckId.toString(), { 
+            ...existing, 
+            status: statusVal as any, 
+            bankAccountId: statusVal === 'cashed' ? depositAccountId : existing.bankAccountId,
+            transactionId: newTx ? newTx.id : (statusVal !== 'cashed' && wasAlreadyCashed ? null : existing.transactionId),
+            receiptNumber: newTx?.receiptNumber || existing.receiptNumber || existing.checkNumber,
+            statusDesc,
+            userId: currentUser
+          });
         } catch(err: any) {
           notify(err.message || 'خطا در تغییر وضعیت چک', 'error');
           return;
@@ -214,31 +281,18 @@ export function useCheckForm(
 
         if (statusVal === 'cashed' && !wasAlreadyCashed) {
           if (depositAccountId) {
-            await addTransaction({
-              type: 'pay',
-              resourceType: 'bank',
-              resourceId: depositAccountId,
-              amount: existing.amount,
-              isCheckCashing: true,
-              personId: existing.payeeId,
-              date: new Date().toISOString(),
-              method: 'check',
-              receiptNumber: existing.checkNumber,
-              description: `تسویه و پاس شدن برگه چک صادره شماره ${existing.checkNumber} به ذینفع`
-            });
             notify(`چک شماره ${existing.checkNumber} با موفقیت پاس شد و مبلغ ${Number(existing.amount).toLocaleString()} ${storeSettings?.currency || 'تومان'} از حساب بانک کسر و در معین شخص ثبت گردید.`, 'success');
           } else {
             notify(`چک شماره ${existing.checkNumber} پاس شد، اما به دلیل عدم یافتن بانک مرجع، سند کاهنده خودکار درج نگردید.`, 'warning');
           }
         } else if (wasAlreadyCashed && statusVal !== 'cashed') {
-          await rollbackCashedTransaction(existing.checkNumber, existing.payeeId, 'issued');
           notify(`وضعیت چک صادره به ${statusVal} تغییر یافت و سند پرداختی متصل به آن حذف گردید.`, 'info');
         } else {
           notify(`وضعیت چک صادره با موفقیت تغییر یافت.`, 'info');
         }
       }
     } else {
-      const existing = receivedChecks.find(c => c.id === updatingCheckId);
+      const existing = receivedChecks.find(c => String(c.id) === String(updatingCheckId));
       if (existing) {
         const wasAlreadyCashed = existing.status === 'cashed';
         
@@ -247,27 +301,60 @@ export function useCheckForm(
           return;
         }
 
-        await addCheckAuditLog({ checkId: existing.id, checkType: 'received', action: 'status_change', oldValues: { status: existing.status }, newValues: { status: statusVal }, userId: currentUser });
+        let newTx: any = null;
+        if (statusVal === 'cashed' && !wasAlreadyCashed && depositAccountId) {
+          try {
+            newTx = await addTransaction({
+              type: 'receive',
+              resourceType: 'bank',
+              resourceId: depositAccountId,
+              amount: existing.amount,
+              isCheckCashing: true,
+              personId: existing.payerId,
+              checkId: existing.id,
+              date: new Date().toISOString(),
+              method: 'check',
+              receiptNumber: existing.receiptNumber || existing.checkNumber,
+              checkNumber: existing.checkNumber,
+              description: `وصول و نقد شدن چک دریافتی شماره ${existing.checkNumber} - بانک ${existing.bankName || ''}`
+            });
+          } catch (txErr) {
+            console.error('Error creating transaction for received check:', txErr);
+          }
+        } else if (wasAlreadyCashed && statusVal !== 'cashed') {
+          try {
+            await rollbackCashedTransaction(existing.checkNumber, existing.payerId, 'receive');
+          } catch (rbErr) {
+            console.warn('Error rolling back cashed transaction:', rbErr);
+          }
+        }
+
+        await addCheckAuditLog({ 
+          checkId: existing.id, 
+          checkType: 'received', 
+          action: 'status_change', 
+          oldValues: { status: existing.status, transactionId: existing.transactionId }, 
+          newValues: { status: statusVal, transactionId: newTx ? newTx.id : (statusVal !== 'cashed' && wasAlreadyCashed ? null : existing.transactionId) }, 
+          userId: currentUser 
+        });
+
         try {
-          await updateReceivedCheck(updatingCheckId.toString(), { ...existing, status: statusVal as any, assignedToId: statusVal === 'assigned' ? assignedVendorId : existing.assignedToId, accountId: statusVal === 'cashed' || statusVal === 'deposited' ? depositAccountId : existing.accountId });
+          await updateReceivedCheck(updatingCheckId.toString(), { 
+            ...existing, 
+            status: statusVal as any, 
+            assignedToId: statusVal === 'assigned' ? assignedVendorId : existing.assignedToId, 
+            accountId: statusVal === 'cashed' || statusVal === 'deposited' ? depositAccountId : existing.accountId,
+            transactionId: newTx ? newTx.id : (statusVal !== 'cashed' && wasAlreadyCashed ? null : existing.transactionId),
+            receiptNumber: newTx?.receiptNumber || existing.receiptNumber || existing.checkNumber,
+            statusDesc,
+            userId: currentUser
+          });
         } catch(err: any) {
           notify(err.message || 'خطا در تغییر وضعیت چک', 'error');
           return;
         }
 
         if (statusVal === 'cashed' && !wasAlreadyCashed) {
-          await addTransaction({
-            type: 'receive',
-            resourceType: 'bank',
-            resourceId: depositAccountId,
-            amount: existing.amount,
-            isCheckCashing: true,
-            personId: existing.payerId,
-            date: new Date().toISOString(),
-            method: 'check',
-            receiptNumber: existing.checkNumber,
-            description: `وصول و نقد شدن چک دریافتی شماره ${existing.checkNumber} - بانک ${existing.bankName || ''}`
-          });
           notify(`چک شماره ${existing.checkNumber} وصول گردید. مبلغ ${Number(existing.amount).toLocaleString()} ${storeSettings?.currency || 'تومان'} به حساب بانک واریز و اسناد دریافتنی بستانکار شد.`, 'success');
         } else if (statusVal === 'returned') {
           notify(`چک عودت داده شد و حساب شخص بدهکار گردید.`, 'success');
@@ -276,7 +363,6 @@ export function useCheckForm(
         } else if (statusVal === 'bounced_assigned') {
           notify(`چک خرج شده برگشت خورد. اسناد دریافتنی بدهکار و فروشنده بستانکار گردید.`, 'warning');
         } else if (wasAlreadyCashed && statusVal !== 'cashed') {
-          await rollbackCashedTransaction(existing.checkNumber, existing.payerId, 'receive');
           notify(`وضعیت چک دریافتی به ${statusVal} تغییر یافت و تراکنش بانکی متصل به آن حذف گردید.`, 'info');
         } else {
           notify(`وضعیت چک با موفقیت به ${statusVal} تغییر یافت.`, 'info');
@@ -284,6 +370,9 @@ export function useCheckForm(
       }
     }
     setIsStatusModalOpen(false);
+    setStatusDesc('');
+    setDepositAccountId('');
+    setAssignedVendorId('');
     await fetchData();
   };
 

@@ -255,8 +255,43 @@ export const getCheckAuditLogs = async (checkId?: string | number, checkType?: '
   return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
 };
 
+export const rollbackCashedTransaction = async (checkNumber: string, personId: string, type: 'issued' | 'receive' | 'received') => {
+  try {
+    const txTables = ['receipt_transactions', 'payment_transactions', 'transactions'];
+    for (const tbl of txTables) {
+      try {
+        const list = await getLocalData<any[]>(tbl, []);
+        if (Array.isArray(list)) {
+          const txType = type === 'issued' ? 'pay' : 'receive';
+          const toDelete = list.find(tx => 
+            (tx.type === txType || tbl.includes(txType === 'pay' ? 'payment' : 'receipt')) && 
+            String(tx.personId) === String(personId) && 
+            (String(tx.receiptNumber) === String(checkNumber) || String(tx.checkNumber) === String(checkNumber)) && 
+            tx.description && tx.description.includes(String(checkNumber))
+          );
+          if (toDelete) {
+            const remaining = list.filter(tx => tx.id !== toDelete.id);
+            await saveLocalData(tbl, remaining);
+          }
+        }
+      } catch (_) {}
+    }
+  } catch (err) {
+    console.error('Error rolling back check transaction', err);
+  }
+};
 
-export const addCheckHistoryLog = async (record: { checkId: string | number, checkType: 'issued' | 'received', oldStatus?: string, newStatus?: string, description?: string, userId?: string }) => {
+
+export const addCheckHistoryLog = async (record: { 
+  checkId: string | number, 
+  checkType: 'issued' | 'received', 
+  oldStatus?: string, 
+  newStatus?: string, 
+  description?: string, 
+  userId?: string,
+  transactionId?: string | number | null,
+  receiptNumber?: string | number | null
+}) => {
   const now = new Date().toISOString();
   const newItem = { ...record, id: Math.random().toString(36).substring(2, 15), createdAt: now };
   try {
@@ -292,18 +327,39 @@ export const addIssuedCheck = async (record: any) => {
   if (Number(record.amount) <= 0) {
     throw new Error('مبلغ چک نامعتبر است');
   }
-  const existing = await getIssuedChecks();
-  if (record.checkNumber && record.checkbookId && existing.some(c => c.checkNumber === record.checkNumber && c.checkbookId === record.checkbookId && c.status !== 'cancelled')) {
+  const existingRaw = await getIssuedChecks();
+  const existing = Array.isArray(existingRaw) ? existingRaw : (existingRaw?.data || []);
+  if (record.checkNumber && record.checkbookId && existing.some((c: any) => c.checkNumber === record.checkNumber && c.checkbookId === record.checkbookId && c.status !== 'cancelled')) {
     throw new Error('این شماره چک قبلاً در این دسته‌چک ثبت شده است');
   }
 
   let activeYear = null;
-  if (record.issueDate) activeYear = await checkFinancialYear(record.issueDate);
+  if (record.issueDate) {
+    try {
+      activeYear = await checkFinancialYear(record.issueDate);
+    } catch (fyErr) {
+      console.warn('Financial year check warning for issueDate:', fyErr);
+    }
+  }
   const now = Date.now();
   const newItem = { ...record, id: generateId(), createdAt: now, updatedAt: now, fiscalYearId: activeYear ? activeYear.id : undefined };
   await appendLocalData('issued_checks', newItem);
-  await addCheckAuditLog({ checkId: newItem.id, checkType: 'issued', action: 'create', newValues: newItem, userId: 'system' });
+  await addCheckAuditLog({ checkId: newItem.id, checkType: 'issued', action: 'create', newValues: newItem, userId: record.userId || 'system' });
   
+  try {
+    await addCheckHistoryLog({
+      checkId: newItem.id,
+      checkType: 'issued',
+      newStatus: newItem.status || 'issued',
+      description: record.description ? `ثبت و صدور چک: ${record.description}` : 'ثبت و صدور اولیه برگه چک در سیستم',
+      userId: record.userId || 'system',
+      transactionId: record.transactionId || newItem.transactionId || null,
+      receiptNumber: record.receiptNumber || newItem.receiptNumber || null
+    });
+  } catch (hErr) {
+    console.warn('Failed to add initial check history log:', hErr);
+  }
+
   if (typeof addSystemLog !== 'undefined') {
     await addSystemLog('ADD_' + 'IssuedCheck'.toUpperCase(), 'ثبت رکورد جدید در issued_checks', 'IssuedCheck', newItem.id);
   }
@@ -319,22 +375,53 @@ export const updateIssuedCheck = async (id: string, record: any) => {
   if (record.amount !== undefined && Number(record.amount) <= 0) {
     throw new Error('مبلغ چک نامعتبر است');
   }
-  const oldChecks = await getIssuedChecks();
-  if (record.checkNumber && record.checkbookId && oldChecks.some(c => c.id !== id && c.checkNumber === record.checkNumber && c.checkbookId === record.checkbookId && c.status !== 'cancelled')) {
+  const oldChecksRaw = await getIssuedChecks();
+  const oldChecks = Array.isArray(oldChecksRaw) ? oldChecksRaw : (oldChecksRaw?.data || []);
+  const previous = oldChecks.find((c: any) => String(c.id) === String(id));
+
+  if (record.checkNumber && record.checkbookId && oldChecks.some((c: any) => String(c.id) !== String(id) && c.checkNumber === record.checkNumber && c.checkbookId === record.checkbookId && c.status !== 'cancelled')) {
     throw new Error('این شماره چک قبلاً در این دسته‌چک ثبت شده است');
   }
 
+  // Only check financial year if issueDate is being changed to a new date
   let activeYear = null;
-  if (record.issueDate) activeYear = await checkFinancialYear(record.issueDate);
+  if (record.issueDate && (!previous || previous.issueDate !== record.issueDate)) {
+    try {
+      activeYear = await checkFinancialYear(record.issueDate);
+    } catch (fyErr) {
+      console.warn('Financial year check warning for updated issueDate:', fyErr);
+    }
+  }
+
   const updatedData = { ...record, updatedAt: Date.now() };
   try {
-     const oldChecks = await getIssuedChecks();
-     const previous = oldChecks.find((c: any) => String(c.id) === String(id));
      const saved = await updateLocalData('issued_checks', id, updatedData);
-     await addCheckAuditLog({ checkId: saved.id, checkType: 'issued', action: 'update', oldValues: previous, newValues: saved, userId: 'system' });
+     await addCheckAuditLog({ checkId: saved.id, checkType: 'issued', action: 'update', oldValues: previous, newValues: saved, userId: record.userId || 'system' });
+     
      if (previous && previous.status !== saved.status) {
-       await addCheckHistoryLog({ checkId: saved.id, checkType: 'issued', oldStatus: previous.status, newStatus: saved.status, userId: 'system' });
+       await addCheckHistoryLog({
+         checkId: saved.id,
+         checkType: 'issued',
+         oldStatus: previous.status,
+         newStatus: saved.status,
+         description: record.statusDesc || record.description || `تغییر وضعیت چک از ${previous.status} به ${saved.status}`,
+         userId: record.userId || 'system',
+         transactionId: record.transactionId !== undefined ? record.transactionId : saved.transactionId,
+         receiptNumber: record.receiptNumber !== undefined ? record.receiptNumber : saved.receiptNumber
+       });
+     } else if (!previous && record.status) {
+       await addCheckHistoryLog({
+         checkId: saved.id,
+         checkType: 'issued',
+         oldStatus: record.oldStatus || undefined,
+         newStatus: saved.status,
+         description: record.statusDesc || record.description || `ثبت وضعیت چک: ${saved.status}`,
+         userId: record.userId || 'system',
+         transactionId: record.transactionId !== undefined ? record.transactionId : saved.transactionId,
+         receiptNumber: record.receiptNumber !== undefined ? record.receiptNumber : saved.receiptNumber
+       });
      }
+
      if (typeof addSystemLog !== 'undefined') {
        await addSystemLog('UPDATE_' + 'IssuedCheck'.toUpperCase(), 'ویرایش رکورد در issued_checks', 'IssuedCheck', saved.id);
      }
@@ -379,19 +466,40 @@ export const addReceivedCheck = async (record: any) => {
   if (Number(record.amount) <= 0) {
     throw new Error('مبلغ چک نامعتبر است');
   }
-  const existing = await getReceivedChecks();
-  if (record.checkNumber && record.bankName && existing.some(c => c.checkNumber === record.checkNumber && c.bankName === record.bankName && c.status !== 'returned')) {
+  const existingRaw = await getReceivedChecks();
+  const existing = Array.isArray(existingRaw) ? existingRaw : (existingRaw?.data || []);
+  if (record.checkNumber && record.bankName && existing.some((c: any) => c.checkNumber === record.checkNumber && c.bankName === record.bankName && c.status !== 'returned')) {
     throw new Error('این شماره چک از این بانک قبلاً ثبت شده است');
   }
 
   const checkDate = record.receiveDate || record.issueDate;
   let activeYear = null;
-  if (checkDate) activeYear = await checkFinancialYear(checkDate);
+  if (checkDate) {
+    try {
+      activeYear = await checkFinancialYear(checkDate);
+    } catch (fyErr) {
+      console.warn('Financial year check warning for received check:', fyErr);
+    }
+  }
   const now = Date.now();
   const newItem = { ...record, id: generateId(), createdAt: now, updatedAt: now, fiscalYearId: activeYear ? activeYear.id : undefined };
   await appendLocalData('received_checks', newItem);
-  await addCheckAuditLog({ checkId: newItem.id, checkType: 'received', action: 'create', newValues: newItem, userId: 'system' });
+  await addCheckAuditLog({ checkId: newItem.id, checkType: 'received', action: 'create', newValues: newItem, userId: record.userId || 'system' });
   
+  try {
+    await addCheckHistoryLog({
+      checkId: newItem.id,
+      checkType: 'received',
+      newStatus: newItem.status || 'received',
+      description: record.description ? `ثبت و دریافت چک: ${record.description}` : 'ثبت اولیه برگه چک دریافتی در سیستم',
+      userId: record.userId || 'system',
+      transactionId: record.transactionId || newItem.transactionId || null,
+      receiptNumber: record.receiptNumber || newItem.receiptNumber || null
+    });
+  } catch (hErr) {
+    console.warn('Failed to add initial received check history log:', hErr);
+  }
+
   if (typeof addSystemLog !== 'undefined') {
     await addSystemLog('ADD_' + 'ReceivedCheck'.toUpperCase(), 'ثبت رکورد جدید در received_checks', 'ReceivedCheck', newItem.id);
   }
@@ -407,23 +515,53 @@ export const updateReceivedCheck = async (id: string, record: any) => {
   if (record.amount !== undefined && Number(record.amount) <= 0) {
     throw new Error('مبلغ چک نامعتبر است');
   }
-  const oldChecks = await getReceivedChecks();
-  if (record.checkNumber && record.bankName && oldChecks.some(c => c.id !== id && c.checkNumber === record.checkNumber && c.bankName === record.bankName && c.status !== 'returned')) {
+  const oldChecksRaw = await getReceivedChecks();
+  const oldChecks = Array.isArray(oldChecksRaw) ? oldChecksRaw : (oldChecksRaw?.data || []);
+  const previous = oldChecks.find((c: any) => String(c.id) === String(id));
+
+  if (record.checkNumber && record.bankName && oldChecks.some((c: any) => String(c.id) !== String(id) && c.checkNumber === record.checkNumber && c.bankName === record.bankName && c.status !== 'returned')) {
     throw new Error('این شماره چک از این بانک قبلاً ثبت شده است');
   }
 
   const checkDate = record.receiveDate || record.issueDate;
   let activeYear = null;
-  if (checkDate) activeYear = await checkFinancialYear(checkDate);
+  if (checkDate && (!previous || (previous.receiveDate !== record.receiveDate && previous.issueDate !== record.issueDate))) {
+    try {
+      activeYear = await checkFinancialYear(checkDate);
+    } catch (fyErr) {
+      console.warn('Financial year check warning for updated received check:', fyErr);
+    }
+  }
+
   const updatedData = { ...record, updatedAt: Date.now() };
   try {
-     const oldChecks = await getReceivedChecks();
-     const previous = oldChecks.find((c: any) => String(c.id) === String(id));
      const saved = await updateLocalData('received_checks', id, updatedData);
-     await addCheckAuditLog({ checkId: saved.id, checkType: 'received', action: 'update', oldValues: previous, newValues: saved, userId: 'system' });
+     await addCheckAuditLog({ checkId: saved.id, checkType: 'received', action: 'update', oldValues: previous, newValues: saved, userId: record.userId || 'system' });
+     
      if (previous && previous.status !== saved.status) {
-       await addCheckHistoryLog({ checkId: saved.id, checkType: 'received', oldStatus: previous.status, newStatus: saved.status, userId: 'system' });
+       await addCheckHistoryLog({
+         checkId: saved.id,
+         checkType: 'received',
+         oldStatus: previous.status,
+         newStatus: saved.status,
+         description: record.statusDesc || record.description || `تغییر وضعیت چک از ${previous.status} به ${saved.status}`,
+         userId: record.userId || 'system',
+         transactionId: record.transactionId !== undefined ? record.transactionId : saved.transactionId,
+         receiptNumber: record.receiptNumber !== undefined ? record.receiptNumber : saved.receiptNumber
+       });
+     } else if (!previous && record.status) {
+       await addCheckHistoryLog({
+         checkId: saved.id,
+         checkType: 'received',
+         oldStatus: record.oldStatus || undefined,
+         newStatus: saved.status,
+         description: record.statusDesc || record.description || `ثبت وضعیت چک: ${saved.status}`,
+         userId: record.userId || 'system',
+         transactionId: record.transactionId !== undefined ? record.transactionId : saved.transactionId,
+         receiptNumber: record.receiptNumber !== undefined ? record.receiptNumber : saved.receiptNumber
+       });
      }
+
      if (typeof addSystemLog !== 'undefined') {
        await addSystemLog('UPDATE_' + 'ReceivedCheck'.toUpperCase(), 'ویرایش رکورد در received_checks', 'ReceivedCheck', saved.id);
      }
@@ -1175,10 +1313,184 @@ export const saveInstallments = async (installments: any[]) => {
 };
 
 
-export const getCheckHistoryLogs = async (checkId?: string | number, checkType?: 'issued' | 'received') => {
+export const getCheckHistoryLogs = async (checkId?: string | number, checkType?: 'issued' | 'received', checkObj?: any) => {
   const data = await getLocalData<any[]>('check_history', []);
-  let filtered = data;
-  if (checkId) filtered = filtered.filter(h => String(h.checkId) === String(checkId));
-  if (checkType) filtered = filtered.filter(h => h.checkType === checkType);
-  return filtered.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  let filtered = Array.isArray(data) ? [...data] : [];
+  
+  if (checkId) {
+    filtered = filtered.filter(h => String(h.checkId) === String(checkId));
+  }
+  if (checkType) {
+    filtered = filtered.filter(h => !h.checkType || h.checkType === checkType);
+  }
+
+  // If checkId is specified, let's also pull in audit logs, transactions, and check object history
+  if (checkId) {
+    try {
+      const auditLogs = await getLocalData<any[]>('check_audit_logs', []);
+      if (Array.isArray(auditLogs)) {
+        const checkAudits = auditLogs.filter(a => String(a.checkId) === String(checkId) && (!checkType || !a.checkType || a.checkType === checkType));
+        for (const a of checkAudits) {
+          const actionStatus = a.newValues?.status || (a.action === 'create' ? (checkType === 'issued' ? 'issued' : 'received') : undefined);
+          const exists = filtered.some(h => 
+            (h.newStatus === actionStatus || h.createdAt === a.createdAt)
+          );
+          if (!exists && actionStatus) {
+            filtered.push({
+              id: a.id || `audit_${Math.random().toString(36).substring(2, 9)}`,
+              checkId: a.checkId,
+              checkType: a.checkType || checkType || 'issued',
+              oldStatus: a.oldValues?.status || null,
+              newStatus: actionStatus,
+              description: a.action === 'create' ? 'ثبت و صدور اولیه چک در سیستم' : (a.action === 'status_change' ? `تغییر وضعیت به ${actionStatus}` : 'ویرایش اطلاعات چک'),
+              userId: a.userId || 'system',
+              transactionId: a.newValues?.transactionId || a.oldValues?.transactionId || null,
+              receiptNumber: a.newValues?.receiptNumber || a.oldValues?.receiptNumber || null,
+              createdAt: a.createdAt || new Date().toISOString()
+            });
+          }
+        }
+      }
+    } catch (_) {}
+
+    // Find the check if not provided
+    let targetCheck = checkObj;
+    if (!targetCheck) {
+      try {
+        if (checkType === 'issued' || !checkType) {
+          const issuedRaw = await getLocalData<any>('issued_checks', []);
+          const issued = Array.isArray(issuedRaw) ? issuedRaw : (issuedRaw?.data || []);
+          targetCheck = issued.find((c: any) => String(c.id) === String(checkId));
+        }
+        if (!targetCheck && (checkType === 'received' || !checkType)) {
+          const receivedRaw = await getLocalData<any>('received_checks', []);
+          const received = Array.isArray(receivedRaw) ? receivedRaw : (receivedRaw?.data || []);
+          targetCheck = received.find((c: any) => String(c.id) === String(checkId));
+        }
+      } catch (_) {}
+    }
+
+    // Load related transactions
+    let linkedTransactions: any[] = [];
+    try {
+      const txTables = ['receipt_transactions', 'payment_transactions', 'transactions'];
+      const rawTxs: any[] = [];
+      for (const tbl of txTables) {
+        try {
+          const list = await getLocalData<any[]>(tbl, []);
+          if (Array.isArray(list)) rawTxs.push(...list);
+        } catch (_) {}
+      }
+
+      const checkNumStr = targetCheck?.checkNumber ? String(targetCheck.checkNumber).trim() : null;
+      const targetTxId = targetCheck?.transactionId ? String(targetCheck.transactionId) : null;
+      const targetReceiptNo = targetCheck?.receiptNumber ? String(targetCheck.receiptNumber).trim() : null;
+      const targetPersonId = targetCheck?.payeeId || targetCheck?.payerId;
+
+      linkedTransactions = rawTxs.filter((t: any) => {
+        if (!t || t.isDeleted) return false;
+        if (String(t.checkId) === String(checkId) || String(t.sourceId) === String(checkId)) return true;
+        if (targetTxId && String(t.id) === targetTxId) return true;
+        if (targetReceiptNo && String(t.receiptNumber).trim() === targetReceiptNo) return true;
+        if (checkNumStr && t.method === 'check') {
+          if (String(t.checkNumber).trim() === checkNumStr || String(t.receiptNumber).trim() === checkNumStr) {
+            if (!targetPersonId || String(t.personId) === String(targetPersonId)) return true;
+          }
+        }
+        return false;
+      });
+    } catch (_) {}
+
+    if (targetCheck) {
+      // Check if targetCheck has history embedded in it (targetCheck.history)
+      if (Array.isArray(targetCheck.history)) {
+        for (const h of targetCheck.history) {
+          const hStatus = h.newStatus || h.status;
+          const hCreated = h.createdAt || h.date;
+          if (!filtered.some(f => String(f.id) === String(h.id) || (f.newStatus === hStatus && f.createdAt === hCreated))) {
+            filtered.push({
+              ...h,
+              checkId: targetCheck.id,
+              checkType: targetCheck.checkType || checkType || 'issued',
+              newStatus: hStatus,
+              transactionId: h.transactionId || targetCheck.transactionId || null,
+              receiptNumber: h.receiptNumber || targetCheck.receiptNumber || null,
+              createdAt: hCreated || new Date().toISOString()
+            });
+          }
+        }
+      }
+
+      // If no initial registration log exists in filtered, add one
+      const hasInitialLog = filtered.some(h => !h.oldStatus && (h.newStatus === 'issued' || h.newStatus === 'received' || h.newStatus === 'blank'));
+      if (!hasInitialLog) {
+        const initialStatus = targetCheck.status === 'blank' ? 'blank' : (checkType === 'received' ? 'received' : 'issued');
+        const initialDate = targetCheck.createdAt ? (typeof targetCheck.createdAt === 'number' ? new Date(targetCheck.createdAt).toISOString() : targetCheck.createdAt) : (targetCheck.issueDate || targetCheck.receiveDate || new Date().toISOString());
+        const initTx = linkedTransactions.find(t => !t.isCheckCashing);
+        filtered.push({
+          id: `init_${targetCheck.id}`,
+          checkId: targetCheck.id,
+          checkType: checkType || 'issued',
+          oldStatus: null,
+          newStatus: initialStatus,
+          description: targetCheck.description ? `ثبت اولیه چک: ${targetCheck.description}` : `ثبت برگه چک شماره ${targetCheck.checkNumber || ''}`,
+          userId: targetCheck.userId || 'system',
+          transactionId: initTx?.id || targetCheck.transactionId || null,
+          receiptNumber: initTx?.receiptNumber || targetCheck.receiptNumber || null,
+          createdAt: initialDate
+        });
+      }
+
+      // If check status is changed (e.g. 'cashed', 'bounced', etc.) and no transition record matches current status:
+      if (targetCheck.status && targetCheck.status !== 'issued' && targetCheck.status !== 'received' && targetCheck.status !== 'blank') {
+        const hasCurrentStatusLog = filtered.some(h => h.newStatus === targetCheck.status);
+        if (!hasCurrentStatusLog) {
+          const updateDate = targetCheck.updatedAt ? (typeof targetCheck.updatedAt === 'number' ? new Date(targetCheck.updatedAt).toISOString() : targetCheck.updatedAt) : new Date().toISOString();
+          const cashingTx = linkedTransactions.find(t => t.isCheckCashing || String(t.id) === String(targetCheck.transactionId));
+          filtered.push({
+            id: `status_${targetCheck.id}_${targetCheck.status}`,
+            checkId: targetCheck.id,
+            checkType: checkType || 'issued',
+            oldStatus: checkType === 'received' ? 'received' : 'issued',
+            newStatus: targetCheck.status,
+            description: targetCheck.statusDesc || `تغییر وضعیت چک به ${targetCheck.status}`,
+            userId: targetCheck.userId || 'system',
+            transactionId: targetCheck.status === 'cashed' ? (cashingTx?.id || targetCheck.transactionId || null) : null,
+            receiptNumber: targetCheck.status === 'cashed' ? (cashingTx?.receiptNumber || targetCheck.receiptNumber || null) : null,
+            createdAt: updateDate
+          });
+        }
+      }
+    }
+
+    // Enrich logs with linked transactions if missing
+    for (const h of filtered) {
+      if (!h.transactionId || !h.receiptNumber) {
+        if (h.newStatus === 'cashed') {
+          const cashingTx = linkedTransactions.find(t => t.isCheckCashing || String(t.id) === String(targetCheck?.transactionId) || (t.description && (t.description.includes('پاس') || t.description.includes('وصول') || t.description.includes('نقد'))));
+          if (cashingTx) {
+            h.transactionId = h.transactionId || cashingTx.id;
+            h.receiptNumber = h.receiptNumber || cashingTx.receiptNumber;
+          } else if (targetCheck?.transactionId) {
+            h.transactionId = h.transactionId || targetCheck.transactionId;
+            h.receiptNumber = h.receiptNumber || targetCheck.receiptNumber;
+          }
+        } else if (h.newStatus === 'issued' || h.newStatus === 'received') {
+          const initTx = linkedTransactions.find(t => !t.isCheckCashing);
+          if (initTx) {
+            h.transactionId = h.transactionId || initTx.id;
+            h.receiptNumber = h.receiptNumber || initTx.receiptNumber;
+          } else if (targetCheck?.receiptNumber) {
+            h.receiptNumber = h.receiptNumber || targetCheck.receiptNumber;
+          }
+        }
+      }
+    }
+  }
+
+  return filtered.sort((a, b) => {
+    const timeA = new Date(a.createdAt || a.date || 0).getTime() || 0;
+    const timeB = new Date(b.createdAt || b.date || 0).getTime() || 0;
+    return timeB - timeA;
+  });
 };

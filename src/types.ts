@@ -99,12 +99,13 @@ export type IssuedCheck = {
   payeeId: string | number;
   status: 'blank' | 'issued' | 'cashed' | 'bounced' | 'cancelled';
   receiptNumber?: string;
+  transactionId?: string | number | null;
   assignedToId?: string | number;
   bankAccountId?: string | number;
   description?: string;
   imageUrl?: string;
   attachments?: string[];
-  history?: { status: string, date: string, desc?: string, user?: string }[];
+  history?: { status: string, date: string, desc?: string, user?: string, transactionId?: string | number, receiptNumber?: string | number }[];
   isActive?: boolean;
   salePrice?: number;
   discountPercent?: number;
@@ -124,12 +125,13 @@ export type ReceivedCheck = {
   payerId: string | number;
   status: 'received' | 'deposited' | 'cashed' | 'bounced' | 'returned' | 'assigned' | 'bounced_assigned';
   receiptNumber?: string;
+  transactionId?: string | number | null;
   assignedToId?: string | number;
   accountId?: string | number;
   description?: string;
   imageUrl?: string;
   attachments?: string[];
-  history?: { status: string, date: string, desc?: string, user?: string }[];
+  history?: { status: string, date: string, desc?: string, user?: string, transactionId?: string | number, receiptNumber?: string | number }[];
 };
 
 export type ProductCategory = {

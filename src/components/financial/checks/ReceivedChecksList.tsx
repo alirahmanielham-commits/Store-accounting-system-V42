@@ -231,10 +231,8 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
                               <button 
                                 onClick={async () => {
                                   setHistoryCheck({ ...c, checkType: 'received' });
-                                  const h = await getCheckHistoryLogs(c.id, 'received');
-                                  const oldHistory = c.history || [];
-                                  const combined = [...oldHistory, ...h].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-                                  setHistoryData(combined);
+                                  const h = await getCheckHistoryLogs(c.id, 'received', c);
+                                  setHistoryData(h);
                                   setIsHistoryModalOpen(true);
                                 }}
                                 className="p-1.5 text-gray-400 hover:text-blue-600 hover:bg-blue-50 rounded-lg transition-colors border border-transparent hover:border-blue-100 inline-block"

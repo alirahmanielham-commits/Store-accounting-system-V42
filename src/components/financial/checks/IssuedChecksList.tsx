@@ -279,10 +279,8 @@ export function IssuedChecksList({
                         <button
                           onClick={async () => {
                             setHistoryCheck({ ...c, checkType: 'issued' });
-                            const h = await getCheckHistoryLogs(c.id, 'issued');
-                            const oldHistory = c.history || [];
-                            const combined = [...oldHistory, ...h].sort((a, b) => new Date(b.date || b.createdAt).getTime() - new Date(a.date || a.createdAt).getTime());
-                            setHistoryData(combined);
+                            const h = await getCheckHistoryLogs(c.id, 'issued', c);
+                            setHistoryData(h);
                             setIsHistoryModalOpen(true);
                           }}
                           className="p-2 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
