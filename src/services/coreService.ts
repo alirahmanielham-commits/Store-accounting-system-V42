@@ -209,7 +209,12 @@ export const appendLocalData = async <T>(key: string, data: T): Promise<T> => {
   });
   if (!res.ok) {
     if (res.status === 401) return data as T;
-    throw new Error('Network response was not ok');
+    let errText = 'Network response was not ok';
+    try {
+      const errJson = await res.json();
+      errText = errJson.error || errJson.message || errText;
+    } catch (_) {}
+    throw new Error(errText);
   }
   invalidateCache(key);
   if (!isAppDataChangedSuspended && typeof window !== 'undefined') {

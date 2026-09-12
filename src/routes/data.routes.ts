@@ -270,18 +270,17 @@ router.post('/api/data/:key/append', async (req, res) => {
              }
          }
       } else {
-         const data = (await getDbData(key)) || [];
-         if (Array.isArray(data)) {
-           const idx = data.findIndex((x: any) => String(x.id) === String(newItem.id));
-           if (idx !== -1) {
-               data[idx] = { ...data[idx], ...newItem };
-           } else {
-               data.push(newItem);
-           }
-           await setDbData(key, data);
-         } else {
-           return res.status(400).json({ error: 'Target is not an array' });
+         let data = (await getDbData(key));
+         if (!Array.isArray(data)) {
+           data = [];
          }
+         const idx = data.findIndex((x: any) => x && String(x.id) === String(newItem.id));
+         if (idx !== -1) {
+             data[idx] = { ...data[idx], ...newItem };
+         } else {
+             data.push(newItem);
+         }
+         await setDbData(key, data);
       }
 
       // Log creation in background to avoid delaying client response

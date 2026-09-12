@@ -16,7 +16,7 @@ export default function PreviewModals(props: any) {
     previewReceiptData, setPreviewReceiptData, confirmReceiptSubmit,
     storeSettings, products, warehouses,
     transactions, invoices, personOpeningBalances, issuedChecks, receivedChecks, printingTransaction, setPrintingTransaction,
-    accounts, cashboxes, checkbooks, submittingReceipt,
+    accounts, cashboxes, checkbooks, submittingReceipt, setEditingReceipt, setIsEditReceiptModalOpen,
   } = props;
 
   const currentInvoice = viewingInvoice || previewInvoiceData;
@@ -556,6 +556,13 @@ export default function PreviewModals(props: any) {
           invoices={invoices}
           formatCurrency={formatCurrency}
           getPersonDisplayName={getPersonDisplayName}
+          onEdit={(receipt) => {
+            setPrintingTransaction(null);
+            if (setEditingReceipt && setIsEditReceiptModalOpen) {
+              setEditingReceipt(receipt);
+              setIsEditReceiptModalOpen(true);
+            }
+          }}
         />
       )}
     </>

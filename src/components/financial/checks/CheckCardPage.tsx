@@ -225,14 +225,17 @@ export default function CheckCardPage({
         await updateReceivedCheck(check.id, updatedCheck);
       }
       
-      await addCheckHistoryLog({
-        checkId: check.id,
-        checkType: checkType,
-        oldStatus: oldState,
-        newStatus: newState,
-        userId: currentUser,
-        
-      });
+      try {
+        await addCheckHistoryLog({
+          checkId: check.id,
+          checkType: checkType,
+          oldStatus: oldState,
+          newStatus: newState,
+          userId: currentUser,
+        });
+      } catch (logErr) {
+        console.warn('History log warning:', logErr);
+      }
       
       if (financialEffectStates.includes(newState)) {
         await syncCheckAccountingDocument(checkType, updatedCheck);

@@ -631,6 +631,18 @@ export const checkAuditLogs = pgTable('check_audit_logs', {
   createdAt: timestamp('created_at').defaultNow().notNull(),
 });
 
+export const checkHistory = pgTable('check_history', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  checkId: varchar('check_id', { length: 50 }).notNull(),
+  checkType: varchar('check_type', { length: 50 }).notNull(), // 'issued' | 'received'
+  oldStatus: varchar('old_status', { length: 50 }),
+  newStatus: varchar('new_status', { length: 50 }),
+  description: text('description'),
+  userId: varchar('user_id', { length: 50 }),
+  fiscalYearId: varchar('fiscal_year_id', { length: 50 }),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 export const notifications = pgTable('notifications', {
   id: varchar('id', { length: 50 }).primaryKey(),
   userId: varchar('user_id', { length: 50 }),

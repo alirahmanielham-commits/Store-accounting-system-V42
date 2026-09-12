@@ -18,7 +18,8 @@ import {
   User,
   CreditCard,
   PenTool,
-  Save
+  Save,
+  Edit2
 } from 'lucide-react';
 import ReceiptPrintTemplate from './ReceiptPrintTemplate';
 import {
@@ -42,6 +43,7 @@ interface ReceiptPrintModalProps {
   invoices?: any[];
   getPersonDisplayName?: (person: any, persons?: any[]) => string;
   formatCurrency?: (val: any) => string;
+  onEdit?: (receipt: any) => void;
 }
 
 export default function ReceiptPrintModal({
@@ -55,6 +57,7 @@ export default function ReceiptPrintModal({
   invoices = [],
   getPersonDisplayName,
   formatCurrency,
+  onEdit,
 }: ReceiptPrintModalProps) {
   const [printSettings, setPrintSettings] = useState<ReceiptPrintSettings>(() => {
     try {
@@ -312,6 +315,18 @@ export default function ReceiptPrintModal({
               <ZoomIn className="w-4 h-4" />
             </button>
           </div>
+
+          {onEdit && (
+            <button
+              type="button"
+              onClick={() => onEdit(data)}
+              className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs sm:text-sm font-black border border-indigo-200 flex items-center gap-1.5 transition-all"
+              title="ویرایش این رسید"
+            >
+              <Edit2 className="w-4 h-4" />
+              <span>ویرایش رسید</span>
+            </button>
+          )}
 
           <button
             type="button"

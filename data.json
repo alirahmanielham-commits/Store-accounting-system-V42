@@ -1464,6 +1464,86 @@
       "entityId": "5f2sgp9gjfc",
       "changes": "{\"type\":\"purchase_return\",\"title\":\"تست همزمان فاکتور برگشت از خرید 4\",\"date\":\"2026-09-08\",\"invoiceNumber\":\"RTN-P-001008\",\"id\":\"5f2sgp9gjfc\",\"items\":[]}",
       "timestamp": 1788902671187
+    },
+    {
+      "id": "5u42jqcph0t",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "xcx3j4jlxe",
+      "changes": "{\"checkId\":\"test\",\"checkType\":\"issued\",\"oldStatus\":\"in_circulation\",\"newStatus\":\"cleared\",\"id\":\"xcx3j4jlxe\"}",
+      "timestamp": 1789200534016
+    },
+    {
+      "id": "g0a23sy9cvr",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "test1",
+      "changes": "{\"checkId\":\"test\",\"checkType\":\"issued\",\"oldStatus\":\"in_circulation\",\"newStatus\":\"cleared\",\"fiscalYearId\":\"db4148fa-fa50-40d9-8333-01bb7e5f6af8\",\"id\":\"test1\"}",
+      "timestamp": 1789200612795
+    },
+    {
+      "id": "cl2gnwdwq9q",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "test2",
+      "changes": "{\"checkId\":\"test\",\"checkType\":\"issued\",\"oldStatus\":\"in_circulation\",\"newStatus\":\"cleared\",\"fiscalYearId\":\"db4148fa-fa50-40d9-8333-01bb7e5f6af8\",\"id\":\"test2\"}",
+      "timestamp": 1789200824181
+    },
+    {
+      "id": "zqk8z0dltb",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "rspdndj748l",
+      "changes": "{\"checkId\":\"c123\",\"checkType\":\"issued\",\"oldStatus\":\"blank\",\"newStatus\":\"issued\",\"userId\":\"system\",\"id\":\"rspdndj748l\",\"createdAt\":\"2026-09-12T08:14:28.312Z\",\"fiscalYearId\":\"db4148fa-fa50-40d9-8333-01bb7e5f6af8\"}",
+      "timestamp": 1789200868444
+    },
+    {
+      "id": "o9varoj755n",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "1",
+      "changes": "{\"checkId\":12345,\"checkType\":\"issued\",\"newStatus\":\"issued\",\"userId\":\"system\",\"id\":\"1\",\"createdAt\":\"2026-09-12T08:14:30.792Z\"}",
+      "timestamp": 1789200870929
+    },
+    {
+      "id": "951ldyd42i8",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "2",
+      "changes": "{\"checkId\":\"12345\",\"checkType\":\"issued\",\"oldStatus\":\"پیش‌نویس\",\"newStatus\":\"صادر شده\",\"description\":\"تغییر وضعیت\",\"userId\":\"علی\",\"id\":\"2\",\"createdAt\":\"2026-09-12T08:14:30.793Z\"}",
+      "timestamp": 1789200870947
+    },
+    {
+      "id": "js5knhpujj",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "3",
+      "changes": "{\"checkType\":\"issued\",\"id\":\"3\"}",
+      "timestamp": 1789200870953
+    },
+    {
+      "id": "ldqrmdz9cvf",
+      "action": "CREATE",
+      "userId": "system",
+      "details": "ایجاد رکورد جدید",
+      "entityType": "check_history",
+      "entityId": "4",
+      "changes": "{\"id\":\"4\"}",
+      "timestamp": 1789200870957
     }
   ],
   "person_roles": [
@@ -1967,5 +2047,65 @@
   "sales_invoice_items": [],
   "sales_invoices": [],
   "purchase_invoice_items": [],
-  "purchase_invoices": []
+  "purchase_invoices": [],
+  "check_history": [
+    {
+      "checkId": "test",
+      "checkType": "issued",
+      "oldStatus": "in_circulation",
+      "newStatus": "cleared",
+      "id": "xcx3j4jlxe"
+    },
+    {
+      "checkId": "test",
+      "checkType": "issued",
+      "oldStatus": "in_circulation",
+      "newStatus": "cleared",
+      "fiscalYearId": "db4148fa-fa50-40d9-8333-01bb7e5f6af8",
+      "id": "test1"
+    },
+    {
+      "checkId": "test",
+      "checkType": "issued",
+      "oldStatus": "in_circulation",
+      "newStatus": "cleared",
+      "fiscalYearId": "db4148fa-fa50-40d9-8333-01bb7e5f6af8",
+      "id": "test2"
+    },
+    {
+      "checkId": "c123",
+      "checkType": "issued",
+      "oldStatus": "blank",
+      "newStatus": "issued",
+      "userId": "system",
+      "id": "rspdndj748l",
+      "createdAt": "2026-09-12T08:14:28.312Z",
+      "fiscalYearId": "db4148fa-fa50-40d9-8333-01bb7e5f6af8"
+    },
+    {
+      "checkId": 12345,
+      "checkType": "issued",
+      "newStatus": "issued",
+      "userId": "system",
+      "id": "1",
+      "createdAt": "2026-09-12T08:14:30.792Z"
+    },
+    {
+      "checkId": "12345",
+      "checkType": "issued",
+      "oldStatus": "پیش‌نویس",
+      "newStatus": "صادر شده",
+      "description": "تغییر وضعیت",
+      "userId": "علی",
+      "id": "2",
+      "createdAt": "2026-09-12T08:14:30.793Z"
+    },
+    {
+      "checkType": "issued",
+      "id": "3"
+    },
+    {
+      "id": "4"
+    }
+  ]
 }

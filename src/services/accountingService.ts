@@ -259,14 +259,32 @@ export const getCheckAuditLogs = async (checkId?: string | number, checkType?: '
 export const addCheckHistoryLog = async (record: { checkId: string | number, checkType: 'issued' | 'received', oldStatus?: string, newStatus?: string, description?: string, userId?: string }) => {
   const now = new Date().toISOString();
   const newItem = { ...record, id: Math.random().toString(36).substring(2, 15), createdAt: now };
-  await appendLocalData('check_history', newItem);
+  try {
+    await appendLocalData('check_history', newItem);
+  } catch (err) {
+    console.warn('Warning: Failed to append check_history log, falling back:', err);
+    try {
+      const existing = await getLocalData<any[]>('check_history', []);
+      const updated = Array.isArray(existing) ? [...existing, newItem] : [newItem];
+      await saveLocalData('check_history', updated);
+    } catch (_) {}
+  }
   return newItem;
 };
 
 export const addCheckAuditLog = async (record: { checkId: string | number, checkType: 'issued' | 'received', action: string, oldValues?: any, newValues?: any, userId?: string }) => {
   const now = new Date().toISOString();
   const newItem = { ...record, id: (Math.random() + 1).toString(36).substring(7), createdAt: now };
-  await appendLocalData('check_audit_logs', newItem);
+  try {
+    await appendLocalData('check_audit_logs', newItem);
+  } catch (err) {
+    console.warn('Warning: Failed to append check_audit_logs, falling back:', err);
+    try {
+      const existing = await getLocalData<any[]>('check_audit_logs', []);
+      const updated = Array.isArray(existing) ? [...existing, newItem] : [newItem];
+      await saveLocalData('check_audit_logs', updated);
+    } catch (_) {}
+  }
   return newItem;
 };
 
