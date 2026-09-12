@@ -141,6 +141,8 @@ export const allSidebarGroups: SidebarGroup[] = [
       { id: "checkbooks", label: "دسته چک ها", roles: ["admin", "accountant", "manager"] },
       { id: "issue_check_form", label: "صدور چک", roles: ["admin", "accountant", "manager"] },
       { id: "issued_checks_page", label: "لیست چک‌های پرداختی", roles: ["admin", "accountant", "manager", "viewer"] },
+      { id: "receive_check_form", label: "ثبت چک دریافتی", roles: ["admin", "accountant", "manager"] },
+      { id: "received_checks_page", label: "لیست چک‌های دریافتی", roles: ["admin", "accountant", "manager", "viewer"] },
       { id: "check_card", label: "کارت/برگه چک", roles: ["admin", "accountant", "manager", "viewer"] },
     ],
   },

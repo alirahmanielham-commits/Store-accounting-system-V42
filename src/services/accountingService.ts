@@ -459,7 +459,46 @@ export const getReceivedChecks = async (page?: number, pageSize?: number, sortBy
   if (sortBy) query.sortBy = sortBy;
   if (sortDir) query.sortDir = sortDir;
   const data = await getLocalData<any>('received_checks', [], query);
-  return data.sort((a, b) => b.createdAt - a.createdAt);
+  const list = Array.isArray(data) ? data : (data?.data || []);
+  
+  const norm = (dStr: any) => {
+    if (!dStr) return 0;
+    if (typeof dStr === 'number') return dStr;
+    const str = String(dStr).trim();
+    if (!str) return 0;
+    if (str.includes('T')) {
+      const t = new Date(str).getTime();
+      if (!isNaN(t)) return t;
+    }
+    const eng = str.replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)])
+                   .replace(/[٠-٩]/g, d => '0123456789'['٠١٢٣٤٥٦٧٨٩'.indexOf(d)]);
+    const parts = eng.split(/[/.-]/).map(p => p.trim()).filter(Boolean);
+    if (parts.length >= 3) {
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+      if (!isNaN(y) && !isNaN(m) && !isNaN(d)) {
+        return y * 10000 + m * 100 + d;
+      }
+    }
+    const t = new Date(eng).getTime();
+    return isNaN(t) ? 0 : t;
+  };
+
+  return list.sort((a: any, b: any) => {
+    if (sortBy === 'amount') {
+      const diff = Number(a.amount || 0) - Number(b.amount || 0);
+      return sortDir === 'desc' ? -diff : diff;
+    }
+    const timeA = norm(a.dueDate);
+    const timeB = norm(b.dueDate);
+    if (!timeA && timeB) return 1;
+    if (timeA && !timeB) return -1;
+    if (timeA !== timeB) {
+      return sortDir === 'desc' ? timeB - timeA : timeA - timeB;
+    }
+    return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+  });
 };
 
 export const addReceivedCheck = async (record: any) => {

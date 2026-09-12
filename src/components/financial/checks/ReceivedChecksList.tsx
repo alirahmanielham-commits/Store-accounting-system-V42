@@ -1,6 +1,7 @@
 import { toPersianDigits, getDaysRemaining } from "./utils";
 import { renderSmsTemplate } from "../../../utils/smsTemplateRenderer";
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'motion/react';
 import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import { 
@@ -13,9 +14,10 @@ import persian_fa from "react-date-object/locales/persian_fa";
 
 export function ReceivedChecksList({ showNotification, receivedChecks, persons, checkbooks, accounts, receivedSearchQuery, setReceivedSearchQuery, receivedCheckStatusFilter, setReceivedCheckStatusFilter, receivedSortBy, setReceivedSortBy, receivedSortDir, setReceivedSortDir, filteredReceivedChecks, totalReceivedAmount, cashedReceivedAmount, inHandReceivedAmount, bouncedReceivedAmount, setViewingCheck, setUpdatingCheckId, setUpdatingCheckType, setStatusVal, setIsStatusModalOpen, setIsHistoryModalOpen, setHistoryCheck, setHistoryData, handleDeleteReceivedCheck, formatDateDisplay, storeSettings, sendNotification, getCheckHistoryLogs, onEditReceiptByCheck, receivedPage, setReceivedPage, totalReceivedPages }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const navigate = useNavigate();
   return (
     <>
-/* SUBTAB 3: RECEIVED CHECKS */
+      {/* SUBTAB 3: RECEIVED CHECKS */}
           <div>
             {/* KPI Stat Cards */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-6 print:hidden">
@@ -103,6 +105,15 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
                     {receivedSortDir === 'asc' ? <ArrowUpRight className="w-4 h-4" /> : <ArrowDownLeft className="w-4 h-4" />}
                   </button>
                 </div>
+
+                <button 
+                  onClick={() => navigate('/receive_check_form')}
+                  className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
+                  title="ثبت برگه چک دریافتی در فرم مجزا"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>ثبت چک جدید</span>
+                </button>
                 
                 <button 
                   onClick={() => window.print()}
@@ -249,14 +260,10 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
                               </button>
                               <button 
                                 onClick={() => { 
-                                  if (onEditReceiptByCheck) {
-                                    onEditReceiptByCheck(c, 'received');
-                                  } else {
-                                    showNotification('این چک بدون فرم رسید ثبت شده است و قابلیت ویرایش از طریق رسید را ندارد. در صورت نیاز آن را حذف کرده و مجدداً از طریق فرم رسید ثبت نمایید.', 'error');
-                                  }
+                                  navigate(`/receive_check_form?id=${c.id}`);
                                 }}
                                 className="p-1.5 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors border border-transparent hover:border-indigo-100 inline-block"
-                                title="ویرایش چک"
+                                title="ویرایش برگه چک دریافتی"
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>

@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { getIssuedChecks, getPersons, getCheckbooks, getAccounts, getStoreSettings } from "../../services/dataService";
 import { IssuedChecksList } from "./checks/IssuedChecksList";
 import { Search, Filter, BookOpen } from "lucide-react";
+import { compareChecksByDueDate, normalizeDateForSort } from "./checks/utils";
 
 export default function IssuedChecksPage({ showNotification, currentUser, setViewingCheck, onDataChange, onEditReceiptByCheck }: any) {
   const [issuedChecks, setIssuedChecks] = useState<any[]>([]);
@@ -64,12 +65,21 @@ export default function IssuedChecksPage({ showNotification, currentUser, setVie
       result = result.filter(c => c.checkbookId === issuedCheckbookFilter);
     }
     result.sort((a, b) => {
-      let valA = a[issuedSortBy];
-      let valB = b[issuedSortBy];
-      if (issuedSortBy === 'dueDate' || issuedSortBy === 'issueDate') {
-        valA = new Date(valA || 0).getTime();
-        valB = new Date(valB || 0).getTime();
+      if (issuedSortBy === 'dueDate') {
+        return compareChecksByDueDate(a, b, issuedSortDir);
       }
+      if (issuedSortBy === 'issueDate') {
+        const timeA = normalizeDateForSort(a.issueDate);
+        const timeB = normalizeDateForSort(b.issueDate);
+        if (!timeA && timeB) return 1;
+        if (timeA && !timeB) return -1;
+        if (timeA !== timeB) {
+          return issuedSortDir === 'asc' ? timeA - timeB : timeB - timeA;
+        }
+        return (Number(b.createdAt) || 0) - (Number(a.createdAt) || 0);
+      }
+      const valA = Number(a[issuedSortBy] || 0);
+      const valB = Number(b[issuedSortBy] || 0);
       if (valA < valB) return issuedSortDir === 'asc' ? -1 : 1;
       if (valA > valB) return issuedSortDir === 'asc' ? 1 : -1;
       return 0;

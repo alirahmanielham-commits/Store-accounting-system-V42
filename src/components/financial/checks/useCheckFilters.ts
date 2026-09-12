@@ -1,19 +1,7 @@
 import { useState, useMemo } from 'react';
 import { IssuedCheck, ReceivedCheck, Person, Account, Checkbook } from '../../../types';
 import { CheckFilters } from './types';
-
-// Helper functions that were inside the component
-const normalizeDate = (dStr: string) => {
-  if (!dStr) return 0;
-  if (dStr.includes('T')) {
-    const d = new Date(dStr);
-    return isNaN(d.getTime()) ? 0 : d.getTime();
-  }
-  const englishDStr = dStr.replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]);
-  const parts = englishDStr.split(/[/-]/).map(p => p.padStart(2, '0'));
-  if (parts.length === 3) return parseInt(parts[0] + parts[1] + parts[2], 10);
-  return 0;
-};
+import { compareChecksByDueDate, normalizeDateForSort } from './utils';
 
 export function useCheckFilters(
   issuedChecks: IssuedCheck[],
@@ -59,10 +47,12 @@ export function useCheckFilters(
       
       return searchMatch && statusMatch && checkbookMatch;
     }).sort((a, b) => {
-      let diff = 0;
-      if (issuedSortBy === 'date') diff = normalizeDate(a.dueDate) - normalizeDate(b.dueDate);
-      else diff = Number(a.amount) - Number(b.amount);
-      return issuedSortDir === 'asc' ? diff : -diff;
+      if (issuedSortBy === 'date') {
+        return compareChecksByDueDate(a, b, issuedSortDir);
+      }
+      const amtA = Number(a.amount || 0);
+      const amtB = Number(b.amount || 0);
+      return issuedSortDir === 'asc' ? amtA - amtB : amtB - amtA;
     });
   }, [issuedChecks, persons, checkbooks, accounts, issuedSearchQuery, issuedCheckStatusFilter, issuedCheckbookFilter, issuedSortBy, issuedSortDir]);
 
@@ -82,10 +72,12 @@ export function useCheckFilters(
       
       return searchMatch && statusMatch;
     }).sort((a, b) => {
-      let diff = 0;
-      if (receivedSortBy === 'date') diff = normalizeDate(a.dueDate) - normalizeDate(b.dueDate);
-      else diff = Number(a.amount) - Number(b.amount);
-      return receivedSortDir === 'asc' ? diff : -diff;
+      if (receivedSortBy === 'date') {
+        return compareChecksByDueDate(a, b, receivedSortDir);
+      }
+      const amtA = Number(a.amount || 0);
+      const amtB = Number(b.amount || 0);
+      return receivedSortDir === 'asc' ? amtA - amtB : amtB - amtA;
     });
   }, [receivedChecks, persons, receivedSearchQuery, receivedCheckStatusFilter, receivedSortBy, receivedSortDir]);
 

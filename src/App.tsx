@@ -315,6 +315,8 @@ const CheckManagement = React.lazy(() => import('./components/financial/CheckMan
 const CheckbooksManager = React.lazy(() => import('./components/financial/CheckbooksManager'));
 const IssuedChecksPage = React.lazy(() => import('./components/financial/IssuedChecksPage'));
 const IssueCheckStandalone = React.lazy(() => import('./components/financial/IssueCheckStandalone'));
+const ReceivedChecksPage = React.lazy(() => import('./components/financial/ReceivedChecksPage'));
+const ReceiveCheckStandalone = React.lazy(() => import('./components/financial/ReceiveCheckStandalone'));
 const CheckCardPage = React.lazy(() => import('./components/financial/checks/CheckCardPage'));
 
 const PersonNotesAndAttachments = React.lazy(() => import('./components/financial/PersonNotesAndAttachments'));
@@ -952,6 +954,22 @@ export default function App() {
                         className="h-full overflow-y-auto"
                       >
                         <IssueCheckStandalone />
+                      </motion.div>} />
+
+<Route path="/received_checks_page" element={<ReceivedChecksPage showNotification={showNotification} currentUser={user?.name || "کاربر سیستم"} setViewingCheck={setViewingCheck} onDataChange={() => { fetchDataSilent(); fetchPersons(); }} />} />
+<Route path="/receive_check_form" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="h-full overflow-y-auto"
+                      >
+                        <ReceiveCheckStandalone
+                          showNotification={showNotification}
+                          setViewingCheck={setViewingCheck}
+                          onSuccess={() => {
+                            fetchDataSilent();
+                            fetchPersons();
+                          }}
+                        />
                       </motion.div>} />
 
 
