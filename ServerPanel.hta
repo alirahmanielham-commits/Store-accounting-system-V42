@@ -212,18 +212,26 @@
         }
 
         function checkServerStatus() {
-            // Using WinHttp for a much more reliable local connection test in HTA
             try {
                 var port = document.getElementById('portNum').value || "3000";
-                var req = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
-                // Set short timeouts: resolve, connect, send, receive (in milliseconds)
-                req.SetTimeouts(1000, 1000, 1000, 1000);
-                req.Open("GET", "http://127.0.0.1:" + port + "/", false); 
-                req.Send();
-                // If it doesn't throw, we assume it's running
-                updateStatusBadge(true);
+                var xhr = new ActiveXObject("Microsoft.XMLHTTP");
+                // استفاده از true به معنای اجرای غیرهمزمان (Asynchronous) است تا صفحه قفل نشود
+                xhr.open("GET", "http://127.0.0.1:" + port + "/?t=" + new Date().getTime(), true); 
+                
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        // اگر status بزرگتر از صفر باشد یعنی سرور پاسخی داده است (روشن است)
+                        updateStatusBadge(xhr.status > 0);
+                    }
+                };
+                
+                // هندل کردن ارورهای شبکه بدون متوقف کردن کد
+                xhr.onerror = function() {
+                    updateStatusBadge(false);
+                };
+                
+                xhr.send();
             } catch(e) {
-                // Connection refused or timeout
                 updateStatusBadge(false);
             }
         }
