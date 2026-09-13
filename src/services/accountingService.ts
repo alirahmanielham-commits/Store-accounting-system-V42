@@ -292,7 +292,7 @@ export const addCheckHistoryLog = async (record: {
   transactionId?: string | number | null,
   receiptNumber?: string | number | null
 }) => {
-  const now = new Date().toISOString();
+  const now = Date.now();
   const newItem = { ...record, id: Math.random().toString(36).substring(2, 15), createdAt: now };
   try {
     await appendLocalData('check_history', newItem);
@@ -308,7 +308,7 @@ export const addCheckHistoryLog = async (record: {
 };
 
 export const addCheckAuditLog = async (record: { checkId: string | number, checkType: 'issued' | 'received', action: string, oldValues?: any, newValues?: any, userId?: string }) => {
-  const now = new Date().toISOString();
+  const now = Date.now();
   const newItem = { ...record, id: (Math.random() + 1).toString(36).substring(7), createdAt: now };
   try {
     await appendLocalData('check_audit_logs', newItem);

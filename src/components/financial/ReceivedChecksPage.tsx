@@ -38,10 +38,12 @@ import {
   Copy, 
   Check, 
   Download, 
-  RefreshCw 
+  RefreshCw,
+  List
 } from "lucide-react";
 import { CheckReceiptPrintTemplate } from "../print/CheckReceiptPrintTemplate";
 import { compareChecksByDueDate, normalizeDateForSort, getDaysRemaining } from "./checks/utils";
+import { CheckCalendar } from "./checks/CheckCalendar";
 
 export default function ReceivedChecksPage({
   showNotification,
@@ -65,6 +67,9 @@ export default function ReceivedChecksPage({
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
   const [currentPage, setCurrentPage] = useState(1);
   const pageSize = 15;
+
+  const [viewMode, setViewMode] = useState<"list" | "calendar">("list");
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<any[]>([]);
 
   // Selected checks for batch actions
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
@@ -483,6 +488,22 @@ export default function ReceivedChecksPage({
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
+          <div className="bg-slate-100 p-1 rounded-xl flex items-center border border-slate-200">
+             <button
+               onClick={() => setViewMode("list")}
+               className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === "list" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+             >
+               <List className="w-4 h-4" />
+               لیست
+             </button>
+             <button
+               onClick={() => setViewMode("calendar")}
+               className={`px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-2 transition-all ${viewMode === "calendar" ? "bg-white text-slate-800 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+             >
+               <Calendar className="w-4 h-4" />
+               تقویم
+             </button>
+          </div>
           <button
             onClick={() => navigate("/receive_check_form")}
             className="px-5 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-sm font-bold shadow-md shadow-emerald-600/20 flex items-center gap-2 transition-all"
@@ -692,6 +713,7 @@ export default function ReceivedChecksPage({
       </div>
 
       {/* Main Table */}
+      {viewMode === "list" ? (
       <div className="bg-white rounded-3xl border border-slate-200 shadow-sm overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-right text-sm">
@@ -911,6 +933,21 @@ export default function ReceivedChecksPage({
           </div>
         )}
       </div>
+      ) : (
+        <CheckCalendar 
+          issuedChecks={[]} 
+          receivedChecks={filteredChecks} 
+          persons={persons} 
+          checkbooks={[]} 
+          accounts={accounts}
+          storeSettings={storeSettings}
+          selectedCalendarDate={selectedCalendarDate} 
+          setSelectedCalendarDate={setSelectedCalendarDate}
+          normalizeDate={normalizeDateForSort} 
+          getSelectedRange={() => null} 
+          setViewingCheck={setViewingCheck}
+        />
+      )}
 
       {/* MODAL 1: Delete Confirmation */}
       <AnimatePresence>
