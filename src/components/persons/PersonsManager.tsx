@@ -435,7 +435,7 @@ export default function PersonsManager(props: any) {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="bg-white px-6 sm:px-8 py-5 border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+      <div className="bg-white px-4 sm:px-6 md:px-8 py-4 sm:py-5 border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
           <div>
             <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
@@ -494,7 +494,7 @@ export default function PersonsManager(props: any) {
         </div>
 
         {/* KPIs */}
-        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3 mt-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6">
           <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col justify-center">
             <span className="text-[10px] font-black text-slate-500 mb-1 flex items-center gap-1"><Users className="w-3 h-3"/> کل اشخاص</span>
             <span className="text-lg font-black text-slate-800 font-sans">{toPersianDigits(kpis.total)}</span>
@@ -538,7 +538,7 @@ export default function PersonsManager(props: any) {
       </div>
 
       {/* Toolbar & Filters */}
-      <div className="px-6 sm:px-8 py-4 bg-white/50 border-b border-slate-200">
+      <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 bg-white/50 border-b border-slate-200">
         <div className="flex flex-col xl:flex-row gap-3 xl:items-center justify-between">
           <div className="relative w-full xl:max-w-md">
             <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
@@ -706,7 +706,7 @@ export default function PersonsManager(props: any) {
       </div>
 
       {/* Main Content */}
-      <div className="px-6 sm:px-8 py-6 flex-1 overflow-x-hidden">
+      <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6 flex-1 overflow-x-hidden">
         
         {/* Bulk Actions Bar */}
         <AnimatePresence>

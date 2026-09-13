@@ -726,16 +726,16 @@ export default function PersonFormModal({
         )}
       </AnimatePresence>
       <div key="isPersonModalOpen-modal"
-        className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/50 backdrop-blur-sm"
+        className="fixed inset-0 z-[100] flex items-center justify-center p-0 sm:p-4 bg-gray-900/50 backdrop-blur-sm"
         dir="rtl"
       >
         <motion.div
                     initial={{ opacity: 0, scale: 0.95 }}
                     animate={{ opacity: 1, scale: 1 }}
                     exit={{ opacity: 0, scale: 0.95 }}
-                    className="bg-white rounded-2xl shadow-xl border border-gray-100 overflow-hidden w-full max-w-3xl max-h-[90vh] flex flex-col relative"
+                    className="bg-white rounded-none sm:rounded-2xl shadow-xl border-0 sm:border border-gray-100 overflow-hidden w-full max-w-3xl h-[100dvh] sm:h-auto sm:max-h-[90vh] flex flex-col relative"
                   >
-                    <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                    <div className="px-4 sm:px-6 py-3 sm:py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
                       <h3 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
                         <User className="w-5 h-5 text-indigo-500" />
                         {editingPersonId ? `ویرایش شخص (${newPersonAlias || (newPersonFirstName + " " + newPersonLastName).trim() || newPersonCompanyName || ""})` : "ثبت شخص جدید"}
@@ -748,7 +748,7 @@ export default function PersonFormModal({
                       </button>
                     </div>
 
-                    <div className="flex border-b border-gray-100 mt-2 px-6">
+                    <div className="flex border-b border-gray-100 mt-2 px-4 sm:px-6 overflow-x-auto whitespace-nowrap [&::-webkit-scrollbar]:hidden [-ms-overflow-style:none] [scrollbar-width:none]">
                       <button
                         type="button"
                         onClick={() => setPersonFormTab("general")}
@@ -788,7 +788,7 @@ export default function PersonFormModal({
                       )}
                     </div>
 
-                    <div className="p-6 overflow-y-auto">
+                    <div className="p-4 sm:p-6 overflow-y-auto flex-1">
                       <form
                         id="personForm"
                         onSubmit={(e) => {
@@ -1354,7 +1354,7 @@ export default function PersonFormModal({
 
                           {personFormTab === "financial" && (
                             <div className="w-full text-right md:col-span-2 space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                              <div className="w-full text-right bg-blue-50/50 p-6 rounded-3xl border border-blue-100 shadow-sm relative overflow-hidden">
+                              <div className="w-full text-right bg-blue-50/50 p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-blue-100 shadow-sm relative overflow-hidden">
                                 <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
                                 <div className="mb-4 relative z-10 border-b border-blue-100 pb-4">
                                   <h4 className="text-sm font-black text-blue-900 mb-2">
@@ -1519,11 +1519,11 @@ export default function PersonFormModal({
                       </form>
                     </div>
 
-                    <div className="px-6 py-4 border-t border-gray-100 bg-gray-50 flex justify-end gap-3 mt-auto">
+                    <div className="px-4 sm:px-6 py-4 border-t border-gray-100 bg-gray-50 flex sm:justify-end gap-3 mt-auto shrink-0">
                       <button
                         type="button"
                         onClick={() => onClose()}
-                        className="px-6 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl font-medium transition-colors shadow-sm"
+                        className="flex-1 sm:flex-none px-6 py-2.5 bg-white border border-gray-200 hover:bg-gray-50 text-gray-700 rounded-xl font-medium transition-colors shadow-sm"
                       >
                         انصراف
                       </button>
@@ -1531,7 +1531,7 @@ export default function PersonFormModal({
                         type="submit"
                         form="personForm"
                         disabled={submittingPerson}
-                        className="px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
+                        className="flex-1 sm:flex-none px-8 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-medium transition-colors shadow-sm disabled:opacity-70 disabled:cursor-not-allowed flex items-center justify-center gap-2"
                       >
                         {submittingPerson ? (
                           <motion.div
@@ -1567,11 +1567,11 @@ export default function PersonFormModal({
               initial={{ opacity: 0, scale: 0.95, y: 15 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 15 }}
-              className="relative w-full max-w-2xl bg-white rounded-3xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh] my-auto border border-amber-200/80 z-10"
+              className="relative w-full max-w-2xl bg-white rounded-none sm:rounded-3xl shadow-2xl overflow-hidden flex flex-col h-[100dvh] sm:h-auto sm:max-h-[92vh] my-auto border-0 sm:border border-amber-200/80 z-10"
               dir="rtl"
             >
               {/* Header */}
-              <div className="px-6 py-4 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-white flex items-center justify-between shadow-md">
+              <div className="px-4 sm:px-6 py-3 sm:py-4 bg-gradient-to-r from-amber-600 via-amber-500 to-amber-600 text-white flex items-center justify-between shadow-md">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-2xl bg-white/20 backdrop-blur-md flex items-center justify-center shrink-0 border border-white/20">
                     <AlertTriangle className="w-5 h-5 text-white" />
