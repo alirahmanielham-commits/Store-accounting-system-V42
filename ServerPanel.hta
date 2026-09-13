@@ -1,18 +1,17 @@
 <!DOCTYPE html>
 <html lang="fa" dir="rtl">
 <head>
-    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta charset="UTF-8">
-    <title>پنل مدیریت سرور</title>
-    <!-- تنظیمات مربوط به اجرای HTA در ویندوز -->
+    <title>پنل مدیریت حرفه‌ای سرور</title>
     <HTA:APPLICATION
         ID="ServerPanelApp"
-        APPLICATIONNAME="ServerPanel"
+        APPLICATIONNAME="ServerPanelPro"
         SCROLL="no"
         SINGLEINSTANCE="yes"
         WINDOWSTATE="normal"
         BORDER="dialog"
-        MAXIMIZEBUTTON="no"
+        MAXIMIZEBUTTON="yes"
         MINIMIZEBUTTON="yes"
         SYSMENU="yes"
         ICON="shell32.dll,43"
@@ -20,134 +19,350 @@
     <style>
         body {
             font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-            background: #f8fafc;
+            background: #0f172a;
             margin: 0;
-            padding: 25px;
-            color: #334155;
-            user-select: none;
+            padding: 0;
+            color: #f1f5f9;
+            display: flex;
+            height: 100vh;
+            overflow: hidden;
+        }
+        .sidebar {
+            width: 260px;
+            background: #1e293b;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            border-left: 1px solid #334155;
+        }
+        .main {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            background: #0f172a;
         }
         .header {
-            text-align: center;
-            margin-bottom: 30px;
-            padding-bottom: 20px;
-            border-bottom: 2px dashed #cbd5e1;
+            padding: 20px;
+            background: #1e293b;
+            border-bottom: 1px solid #334155;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
         }
-        .header h2 {
-            margin: 0;
-            font-size: 24px;
-            color: #0f172a;
-        }
-        .header p {
-            margin: 8px 0 0 0;
-            font-size: 13px;
-            color: #64748b;
-        }
-        .btn {
-            display: block;
-            width: 100%;
-            padding: 16px;
-            margin-bottom: 12px;
-            color: white;
-            border-radius: 12px;
-            cursor: pointer;
-            border: none;
-            font-size: 15px;
+        .header h2 { margin: 0; font-size: 18px; }
+        .status-badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 12px;
             font-weight: bold;
-            font-family: inherit;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
-            transition: all 0.2s;
-            text-align: center;
-            position: relative;
-        }
-        .btn:hover {
-            opacity: 0.9;
-        }
-        .btn-start { background: linear-gradient(135deg, #10b981, #059669); }
-        .btn-stop { background: linear-gradient(135deg, #ef4444, #dc2626); }
-        .btn-restart { background: linear-gradient(135deg, #f59e0b, #d97706); }
-        .btn-git { background: linear-gradient(135deg, #6366f1, #4f46e5); }
-        .btn-npm { background: linear-gradient(135deg, #64748b, #475569); }
-        
-        .icon {
-            font-size: 18px;
-            vertical-align: middle;
-            margin-left: 8px;
-        }
-        .footer {
-            text-align: center;
-            margin-top: 20px;
-            font-size: 11px;
+            background: #334155;
             color: #94a3b8;
         }
+        .status-badge.online {
+            background: rgba(16, 185, 129, 0.2);
+            color: #34d399;
+            border: 1px solid rgba(16, 185, 129, 0.3);
+        }
+        .status-badge.offline {
+            background: rgba(239, 68, 68, 0.2);
+            color: #f87171;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            margin-left: 8px;
+            background: currentColor;
+            display: inline-block;
+        }
+        
+        .btn {
+            display: flex;
+            align-items: center;
+            padding: 12px 16px;
+            margin-bottom: 12px;
+            color: white;
+            border-radius: 8px;
+            cursor: pointer;
+            border: none;
+            font-size: 14px;
+            font-weight: bold;
+            font-family: inherit;
+            transition: all 0.2s;
+            background: #334155;
+        }
+        .btn:hover { background: #475569; }
+        .btn-start { background: #059669; }
+        .btn-start:hover { background: #047857; }
+        .btn-stop { background: #dc2626; }
+        .btn-stop:hover { background: #b91c1c; }
+        .btn-icon { margin-left: 10px; font-size: 16px; }
+
+        .terminal-container {
+            flex: 1;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+        }
+        .terminal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+            color: #94a3b8;
+            font-size: 13px;
+        }
+        .terminal {
+            flex: 1;
+            background: #000;
+            color: #a7f3d0;
+            font-family: Consolas, 'Courier New', monospace;
+            font-size: 13px;
+            padding: 15px;
+            border-radius: 8px;
+            border: 1px solid #334155;
+            overflow-y: auto;
+            white-space: pre-wrap;
+            direction: ltr;
+            text-align: left;
+            line-height: 1.5;
+        }
+        .clear-btn {
+            background: transparent;
+            border: 1px solid #475569;
+            color: #94a3b8;
+            padding: 4px 8px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 11px;
+        }
+        .clear-btn:hover { background: #334155; color: #fff; }
     </style>
     <script>
-        // تنظیم اندازه ثابت پنجره
-        window.resizeTo(420, 620);
+        window.resizeTo(900, 600);
         
-        function runCmd(cmd, style, wait) {
+        var shell = new ActiveXObject("WScript.Shell");
+        var fso = new ActiveXObject("Scripting.FileSystemObject");
+        var logFile = "";
+        
+        var logTimer = null;
+        var statusTimer = null;
+        var lastLogSize = 0;
+
+        function init() {
+            // Set Working Directory to the HTA's location
+            var htaPath = unescape(document.location.pathname);
+            if (htaPath.charAt(0) == '/' && htaPath.charAt(2) == ':') {
+                htaPath = htaPath.substring(1);
+            }
+            var projectDir = fso.GetParentFolderName(htaPath);
+            shell.CurrentDirectory = projectDir;
+            
+            logFile = projectDir + "\\server_logs.txt";
+
+            if (!fso.FileExists(logFile)) {
+                var f = fso.CreateTextFile(logFile, true);
+                f.Close();
+            }
+            
+            logTimer = setInterval(readLogs, 1000);
+            statusTimer = setInterval(checkServerStatus, 2000);
+            
+            checkServerStatus();
+            logMsg("✅ سیستم مدیریت سرور آماده است.");
+            logMsg("مسیر پروژه: " + projectDir);
+            logMsg("آماده دریافت دستورات...\n");
+        }
+
+        function stripAnsi(str) {
+            return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
+        }
+
+        function runCmdHidden(cmd) {
             try {
-                var shell = new ActiveXObject("WScript.Shell");
-                shell.Run(cmd, style, wait);
+                var f = fso.CreateTextFile(logFile, true);
+                f.Close();
+                lastLogSize = 0;
+                document.getElementById('terminal').innerHTML = '';
+                
+                // Run completely hidden without creating a new console window popup
+                shell.Run("cmd.exe /c \"chcp 65001 >nul & " + cmd + " > \"" + logFile + "\" 2>&1\"", 0, false);
             } catch(e) {
-                alert("خطا در اجرای دستور. لطفاً مطمئن شوید که دسترسی‌های لازم وجود دارد.\n" + e.message);
+                logMsg("خطا در اجرای دستور: " + e.message);
+            }
+        }
+
+        function logMsg(msg) {
+            var term = document.getElementById('terminal');
+            term.innerHTML += msg + "\n";
+            term.scrollTop = term.scrollHeight;
+        }
+
+        function readLogs() {
+            try {
+                if (fso.FileExists(logFile)) {
+                    var file = fso.GetFile(logFile);
+                    if (file.Size > lastLogSize) {
+                        var ts = fso.OpenTextFile(logFile, 1, false);
+                        var content = ts.ReadAll();
+                        ts.Close();
+                        
+                        var newContent = content.substring(lastLogSize);
+                        if (newContent.length > 0) {
+                            newContent = newContent.replace(/</g, "&lt;").replace(/>/g, "&gt;");
+                            newContent = stripAnsi(newContent);
+                            
+                            var term = document.getElementById('terminal');
+                            term.innerHTML += newContent;
+                            term.scrollTop = term.scrollHeight;
+                            
+                            lastLogSize = content.length;
+                        }
+                    }
+                }
+            } catch(e) {
+                // File might be temporarily locked, try again next tick
+            }
+        }
+
+        function updateStatusBadge(isOnline) {
+            var badge = document.getElementById('status-badge');
+            if (isOnline) {
+                badge.className = "status-badge online";
+                badge.innerHTML = "<span class='status-dot'></span> سرور روشن است (پورت 3000)";
+            } else {
+                badge.className = "status-badge offline";
+                badge.innerHTML = "<span class='status-dot'></span> سرور خاموش است";
+            }
+        }
+
+        function checkServerStatus() {
+            try {
+                var xhr = new XMLHttpRequest();
+                xhr.open("GET", "http://localhost:3000/", true);
+                xhr.timeout = 1500;
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        updateStatusBadge(xhr.status > 0);
+                    }
+                };
+                xhr.onerror = function() {
+                    updateStatusBadge(false);
+                };
+                xhr.send();
+            } catch(e) {
+                updateStatusBadge(false);
             }
         }
 
         function startServer() {
-            // اجرای دستور در خط فرمان و باز گذاشتن پنجره (cmd /k)
-            runCmd('cmd.exe /c start "Dev Server" cmd.exe /k "title AI Studio Server & color 0A & echo Starting Server on Port 3000... & npm run dev -- --host"', 1, false);
+            logMsg("\n--- در حال راه‌اندازی سرور روی پورت 3000 ---");
+            runCmdHidden("npm run dev -- --host");
         }
 
         function stopServer() {
-            // یافتن پروسه‌ای که پورت 3000 را اشغال کرده و بستن آن
-            var killCmd = 'cmd.exe /c "FOR /F "tokens=5" %a in (\'netstat -a -n -o ^| findstr :3000\') do taskkill /f /pid %a"';
-            runCmd(killCmd, 0, true);
-            alert('دستور توقف به سرور (پورت 3000) ارسال شد.');
+            logMsg("\n--- در حال شناسایی و توقف پروسه‌های سرور ---");
+            try {
+                var tempBat = shell.ExpandEnvironmentStrings("%TEMP%") + "\\kill_server.bat";
+                var tempLog = shell.ExpandEnvironmentStrings("%TEMP%") + "\\kill_log.txt";
+                
+                var f = fso.CreateTextFile(tempBat, true);
+                f.WriteLine("@echo off");
+                f.WriteLine("FOR /F \"tokens=5\" %%a in ('netstat -a -n -o ^| findstr :3000') do taskkill /f /pid %%a > \"" + tempLog + "\" 2>&1");
+                f.Close();
+                
+                shell.Run("cmd.exe /c \"" + tempBat + "\"", 0, true);
+                
+                if (fso.FileExists(tempLog)) {
+                    var ts = fso.OpenTextFile(tempLog, 1);
+                    if (!ts.AtEndOfStream) {
+                        logMsg(stripAnsi(ts.ReadAll()));
+                    }
+                    ts.Close();
+                }
+                logMsg("سرور با موفقیت متوقف شد.");
+                updateStatusBadge(false);
+            } catch(e) {
+                logMsg("خطا در توقف سرور: " + e.message);
+            }
         }
 
         function restartServer() {
-            var killCmd = 'cmd.exe /c "FOR /F "tokens=5" %a in (\'netstat -a -n -o ^| findstr :3000\') do taskkill /f /pid %a"';
-            runCmd(killCmd, 0, true);
-            setTimeout(startServer, 1000);
+            stopServer();
+            logMsg("صبر کنید...");
+            setTimeout(startServer, 1500);
         }
 
         function gitPull() {
-            runCmd('cmd.exe /c start "Git Pull" cmd.exe /k "title Git Update & color 0B & echo Pulling latest changes from GitHub... & git pull & echo. & echo ================================== & echo Done! Press any key to close... & pause>nul & exit"', 1, false);
+            logMsg("\n--- دریافت آخرین تغییرات کدها از گیت‌هاب ---");
+            runCmdHidden("git pull");
         }
         
         function npmInstall() {
-            runCmd('cmd.exe /c start "NPM Install" cmd.exe /k "title NPM Install & color 0D & echo Installing dependencies... & npm install & echo. & echo ================================== & echo Done! Press any key to close... & pause>nul & exit"', 1, false);
+            logMsg("\n--- بررسی و نصب کتابخانه‌های جدید (npm install) ---");
+            logMsg("این عملیات ممکن است چند دقیقه طول بکشد...");
+            runCmdHidden("npm install");
+        }
+
+        function clearTerminal() {
+            document.getElementById('terminal').innerHTML = '';
+            lastLogSize = 0;
+            try {
+                var f = fso.CreateTextFile(logFile, true);
+                f.Close();
+            } catch(e){}
+            logMsg("✅ ترمینال پاک شد.");
         }
     </script>
 </head>
-<body>
-    <div class="header">
-        <h2>⚙️ پنل مدیریت سرور</h2>
-        <p>بدون نیاز به تایپ دستی در محیط ویندوز</p>
+<body onload="init()">
+    <div class="sidebar">
+        <div style="margin-bottom: 30px; text-align: center;">
+            <h2 style="margin: 0; font-size: 20px; color: #f8fafc;">AI Studio Panel</h2>
+            <p style="margin: 5px 0 0 0; font-size: 12px; color: #94a3b8;">کنترل سنتر حرفه‌ای</p>
+        </div>
+
+        <button class="btn btn-start" onclick="startServer()">
+            <span class="btn-icon">▶️</span> راه‌اندازی سرور
+        </button>
+
+        <button class="btn btn-stop" onclick="stopServer()">
+            <span class="btn-icon">⏹️</span> توقف سرور
+        </button>
+
+        <button class="btn" onclick="restartServer()">
+            <span class="btn-icon">🔄</span> راه‌اندازی مجدد
+        </button>
+
+        <div style="height: 1px; background: #334155; margin: 15px 0;"></div>
+
+        <button class="btn" onclick="gitPull()">
+            <span class="btn-icon">⬇️</span> بروزرسانی (Git Pull)
+        </button>
+        
+        <button class="btn" onclick="npmInstall()">
+            <span class="btn-icon">📦</span> نصب پکیج‌ها (NPM)
+        </button>
     </div>
 
-    <button class="btn btn-start" onclick="startServer()">
-        <span class="icon">▶️</span> راه‌اندازی سرور (Start)
-    </button>
+    <div class="main">
+        <div class="header">
+            <h2>داشبورد وضعیت</h2>
+            <div id="status-badge" class="status-badge offline">
+                <span class="status-dot"></span> در حال بررسی...
+            </div>
+        </div>
 
-    <button class="btn btn-stop" onclick="stopServer()">
-        <span class="icon">⏹️</span> توقف کامل سرور (Stop)
-    </button>
-
-    <button class="btn btn-restart" onclick="restartServer()">
-        <span class="icon">🔄</span> راه‌اندازی مجدد (Restart)
-    </button>
-
-    <button class="btn btn-git" onclick="gitPull()">
-        <span class="icon">⬇️</span> بروزرسانی از گیت‌هاب (Git Pull)
-    </button>
-    
-    <button class="btn btn-npm" onclick="npmInstall()">
-        <span class="icon">📦</span> نصب و آپدیت پکیج‌ها (NPM)
-    </button>
-
-    <div class="footer">
-        طراحی شده برای سیستم‌عامل ویندوز
+        <div class="terminal-container">
+            <div class="terminal-header">
+                <span>🖥️ ترمینال خروجی (Live)</span>
+                <button class="clear-btn" onclick="clearTerminal()">پاک کردن صفحه</button>
+            </div>
+            <div id="terminal" class="terminal"></div>
+        </div>
     </div>
 </body>
 </html>
