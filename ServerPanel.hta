@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta http-equiv="x-ua-compatible" content="ie=edge">
+    <meta charset="UTF-8">
+    <title>پنل مدیریت سرور</title>
+    <!-- تنظیمات مربوط به اجرای HTA در ویندوز -->
+    <HTA:APPLICATION
+        ID="ServerPanelApp"
+        APPLICATIONNAME="ServerPanel"
+        SCROLL="no"
+        SINGLEINSTANCE="yes"
+        WINDOWSTATE="normal"
+        BORDER="dialog"
+        MAXIMIZEBUTTON="no"
+        MINIMIZEBUTTON="yes"
+        SYSMENU="yes"
+        ICON="shell32.dll,43"
+    >
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            background: #f8fafc;
+            margin: 0;
+            padding: 25px;
+            color: #334155;
+            user-select: none;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding-bottom: 20px;
+            border-bottom: 2px dashed #cbd5e1;
+        }
+        .header h2 {
+            margin: 0;
+            font-size: 24px;
+            color: #0f172a;
+        }
+        .header p {
+            margin: 8px 0 0 0;
+            font-size: 13px;
+            color: #64748b;
+        }
+        .btn {
+            display: block;
+            width: 100%;
+            padding: 16px;
+            margin-bottom: 12px;
+            color: white;
+            border-radius: 12px;
+            cursor: pointer;
+            border: none;
+            font-size: 15px;
+            font-weight: bold;
+            font-family: inherit;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+            transition: all 0.2s;
+            text-align: center;
+            position: relative;
+        }
+        .btn:hover {
+            opacity: 0.9;
+        }
+        .btn-start { background: linear-gradient(135deg, #10b981, #059669); }
+        .btn-stop { background: linear-gradient(135deg, #ef4444, #dc2626); }
+        .btn-restart { background: linear-gradient(135deg, #f59e0b, #d97706); }
+        .btn-git { background: linear-gradient(135deg, #6366f1, #4f46e5); }
+        .btn-npm { background: linear-gradient(135deg, #64748b, #475569); }
+        
+        .icon {
+            font-size: 18px;
+            vertical-align: middle;
+            margin-left: 8px;
+        }
+        .footer {
+            text-align: center;
+            margin-top: 20px;
+            font-size: 11px;
+            color: #94a3b8;
+        }
+    </style>
+    <script>
+        // تنظیم اندازه ثابت پنجره
+        window.resizeTo(420, 620);
+        
+        function runCmd(cmd, style, wait) {
+            try {
+                var shell = new ActiveXObject("WScript.Shell");
+                shell.Run(cmd, style, wait);
+            } catch(e) {
+                alert("خطا در اجرای دستور. لطفاً مطمئن شوید که دسترسی‌های لازم وجود دارد.\n" + e.message);
+            }
+        }
+
+        function startServer() {
+            // اجرای دستور در خط فرمان و باز گذاشتن پنجره (cmd /k)
+            runCmd('cmd.exe /c start "Dev Server" cmd.exe /k "title AI Studio Server & color 0A & echo Starting Server on Port 3000... & npm run dev -- --host"', 1, false);
+        }
+
+        function stopServer() {
+            // یافتن پروسه‌ای که پورت 3000 را اشغال کرده و بستن آن
+            var killCmd = 'cmd.exe /c "FOR /F "tokens=5" %a in (\'netstat -a -n -o ^| findstr :3000\') do taskkill /f /pid %a"';
+            runCmd(killCmd, 0, true);
+            alert('دستور توقف به سرور (پورت 3000) ارسال شد.');
+        }
+
+        function restartServer() {
+            var killCmd = 'cmd.exe /c "FOR /F "tokens=5" %a in (\'netstat -a -n -o ^| findstr :3000\') do taskkill /f /pid %a"';
+            runCmd(killCmd, 0, true);
+            setTimeout(startServer, 1000);
+        }
+
+        function gitPull() {
+            runCmd('cmd.exe /c start "Git Pull" cmd.exe /k "title Git Update & color 0B & echo Pulling latest changes from GitHub... & git pull & echo. & echo ================================== & echo Done! Press any key to close... & pause>nul & exit"', 1, false);
+        }
+        
+        function npmInstall() {
+            runCmd('cmd.exe /c start "NPM Install" cmd.exe /k "title NPM Install & color 0D & echo Installing dependencies... & npm install & echo. & echo ================================== & echo Done! Press any key to close... & pause>nul & exit"', 1, false);
+        }
+    </script>
+</head>
+<body>
+    <div class="header">
+        <h2>⚙️ پنل مدیریت سرور</h2>
+        <p>بدون نیاز به تایپ دستی در محیط ویندوز</p>
+    </div>
+
+    <button class="btn btn-start" onclick="startServer()">
+        <span class="icon">▶️</span> راه‌اندازی سرور (Start)
+    </button>
+
+    <button class="btn btn-stop" onclick="stopServer()">
+        <span class="icon">⏹️</span> توقف کامل سرور (Stop)
+    </button>
+
+    <button class="btn btn-restart" onclick="restartServer()">
+        <span class="icon">🔄</span> راه‌اندازی مجدد (Restart)
+    </button>
+
+    <button class="btn btn-git" onclick="gitPull()">
+        <span class="icon">⬇️</span> بروزرسانی از گیت‌هاب (Git Pull)
+    </button>
+    
+    <button class="btn btn-npm" onclick="npmInstall()">
+        <span class="icon">📦</span> نصب و آپدیت پکیج‌ها (NPM)
+    </button>
+
+    <div class="footer">
+        طراحی شده برای سیستم‌عامل ویندوز
+    </div>
+</body>
+</html>
