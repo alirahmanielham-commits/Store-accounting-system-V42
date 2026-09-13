@@ -17,99 +17,106 @@
         SYSMENU="yes"
         ICON="shell32.dll,22"
     >
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;700&display=swap" rel="stylesheet">
     <style>
         /* Reset & Base */
         body, html {
             margin: 0; padding: 0; height: 100%; overflow: hidden;
-            font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+            font-family: 'Vazirmatn', Tahoma, 'Segoe UI', Arial, sans-serif;
             background: #0f172a; color: #f1f5f9;
         }
         * { box-sizing: border-box; }
         
         /* Layout */
         .sidebar {
-            position: absolute; right: 0; top: 0; bottom: 0; width: 300px;
-            background: #1e293b; padding: 25px 20px;
+            position: absolute; right: 0; top: 0; bottom: 0; width: 320px;
+            background: #1e293b; padding: 30px 25px;
             border-left: 1px solid #334155; z-index: 10;
         }
         .main {
-            position: absolute; left: 0; right: 300px; top: 0; bottom: 0;
+            position: absolute; left: 0; right: 320px; top: 0; bottom: 0;
             background: #0f172a;
         }
         .header {
-            position: absolute; top: 0; left: 0; right: 0; height: 85px;
-            padding: 0 30px; background: #1e293b; border-bottom: 1px solid #334155;
+            position: absolute; top: 0; left: 0; right: 0; height: 95px;
+            padding: 0 40px; background: #1e293b; border-bottom: 1px solid #334155;
             display: flex; justify-content: space-between; align-items: center; z-index: 5;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
         }
-        .header-titles h2 { margin: 0; font-size: 20px; font-weight: bold; color: #f8fafc; }
-        .header-titles p { margin: 6px 0 0 0; font-size: 13px; color: #94a3b8; }
+        .header-titles h2 { margin: 0; font-size: 22px; font-weight: bold; color: #f8fafc; }
+        .header-titles p { margin: 8px 0 0 0; font-size: 14px; color: #94a3b8; }
         
         /* Terminal */
         .terminal-container {
-            position: absolute; top: 85px; bottom: 0; left: 0; right: 0; padding: 25px 30px;
+            position: absolute; top: 95px; bottom: 0; left: 0; right: 0; padding: 30px 40px;
         }
         .terminal-header {
-            height: 30px; display: flex; justify-content: space-between; align-items: center;
-            color: #94a3b8; font-size: 14px; font-weight: bold;
+            height: 35px; display: flex; justify-content: space-between; align-items: center;
+            color: #cbd5e1; font-size: 15px; font-weight: bold;
         }
         .terminal {
-            position: absolute; top: 60px; bottom: 30px; left: 30px; right: 30px;
+            position: absolute; top: 65px; bottom: 40px; left: 40px; right: 40px;
             background: #020617; color: #34d399;
-            font-family: Consolas, 'Courier New', monospace; font-size: 14px;
-            padding: 20px; border-radius: 10px; border: 1px solid #334155;
+            font-family: Consolas, 'Courier New', monospace; font-size: 15px;
+            padding: 25px; border-radius: 12px; border: 1px solid #334155;
             overflow-y: auto; white-space: pre-wrap; direction: ltr; text-align: left;
-            line-height: 1.6; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+            line-height: 1.7; box-shadow: inset 0 0 20px rgba(0,0,0,0.4);
         }
         
         /* Components */
         .status-badge {
-            display: inline-flex; align-items: center; padding: 8px 16px;
-            border-radius: 30px; font-size: 13px; font-weight: bold;
+            display: inline-flex; align-items: center; padding: 10px 20px;
+            border-radius: 30px; font-size: 14px; font-weight: bold;
             background: #334155; color: #94a3b8; transition: all 0.3s;
         }
         .status-badge.online {
             background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);
+            box-shadow: 0 0 15px rgba(16, 185, 129, 0.1);
         }
         .status-badge.offline {
             background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);
+            box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);
         }
         .status-dot {
-            width: 10px; height: 10px; border-radius: 50%; margin-left: 10px; background: currentColor; box-shadow: 0 0 6px currentColor;
+            width: 12px; height: 12px; border-radius: 50%; margin-left: 12px; background: currentColor; box-shadow: 0 0 8px currentColor;
         }
         
         .btn {
-            display: block; width: 100%; text-align: right; padding: 12px 18px; margin-bottom: 10px;
-            color: #f1f5f9; border-radius: 10px; cursor: pointer; border: 1px solid transparent;
-            font-size: 14px; font-weight: bold; font-family: inherit;
-            transition: all 0.2s; background: #334155;
+            display: block; width: 100%; text-align: right; padding: 14px 20px; margin-bottom: 12px;
+            color: #f1f5f9; border-radius: 12px; cursor: pointer; border: 1px solid transparent;
+            font-size: 15px; font-weight: bold; font-family: inherit;
+            transition: all 0.2s ease-in-out; background: #334155;
         }
-        .btn:hover { background: #475569; border-color: #64748b; }
-        .btn-primary { background: #0ea5e9; color: white; }
-        .btn-primary:hover { background: #0284c7; }
-        .btn-start { background: #10b981; color: white; }
-        .btn-start:hover { background: #059669; }
-        .btn-stop { background: #ef4444; color: white; }
-        .btn-stop:hover { background: #dc2626; }
+        .btn:hover { background: #475569; border-color: #64748b; transform: translateY(-1px); }
+        .btn:active { transform: translateY(1px); }
+        .btn-primary { background: #0ea5e9; color: white; box-shadow: 0 4px 12px rgba(14, 165, 233, 0.2); }
+        .btn-primary:hover { background: #0284c7; box-shadow: 0 6px 16px rgba(14, 165, 233, 0.3); }
+        .btn-start { background: #10b981; color: white; box-shadow: 0 4px 12px rgba(16, 185, 129, 0.2); }
+        .btn-start:hover { background: #059669; box-shadow: 0 6px 16px rgba(16, 185, 129, 0.3); }
+        .btn-stop { background: #ef4444; color: white; box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+        .btn-stop:hover { background: #dc2626; box-shadow: 0 6px 16px rgba(239, 68, 68, 0.3); }
         
-        .btn-icon { display: inline-block; width: 28px; text-align: center; margin-left: 8px; font-size: 18px; vertical-align: middle; }
+        .btn-icon { display: inline-block; width: 30px; text-align: center; margin-left: 10px; font-size: 18px; vertical-align: middle; }
         .clear-btn {
-            background: transparent; border: 1px solid #475569; color: #94a3b8;
-            padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s;
+            background: transparent; border: 1px solid #475569; color: #cbd5e1;
+            padding: 8px 16px; border-radius: 8px; cursor: pointer; font-size: 13px; font-family: inherit; transition: all 0.2s;
         }
-        .clear-btn:hover { background: #334155; color: #fff; }
-        .divider { height: 1px; background: #334155; margin: 15px 0; }
-
+        .clear-btn:hover { background: #334155; color: #fff; border-color: #64748b; }
+        .divider { height: 1px; background: #334155; margin: 20px 0; }
+        
         /* Inputs */
         .config-box {
-            background: #0f172a; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #334155;
+            background: #0f172a; padding: 20px; border-radius: 12px; margin-bottom: 20px; border: 1px solid #334155;
+            box-shadow: inset 0 2px 4px rgba(0,0,0,0.1);
         }
-        .config-box label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
+        .config-box label { display: block; font-size: 13px; color: #94a3b8; margin-bottom: 8px; font-weight: bold; }
         .config-box input[type="text"], .config-box select {
-            width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #475569;
-            background: #1e293b; color: white; font-family: Tahoma, sans-serif; font-size: 13px; text-align: left; direction: ltr; margin-bottom: 10px;
+            width: 100%; padding: 10px 14px; border-radius: 8px; border: 1px solid #475569;
+            background: #1e293b; color: white; font-family: Tahoma, sans-serif; font-size: 14px; text-align: left; direction: ltr; margin-bottom: 15px;
+            transition: all 0.2s;
         }
-        .config-box select { text-align: right; direction: rtl; }
-        .config-box input:focus { outline: none; border-color: #0ea5e9; }
+        .config-box select { text-align: right; direction: rtl; font-family: inherit; }
+        .config-box input:focus, .config-box select:focus { outline: none; border-color: #0ea5e9; box-shadow: 0 0 0 2px rgba(14, 165, 233, 0.2); }
     </style>
     <script>
         window.resizeTo(1050, 750);
