@@ -3,10 +3,11 @@
 <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta charset="UTF-8">
-    <title>پنل مدیریت حرفه‌ای سرور</title>
+    <title>برنامه اجرای سرور حسابداری</title>
+    <!-- تنظیمات مربوط به اجرای HTA در ویندوز -->
     <HTA:APPLICATION
-        ID="ServerPanelApp"
-        APPLICATIONNAME="ServerPanelPro"
+        ID="AccountingServerApp"
+        APPLICATIONNAME="AccountingServer"
         SCROLL="no"
         SINGLEINSTANCE="yes"
         WINDOWSTATE="normal"
@@ -14,146 +15,107 @@
         MAXIMIZEBUTTON="yes"
         MINIMIZEBUTTON="yes"
         SYSMENU="yes"
-        ICON="shell32.dll,43"
+        ICON="shell32.dll,15"
     >
     <style>
-        body {
+        /* Reset & Base */
+        body, html {
+            margin: 0; padding: 0; height: 100%; overflow: hidden;
             font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-            background: #0f172a;
-            margin: 0;
-            padding: 0;
-            color: #f1f5f9;
-            display: flex;
-            height: 100vh;
-            overflow: hidden;
+            background: #0f172a; color: #f1f5f9;
         }
+        * { box-sizing: border-box; }
+        
+        /* Layout */
         .sidebar {
-            width: 260px;
-            background: #1e293b;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-            border-left: 1px solid #334155;
+            position: absolute; right: 0; top: 0; bottom: 0; width: 280px;
+            background: #1e293b; padding: 25px 20px;
+            border-left: 1px solid #334155; z-index: 10;
         }
         .main {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
+            position: absolute; left: 0; right: 280px; top: 0; bottom: 0;
             background: #0f172a;
         }
         .header {
-            padding: 20px;
-            background: #1e293b;
-            border-bottom: 1px solid #334155;
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
+            position: absolute; top: 0; left: 0; right: 0; height: 85px;
+            padding: 0 30px; background: #1e293b; border-bottom: 1px solid #334155;
+            display: flex; justify-content: space-between; align-items: center; z-index: 5;
         }
-        .header h2 { margin: 0; font-size: 18px; }
+        .header-titles h2 { margin: 0; font-size: 20px; font-weight: bold; color: #f8fafc; }
+        .header-titles p { margin: 6px 0 0 0; font-size: 13px; color: #94a3b8; }
+        
+        /* Terminal */
+        .terminal-container {
+            position: absolute; top: 85px; bottom: 0; left: 0; right: 0; padding: 25px 30px;
+        }
+        .terminal-header {
+            height: 30px; display: flex; justify-content: space-between; align-items: center;
+            color: #94a3b8; font-size: 14px; font-weight: bold;
+        }
+        .terminal {
+            position: absolute; top: 60px; bottom: 30px; left: 30px; right: 30px;
+            background: #020617; color: #34d399;
+            font-family: Consolas, 'Courier New', monospace; font-size: 14px;
+            padding: 20px; border-radius: 10px; border: 1px solid #334155;
+            overflow-y: auto; white-space: pre-wrap; direction: ltr; text-align: left;
+            line-height: 1.6; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+        
+        /* Components */
         .status-badge {
-            display: inline-flex;
-            align-items: center;
-            padding: 6px 12px;
-            border-radius: 20px;
-            font-size: 12px;
-            font-weight: bold;
-            background: #334155;
-            color: #94a3b8;
+            display: inline-flex; align-items: center; padding: 8px 16px;
+            border-radius: 30px; font-size: 13px; font-weight: bold;
+            background: #334155; color: #94a3b8; transition: all 0.3s;
         }
         .status-badge.online {
-            background: rgba(16, 185, 129, 0.2);
-            color: #34d399;
-            border: 1px solid rgba(16, 185, 129, 0.3);
+            background: rgba(16, 185, 129, 0.15); color: #10b981; border: 1px solid rgba(16, 185, 129, 0.3);
         }
         .status-badge.offline {
-            background: rgba(239, 68, 68, 0.2);
-            color: #f87171;
-            border: 1px solid rgba(239, 68, 68, 0.3);
+            background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3);
         }
         .status-dot {
-            width: 8px;
-            height: 8px;
-            border-radius: 50%;
-            margin-left: 8px;
-            background: currentColor;
-            display: inline-block;
+            width: 10px; height: 10px; border-radius: 50%; margin-left: 10px; background: currentColor; box-shadow: 0 0 6px currentColor;
         }
         
         .btn {
-            display: flex;
-            align-items: center;
-            padding: 12px 16px;
-            margin-bottom: 12px;
-            color: white;
-            border-radius: 8px;
-            cursor: pointer;
-            border: none;
-            font-size: 14px;
-            font-weight: bold;
-            font-family: inherit;
-            transition: all 0.2s;
-            background: #334155;
+            display: block; width: 100%; text-align: right; padding: 14px 18px; margin-bottom: 12px;
+            color: #f1f5f9; border-radius: 10px; cursor: pointer; border: 1px solid transparent;
+            font-size: 14px; font-weight: bold; font-family: inherit;
+            transition: all 0.2s; background: #334155;
         }
-        .btn:hover { background: #475569; }
-        .btn-start { background: #059669; }
-        .btn-start:hover { background: #047857; }
-        .btn-stop { background: #dc2626; }
-        .btn-stop:hover { background: #b91c1c; }
-        .btn-icon { margin-left: 10px; font-size: 16px; }
-
-        .terminal-container {
-            flex: 1;
-            padding: 20px;
-            display: flex;
-            flex-direction: column;
-        }
-        .terminal-header {
-            display: flex;
-            justify-content: space-between;
-            align-items: center;
-            margin-bottom: 10px;
-            color: #94a3b8;
-            font-size: 13px;
-        }
-        .terminal {
-            flex: 1;
-            background: #000;
-            color: #a7f3d0;
-            font-family: Consolas, 'Courier New', monospace;
-            font-size: 13px;
-            padding: 15px;
-            border-radius: 8px;
-            border: 1px solid #334155;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            direction: ltr;
-            text-align: left;
-            line-height: 1.5;
-        }
+        .btn:hover { background: #475569; border-color: #64748b; }
+        .btn-primary { background: #0ea5e9; color: white; }
+        .btn-primary:hover { background: #0284c7; }
+        .btn-start { background: #10b981; color: white; }
+        .btn-start:hover { background: #059669; }
+        .btn-stop { background: #ef4444; color: white; }
+        .btn-stop:hover { background: #dc2626; }
+        
+        .btn-icon { display: inline-block; width: 28px; text-align: center; margin-left: 8px; font-size: 18px; vertical-align: middle; }
         .clear-btn {
-            background: transparent;
-            border: 1px solid #475569;
-            color: #94a3b8;
-            padding: 4px 8px;
-            border-radius: 4px;
-            cursor: pointer;
-            font-size: 11px;
+            background: transparent; border: 1px solid #475569; color: #94a3b8;
+            padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s;
         }
         .clear-btn:hover { background: #334155; color: #fff; }
+        .divider { height: 1px; background: #334155; margin: 20px 0; }
     </style>
     <script>
-        window.resizeTo(900, 600);
+        // پنجره را در اندازه مناسب و بزرگ باز می‌کنیم
+        window.resizeTo(1000, 700);
         
         var shell = new ActiveXObject("WScript.Shell");
         var fso = new ActiveXObject("Scripting.FileSystemObject");
         var logFile = "";
-        
-        var logTimer = null;
-        var statusTimer = null;
         var lastLogSize = 0;
+        var isServerOnline = false;
+
+        function getTimeStamp() {
+            var d = new Date();
+            var h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
+            return "[" + (h<10?"0":"")+h + ":" + (m<10?"0":"")+m + ":" + (s<10?"0":"")+s + "] ";
+        }
 
         function init() {
-            // Set Working Directory to the HTA's location
             var htaPath = unescape(document.location.pathname);
             if (htaPath.charAt(0) == '/' && htaPath.charAt(2) == ':') {
                 htaPath = htaPath.substring(1);
@@ -162,22 +124,24 @@
             shell.CurrentDirectory = projectDir;
             
             logFile = projectDir + "\\server_logs.txt";
-
-            if (!fso.FileExists(logFile)) {
+            
+            // ایجاد فایل لاگ خالی در صورت عدم وجود
+            try {
                 var f = fso.CreateTextFile(logFile, true);
                 f.Close();
-            }
+            } catch(e) {}
             
-            logTimer = setInterval(readLogs, 1000);
-            statusTimer = setInterval(checkServerStatus, 2000);
+            setInterval(readLogs, 1000);
+            setInterval(checkServerStatus, 2000);
             
             checkServerStatus();
-            logMsg("✅ سیستم مدیریت سرور آماده است.");
+            logMsg("✅ سیستم مدیریت حسابداری آماده است.");
             logMsg("مسیر پروژه: " + projectDir);
-            logMsg("آماده دریافت دستورات...\n");
+            logMsg("جهت شروع، روی دکمه «راه‌اندازی سرور» کلیک کنید...\n");
         }
 
         function stripAnsi(str) {
+            // حذف کدهای رنگی ترمینال برای نمایش تمیز در HTML
             return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
         }
 
@@ -188,16 +152,16 @@
                 lastLogSize = 0;
                 document.getElementById('terminal').innerHTML = '';
                 
-                // Run completely hidden without creating a new console window popup
+                // اجرای مخفیانه دستور (بدون باز شدن پنجره سیاه cmd) و ریختن خروجی به فایل
                 shell.Run("cmd.exe /c \"chcp 65001 >nul & " + cmd + " > \"" + logFile + "\" 2>&1\"", 0, false);
             } catch(e) {
-                logMsg("خطا در اجرای دستور: " + e.message);
+                logMsg("خطا: " + e.message);
             }
         }
 
         function logMsg(msg) {
             var term = document.getElementById('terminal');
-            term.innerHTML += msg + "\n";
+            term.innerHTML += getTimeStamp() + msg + "\n";
             term.scrollTop = term.scrollHeight;
         }
 
@@ -224,15 +188,16 @@
                     }
                 }
             } catch(e) {
-                // File might be temporarily locked, try again next tick
+                // اگر فایل توسط پروسه دیگری در حال نوشتن قفل شده باشد، در تیک بعدی خوانده می‌شود
             }
         }
 
         function updateStatusBadge(isOnline) {
+            isServerOnline = isOnline;
             var badge = document.getElementById('status-badge');
             if (isOnline) {
                 badge.className = "status-badge online";
-                badge.innerHTML = "<span class='status-dot'></span> سرور روشن است (پورت 3000)";
+                badge.innerHTML = "<span class='status-dot'></span> سرور حسابداری فعال است";
             } else {
                 badge.className = "status-badge offline";
                 badge.innerHTML = "<span class='status-dot'></span> سرور خاموش است";
@@ -241,9 +206,8 @@
 
         function checkServerStatus() {
             try {
-                var xhr = new XMLHttpRequest();
+                var xhr = window.XMLHttpRequest ? new XMLHttpRequest() : new ActiveXObject("Microsoft.XMLHTTP");
                 xhr.open("GET", "http://localhost:3000/", true);
-                xhr.timeout = 1500;
                 xhr.onreadystatechange = function() {
                     if (xhr.readyState === 4) {
                         updateStatusBadge(xhr.status > 0);
@@ -259,30 +223,20 @@
         }
 
         function startServer() {
-            logMsg("\n--- در حال راه‌اندازی سرور روی پورت 3000 ---");
+            logMsg("در حال راه‌اندازی سرور روی پورت 3000 ...");
             runCmdHidden("npm run dev -- --host");
         }
 
         function stopServer() {
-            logMsg("\n--- در حال شناسایی و توقف پروسه‌های سرور ---");
+            logMsg("در حال توقف سرویس‌های حسابداری...");
             try {
                 var tempBat = shell.ExpandEnvironmentStrings("%TEMP%") + "\\kill_server.bat";
-                var tempLog = shell.ExpandEnvironmentStrings("%TEMP%") + "\\kill_log.txt";
-                
                 var f = fso.CreateTextFile(tempBat, true);
                 f.WriteLine("@echo off");
-                f.WriteLine("FOR /F \"tokens=5\" %%a in ('netstat -a -n -o ^| findstr :3000') do taskkill /f /pid %%a > \"" + tempLog + "\" 2>&1");
+                f.WriteLine("FOR /F \"tokens=5\" %%a in ('netstat -a -n -o ^| findstr :3000') do taskkill /f /pid %%a");
                 f.Close();
                 
                 shell.Run("cmd.exe /c \"" + tempBat + "\"", 0, true);
-                
-                if (fso.FileExists(tempLog)) {
-                    var ts = fso.OpenTextFile(tempLog, 1);
-                    if (!ts.AtEndOfStream) {
-                        logMsg(stripAnsi(ts.ReadAll()));
-                    }
-                    ts.Close();
-                }
                 logMsg("سرور با موفقیت متوقف شد.");
                 updateStatusBadge(false);
             } catch(e) {
@@ -297,14 +251,27 @@
         }
 
         function gitPull() {
-            logMsg("\n--- دریافت آخرین تغییرات کدها از گیت‌هاب ---");
+            logMsg("دریافت آخرین تغییرات و بروزرسانی نرم‌افزار...");
             runCmdHidden("git pull");
         }
         
         function npmInstall() {
-            logMsg("\n--- بررسی و نصب کتابخانه‌های جدید (npm install) ---");
-            logMsg("این عملیات ممکن است چند دقیقه طول بکشد...");
+            logMsg("بررسی و نصب کتابخانه‌های جدید (ممکن است زمان‌بر باشد)...");
             runCmdHidden("npm install");
+        }
+
+        function openBrowser() {
+            if (isServerOnline) {
+                shell.Run("http://localhost:3000");
+                logMsg("برنامه در مرورگر باز شد.");
+            } else {
+                alert("لطفاً ابتدا سرور را راه‌اندازی کنید (وقتی چراغ وضعیت سبز شد روی این گزینه کلیک کنید).");
+            }
+        }
+
+        function openFolder() {
+            shell.Run("explorer.exe .");
+            logMsg("پوشه نرم‌افزار باز شد.");
         }
 
         function clearTerminal() {
@@ -314,16 +281,23 @@
                 var f = fso.CreateTextFile(logFile, true);
                 f.Close();
             } catch(e){}
-            logMsg("✅ ترمینال پاک شد.");
+            logMsg("ترمینال پاک شد.");
         }
     </script>
 </head>
 <body onload="init()">
     <div class="sidebar">
-        <div style="margin-bottom: 30px; text-align: center;">
-            <h2 style="margin: 0; font-size: 20px; color: #f8fafc;">AI Studio Panel</h2>
-            <p style="margin: 5px 0 0 0; font-size: 12px; color: #94a3b8;">کنترل سنتر حرفه‌ای</p>
+        <div style="margin-bottom: 35px; text-align: center;">
+            <div style="font-size: 40px; margin-bottom: 10px;">📊</div>
+            <h2 style="margin: 0; font-size: 20px; color: #f8fafc;">نرم‌افزار حسابداری</h2>
+            <p style="margin: 5px 0 0 0; font-size: 13px; color: #94a3b8;">پنل مدیریت سرور</p>
         </div>
+
+        <button class="btn btn-primary" onclick="openBrowser()">
+            <span class="btn-icon">🌐</span> اجرای نرم‌افزار (مرورگر)
+        </button>
+
+        <div class="divider"></div>
 
         <button class="btn btn-start" onclick="startServer()">
             <span class="btn-icon">▶️</span> راه‌اندازی سرور
@@ -337,20 +311,27 @@
             <span class="btn-icon">🔄</span> راه‌اندازی مجدد
         </button>
 
-        <div style="height: 1px; background: #334155; margin: 15px 0;"></div>
+        <div class="divider"></div>
 
         <button class="btn" onclick="gitPull()">
-            <span class="btn-icon">⬇️</span> بروزرسانی (Git Pull)
+            <span class="btn-icon">⬇️</span> بروزرسانی ابری (Git)
         </button>
         
         <button class="btn" onclick="npmInstall()">
-            <span class="btn-icon">📦</span> نصب پکیج‌ها (NPM)
+            <span class="btn-icon">📦</span> نصب پیش‌نیازها (NPM)
+        </button>
+
+        <button class="btn" onclick="openFolder()">
+            <span class="btn-icon">📂</span> بازکردن پوشه برنامه
         </button>
     </div>
 
     <div class="main">
         <div class="header">
-            <h2>داشبورد وضعیت</h2>
+            <div class="header-titles">
+                <h2>داشبورد کنترل سرویس‌ها</h2>
+                <p>مانیتورینگ و اجرای دستورات سیستم</p>
+            </div>
             <div id="status-badge" class="status-badge offline">
                 <span class="status-dot"></span> در حال بررسی...
             </div>
@@ -358,7 +339,7 @@
 
         <div class="terminal-container">
             <div class="terminal-header">
-                <span>🖥️ ترمینال خروجی (Live)</span>
+                <span>🖥️ کنسول خروجی عملیات (Live)</span>
                 <button class="clear-btn" onclick="clearTerminal()">پاک کردن صفحه</button>
             </div>
             <div id="terminal" class="terminal"></div>
