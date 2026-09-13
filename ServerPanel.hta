@@ -15,7 +15,7 @@
         MAXIMIZEBUTTON="yes"
         MINIMIZEBUTTON="yes"
         SYSMENU="yes"
-        ICON="shell32.dll,15"
+        ICON="shell32.dll,22"
     >
     <style>
         /* Reset & Base */
@@ -28,12 +28,12 @@
         
         /* Layout */
         .sidebar {
-            position: absolute; right: 0; top: 0; bottom: 0; width: 280px;
+            position: absolute; right: 0; top: 0; bottom: 0; width: 300px;
             background: #1e293b; padding: 25px 20px;
             border-left: 1px solid #334155; z-index: 10;
         }
         .main {
-            position: absolute; left: 0; right: 280px; top: 0; bottom: 0;
+            position: absolute; left: 0; right: 300px; top: 0; bottom: 0;
             background: #0f172a;
         }
         .header {
@@ -78,7 +78,7 @@
         }
         
         .btn {
-            display: block; width: 100%; text-align: right; padding: 14px 18px; margin-bottom: 12px;
+            display: block; width: 100%; text-align: right; padding: 12px 18px; margin-bottom: 10px;
             color: #f1f5f9; border-radius: 10px; cursor: pointer; border: 1px solid transparent;
             font-size: 14px; font-weight: bold; font-family: inherit;
             transition: all 0.2s; background: #334155;
@@ -97,17 +97,29 @@
             padding: 6px 12px; border-radius: 6px; cursor: pointer; font-size: 12px; transition: all 0.2s;
         }
         .clear-btn:hover { background: #334155; color: #fff; }
-        .divider { height: 1px; background: #334155; margin: 20px 0; }
+        .divider { height: 1px; background: #334155; margin: 15px 0; }
+
+        /* Inputs */
+        .config-box {
+            background: #0f172a; padding: 15px; border-radius: 10px; margin-bottom: 15px; border: 1px solid #334155;
+        }
+        .config-box label { display: block; font-size: 12px; color: #94a3b8; margin-bottom: 6px; }
+        .config-box input[type="text"], .config-box select {
+            width: 100%; padding: 8px 12px; border-radius: 6px; border: 1px solid #475569;
+            background: #1e293b; color: white; font-family: Tahoma, sans-serif; font-size: 13px; text-align: left; direction: ltr; margin-bottom: 10px;
+        }
+        .config-box select { text-align: right; direction: rtl; }
+        .config-box input:focus { outline: none; border-color: #0ea5e9; }
     </style>
     <script>
-        // پنجره را در اندازه مناسب و بزرگ باز می‌کنیم
-        window.resizeTo(1000, 700);
+        window.resizeTo(1050, 750);
         
         var shell = new ActiveXObject("WScript.Shell");
         var fso = new ActiveXObject("Scripting.FileSystemObject");
         var logFile = "";
         var lastLogSize = 0;
         var isServerOnline = false;
+        var currentPort = "3000";
 
         function getTimeStamp() {
             var d = new Date();
@@ -125,14 +137,13 @@
             
             logFile = projectDir + "\\server_logs.txt";
             
-            // ایجاد فایل لاگ خالی در صورت عدم وجود
             try {
                 var f = fso.CreateTextFile(logFile, true);
                 f.Close();
             } catch(e) {}
             
             setInterval(readLogs, 1000);
-            setInterval(checkServerStatus, 2000);
+            setInterval(checkServerStatus, 2500); // Check status every 2.5 seconds
             
             checkServerStatus();
             logMsg("✅ سیستم مدیریت حسابداری آماده است.");
@@ -141,7 +152,6 @@
         }
 
         function stripAnsi(str) {
-            // حذف کدهای رنگی ترمینال برای نمایش تمیز در HTML
             return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
         }
 
@@ -152,7 +162,6 @@
                 lastLogSize = 0;
                 document.getElementById('terminal').innerHTML = '';
                 
-                // اجرای مخفیانه دستور (بدون باز شدن پنجره سیاه cmd) و ریختن خروجی به فایل
                 shell.Run("cmd.exe /c \"chcp 65001 >nul & " + cmd + " > \"" + logFile + "\" 2>&1\"", 0, false);
             } catch(e) {
                 logMsg("خطا: " + e.message);
@@ -187,9 +196,7 @@
                         }
                     }
                 }
-            } catch(e) {
-                // اگر فایل توسط پروسه دیگری در حال نوشتن قفل شده باشد، در تیک بعدی خوانده می‌شود
-            }
+            } catch(e) {}
         }
 
         function updateStatusBadge(isOnline) {
@@ -197,7 +204,7 @@
             var badge = document.getElementById('status-badge');
             if (isOnline) {
                 badge.className = "status-badge online";
-                badge.innerHTML = "<span class='status-dot'></span> سرور حسابداری فعال است";
+                badge.innerHTML = "<span class='status-dot'></span> فعال در پورت " + currentPort;
             } else {
                 badge.className = "status-badge offline";
                 badge.innerHTML = "<span class='status-dot'></span> سرور خاموش است";
@@ -205,40 +212,53 @@
         }
 
         function checkServerStatus() {
+            // Using WinHttp for a much more reliable local connection test in HTA
             try {
-                var xhr = window.XMLHttpRequest ? new XMLHttpRequest() : new ActiveXObject("Microsoft.XMLHTTP");
-                xhr.open("GET", "http://localhost:3000/", true);
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        updateStatusBadge(xhr.status > 0);
-                    }
-                };
-                xhr.onerror = function() {
-                    updateStatusBadge(false);
-                };
-                xhr.send();
+                var port = document.getElementById('portNum').value || "3000";
+                var req = new ActiveXObject("WinHttp.WinHttpRequest.5.1");
+                // Set short timeouts: resolve, connect, send, receive (in milliseconds)
+                req.SetTimeouts(1000, 1000, 1000, 1000);
+                req.Open("GET", "http://127.0.0.1:" + port + "/", false); 
+                req.Send();
+                // If it doesn't throw, we assume it's running
+                updateStatusBadge(true);
             } catch(e) {
+                // Connection refused or timeout
                 updateStatusBadge(false);
             }
         }
 
         function startServer() {
-            logMsg("در حال راه‌اندازی سرور روی پورت 3000 ...");
-            runCmdHidden("npm run dev -- --host");
+            var port = document.getElementById('portNum').value || "3000";
+            var hostOption = document.getElementById('hostSelect').value;
+            currentPort = port;
+            
+            var cmd = "npm run dev -- --port " + port;
+            if (hostOption === "network") {
+                cmd += " --host";
+                logMsg("در حال راه‌اندازی سرور تحت شبکه (دسترسی برای همه سیستم‌ها)...");
+            } else {
+                logMsg("در حال راه‌اندازی سرور محلی (Localhost) ...");
+            }
+            
+            logMsg("پورت تنظیمی: " + port);
+            logMsg("دستور اجرایی: " + cmd);
+            runCmdHidden(cmd);
         }
 
         function stopServer() {
-            logMsg("در حال توقف سرویس‌های حسابداری...");
+            var port = document.getElementById('portNum').value || "3000";
+            logMsg("در حال توقف سرویس‌های روی پورت " + port + "...");
             try {
                 var tempBat = shell.ExpandEnvironmentStrings("%TEMP%") + "\\kill_server.bat";
                 var f = fso.CreateTextFile(tempBat, true);
                 f.WriteLine("@echo off");
-                f.WriteLine("FOR /F \"tokens=5\" %%a in ('netstat -a -n -o ^| findstr :3000') do taskkill /f /pid %%a");
+                f.WriteLine("FOR /F \"tokens=5\" %%a in ('netstat -a -n -o ^| findstr :" + port + "') do taskkill /f /pid %%a");
                 f.Close();
                 
                 shell.Run("cmd.exe /c \"" + tempBat + "\"", 0, true);
-                logMsg("سرور با موفقیت متوقف شد.");
-                updateStatusBadge(false);
+                logMsg("سیگنال توقف با موفقیت ارسال شد.");
+                setTimeout(checkServerStatus, 1000);
             } catch(e) {
                 logMsg("خطا در توقف سرور: " + e.message);
             }
@@ -247,7 +267,7 @@
         function restartServer() {
             stopServer();
             logMsg("صبر کنید...");
-            setTimeout(startServer, 1500);
+            setTimeout(startServer, 2000);
         }
 
         function gitPull() {
@@ -261,8 +281,9 @@
         }
 
         function openBrowser() {
+            var port = document.getElementById('portNum').value || "3000";
             if (isServerOnline) {
-                shell.Run("http://localhost:3000");
+                shell.Run("http://localhost:" + port);
                 logMsg("برنامه در مرورگر باز شد.");
             } else {
                 alert("لطفاً ابتدا سرور را راه‌اندازی کنید (وقتی چراغ وضعیت سبز شد روی این گزینه کلیک کنید).");
@@ -287,10 +308,20 @@
 </head>
 <body onload="init()">
     <div class="sidebar">
-        <div style="margin-bottom: 35px; text-align: center;">
-            <div style="font-size: 40px; margin-bottom: 10px;">📊</div>
+        <div style="margin-bottom: 20px; text-align: center;">
+            <div style="font-size: 45px; margin-bottom: 10px;">📊</div>
             <h2 style="margin: 0; font-size: 20px; color: #f8fafc;">نرم‌افزار حسابداری</h2>
-            <p style="margin: 5px 0 0 0; font-size: 13px; color: #94a3b8;">پنل مدیریت سرور</p>
+        </div>
+
+        <div class="config-box">
+            <label>شماره پورت اجرا (پیش‌فرض 3000)</label>
+            <input type="text" id="portNum" value="3000" maxlength="5">
+            
+            <label>نحوه دسترسی (شبکه)</label>
+            <select id="hostSelect">
+                <option value="local">فقط روی همین سیستم (Localhost)</option>
+                <option value="network" selected>قابل دسترس در کل شبکه (Host)</option>
+            </select>
         </div>
 
         <button class="btn btn-primary" onclick="openBrowser()">
@@ -322,15 +353,15 @@
         </button>
 
         <button class="btn" onclick="openFolder()">
-            <span class="btn-icon">📂</span> بازکردن پوشه برنامه
+            <span class="btn-icon">📂</span> بازکردن پوشه فایل‌ها
         </button>
     </div>
 
     <div class="main">
         <div class="header">
             <div class="header-titles">
-                <h2>داشبورد کنترل سرویس‌ها</h2>
-                <p>مانیتورینگ و اجرای دستورات سیستم</p>
+                <h2>داشبورد کنترل سیستم</h2>
+                <p>مانیتورینگ و مدیریت اجرای نرم‌افزار</p>
             </div>
             <div id="status-badge" class="status-badge offline">
                 <span class="status-dot"></span> در حال بررسی...
