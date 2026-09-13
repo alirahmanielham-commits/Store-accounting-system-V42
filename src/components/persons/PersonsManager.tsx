@@ -748,7 +748,86 @@ export default function PersonsManager(props: any) {
             )}
           </div>
         ) : effectiveViewMode === "list" ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
+          <>
+            {/* Mobile View: Concise, uncluttered summary list */}
+            <div className="block md:hidden space-y-2">
+              {paginatedPersons.map((p: any) => {
+                const bal = p.calculatedBalance;
+                const isDebtor = bal > 0;
+                const isCreditor = bal < 0;
+                const phone = p.phone || p.mobile;
+
+                return (
+                  <div
+                    key={p.id}
+                    onClick={() => { setProfilePersonId(p.id); setActiveTab("person_profile"); }}
+                    className="bg-white border border-slate-200/90 rounded-xl p-3 shadow-xs active:bg-slate-50 transition-colors flex items-center justify-between gap-2.5 cursor-pointer"
+                  >
+                    {/* Right: Avatar + Name + Role & Phone */}
+                    <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="relative shrink-0">
+                        {p.imageUrl ? (
+                          <img src={p.imageUrl} alt={p.name} className="w-10 h-10 rounded-full object-cover ring-1 ring-slate-200" />
+                        ) : (
+                          <div className={`w-10 h-10 rounded-full flex items-center justify-center text-white text-sm font-bold shadow-xs ${p.personType === 'legal' ? 'bg-amber-500' : 'bg-indigo-600'}`}>
+                            {p.name ? p.name.substring(0, 1) : "?"}
+                          </div>
+                        )}
+                        <div className={`absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full flex items-center justify-center text-[8px] border border-white ${p.personType === "legal" ? "bg-amber-100 text-amber-700" : "bg-blue-100 text-blue-700"}`}>
+                          {p.personType === "legal" ? <Building className="w-2.5 h-2.5" /> : <User className="w-2.5 h-2.5" />}
+                        </div>
+                      </div>
+
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-sm font-bold text-slate-800 truncate">{getPersonDisplayName(p)}</span>
+                          {p.isActive === false && (
+                            <span className="text-[9px] font-bold bg-rose-50 text-rose-600 px-1 py-0.2 rounded shrink-0">غیرفعال</span>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2 mt-0.5 text-xs text-slate-500">
+                          <span className={`text-[9px] font-bold px-1.5 py-0.2 rounded ${getRoleBadgeClasses(p.role)}`}>
+                            {getRoleName(p.role)}
+                          </span>
+                          {phone && (
+                            <span className="text-[11px] font-mono text-slate-500 truncate" dir="ltr">
+                              {toPersianDigits(phone)}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Left: Balance + Action */}
+                    <div className="flex items-center gap-2 shrink-0 text-left">
+                      <div className="text-left">
+                        <div className={`text-xs font-bold font-sans tabular-nums ${isDebtor ? "text-rose-600" : isCreditor ? "text-emerald-600" : "text-slate-500"}`} dir="ltr">
+                          {bal === 0 ? "تسویه" : toPersianDigits(formatNumber(Math.abs(bal)))}
+                        </div>
+                        <div className={`text-[10px] font-medium ${isDebtor ? "text-rose-500" : isCreditor ? "text-emerald-500" : "text-slate-400"}`}>
+                          {bal === 0 ? "۰ ریال" : isDebtor ? "بدهکار" : "بستانکار"}
+                        </div>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenMessageModal(p, e);
+                        }}
+                        className="p-2 rounded-lg bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-600 transition-colors"
+                        title="پیامک / تماس"
+                      >
+                        <MessageSquare className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Desktop View: Full Rich Cards (Untouched) */}
+            <div className="hidden md:grid sm:grid-cols-2 md:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5 gap-4">
             {paginatedPersons.map((p: any, index: number) => {
               const bal = p.calculatedBalance;
               const isDebtor = bal > 0;
@@ -832,7 +911,8 @@ export default function PersonsManager(props: any) {
                 </motion.div>
               );
             })}
-          </div>
+            </div>
+          </>
         ) : (
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
