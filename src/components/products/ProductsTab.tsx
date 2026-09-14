@@ -52,7 +52,7 @@ export default function ProductsTab(props: any) {
   } = props;
   
   // Destruct icons
-  const { Percent, ArrowDownToLine, ArrowUpFromLine, FileSpreadsheet, Sparkles, Zap, CheckCircle, Tag, Activity, Printer, Edit2, Package, Plus, Search, Filter, ArrowUpDown, MoreVertical, Edit, Trash2, 
+  const { Globe, Percent, ArrowDownToLine, ArrowUpFromLine, FileSpreadsheet, Sparkles, Zap, CheckCircle, Tag, Activity, Printer, Edit2, Package, Plus, Search, Filter, ArrowUpDown, MoreVertical, Edit, Trash2, 
     X, Check, AlertCircle, ChevronDown, ChevronUp, Download, Upload, 
     Copy, Barcode, Eye, FileText, Image
   } = lucide;
@@ -176,6 +176,16 @@ export default function ProductsTab(props: any) {
                                 >
                                   <Barcode className="w-4 h-4" />
                                   تولید گروهی بارکد
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setActiveTab("online_pipe_pricing");
+                                    setIsProductActionsMenuOpen(false);
+                                  }}
+                                  className="w-full px-4 py-2 text-right text-sm text-indigo-700 hover:bg-indigo-50 transition-colors flex items-center gap-2 font-bold border-t border-slate-100 mt-1 pt-2"
+                                >
+                                  <Globe className="w-4 h-4 text-indigo-600" />
+                                  استعلام آنلاین لوله گاز (سپاهان)
                                 </button>
                                 <button
                                   onClick={() => {

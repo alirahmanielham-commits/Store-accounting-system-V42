@@ -71,6 +71,7 @@ export const allSidebarGroups: SidebarGroup[] = [
     icon: <Package className="w-5 h-5" />,
     items: [
       { id: "products", label: "مدیریت کالا و خدمات", roles: ["admin", "accountant"] },
+      { id: "online_pipe_pricing", label: "استعلام و ثبت آنلاین لوله گاز (سپاهان)", roles: ["admin", "accountant"] },
       { id: "bulk_barcode_generator", label: "تولید گروهی بارکد", roles: ["admin", "accountant"] },
       { id: "product_categories", label: "گروه‌بندی کالاها", roles: ["admin", "accountant"] },
       { id: "product_view", label: "کارت کالا", roles: ["admin", "accountant", "viewer"] },

@@ -164,6 +164,18 @@ export type Product = {
   discountPercent?: number;
   minStockLevel?: number;
   description?: string;
+  // Steel & Pipe specific properties (for online scrapers & pricing by weight/branch/meter)
+  pipeDiameterInch?: string;
+  pipeThicknessMm?: number;
+  pipeDiameterMm?: number;
+  pipeLengthM?: number;
+  pipeWeightPerBranchKg?: number;
+  pipeLoadingLocation?: string;
+  sourceUrl?: string;
+  pricePerKg?: number;
+  pricePerMeter?: number;
+  pricePerBranch?: number;
+  pricingBasis?: 'kg' | 'meter' | 'branch';
 };
 
 export type Account = {
