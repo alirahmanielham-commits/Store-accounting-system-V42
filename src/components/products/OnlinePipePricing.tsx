@@ -5,112 +5,20 @@ import {
   ExternalLink, Layers, Scale, Ruler, Hash, CheckSquare, Square, 
   ArrowRight, ShieldCheck, Tag, PlusCircle, Check, Info, 
   FileText, Sliders, ChevronDown, Clock, Search, Sparkles,
-  Coins, DollarSign, ArrowRightLeft, Repeat
+  Coins, DollarSign, ArrowRightLeft, Repeat, Building2, Flame
 } from 'lucide-react';
 import { Product, ProductCategory } from '../../types';
 import { addProduct, updateProduct, getProducts, getProductCategories, addProductCategory } from '../../services/dataService';
 import { addCommas, toPersianDigits, formatNumber, getBaseValueInToman } from '../../utils/format';
-
-interface PipeOnlineItem {
-  id: string;
-  diameterInch: string;
-  thicknessMm: number;
-  diameterMm: number;
-  lengthM: number;
-  weightPerBranchKg: number;
-  location: string;
-  pricePerKg: number;
-  pricePerBranch: number;
-  pricePerMeter: number;
-  name: string;
-  brand: string;
-  productUrl?: string;
-  defaultCategory: string;
-  mainUnit: string;
-  secondaryUnitWeight: string;
-  secondaryUnitMeter: string;
-  unitRatioWeight: number;
-  unitRatioMeter: number;
-}
-
-interface OnlinePipePricingProps {
-  products: Product[];
-  setProducts: React.Dispatch<React.SetStateAction<Product[]>>;
-  categories: ProductCategory[];
-  setCategories?: React.Dispatch<React.SetStateAction<ProductCategory[]>>;
-  storeSettings?: any;
-  showNotification: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
-  confirmAction?: (message: string, onConfirm: () => Promise<void> | void, details?: string) => void;
-  setActiveTab?: (tab: string) => void;
-}
-
-interface CurrencyPreset {
-  id: string;
-  name: string;
-  symbol: string;
-  type: 'base' | 'multiplier' | 'divisor';
-  defaultRate: number;
-  description: string;
-}
-
-const CURRENCY_PRESETS: CurrencyPreset[] = [
-  { 
-    id: "تومان", 
-    name: "تومان (IRT)", 
-    symbol: "تومان", 
-    type: "base", 
-    defaultRate: 1, 
-    description: "واحد ارزی پیش‌فرض سایت مرکزآهن (بدون تغییر)" 
-  },
-  { 
-    id: "ریال", 
-    name: "ریال (IRR)", 
-    symbol: "ریال", 
-    type: "multiplier", 
-    defaultRate: 10, 
-    description: "هر ۱ تومان = ۱۰ ریال (ضرب در ۱۰)" 
-  },
-  { 
-    id: "دلار", 
-    name: "دلار آمریکا (USD)", 
-    symbol: "$", 
-    type: "divisor", 
-    defaultRate: 70000, 
-    description: "قیمت تومان تقسیم بر نرخ روز دلار" 
-  },
-  { 
-    id: "یورو", 
-    name: "یورو (EUR)", 
-    symbol: "€", 
-    type: "divisor", 
-    defaultRate: 75000, 
-    description: "قیمت تومان تقسیم بر نرخ روز یورو" 
-  },
-  { 
-    id: "درهم", 
-    name: "درهم امارات (AED)", 
-    symbol: "درهم", 
-    type: "divisor", 
-    defaultRate: 19000, 
-    description: "قیمت تومان تقسیم بر نرخ روز درهم" 
-  },
-  { 
-    id: "افغانی", 
-    name: "افغانی (AFN)", 
-    symbol: "افغانی", 
-    type: "divisor", 
-    defaultRate: 1000, 
-    description: "قیمت تومان تقسیم بر نرخ روز افغانی" 
-  },
-  { 
-    id: "سفارشی", 
-    name: "سایر / ارز سفارشی", 
-    symbol: "واحد", 
-    type: "divisor", 
-    defaultRate: 1, 
-    description: "نرخ برابری دلخواه واردشده توسط کاربر" 
-  }
-];
+import { 
+  PipeCategoryType, 
+  PIPE_TABS_CONFIG, 
+  PipeOnlineItem, 
+  OnlinePipePricingProps, 
+  CURRENCY_PRESETS, 
+  UNIT_PRESETS, 
+  CurrencyPreset 
+} from './pipePricingConfig';
 
 export default function OnlinePipePricing({
   products,
@@ -122,7 +30,15 @@ export default function OnlinePipePricing({
   confirmAction,
   setActiveTab
 }: OnlinePipePricingProps) {
-  const [sourceUrl, setSourceUrl] = useState("https://www.markazeahan.com/company/%D9%84%D9%88%D9%84%D9%87-%DA%AF%D8%A7%D8%B2-%D8%AA%D9%88%DA%A9%D8%A7%D8%B1-%D8%B3%D9%BE%D8%A7%D9%87%D8%A7%D9%86/");
+  // Active Category Tab
+  const [activeCategoryTab, setActiveCategoryTab] = useState<PipeCategoryType>('sepahan');
+  
+  // Current tab configuration
+  const currentTabConfig = useMemo(() => {
+    return PIPE_TABS_CONFIG.find(t => t.id === activeCategoryTab) || PIPE_TABS_CONFIG[0];
+  }, [activeCategoryTab]);
+
+  const [sourceUrl, setSourceUrl] = useState(currentTabConfig.url);
   const [loading, setLoading] = useState(false);
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
   const [onlinePipes, setOnlinePipes] = useState<PipeOnlineItem[]>([]);
@@ -130,11 +46,11 @@ export default function OnlinePipePricing({
   
   // Customization controls for import/update
   const [pricingBasis, setPricingBasis] = useState<'kg' | 'branch' | 'meter'>('branch');
-  const [targetCategory, setTargetCategory] = useState<string>("لوله گاز توکار سپاهان");
-  const [selectedMainUnit, setSelectedMainUnit] = useState<string>("شاخه");
-  const [selectedSecondaryUnit, setSelectedSecondaryUnit] = useState<string>("متر");
+  const [targetCategory, setTargetCategory] = useState<string>(currentTabConfig.categoryName);
+  const [selectedMainUnit, setSelectedMainUnit] = useState<string>(currentTabConfig.defaultMainUnit);
+  const [selectedSecondaryUnit, setSelectedSecondaryUnit] = useState<string>(currentTabConfig.defaultSecondaryUnit);
   const [ratioDirection, setRatioDirection] = useState<'direct' | 'inverse'>('direct');
-  const [profitMarginPercent, setProfitMarginPercent] = useState<number>(10); // درصد سود پیشنهادی برای قیمت فروش
+  const [profitMarginPercent, setProfitMarginPercent] = useState<number>(10);
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResults, setSyncResults] = useState<{ updated: number; created: number; currency: string } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -181,6 +97,20 @@ export default function OnlinePipePricing({
     }
   }, [systemDefaultCurrency]);
 
+  // Handle Category Tab Switching
+  const handleSwitchCategoryTab = (tabId: PipeCategoryType) => {
+    setActiveCategoryTab(tabId);
+    const targetConfig = PIPE_TABS_CONFIG.find(t => t.id === tabId) || PIPE_TABS_CONFIG[0];
+    setSourceUrl(targetConfig.url);
+    setTargetCategory(targetConfig.categoryName);
+    setSelectedMainUnit(targetConfig.defaultMainUnit);
+    setSelectedSecondaryUnit(targetConfig.defaultSecondaryUnit);
+    setPricingBasis(targetConfig.defaultBasis);
+    setSearchQuery("");
+    setSyncResults(null);
+    fetchOnlinePricesForTab(tabId, targetConfig.url);
+  };
+
   // Handle Currency Selection Change
   const handleCurrencyChange = (newCur: string) => {
     setTargetCurrency(newCur);
@@ -206,11 +136,8 @@ export default function OnlinePipePricing({
       return amountInToman;
     }
     if (cur === "ریال" || cur === "IRR") {
-      // 1 Toman = exchangeRate Rials (usually 10)
       return Math.round(amountInToman * (exchangeRate || 10));
     }
-    // Foreign or Divisor currencies (USD, EUR, AED, etc.)
-    // Price in target currency = Price in Toman / exchangeRate
     const rate = exchangeRate || 1;
     if (rate <= 0) return amountInToman;
     return amountInToman / rate;
@@ -224,7 +151,6 @@ export default function OnlinePipePricing({
     if (cur === "ریال" || cur === "تومان") {
       return toPersianDigits(addCommas(Math.round(converted)));
     }
-    // Foreign currency: format with 2 decimal places if needed
     if (Number.isInteger(converted)) {
       return toPersianDigits(addCommas(converted));
     }
@@ -232,50 +158,6 @@ export default function OnlinePipePricing({
   };
 
   const activeCurrencyLabel = targetCurrency === "سفارشی" ? (customCurrencyName || "واحد سفارشی") : targetCurrency;
-
-  // Preset Configurations for Units & Ratios
-  const UNIT_PRESETS = [
-    {
-      id: "branch_meter",
-      title: "شاخه (اصلی) / متر (فرعی)",
-      mainUnit: "شاخه",
-      secondaryUnit: "متر",
-      basis: "branch" as const,
-      description: "هر شاخه ۶ متر طول (ضریب: ۶)"
-    },
-    {
-      id: "meter_branch",
-      title: "متر (اصلی) / شاخه (فرعی)",
-      mainUnit: "متر",
-      secondaryUnit: "شاخه",
-      basis: "meter" as const,
-      description: "قیمت‌گذاری بر مبنای متر، هر ۱ شاخه = ۶ متر"
-    },
-    {
-      id: "branch_kg",
-      title: "شاخه (اصلی) / کیلوگرم (فرعی)",
-      mainUnit: "شاخه",
-      secondaryUnit: "کیلوگرم",
-      basis: "branch" as const,
-      description: "هر شاخه بر مبنای وزن جدول سپاهان (ضریب = وزن هر شاخه)"
-    },
-    {
-      id: "kg_branch",
-      title: "کیلوگرم (اصلی) / شاخه (فرعی)",
-      mainUnit: "کیلوگرم",
-      secondaryUnit: "شاخه",
-      basis: "kg" as const,
-      description: "قیمت‌گذاری بر مبنای کیلو، هر ۱ شاخه = وزن شاخه"
-    },
-    {
-      id: "single_branch",
-      title: "تک‌واحدی: فقط شاخه",
-      mainUnit: "شاخه",
-      secondaryUnit: "ندارد",
-      basis: "branch" as const,
-      description: "بدون واحد فرعی (یکای ساده شاخه)"
-    }
-  ];
 
   const applyUnitPreset = (preset: typeof UNIT_PRESETS[0]) => {
     setSelectedMainUnit(preset.mainUnit);
@@ -289,7 +171,7 @@ export default function OnlinePipePricing({
       return 1;
     }
 
-    const length = Number(item.lengthM) || 6;
+    const length = Number(item.lengthM) || currentTabConfig.defaultLength;
     const weight = Number(item.weightPerBranchKg) || 1;
 
     // شاخه و متر
@@ -332,7 +214,7 @@ export default function OnlinePipePricing({
       };
     }
 
-    const length = Number(item.lengthM) || 6;
+    const length = Number(item.lengthM) || currentTabConfig.defaultLength;
     const weight = Number(item.weightPerBranchKg) || 1;
 
     if (selectedMainUnit === "شاخه" && selectedSecondaryUnit === "متر") {
@@ -371,6 +253,14 @@ export default function OnlinePipePricing({
       };
     }
 
+    if (selectedMainUnit === "کیلوگرم" && selectedSecondaryUnit === "متر") {
+      return {
+        formula: `هر ۱ متر = ${toPersianDigits(Number((weight / length).toFixed(2)))} کیلوگرم`,
+        ratio,
+        badge: `ضریب: ${toPersianDigits(ratio)}`
+      };
+    }
+
     return {
       formula: `۱ ${selectedSecondaryUnit} = ${toPersianDigits(ratio)} ${selectedMainUnit}`,
       ratio,
@@ -378,23 +268,23 @@ export default function OnlinePipePricing({
     };
   };
 
-  // Fetch online prices
-  const fetchOnlinePrices = async () => {
+  // Fetch online prices for a specific tab
+  const fetchOnlinePricesForTab = async (typeId: PipeCategoryType, urlToFetch?: string) => {
     setLoading(true);
     setSyncResults(null);
+    const targetUrl = urlToFetch || sourceUrl;
     try {
       const res = await fetch("/api/scraping/markaz-ahan-pipes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ url: sourceUrl })
+        body: JSON.stringify({ url: targetUrl, type: typeId })
       });
       const data = await res.json();
       if (data.success && Array.isArray(data.items)) {
         setOnlinePipes(data.items);
         setLastFetchedTime(new Date().toLocaleTimeString('fa-IR'));
-        // Select all by default
         setSelectedItemIds(data.items.map((i: PipeOnlineItem) => i.id));
-        showNotification(`تعداد ${toPersianDigits(data.items.length)} مشخصه لوله گاز با موفقیت دریافت شد.`, "success");
+        showNotification(`تعداد ${toPersianDigits(data.items.length)} مشخصه ${data.title || 'لوله'} با موفقیت دریافت شد.`, "success");
       } else {
         throw new Error(data.error || "پاسخ نامعتبر از سرور دریافت شد");
       }
@@ -407,7 +297,7 @@ export default function OnlinePipePricing({
   };
 
   useEffect(() => {
-    fetchOnlinePrices();
+    fetchOnlinePricesForTab(activeCategoryTab, currentTabConfig.url);
   }, []);
 
   // Filtered pipes by search query
@@ -417,7 +307,8 @@ export default function OnlinePipePricing({
     return onlinePipes.filter(p => 
       p.name.toLowerCase().includes(q) ||
       p.diameterInch.includes(q) ||
-      String(p.thicknessMm).includes(q)
+      String(p.thicknessMm).includes(q) ||
+      String(p.diameterMm).includes(q)
     );
   }, [onlinePipes, searchQuery]);
 
@@ -425,15 +316,24 @@ export default function OnlinePipePricing({
   const getExistingMatch = (pipe: PipeOnlineItem): Product | undefined => {
     return products.find(prod => {
       if (prod.pipeDiameterInch && prod.pipeThicknessMm) {
-        return prod.pipeDiameterInch === pipe.diameterInch && Number(prod.pipeThicknessMm) === pipe.thicknessMm;
+        return prod.pipeDiameterInch === pipe.diameterInch && 
+               Number(prod.pipeThicknessMm) === pipe.thicknessMm &&
+               (!prod.category || prod.category.includes(currentTabConfig.categoryName) || prod.name.includes(currentTabConfig.categoryName));
       }
-      // Name match
       const pName = prod.name.replace(/\s+/g, ' ');
-      return pName.includes("توکار") && pName.includes("سپاهان") && pName.includes(pipe.diameterInch);
+      if (activeCategoryTab === 'sepahan') {
+        return pName.includes("توکار") && pName.includes("سپاهان") && pName.includes(pipe.diameterInch);
+      } else if (activeCategoryTab === 'kecho') {
+        return pName.includes("کچو") && pName.includes(pipe.diameterInch);
+      } else if (activeCategoryTab === 'copper') {
+        return pName.includes("مسی") && pName.includes(pipe.diameterInch || String(pipe.diameterMm));
+      } else if (activeCategoryTab === 'galvanized') {
+        return pName.includes("گالوانیزه") && pName.includes(pipe.diameterInch);
+      }
+      return false;
     });
   };
 
-  // Toggle selection
   const toggleSelect = (id: string) => {
     setSelectedItemIds(prev => 
       prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]
@@ -467,7 +367,7 @@ export default function OnlinePipePricing({
       if (!cat) {
         const newCat = await addProductCategory({
           name: targetCategory,
-          description: "لوله‌های گاز توکار استانداردی تولید گروه صنعتی سپاهان (مانیس گاز)"
+          description: currentTabConfig.description
         });
         if (newCat) {
           categoryId = newCat.id;
@@ -481,28 +381,24 @@ export default function OnlinePipePricing({
       for (const item of itemsToProcess) {
         const existing = getExistingMatch(item);
 
-        // Raw prices in Toman (website baseline)
-        let rawPurchasePriceToman = item.pricePerBranch; // default: branch
+        let rawPurchasePriceToman = item.pricePerBranch;
         if (pricingBasis === 'kg') {
           rawPurchasePriceToman = item.pricePerKg;
         } else if (pricingBasis === 'meter') {
           rawPurchasePriceToman = item.pricePerMeter;
         }
 
-        // Converted prices to Target Currency
         const convertedPurchasePrice = convertFromToman(rawPurchasePriceToman);
         const convertedPricePerKg = convertFromToman(item.pricePerKg);
         const convertedPricePerBranch = convertFromToman(item.pricePerBranch);
         const convertedPricePerMeter = convertFromToman(item.pricePerMeter);
 
-        // Round according to currency
         const isPersianCurrency = activeCurrencyLabel === "تومان" || activeCurrencyLabel === "ریال";
         const finalPurchasePrice = isPersianCurrency ? Math.round(convertedPurchasePrice) : Number(convertedPurchasePrice.toFixed(2));
         const finalPricePerKg = isPersianCurrency ? Math.round(convertedPricePerKg) : Number(convertedPricePerKg.toFixed(2));
         const finalPricePerBranch = isPersianCurrency ? Math.round(convertedPricePerBranch) : Number(convertedPricePerBranch.toFixed(2));
         const finalPricePerMeter = isPersianCurrency ? Math.round(convertedPricePerMeter) : Number(convertedPricePerMeter.toFixed(2));
 
-        // Suggested Sale Price in Target Currency
         const marginMultiplier = 1 + (Number(profitMarginPercent) || 0) / 100;
         const rawSalePrice = finalPurchasePrice * marginMultiplier;
         const finalSalePrice = isPersianCurrency ? Math.round(rawSalePrice) : Number(rawSalePrice.toFixed(2));
@@ -510,7 +406,6 @@ export default function OnlinePipePricing({
         const computedUnitRatio = getComputedUnitRatio(item);
         const ratioInfo = getUnitRatioDescription(item);
 
-        // Build Product Payload
         const productPayload: Partial<Product> = {
           name: item.name,
           category: targetCategory,
@@ -522,7 +417,7 @@ export default function OnlinePipePricing({
           unit: selectedMainUnit,
           secondaryUnit: selectedSecondaryUnit === "ندارد" ? undefined : selectedSecondaryUnit,
           unitRatio: computedUnitRatio,
-          description: `لوله گاز توکار استاندارد سپاهان | سایز: ${item.diameterInch} اینچ | ضخامت: ${item.thicknessMm}mm | قطر: ${item.diameterMm}mm | طول: ${item.lengthM}m | وزن شاخه: ${item.weightPerBranchKg}kg | واحد اصلی: ${selectedMainUnit} | واحد فرعی: ${selectedSecondaryUnit === 'ندارد' ? 'ندارد' : `${selectedSecondaryUnit} (${ratioInfo.formula})`} | نسبت تبدیل: ${computedUnitRatio} | واحد ارزی: ${activeCurrencyLabel} (نرخ تبدیل: ${activeCurrencyLabel === 'ریال' ? `هر ۱ تومان = ${exchangeRate} ریال` : `هر ۱ ${activeCurrencyLabel} = ${addCommas(exchangeRate)} تومان`}) | قیمت پایه مرکزآهن: ${addCommas(item.pricePerKg)} تومان/کیلو`,
+          description: `${item.name} | برند: ${item.brand || currentTabConfig.brand} | سایز: ${item.diameterInch} اینچ | ضخامت: ${item.thicknessMm}mm | قطر خارجی: ${item.diameterMm}mm | طول: ${item.lengthM}m | وزن شاخه: ${item.weightPerBranchKg}kg | واحد اصلی: ${selectedMainUnit} | واحد فرعی: ${selectedSecondaryUnit === 'ندارد' ? 'ندارد' : `${selectedSecondaryUnit} (${ratioInfo.formula})`} | نسبت تبدیل: ${computedUnitRatio} | واحد ارزی: ${activeCurrencyLabel} (نرخ تبدیل: ${activeCurrencyLabel === 'ریال' ? `هر ۱ تومان = ${exchangeRate} ریال` : `هر ۱ ${activeCurrencyLabel} = ${addCommas(exchangeRate)} تومان`}) | قیمت پایه مرکزآهن: ${addCommas(item.pricePerKg)} تومان/کیلو`,
           pipeDiameterInch: item.diameterInch,
           pipeThicknessMm: item.thicknessMm,
           pipeDiameterMm: item.diameterMm,
@@ -545,8 +440,10 @@ export default function OnlinePipePricing({
           await updateProduct(String(existing.id), productPayload);
           updatedCount++;
         } else {
-          // Generate code
-          const newCode = `PIPE-${item.diameterInch.replace(/[\s/]/g, '')}-${String(item.thicknessMm).replace('.', '')}`;
+          const prefix = activeCategoryTab.toUpperCase();
+          const cleanInch = (item.diameterInch || String(item.diameterMm)).replace(/[\s/]/g, '');
+          const cleanThick = String(item.thicknessMm).replace('.', '');
+          const newCode = `PIPE-${prefix}-${cleanInch}-${cleanThick}`;
           await addProduct({
             ...productPayload,
             code: newCode,
@@ -557,13 +454,12 @@ export default function OnlinePipePricing({
         }
       }
 
-      // Reload fresh products
       const refreshed = await getProducts();
       setProducts(refreshed);
 
       setSyncResults({ created: createdCount, updated: updatedCount, currency: activeCurrencyLabel });
       showNotification(
-        `عملیات موفق: ${toPersianDigits(createdCount)} کالا جدید و ${toPersianDigits(updatedCount)} کالا با واحد پولی «${activeCurrencyLabel}» به‌روزرسانی شد.`, 
+        `عملیات موفق: ${toPersianDigits(createdCount)} کالای جدید و ${toPersianDigits(updatedCount)} کالای موجود با واحد پولی «${activeCurrencyLabel}» ثبت و به‌روزرسانی شد.`, 
         "success"
       );
     } catch (err: any) {
@@ -581,6 +477,48 @@ export default function OnlinePipePricing({
       className="space-y-6"
       dir="rtl"
     >
+      {/* Category Navigation Bar (All 4 Sources in One Unified Menu) */}
+      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 p-2 overflow-x-auto">
+        <div className="flex items-center gap-2 min-w-max">
+          <div className="px-3 py-2 text-xs font-black text-slate-500 flex items-center gap-1.5 border-l border-slate-200 ml-1">
+            <Layers className="w-4 h-4 text-indigo-600" />
+            <span>منوی صفحات استعلام:</span>
+          </div>
+
+          {PIPE_TABS_CONFIG.map((tab) => {
+            const isActive = activeCategoryTab === tab.id;
+            return (
+              <button
+                key={tab.id}
+                type="button"
+                onClick={() => handleSwitchCategoryTab(tab.id)}
+                className={`px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2.5 cursor-pointer relative ${
+                  isActive
+                    ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
+                    : "bg-slate-50 text-slate-700 hover:bg-indigo-50/70 hover:text-indigo-700 border border-slate-200/80"
+                }`}
+              >
+                {tab.id === 'copper' ? (
+                  <Sparkles className={`w-4 h-4 ${isActive ? 'text-amber-300' : 'text-amber-600'}`} />
+                ) : tab.id === 'galvanized' ? (
+                  <ShieldCheck className={`w-4 h-4 ${isActive ? 'text-cyan-200' : 'text-cyan-600'}`} />
+                ) : tab.id === 'kecho' ? (
+                  <Building2 className={`w-4 h-4 ${isActive ? 'text-emerald-300' : 'text-emerald-600'}`} />
+                ) : (
+                  <Flame className={`w-4 h-4 ${isActive ? 'text-amber-300' : 'text-amber-500'}`} />
+                )}
+                <span>{tab.title}</span>
+                <span className={`text-[10px] px-2 py-0.5 rounded-md font-normal ${
+                  isActive ? "bg-indigo-700 text-indigo-100" : "bg-white text-slate-500 border border-slate-200"
+                }`}>
+                  {tab.badge}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Header Banner */}
       <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
         <div className="bg-gradient-to-l from-indigo-800 via-indigo-700 to-slate-900 p-6 text-white relative overflow-hidden">
@@ -594,12 +532,14 @@ export default function OnlinePipePricing({
                 <span className="text-indigo-300/50">•</span>
                 <Coins className="w-3.5 h-3.5 text-amber-300" />
                 تبدیل هوشمند واحد ارزی سیستم
+                <span className="text-indigo-300/50">•</span>
+                <span className="text-emerald-300 font-black">{currentTabConfig.title}</span>
               </div>
               <h1 className="text-xl md:text-2xl font-black flex items-center gap-2.5">
-                تعریف و بروزرسانی قیمت آنلاین لوله گاز توکار سپاهان
+                تعریف و بروزرسانی قیمت آنلاین {currentTabConfig.title}
               </h1>
               <p className="text-xs md:text-sm text-indigo-100/90 mt-1 max-w-3xl leading-relaxed">
-                استخراج برخط مشخصات فنی و قیمت روز لوله‌های گازی سپاهان، با قابلیت تبدیل خودکار نرخ‌های مرکزآهن (تومان) به واحد ارزی پیش‌فرض سیستم (ریال، دلار، یورو و...) و محاسبه مبنای شاخه، کیلوگرم یا متر.
+                {currentTabConfig.description} با قابلیت تبدیل خودکار نرخ‌های روز مرکزآهن (تومان) به واحد ارزی سیستم ({activeCurrencyLabel}) و ثبت بر مبنای شاخه، کیلوگرم یا متر.
               </p>
             </div>
 
@@ -615,7 +555,7 @@ export default function OnlinePipePricing({
               </a>
               <button
                 type="button"
-                onClick={fetchOnlinePrices}
+                onClick={() => fetchOnlinePricesForTab(activeCategoryTab, sourceUrl)}
                 disabled={loading || isSyncing}
                 className="px-4 py-2.5 bg-emerald-500 hover:bg-emerald-600 text-white rounded-xl text-xs md:text-sm font-black flex items-center gap-2 shadow-lg shadow-emerald-600/20 transition-all disabled:opacity-50 cursor-pointer"
               >
@@ -660,7 +600,7 @@ export default function OnlinePipePricing({
             {setActiveTab && (
               <button
                 onClick={() => setActiveTab("products")}
-                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5"
+                className="px-3 py-1 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 cursor-pointer"
               >
                 مشاهده در لیست کالاها
                 <ArrowRight className="w-3.5 h-3.5" />
@@ -819,7 +759,7 @@ export default function OnlinePipePricing({
           <div className="text-xs font-black text-slate-800 mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2">
               <Sliders className="w-4 h-4 text-indigo-600" />
-              <span>تنظیمات واحد شمارش، نسبت واحدها و دسته‌بندی کالا</span>
+              <span>تنظیمات واحد شمارش، نسبت واحدها و دسته‌بندی کالا ({currentTabConfig.title})</span>
             </div>
             <div className="text-[11px] font-bold text-slate-500">
               واحد اصلی: <span className="text-indigo-600">{selectedMainUnit}</span> | واحد فرعی: <span className="text-indigo-600">{selectedSecondaryUnit}</span>
@@ -867,7 +807,7 @@ export default function OnlinePipePricing({
                 onChange={(e) => setPricingBasis(e.target.value as any)}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
-                <option value="branch">بر اساس شاخه ۶ متری ({activeCurrencyLabel}/شاخه)</option>
+                <option value="branch">بر اساس شاخه ({activeCurrencyLabel}/شاخه)</option>
                 <option value="kg">بر اساس وزن ({activeCurrencyLabel}/کیلوگرم)</option>
                 <option value="meter">بر اساس متر طول ({activeCurrencyLabel}/متر)</option>
               </select>
@@ -882,7 +822,7 @@ export default function OnlinePipePricing({
                 type="text"
                 value={targetCategory}
                 onChange={(e) => setTargetCategory(e.target.value)}
-                placeholder="مثلاً: لوله گاز توکار سپاهان"
+                placeholder="نام گروه کالا..."
                 className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               />
             </div>
@@ -898,8 +838,9 @@ export default function OnlinePipePricing({
                 className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
                 <option value="شاخه">شاخه (پیش‌فرض لوله)</option>
-                <option value="متر">متر (طول لوله)</option>
                 <option value="کیلوگرم">کیلوگرم (وزن لوله)</option>
+                <option value="متر">متر (طول لوله)</option>
+                <option value="کلاف">کلاف (مسی)</option>
                 <option value="بندیل">بندیل</option>
               </select>
             </div>
@@ -914,8 +855,8 @@ export default function OnlinePipePricing({
                 onChange={(e) => setSelectedSecondaryUnit(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
-                <option value="متر">متر (طول هر شاخه = ۶ متر)</option>
-                <option value="کیلوگرم">کیلوگرم (وزن هر شاخه طبق جدول)</option>
+                <option value="متر">متر (طول)</option>
+                <option value="کیلوگرم">کیلوگرم (وزن طبق مشخصات)</option>
                 <option value="شاخه">شاخه (واحد شمارش)</option>
                 <option value="ندارد">بدون واحد فرعی (تک‌واحدی)</option>
               </select>
@@ -948,45 +889,15 @@ export default function OnlinePipePricing({
                 <strong>فرمول نسبت تبدیل واحد: </strong>
                 {selectedSecondaryUnit === "ندارد" ? (
                   <span className="text-slate-500">کالاها فقط با واحد اصلی «{selectedMainUnit}» و بدون واحد فرعی ثبت می‌شوند.</span>
-                ) : selectedMainUnit === "شاخه" && selectedSecondaryUnit === "متر" ? (
-                  <span>
-                    یک شاخه ۶ متری ➔ <span className="text-emerald-700 font-black">هر ۱ شاخه = ۶ متر طول</span> (ضریب ثبت در سیستم: <strong className="font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">{toPersianDigits(ratioDirection === 'direct' ? 6 : 0.1667)}</strong>)
-                  </span>
-                ) : selectedMainUnit === "شاخه" && selectedSecondaryUnit === "کیلوگرم" ? (
-                  <span>
-                    هر ۱ شاخه = بر اساس وزن شاخه (جدول سپاهان) ➔ ضریب ثبت در سیستم: <strong className="font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">وزن هر شاخه به کیلوگرم</strong>
-                  </span>
                 ) : (
                   <span>
-                    تبدیل بین <strong>{selectedMainUnit}</strong> و <strong>{selectedSecondaryUnit}</strong> به صورت پویا محاسبه و ثبت می‌شود.
+                    در تعریف کالا در نرم‌افزار، نسبت واحد فرعی به صورت هوشمند محاسبه می‌شود (مثلاً برای لوله ۶ متری: <strong>۱ شاخه = ۶ متر</strong> و ضریب تبدیل = <strong>۶</strong> ذخیره می‌گردد).
                   </span>
                 )}
               </span>
             </div>
 
-            {selectedMainUnit === "شاخه" && selectedSecondaryUnit === "متر" && (
-              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-[11px]">
-                <span className="text-slate-500 font-bold">حالت ضریب:</span>
-                <button
-                  type="button"
-                  onClick={() => setRatioDirection('direct')}
-                  className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors ${ratioDirection === 'direct' ? 'bg-indigo-100 text-indigo-800' : 'text-slate-600 hover:bg-slate-100'}`}
-                  title="۱ شاخه = ۶ متر (عدد ۶)"
-                >
-                  مستقیم عرف بازار (۶)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setRatioDirection('inverse')}
-                  className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors ${ratioDirection === 'inverse' ? 'bg-indigo-100 text-indigo-800' : 'text-slate-600 hover:bg-slate-100'}`}
-                  title="۱ متر = ۱/۶ شاخه"
-                >
-                  معکوس (۱/۶)
-                </button>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 w-full lg:w-auto">
+            <div className="flex items-center gap-3">
               <button
                 type="button"
                 onClick={handleSaveToDatabase}
@@ -1041,10 +952,10 @@ export default function OnlinePipePricing({
             <thead>
               <tr className="bg-slate-100/70 border-b border-slate-200 text-slate-600 font-extrabold">
                 <th className="p-3.5 w-10 text-center">#</th>
-                <th className="p-3.5">سایز (اینچ)</th>
+                <th className="p-3.5">سایز (اینچ) / نام کامل</th>
                 <th className="p-3.5">ضخامت (mm)</th>
                 <th className="p-3.5">طول (متر)</th>
-                <th className="p-3.5">وزن هر شاخه</th>
+                <th className="p-3.5">وزن هر شاخه/کلاف</th>
                 <th className="p-3.5 bg-amber-50/70 text-amber-900 border-x border-amber-200/60">
                   <div>نسبت واحد اصلی و فرعی</div>
                   <div className="text-[10px] text-amber-700 font-bold">
@@ -1056,7 +967,7 @@ export default function OnlinePipePricing({
                   <div className="text-[10px] text-indigo-600 font-black">({activeCurrencyLabel})</div>
                 </th>
                 <th className="p-3.5">
-                  <div>قیمت خرید هر شاخه</div>
+                  <div>قیمت خرید هر شاخه/کلاف</div>
                   <div className="text-[10px] text-indigo-600 font-black">({activeCurrencyLabel})</div>
                 </th>
                 <th className="p-3.5">
@@ -1082,14 +993,8 @@ export default function OnlinePipePricing({
                 const rawSelectedBasis = pricingBasis === 'kg' ? rawKg : pricingBasis === 'meter' ? rawMeter : rawBranch;
 
                 // Converted values
-                const convertedKg = convertFromToman(rawKg);
-                const convertedBranch = convertFromToman(rawBranch);
-                const convertedMeter = convertFromToman(rawMeter);
                 const convertedPurchaseBasis = convertFromToman(rawSelectedBasis);
-                
-                // Sale price calculation
                 const convertedSale = convertedPurchaseBasis * (1 + profitMarginPercent / 100);
-
                 const isPersianCurrency = activeCurrencyLabel === "تومان" || activeCurrencyLabel === "ریال";
 
                 return (
@@ -1113,12 +1018,12 @@ export default function OnlinePipePricing({
                     </td>
 
                     <td className="p-3 font-black text-slate-900 flex items-center gap-2">
-                      <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs">
-                        {toPersianDigits(pipe.diameterInch)}
+                      <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-black text-xs shrink-0">
+                        {toPersianDigits(pipe.diameterInch || (pipe.diameterMm ? `${pipe.diameterMm}mm` : "-"))}
                       </span>
                       <div>
                         <div>{pipe.name}</div>
-                        <div className="text-[10px] text-slate-400 font-normal">قطر خارجی: {toPersianDigits(pipe.diameterMm)} میلی‌متر</div>
+                        <div className="text-[10px] text-slate-400 font-normal">قطر خارجی: {toPersianDigits(pipe.diameterMm)} میلی‌متر | برند: {pipe.brand}</div>
                       </div>
                     </td>
 
@@ -1266,17 +1171,17 @@ export default function OnlinePipePricing({
             واحدهای سه‌گانه (شاخه، کیلو، متر)
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">
-            امکان تعریف کالا با واحد اصلی شاخه و واحد فرعی کیلوگرم همراه با انتساب ضریب وزنی استاندارد کارخانه سپاهان برای هر سایز لوله فراهم است.
+            امکان تعریف کالا با واحد اصلی شاخه/کیلوگرم و واحد فرعی کیلوگرم/متر همراه با محاسبه خودکار ضریب تبدیل استاندارد کارخانه‌ها برای هر سایز لوله فراهم است.
           </p>
         </div>
 
         <div className="bg-white rounded-2xl p-5 border border-slate-200 shadow-xs">
           <div className="flex items-center gap-2 text-amber-700 font-extrabold text-sm mb-2">
             <Sparkles className="w-4 h-4" />
-            تطبیق خودکار با تنظیمات سیستم
+            تجمیع ۴ دسته لوله در یک پنل
           </div>
           <p className="text-xs text-slate-600 leading-relaxed">
-            این صفحه به صورت هوشمند واحد پولی پیش‌فرض تنظیم‌شده در بخش پیکربندی فروشگاه شما (مانند ریال یا دلار) را شناسایی و به عنوان واحد هدف پیشنهاد می‌دهد.
+            از طریق زبانه بالای همین صفحه می‌توانید به آسانی بین <strong>لوله گاز سپاهان</strong>، <strong>لوله گاز کچو</strong>، <strong>لوله مسی</strong> و <strong>لوله گالوانیزه</strong> سوئیچ کرده و استعلام و ثبت گروهی انجام دهید.
           </p>
         </div>
       </div>

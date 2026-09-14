@@ -96,7 +96,63 @@ router.post('/api/search-products', async (req, res) => {
 router.post('/api/scraping/markaz-ahan-pipes', async (req, res) => {
   try {
     const targetUrl = req.body?.url || "https://www.markazeahan.com/company/%D9%84%D9%88%D9%84%D9%87-%DA%AF%D8%A7%D8%B2-%D8%AA%D9%88%DA%A9%D8%A7%D8%B1-%D8%B3%D9%BE%D8%A7%D9%87%D8%A7%D9%86/";
-    
+    const pageType = req.body?.type || "sepahan";
+
+    // Known source configurations
+    const SOURCE_CONFIGS: Record<string, {
+      id: string;
+      title: string;
+      category: string;
+      brand: string;
+      defaultUnit: string;
+      defaultLength: number;
+    }> = {
+      sepahan: {
+        id: "sepahan",
+        title: "قیمت لوله گاز توکار سپاهان",
+        category: "لوله گاز توکار سپاهان",
+        brand: "سپاهان (توکار مانیس گاز)",
+        defaultUnit: "شاخه",
+        defaultLength: 6
+      },
+      kecho: {
+        id: "kecho",
+        title: "قیمت لوله گاز توکار کچو",
+        category: "لوله گاز توکار کچو",
+        brand: "کچو (توکار)",
+        defaultUnit: "شاخه",
+        defaultLength: 6
+      },
+      copper: {
+        id: "copper",
+        title: "قیمت لوله مسی (کلاف)",
+        category: "لوله مسی",
+        brand: "مس قائم / بابک / باهنر",
+        defaultUnit: "کیلوگرم",
+        defaultLength: 50
+      },
+      galvanized: {
+        id: "galvanized",
+        title: "قیمت لوله گالوانیزه ضخامت ۲.۵",
+        category: "لوله گالوانیزه ۲.۵",
+        brand: "گالوانیزه صنعتی / تست",
+        defaultUnit: "شاخه",
+        defaultLength: 6
+      }
+    };
+
+    // Detect config by URL or pageType
+    let currentConfig = SOURCE_CONFIGS[pageType] || SOURCE_CONFIGS.sepahan;
+    if (targetUrl.includes("copper-pipe")) {
+      currentConfig = SOURCE_CONFIGS.copper;
+    } else if (targetUrl.includes("%DA%A9%DA%86%D9%88") || targetUrl.includes("کچو")) {
+      currentConfig = SOURCE_CONFIGS.kecho;
+    } else if (targetUrl.includes("galvanized-pipe")) {
+      currentConfig = SOURCE_CONFIGS.galvanized;
+    } else if (targetUrl.includes("%D8%B3%D9%BE%D8%A7%D9%87%D8%A7%D9%86") || targetUrl.includes("سپاهان")) {
+      currentConfig = SOURCE_CONFIGS.sepahan;
+    }
+
     let html = "";
     try {
       const response = await fetch(targetUrl, {
@@ -114,148 +170,133 @@ router.post('/api/scraping/markaz-ahan-pipes', async (req, res) => {
       console.warn("Direct fetch from markazeahan failed, checking fallback:", fetchErr);
     }
 
-    // Default reference data if network or page structure changes
-    const defaultPipes = [
-      {
-        diameterInch: "1/2",
-        thicknessMm: 2.8,
-        diameterMm: 21.3,
-        lengthM: 6,
-        weightPerBranchKg: 7.68,
-        location: "کارخانه",
-        pricePerKg: 160500,
-        name: "لوله گاز توکار سپاهان ۱/۲ اینچ ضخامت ۲.۸ میل",
-        brand: "سپاهان (توکار مانیس گاز)",
-        productUrl: "/product/لوله-گازی-توکار-سپاهان-سایز-1-2-اینچ/"
-      },
-      {
-        diameterInch: "3/4",
-        thicknessMm: 2.9,
-        diameterMm: 26.7,
-        lengthM: 6,
-        weightPerBranchKg: 10.2,
-        location: "کارخانه",
-        pricePerKg: 160500,
-        name: "لوله گاز توکار سپاهان ۳/۴ اینچ ضخامت ۲.۹ میل",
-        brand: "سپاهان (توکار مانیس گاز)",
-        productUrl: "/product/لوله-گازی-توکار-سپاهان-سایز-3-4-اینچ/"
-      },
-      {
-        diameterInch: "1",
-        thicknessMm: 3.4,
-        diameterMm: 33.4,
-        lengthM: 6,
-        weightPerBranchKg: 15.06,
-        location: "کارخانه",
-        pricePerKg: 166500,
-        name: "لوله گاز توکار سپاهان ۱ اینچ ضخامت ۳.۴ میل",
-        brand: "سپاهان (توکار مانیس گاز)",
-        productUrl: "/product/لوله-گازی-توکار-سپاهان-سایز-1-اینچ/"
-      },
-      {
-        diameterInch: "1 1/4",
-        thicknessMm: 3.6,
-        diameterMm: 42.2,
-        lengthM: 6,
-        weightPerBranchKg: 20.58,
-        location: "کارخانه",
-        pricePerKg: 160500,
-        name: "لوله گاز توکار سپاهان ۱ ۱/۴ اینچ ضخامت ۳.۶ میل",
-        brand: "سپاهان (توکار مانیس گاز)",
-        productUrl: "/product/لوله-گازی-توکار-سپاهان-سایز-1-4-1-اینچ/"
-      },
-      {
-        diameterInch: "1 1/2",
-        thicknessMm: 3.7,
-        diameterMm: 48.3,
-        lengthM: 6,
-        weightPerBranchKg: 24.42,
-        location: "کارخانه",
-        pricePerKg: 160500,
-        name: "لوله گاز توکار سپاهان ۱ ۱/۲ اینچ ضخامت ۳.۷ میل",
-        brand: "سپاهان (توکار مانیس گاز)",
-        productUrl: "/product/لوله-گازی-توکار-سپاهان-سایز-1-2-1-اینچ/"
-      },
-      {
-        diameterInch: "2",
-        thicknessMm: 3.9,
-        diameterMm: 60.3,
-        lengthM: 6,
-        weightPerBranchKg: 32.52,
-        location: "کارخانه",
-        pricePerKg: 160500,
-        name: "لوله گاز توکار سپاهان ۲ اینچ ضخامت ۳.۹ میل",
-        brand: "سپاهان (توکار مانیس گاز)",
-        productUrl: "/product/لوله-گازی-توکار-سپاهان-سایز-2-اینچ/"
-      }
-    ];
+    // Default reference datasets for resilience
+    const FALLBACK_DATA: Record<string, any[]> = {
+      sepahan: [
+        { diameterInch: "1/2", thicknessMm: 2.8, diameterMm: 21.3, lengthM: 6, weightPerBranchKg: 7.68, location: "کارخانه", pricePerKg: 160500, name: "لوله گاز توکار سپاهان ۱/۲ اینچ ضخامت ۲.۸ میل", brand: "سپاهان (توکار مانیس گاز)" },
+        { diameterInch: "3/4", thicknessMm: 2.9, diameterMm: 26.7, lengthM: 6, weightPerBranchKg: 10.2, location: "کارخانه", pricePerKg: 160500, name: "لوله گاز توکار سپاهان ۳/۴ اینچ ضخامت ۲.۹ میل", brand: "سپاهان (توکار مانیس گاز)" },
+        { diameterInch: "1", thicknessMm: 3.4, diameterMm: 33.4, lengthM: 6, weightPerBranchKg: 15.06, location: "کارخانه", pricePerKg: 166500, name: "لوله گاز توکار سپاهان ۱ اینچ ضخامت ۳.۴ میل", brand: "سپاهان (توکار مانیس گاز)" },
+        { diameterInch: "1 1/4", thicknessMm: 3.6, diameterMm: 42.2, lengthM: 6, weightPerBranchKg: 20.58, location: "کارخانه", pricePerKg: 160500, name: "لوله گاز توکار سپاهان ۱ ۱/۴ اینچ ضخامت ۳.۶ میل", brand: "سپاهان (توکار مانیس گاز)" },
+        { diameterInch: "1 1/2", thicknessMm: 3.7, diameterMm: 48.3, lengthM: 6, weightPerBranchKg: 24.42, location: "کارخانه", pricePerKg: 160500, name: "لوله گاز توکار سپاهان ۱ ۱/۲ اینچ ضخامت ۳.۷ میل", brand: "سپاهان (توکار مانیس گاز)" },
+        { diameterInch: "2", thicknessMm: 3.9, diameterMm: 60.3, lengthM: 6, weightPerBranchKg: 32.52, location: "کارخانه", pricePerKg: 160500, name: "لوله گاز توکار سپاهان ۲ اینچ ضخامت ۳.۹ میل", brand: "سپاهان (توکار مانیس گاز)" }
+      ],
+      kecho: [
+        { diameterInch: "1/2", thicknessMm: 2.8, diameterMm: 21.3, lengthM: 6, weightPerBranchKg: 8.78, location: "کارخانه", pricePerKg: 147273, name: "لوله گاز توکار کچو ۱/۲ اینچ ضخامت ۲.۸ میل", brand: "کچو (توکار)" },
+        { diameterInch: "3/4", thicknessMm: 2.9, diameterMm: 26.7, lengthM: 6, weightPerBranchKg: 9.5, location: "کارخانه", pricePerKg: 147273, name: "لوله گاز توکار کچو ۳/۴ اینچ ضخامت ۲.۹ میل", brand: "کچو (توکار)" },
+        { diameterInch: "1", thicknessMm: 3.4, diameterMm: 33.4, lengthM: 6, weightPerBranchKg: 15.7, location: "کارخانه", pricePerKg: 147273, name: "لوله گاز توکار کچو ۱ اینچ ضخامت ۳.۴ میل", brand: "کچو (توکار)" },
+        { diameterInch: "1 1/4", thicknessMm: 3.6, diameterMm: 42.2, lengthM: 6, weightPerBranchKg: 21.2, location: "کارخانه", pricePerKg: 147273, name: "لوله گاز توکار کچو ۱ ۱/۴ اینچ ضخامت ۳.۶ میل", brand: "کچو (توکار)" },
+        { diameterInch: "1 1/2", thicknessMm: 3.7, diameterMm: 48.3, lengthM: 6, weightPerBranchKg: 25.1, location: "کارخانه", pricePerKg: 147273, name: "لوله گاز توکار کچو ۱ ۱/۲ اینچ ضخامت ۳.۷ میل", brand: "کچو (توکار)" },
+        { diameterInch: "2", thicknessMm: 3.9, diameterMm: 60.3, lengthM: 6, weightPerBranchKg: 33.2, location: "کارخانه", pricePerKg: 147273, name: "لوله گاز توکار کچو ۲ اینچ ضخامت ۳.۹ میل", brand: "کچو (توکار)" }
+      ],
+      copper: [
+        { diameterInch: "1", thicknessMm: 0.7, diameterMm: 33.4, lengthM: 50, weightPerBranchKg: 32.14, location: "کارخانه", pricePerKg: 3000000, name: "لوله مسی سایز ۱ اینچ (قطر 33.4mm ضخامت 0.7mm کلاف 50m)", brand: "مس قائم / باهنر" },
+        { diameterInch: "1", thicknessMm: 0.8, diameterMm: 33.4, lengthM: 50, weightPerBranchKg: 36.62, location: "کارخانه", pricePerKg: 3000000, name: "لوله مسی سایز ۱ اینچ (قطر 33.4mm ضخامت 0.8mm کلاف 50m)", brand: "مس قائم / باهنر" },
+        { diameterInch: "1 1/4", thicknessMm: 0.7, diameterMm: 42.2, lengthM: 50, weightPerBranchKg: 40.76, location: "کارخانه", pricePerKg: 3000000, name: "لوله مسی سایز ۱ ۱/۴ اینچ (قطر 42.2mm ضخامت 0.7mm کلاف 50m)", brand: "مس قائم / باهنر" },
+        { diameterInch: "1/2", thicknessMm: 0.7, diameterMm: 12.7, lengthM: 50, weightPerBranchKg: 11.8, location: "کارخانه", pricePerKg: 3000000, name: "لوله مسی سایز ۱/۲ اینچ (قطر 12.7mm ضخامت 0.7mm کلاف 50m)", brand: "مس قائم / باهنر" },
+        { diameterInch: "1/4", thicknessMm: 0.8, diameterMm: 6.65, lengthM: 50, weightPerBranchKg: 6.57, location: "کارخانه", pricePerKg: 3000000, name: "لوله مسی سایز ۱/۴ اینچ (قطر 6.65mm ضخامت 0.8mm کلاف 50m)", brand: "مس قائم / باهنر" },
+        { diameterInch: "3/4", thicknessMm: 0.7, diameterMm: 19.05, lengthM: 50, weightPerBranchKg: 18.04, location: "کارخانه", pricePerKg: 3000000, name: "لوله مسی سایز ۳/۴ اینچ (قطر 19.05mm ضخامت 0.7mm کلاف 50m)", brand: "مس قائم / باهنر" }
+      ],
+      galvanized: [
+        { diameterInch: "3 1/2", thicknessMm: 2.5, diameterMm: 101.6, lengthM: 6, weightPerBranchKg: 39.2, location: "کارخانه تهران", pricePerKg: 177273, name: "لوله گالوانیزه ۳ ۱/۲ اینچ ضخامت ۲.۵ میل (قطر 101.6mm)", brand: "گالوانیزه صنعتی / تست" },
+        { diameterInch: "4", thicknessMm: 2.5, diameterMm: 114.3, lengthM: 6, weightPerBranchKg: 43.5, location: "کارخانه تهران", pricePerKg: 177273, name: "لوله گالوانیزه ۴ اینچ ضخامت ۲.۵ میل (قطر 114.3mm)", brand: "گالوانیزه صنعتی / تست" },
+        { diameterInch: "5", thicknessMm: 2.5, diameterMm: 141.3, lengthM: 6, weightPerBranchKg: 53.6, location: "کارخانه تهران", pricePerKg: 177273, name: "لوله گالوانیزه ۵ اینچ ضخامت ۲.۵ میل (قطر 141.3mm)", brand: "گالوانیزه صنعتی / تست" },
+        { diameterInch: "6", thicknessMm: 2.5, diameterMm: 168.3, lengthM: 6, weightPerBranchKg: 64.0, location: "کارخانه تهران", pricePerKg: 177273, name: "لوله گالوانیزه ۶ اینچ ضخامت ۲.۵ میل (قطر 168.3mm)", brand: "گالوانیزه صنعتی / تست" },
+        { diameterInch: "2 1/2", thicknessMm: 2.5, diameterMm: 76.1, lengthM: 6, weightPerBranchKg: 28.5, location: "کارخانه تهران", pricePerKg: 177273, name: "لوله گالوانیزه ۲ ۱/۲ اینچ ضخامت ۲.۵ میل (قطر 76.1mm)", brand: "گالوانیزه صنعتی / تست" }
+      ]
+    };
 
-    let extractedList = [];
+    let extractedList: any[] = [];
 
     if (html && html.includes("<table") && html.includes("tableRow_tBodyRow")) {
       const rows = html.match(/<tr class="tableRow_tBodyRow[^"]*"[\s\S]*?<\/tr>/gi) || [];
+      const ths = (html.match(/<th[^>]*>([\s\S]*?)<\/th>/gi) || []).map(t => t.replace(/<[^>]+>/g, "").replace(/\s+/g, " ").trim());
+
+      const findIdx = (keywords: string[]) => ths.findIndex(h => keywords.some(k => h.includes(k)));
+      const inchIdx = findIdx(["قطر (inch)", "اینچ"]);
+      const mmIdx = ths.findIndex((h, i) => i !== inchIdx && (h.includes("قطر(mm)") || h.includes("قطر (mm)") || h === "قطر(mm)"));
+      const thickIdx = findIdx(["ضخامت"]);
+      const lengthIdx = findIdx(["طول"]);
+      const weightIdx = findIdx(["وزن"]);
+      const locIdx = findIdx(["محل بارگیری", "محل"]);
+      const priceIdx = findIdx(["قیمت"]);
+
       for (const row of rows) {
         const cells = (row.match(/<td[^>]*>([\s\S]*?)<\/td>/gi) || []).map(c => 
           c.replace(/<[^>]+>/g, ' ').replace(/\s+/g, ' ').trim()
         );
-        // Header order: [0:expand, 1:قطر inch, 2:ضخامت mm, 3:قطر mm, 4:طول m, 5:وزن شاخه kg, 6:محل بارگیری, 7:قیمت, 8:نمودار, 9:خرید]
-        if (cells.length >= 8) {
-          const diameterInch = cells[1] || "";
-          const thicknessMm = parseFloat(cells[2]) || 0;
-          const diameterMm = parseFloat(cells[3]) || 0;
-          const lengthM = parseFloat(cells[4]) || 6;
-          const weightPerBranchKg = parseFloat(cells[5]) || 0;
-          const location = cells[6] || "کارخانه";
-          
-          // Clean price (extract digits)
-          const priceRaw = cells[7] || "";
-          const priceDigits = priceRaw.replace(/[^0-9]/g, '');
-          const pricePerKg = parseInt(priceDigits, 10) || 0;
+        if (cells.length < 5) continue;
 
-          // Extract link if present
-          const linkMatch = row.match(/href="([^"]+)"/);
-          const productUrl = linkMatch ? linkMatch[1] : "";
+        const diameterInch = inchIdx >= 0 ? cells[inchIdx] || "" : "";
+        const diameterMm = mmIdx >= 0 ? parseFloat(cells[mmIdx]) || 0 : 0;
+        const thicknessMm = thickIdx >= 0 ? parseFloat(cells[thickIdx]) || 0 : 0;
+        let lengthM = lengthIdx >= 0 ? parseFloat(cells[lengthIdx]) || 0 : currentConfig.defaultLength;
+        if (!lengthM) lengthM = currentConfig.defaultLength;
 
-          const name = `لوله گاز توکار سپاهان ${diameterInch} اینچ ضخامت ${thicknessMm} میل (طول ${lengthM}m)`;
-
-          extractedList.push({
-            diameterInch,
-            thicknessMm,
-            diameterMm,
-            lengthM,
-            weightPerBranchKg,
-            location,
-            pricePerKg,
-            name,
-            brand: "سپاهان (توکار مانیس گاز)",
-            productUrl
-          });
+        let weightPerBranchKg = weightIdx >= 0 ? parseFloat(cells[weightIdx]) || 0 : 0;
+        // If copper pipe has no direct weight column, calculate copper theoretical weight
+        if (currentConfig.id === "copper" && (!weightPerBranchKg || weightPerBranchKg === 0) && diameterMm && thicknessMm) {
+          const area = Math.PI * (diameterMm - thicknessMm) * thicknessMm;
+          weightPerBranchKg = Number(((area * (lengthM * 1000) * 0.00894) / 1000).toFixed(2));
         }
+
+        const location = locIdx >= 0 ? cells[locIdx] || "کارخانه" : "کارخانه";
+        
+        // Clean price (extract digits)
+        const priceRaw = priceIdx >= 0 ? cells[priceIdx] || "" : "";
+        const priceDigits = priceRaw.replace(/[^0-9]/g, '');
+        const pricePerKg = parseInt(priceDigits, 10) || 0;
+
+        // Extract link if present
+        const linkMatch = row.match(/href="([^"]+)"/);
+        const productUrl = linkMatch ? linkMatch[1] : "";
+
+        let name = "";
+        if (currentConfig.id === "copper") {
+          name = `لوله مسی ${diameterInch ? `سایز ${diameterInch} اینچ ` : ""}(قطر ${diameterMm}mm ضخامت ${thicknessMm}mm کلاف ${lengthM}m)`;
+        } else if (currentConfig.id === "galvanized") {
+          name = `لوله گالوانیزه ${diameterInch} اینچ ضخامت ${thicknessMm} میل (قطر ${diameterMm}mm - طول ${lengthM}m)`;
+        } else {
+          name = `${currentConfig.category} ${diameterInch} اینچ ضخامت ${thicknessMm} میل (طول ${lengthM}m)`;
+        }
+
+        extractedList.push({
+          diameterInch,
+          thicknessMm,
+          diameterMm,
+          lengthM,
+          weightPerBranchKg,
+          location,
+          pricePerKg,
+          name,
+          brand: currentConfig.brand,
+          productUrl
+        });
       }
     }
 
-    const finalItems = extractedList.length > 0 ? extractedList : defaultPipes;
+    const fallbackList = FALLBACK_DATA[currentConfig.id] || FALLBACK_DATA.sepahan;
+    const finalItems = extractedList.length > 0 ? extractedList : fallbackList;
 
     // Calculate prices for all units: kg, meter, branch
     const enriched = finalItems.map((item, index) => {
       const kgPrice = item.pricePerKg || 0;
       const weight = item.weightPerBranchKg || 1;
-      const length = item.lengthM || 6;
+      const length = item.lengthM || currentConfig.defaultLength;
       const branchPrice = Math.round(kgPrice * weight);
       const meterPrice = length > 0 ? Math.round(branchPrice / length) : Math.round(branchPrice / 6);
 
       return {
-        id: `pipe-online-${index + 1}`,
+        id: `pipe-${currentConfig.id}-${index + 1}`,
         ...item,
         pricePerKg: kgPrice,
         pricePerBranch: branchPrice,
         pricePerMeter: meterPrice,
-        defaultCategory: "لوله گاز توکار سپاهان",
-        mainUnit: "شاخه",
+        defaultCategory: currentConfig.category,
+        mainUnit: currentConfig.defaultUnit,
         secondaryUnitWeight: "کیلوگرم",
         secondaryUnitMeter: "متر",
-        unitRatioWeight: weight, // هر شاخه = X کیلوگرم
-        unitRatioMeter: length,  // هر شاخه = ۶ متر
+        unitRatioWeight: weight,
+        unitRatioMeter: length,
       };
     });
 
@@ -263,7 +304,9 @@ router.post('/api/scraping/markaz-ahan-pipes', async (req, res) => {
       success: true,
       sourceUrl: targetUrl,
       sourceName: "مرکزآهن (Markaz Ahan)",
-      title: "قیمت لوله گاز توکار سپاهان",
+      title: currentConfig.title,
+      pageType: currentConfig.id,
+      category: currentConfig.category,
       timestamp: new Date().toISOString(),
       itemCount: enriched.length,
       items: enriched
