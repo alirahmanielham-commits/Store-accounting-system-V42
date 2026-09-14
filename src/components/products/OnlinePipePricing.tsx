@@ -132,7 +132,8 @@ export default function OnlinePipePricing({
   const [pricingBasis, setPricingBasis] = useState<'kg' | 'branch' | 'meter'>('branch');
   const [targetCategory, setTargetCategory] = useState<string>("لوله گاز توکار سپاهان");
   const [selectedMainUnit, setSelectedMainUnit] = useState<string>("شاخه");
-  const [selectedSecondaryUnit, setSelectedSecondaryUnit] = useState<string>("کیلوگرم");
+  const [selectedSecondaryUnit, setSelectedSecondaryUnit] = useState<string>("متر");
+  const [ratioDirection, setRatioDirection] = useState<'direct' | 'inverse'>('direct');
   const [profitMarginPercent, setProfitMarginPercent] = useState<number>(10); // درصد سود پیشنهادی برای قیمت فروش
   const [isSyncing, setIsSyncing] = useState(false);
   const [syncResults, setSyncResults] = useState<{ updated: number; created: number; currency: string } | null>(null);
@@ -231,6 +232,151 @@ export default function OnlinePipePricing({
   };
 
   const activeCurrencyLabel = targetCurrency === "سفارشی" ? (customCurrencyName || "واحد سفارشی") : targetCurrency;
+
+  // Preset Configurations for Units & Ratios
+  const UNIT_PRESETS = [
+    {
+      id: "branch_meter",
+      title: "شاخه (اصلی) / متر (فرعی)",
+      mainUnit: "شاخه",
+      secondaryUnit: "متر",
+      basis: "branch" as const,
+      description: "هر شاخه ۶ متر طول (ضریب: ۶)"
+    },
+    {
+      id: "meter_branch",
+      title: "متر (اصلی) / شاخه (فرعی)",
+      mainUnit: "متر",
+      secondaryUnit: "شاخه",
+      basis: "meter" as const,
+      description: "قیمت‌گذاری بر مبنای متر، هر ۱ شاخه = ۶ متر"
+    },
+    {
+      id: "branch_kg",
+      title: "شاخه (اصلی) / کیلوگرم (فرعی)",
+      mainUnit: "شاخه",
+      secondaryUnit: "کیلوگرم",
+      basis: "branch" as const,
+      description: "هر شاخه بر مبنای وزن جدول سپاهان (ضریب = وزن هر شاخه)"
+    },
+    {
+      id: "kg_branch",
+      title: "کیلوگرم (اصلی) / شاخه (فرعی)",
+      mainUnit: "کیلوگرم",
+      secondaryUnit: "شاخه",
+      basis: "kg" as const,
+      description: "قیمت‌گذاری بر مبنای کیلو، هر ۱ شاخه = وزن شاخه"
+    },
+    {
+      id: "single_branch",
+      title: "تک‌واحدی: فقط شاخه",
+      mainUnit: "شاخه",
+      secondaryUnit: "ندارد",
+      basis: "branch" as const,
+      description: "بدون واحد فرعی (یکای ساده شاخه)"
+    }
+  ];
+
+  const applyUnitPreset = (preset: typeof UNIT_PRESETS[0]) => {
+    setSelectedMainUnit(preset.mainUnit);
+    setSelectedSecondaryUnit(preset.secondaryUnit);
+    setPricingBasis(preset.basis);
+  };
+
+  // Accurate ratio calculation based on selected units and item properties
+  const getComputedUnitRatio = (item: PipeOnlineItem): number => {
+    if (!selectedSecondaryUnit || selectedSecondaryUnit === "ندارد" || selectedSecondaryUnit === selectedMainUnit) {
+      return 1;
+    }
+
+    const length = Number(item.lengthM) || 6;
+    const weight = Number(item.weightPerBranchKg) || 1;
+
+    // شاخه و متر
+    if (selectedMainUnit === "شاخه" && selectedSecondaryUnit === "متر") {
+      return ratioDirection === 'direct' ? length : Number((1 / length).toFixed(4));
+    }
+    if (selectedMainUnit === "متر" && selectedSecondaryUnit === "شاخه") {
+      return length;
+    }
+
+    // شاخه و کیلوگرم
+    if (selectedMainUnit === "شاخه" && selectedSecondaryUnit === "کیلوگرم") {
+      return ratioDirection === 'direct' ? weight : Number((1 / weight).toFixed(4));
+    }
+    if (selectedMainUnit === "کیلوگرم" && selectedSecondaryUnit === "شاخه") {
+      return weight;
+    }
+
+    // کیلوگرم و متر
+    if (selectedMainUnit === "کیلوگرم" && selectedSecondaryUnit === "متر") {
+      return Number((weight / length).toFixed(4));
+    }
+    if (selectedMainUnit === "متر" && selectedSecondaryUnit === "کیلوگرم") {
+      return Number((length / weight).toFixed(4));
+    }
+
+    if (selectedSecondaryUnit === "متر") return length;
+    if (selectedSecondaryUnit === "کیلوگرم") return weight;
+    return 1;
+  };
+
+  // Human-readable ratio formula and badge
+  const getUnitRatioDescription = (item: PipeOnlineItem) => {
+    const ratio = getComputedUnitRatio(item);
+    if (!selectedSecondaryUnit || selectedSecondaryUnit === "ندارد" || selectedSecondaryUnit === selectedMainUnit) {
+      return { 
+        formula: `فقط ${selectedMainUnit} (تک‌واحدی)`, 
+        ratio: 1, 
+        badge: "بدون واحد فرعی" 
+      };
+    }
+
+    const length = Number(item.lengthM) || 6;
+    const weight = Number(item.weightPerBranchKg) || 1;
+
+    if (selectedMainUnit === "شاخه" && selectedSecondaryUnit === "متر") {
+      return {
+        formula: ratioDirection === 'direct' 
+          ? `۱ شاخه = ${toPersianDigits(length)} متر` 
+          : `۱ متر = ${toPersianDigits((1 / length).toFixed(2))} شاخه`,
+        ratio,
+        badge: `${toPersianDigits(length)} متر در هر شاخه`
+      };
+    }
+
+    if (selectedMainUnit === "متر" && selectedSecondaryUnit === "شاخه") {
+      return {
+        formula: `۱ شاخه = ${toPersianDigits(length)} متر`,
+        ratio,
+        badge: `ضریب تبدیل: ${toPersianDigits(length)}`
+      };
+    }
+
+    if (selectedMainUnit === "شاخه" && selectedSecondaryUnit === "کیلوگرم") {
+      return {
+        formula: ratioDirection === 'direct' 
+          ? `۱ شاخه = ${toPersianDigits(weight)} کیلوگرم` 
+          : `۱ کیلوگرم = ${toPersianDigits((1 / weight).toFixed(3))} شاخه`,
+        ratio,
+        badge: `وزن شاخه: ${toPersianDigits(weight)} kg`
+      };
+    }
+
+    if (selectedMainUnit === "کیلوگرم" && selectedSecondaryUnit === "شاخه") {
+      return {
+        formula: `۱ شاخه = ${toPersianDigits(weight)} کیلوگرم`,
+        ratio,
+        badge: `ضریب تبدیل: ${toPersianDigits(weight)}`
+      };
+    }
+
+    return {
+      formula: `۱ ${selectedSecondaryUnit} = ${toPersianDigits(ratio)} ${selectedMainUnit}`,
+      ratio,
+      badge: `ضریب: ${toPersianDigits(ratio)}`
+    };
+  };
 
   // Fetch online prices
   const fetchOnlinePrices = async () => {
@@ -361,6 +507,9 @@ export default function OnlinePipePricing({
         const rawSalePrice = finalPurchasePrice * marginMultiplier;
         const finalSalePrice = isPersianCurrency ? Math.round(rawSalePrice) : Number(rawSalePrice.toFixed(2));
 
+        const computedUnitRatio = getComputedUnitRatio(item);
+        const ratioInfo = getUnitRatioDescription(item);
+
         // Build Product Payload
         const productPayload: Partial<Product> = {
           name: item.name,
@@ -371,9 +520,9 @@ export default function OnlinePipePricing({
           price: finalSalePrice,
           salePrice: finalSalePrice,
           unit: selectedMainUnit,
-          secondaryUnit: selectedSecondaryUnit,
-          unitRatio: item.weightPerBranchKg,
-          description: `لوله گاز توکار استاندارد سپاهان | سایز: ${item.diameterInch} اینچ | ضخامت: ${item.thicknessMm}mm | قطر: ${item.diameterMm}mm | طول: ${item.lengthM}m | وزن شاخه: ${item.weightPerBranchKg}kg | واحد ارزی: ${activeCurrencyLabel} (نرخ تبدیل: ${activeCurrencyLabel === 'ریال' ? `هر ۱ تومان = ${exchangeRate} ریال` : `هر ۱ ${activeCurrencyLabel} = ${addCommas(exchangeRate)} تومان`}) | قیمت پایه مرکزآهن: ${addCommas(item.pricePerKg)} تومان/کیلو`,
+          secondaryUnit: selectedSecondaryUnit === "ندارد" ? undefined : selectedSecondaryUnit,
+          unitRatio: computedUnitRatio,
+          description: `لوله گاز توکار استاندارد سپاهان | سایز: ${item.diameterInch} اینچ | ضخامت: ${item.thicknessMm}mm | قطر: ${item.diameterMm}mm | طول: ${item.lengthM}m | وزن شاخه: ${item.weightPerBranchKg}kg | واحد اصلی: ${selectedMainUnit} | واحد فرعی: ${selectedSecondaryUnit === 'ندارد' ? 'ندارد' : `${selectedSecondaryUnit} (${ratioInfo.formula})`} | نسبت تبدیل: ${computedUnitRatio} | واحد ارزی: ${activeCurrencyLabel} (نرخ تبدیل: ${activeCurrencyLabel === 'ریال' ? `هر ۱ تومان = ${exchangeRate} ریال` : `هر ۱ ${activeCurrencyLabel} = ${addCommas(exchangeRate)} تومان`}) | قیمت پایه مرکزآهن: ${addCommas(item.pricePerKg)} تومان/کیلو`,
           pipeDiameterInch: item.diameterInch,
           pipeThicknessMm: item.thicknessMm,
           pipeDiameterMm: item.diameterMm,
@@ -667,9 +816,44 @@ export default function OnlinePipePricing({
 
         {/* General Settings Toolbar (Unit, Category, Pricing Basis, Margin) */}
         <div className="p-6 bg-slate-50/70 border-b border-slate-200">
-          <div className="text-xs font-black text-slate-800 mb-3 flex items-center gap-2">
-            <Sliders className="w-4 h-4 text-indigo-600" />
-            تنظیمات واحد شمارش، مبنای محاسبه قیمت خرید و دسته‌بندی
+          <div className="text-xs font-black text-slate-800 mb-3 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <Sliders className="w-4 h-4 text-indigo-600" />
+              <span>تنظیمات واحد شمارش، نسبت واحدها و دسته‌بندی کالا</span>
+            </div>
+            <div className="text-[11px] font-bold text-slate-500">
+              واحد اصلی: <span className="text-indigo-600">{selectedMainUnit}</span> | واحد فرعی: <span className="text-indigo-600">{selectedSecondaryUnit}</span>
+            </div>
+          </div>
+
+          {/* Quick Presets for Unit Configurations */}
+          <div className="mb-4 bg-white/80 p-3 rounded-xl border border-slate-200/80">
+            <div className="text-[11px] font-black text-slate-600 mb-2 flex items-center gap-1.5">
+              <Layers className="w-3.5 h-3.5 text-indigo-500" />
+              الگوهای سریع واحد و نسبت تبدیل (یک‌کلیک جهت انتخاب عرف بازار):
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {UNIT_PRESETS.map((p) => {
+                const isActive = selectedMainUnit === p.mainUnit && selectedSecondaryUnit === p.secondaryUnit;
+                return (
+                  <button
+                    key={p.id}
+                    type="button"
+                    onClick={() => applyUnitPreset(p)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 border cursor-pointer ${
+                      isActive
+                        ? "bg-indigo-600 text-white border-indigo-600 shadow-xs shadow-indigo-600/30"
+                        : "bg-white text-slate-700 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50/40"
+                    }`}
+                  >
+                    <span>{p.title}</span>
+                    <span className={`text-[10px] px-1.5 py-0.2 rounded-md font-normal ${isActive ? "bg-indigo-700 text-indigo-100" : "bg-slate-100 text-slate-500"}`}>
+                      {p.description}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
           </div>
           
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 text-xs font-semibold">
@@ -713,9 +897,9 @@ export default function OnlinePipePricing({
                 onChange={(e) => setSelectedMainUnit(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
-                <option value="شاخه">شاخه (استاندارد ۶ متری)</option>
-                <option value="کیلوگرم">کیلوگرم (وزن)</option>
-                <option value="متر">متر (طول)</option>
+                <option value="شاخه">شاخه (پیش‌فرض لوله)</option>
+                <option value="متر">متر (طول لوله)</option>
+                <option value="کیلوگرم">کیلوگرم (وزن لوله)</option>
                 <option value="بندیل">بندیل</option>
               </select>
             </div>
@@ -730,10 +914,10 @@ export default function OnlinePipePricing({
                 onChange={(e) => setSelectedSecondaryUnit(e.target.value)}
                 className="w-full bg-white border border-slate-300 rounded-xl px-3 py-2.5 font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500"
               >
-                <option value="کیلوگرم">کیلوگرم (ضریب = وزن هر شاخه)</option>
-                <option value="متر">متر (ضریب = ۶ متر طول)</option>
-                <option value="شاخه">شاخه</option>
-                <option value="گرم">گرم</option>
+                <option value="متر">متر (طول هر شاخه = ۶ متر)</option>
+                <option value="کیلوگرم">کیلوگرم (وزن هر شاخه طبق جدول)</option>
+                <option value="شاخه">شاخه (واحد شمارش)</option>
+                <option value="ندارد">بدون واحد فرعی (تک‌واحدی)</option>
               </select>
             </div>
 
@@ -756,20 +940,58 @@ export default function OnlinePipePricing({
             </div>
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
-            <div className="flex items-center gap-2 text-slate-600">
-              <Info className="w-4 h-4 text-indigo-500 shrink-0" />
+          {/* Formula preview & Ratio direction */}
+          <div className="mt-4 pt-3 border-t border-slate-200/80 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 text-xs">
+            <div className="flex flex-wrap items-center gap-2 text-slate-700">
+              <Scale className="w-4 h-4 text-emerald-600 shrink-0" />
               <span>
-                ضریب تبدیل واحد فرعی به اصلی بر اساس وزن هر شاخه (جدول سپاهان) اعمال و قیمت‌ها به واحد <strong>{activeCurrencyLabel}</strong> در سیستم ذخیره خواهند شد.
+                <strong>فرمول نسبت تبدیل واحد: </strong>
+                {selectedSecondaryUnit === "ندارد" ? (
+                  <span className="text-slate-500">کالاها فقط با واحد اصلی «{selectedMainUnit}» و بدون واحد فرعی ثبت می‌شوند.</span>
+                ) : selectedMainUnit === "شاخه" && selectedSecondaryUnit === "متر" ? (
+                  <span>
+                    یک شاخه ۶ متری ➔ <span className="text-emerald-700 font-black">هر ۱ شاخه = ۶ متر طول</span> (ضریب ثبت در سیستم: <strong className="font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">{toPersianDigits(ratioDirection === 'direct' ? 6 : 0.1667)}</strong>)
+                  </span>
+                ) : selectedMainUnit === "شاخه" && selectedSecondaryUnit === "کیلوگرم" ? (
+                  <span>
+                    هر ۱ شاخه = بر اساس وزن شاخه (جدول سپاهان) ➔ ضریب ثبت در سیستم: <strong className="font-mono text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200">وزن هر شاخه به کیلوگرم</strong>
+                  </span>
+                ) : (
+                  <span>
+                    تبدیل بین <strong>{selectedMainUnit}</strong> و <strong>{selectedSecondaryUnit}</strong> به صورت پویا محاسبه و ثبت می‌شود.
+                  </span>
+                )}
               </span>
             </div>
 
-            <div className="flex items-center gap-2 w-full sm:w-auto">
+            {selectedMainUnit === "شاخه" && selectedSecondaryUnit === "متر" && (
+              <div className="flex items-center gap-1.5 bg-white px-2.5 py-1 rounded-lg border border-slate-200 text-[11px]">
+                <span className="text-slate-500 font-bold">حالت ضریب:</span>
+                <button
+                  type="button"
+                  onClick={() => setRatioDirection('direct')}
+                  className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors ${ratioDirection === 'direct' ? 'bg-indigo-100 text-indigo-800' : 'text-slate-600 hover:bg-slate-100'}`}
+                  title="۱ شاخه = ۶ متر (عدد ۶)"
+                >
+                  مستقیم عرف بازار (۶)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setRatioDirection('inverse')}
+                  className={`px-2 py-0.5 rounded font-bold cursor-pointer transition-colors ${ratioDirection === 'inverse' ? 'bg-indigo-100 text-indigo-800' : 'text-slate-600 hover:bg-slate-100'}`}
+                  title="۱ متر = ۱/۶ شاخه"
+                >
+                  معکوس (۱/۶)
+                </button>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 w-full lg:w-auto">
               <button
                 type="button"
                 onClick={handleSaveToDatabase}
                 disabled={isSyncing || selectedItemIds.length === 0}
-                className="w-full sm:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50 cursor-pointer text-xs"
+                className="w-full lg:w-auto px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black flex items-center justify-center gap-2 shadow-md shadow-indigo-600/20 transition-all disabled:opacity-50 cursor-pointer text-xs"
               >
                 <Check className="w-4 h-4" />
                 {isSyncing ? "در حال ثبت و اعمال..." : `ثبت ${toPersianDigits(selectedItemIds.length)} لوله به واحد «${activeCurrencyLabel}»`}
@@ -823,6 +1045,12 @@ export default function OnlinePipePricing({
                 <th className="p-3.5">ضخامت (mm)</th>
                 <th className="p-3.5">طول (متر)</th>
                 <th className="p-3.5">وزن هر شاخه</th>
+                <th className="p-3.5 bg-amber-50/70 text-amber-900 border-x border-amber-200/60">
+                  <div>نسبت واحد اصلی و فرعی</div>
+                  <div className="text-[10px] text-amber-700 font-bold">
+                    {selectedSecondaryUnit === "ندارد" ? "تک‌واحدی" : `${selectedMainUnit} / ${selectedSecondaryUnit}`}
+                  </div>
+                </th>
                 <th className="p-3.5">
                   <div>قیمت خرید کیلویی</div>
                   <div className="text-[10px] text-indigo-600 font-black">({activeCurrencyLabel})</div>
@@ -904,7 +1132,27 @@ export default function OnlinePipePricing({
 
                     <td className="p-3">
                       <div className="font-bold text-slate-900">{toPersianDigits(pipe.weightPerBranchKg)} کیلوگرم</div>
-                      <div className="text-[10px] text-slate-400">ضریب تبدیل واحد فرعی</div>
+                    </td>
+
+                    {/* Unit ratio column */}
+                    <td className="p-3 bg-amber-50/40 border-x border-amber-200/50">
+                      {(() => {
+                        const ratioInfo = getUnitRatioDescription(pipe);
+                        return (
+                          <div>
+                            <div className="font-bold text-amber-950 flex items-center gap-1">
+                              <Scale className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                              <span>{ratioInfo.formula}</span>
+                            </div>
+                            <div className="text-[10px] text-amber-800 font-semibold mt-0.5 flex items-center gap-1">
+                              <span>ضریب در سیستم:</span>
+                              <span className="font-mono font-black text-xs px-1.5 py-0.5 bg-amber-100 rounded border border-amber-300 text-amber-900">
+                                {toPersianDigits(ratioInfo.ratio)}
+                              </span>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </td>
 
                     {/* Price per Kg */}
