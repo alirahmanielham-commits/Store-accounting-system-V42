@@ -5,7 +5,7 @@ import {
   ExternalLink, Layers, Scale, Ruler, Hash, CheckSquare, Square, 
   ArrowRight, ShieldCheck, Tag, PlusCircle, Check, Info, 
   FileText, Sliders, ChevronDown, Clock, Search, Sparkles,
-  Coins, DollarSign, ArrowRightLeft, Repeat, Building2, Flame
+  Coins, DollarSign, ArrowRightLeft, Repeat, Building2, Flame, FileSpreadsheet
 } from 'lucide-react';
 import { Product, ProductCategory } from '../../types';
 import { addProduct, updateProduct, getProducts, getProductCategories, addProductCategory } from '../../services/dataService';
@@ -528,10 +528,10 @@ export default function OnlinePipePricing({
             onClick={() => setActiveTab && setActiveTab("newpipe_pricing")}
             className="px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-sm hover:from-red-700 hover:to-rose-700 cursor-pointer"
           >
-            <FileText className="w-4 h-4 text-white" />
-            <span>نیوپایپ (کاتالوگ PDF)</span>
+            <FileSpreadsheet className="w-4 h-4 text-white" />
+            <span>نیوپایپ (فایل اکسل Excel)</span>
             <span className="text-[10px] px-2 py-0.5 rounded-md font-normal bg-white/20 text-white">
-              بروزرسانی با PDF
+              بارگذاری اکسل
             </span>
           </button>
         </div>

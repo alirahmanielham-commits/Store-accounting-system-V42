@@ -55,7 +55,7 @@ export default function Sidebar({ appState, isCollapsed, isDarkMode }: SidebarPr
       icon: <Globe className="w-[18px] h-[18px]" />,
       subItems: [
         { id: 'online_pipe_pricing', label: 'استعلام آنلاین انواع لوله', action: () => setActiveTab('online_pipe_pricing') },
-        { id: 'newpipe_pricing', label: 'استعلام و بروزرسانی نیوپایپ (PDF)', action: () => setActiveTab('newpipe_pricing') }
+        { id: 'newpipe_pricing', label: 'استعلام و بروزرسانی نیوپایپ (اکسل)', action: () => setActiveTab('newpipe_pricing') }
       ]
     },
     {

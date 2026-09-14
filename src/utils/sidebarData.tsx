@@ -88,7 +88,7 @@ export const allSidebarGroups: SidebarGroup[] = [
     icon: <Globe className="w-5 h-5" />,
     items: [
       { id: "online_pipe_pricing", label: "استعلام آنلاین لوله (سپاهان، کچو، مس، گالوانیزه)", roles: ["admin", "accountant"] },
-      { id: "newpipe_pricing", label: "استعلام و بروزرسانی نیوپایپ (فایل PDF)", roles: ["admin", "accountant"] },
+      { id: "newpipe_pricing", label: "استعلام و بروزرسانی نیوپایپ (فایل اکسل)", roles: ["admin", "accountant"] },
     ],
   },
   {
