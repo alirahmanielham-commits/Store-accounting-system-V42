@@ -250,3 +250,7 @@ export function formatNumber(num: number | string | undefined | null): string {
   if (num === undefined || num === null) return "0";
   return addCommas(num);
 }
+
+export function formatPrice(num: number | string | undefined | null): string {
+  return formatNumber(num);
+}

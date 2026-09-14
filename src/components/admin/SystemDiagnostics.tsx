@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { motion } from "motion/react";
-import { ShieldAlert, CheckCircle, Search, Copy, RefreshCw, AlertTriangle, Bug, ClipboardList } from "lucide-react";
+import { ShieldAlert, CheckCircle, Search, Copy, RefreshCw, AlertTriangle, Bug, ClipboardList, HandCoins, Database } from "lucide-react";
 import { getAccountingDocuments } from "../../services/dataService";
+import UnvoucheredFinancialsManager from "./UnvoucheredFinancialsManager";
 
 interface SystemDiagnosticsProps {
   persons: any[];
@@ -11,6 +12,9 @@ interface SystemDiagnosticsProps {
   warehouseStocks: any[];
   issuedChecks: any[];
   receivedChecks: any[];
+  initialTab?: 'unvouchered' | 'database_health';
+  showNotification?: (message: string, type: 'success' | 'error' | 'warning' | 'info') => void;
+  storeSettings?: any;
 }
 
 export default function SystemDiagnostics({
@@ -20,12 +24,25 @@ export default function SystemDiagnostics({
   transactions,
   warehouseStocks,
   issuedChecks,
-  receivedChecks
+  receivedChecks,
+  initialTab = 'unvouchered',
+  showNotification = (msg, type) => {
+    if (type === 'error') console.error(msg);
+    else console.log(msg);
+  },
+  storeSettings
 }: SystemDiagnosticsProps) {
-  
+  const [activeTab, setActiveTab] = useState<'unvouchered' | 'database_health'>(initialTab);
   const [issues, setIssues] = useState<any[]>([]);
   const [isChecking, setIsChecking] = useState(false);
   const [copiedPrompt, setCopiedPrompt] = useState<number | null>(null);
+
+  useEffect(() => {
+    if (initialTab) {
+      setActiveTab(initialTab);
+    }
+  }, [initialTab]);
+
   
   const runDiagnostics = async () => {
     setIsChecking(true);
@@ -225,112 +242,159 @@ export default function SystemDiagnostics({
       className="space-y-6 text-right pb-10"
       dir="rtl"
     >
-      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-8">
-        <div>
-          <h1 className="text-2xl font-black text-slate-900 mb-1 flex items-center gap-2">
-            <ShieldAlert className="w-6 h-6 text-indigo-600" />
-            عیب‌یابی و بررسی صحت اطلاعات سیستم
-          </h1>
-          <p className="text-slate-500 font-semibold text-sm">بررسی پیوستگی داده‌ها، مغایرت‌گیری و پیشنهاد راهکار رفع خطا</p>
-        </div>
-        <button
-          onClick={runDiagnostics}
-          disabled={isChecking}
-          className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-colors shadow-sm"
-        >
-          <RefreshCw className={`w-5 h-5 ${isChecking ? 'animate-spin' : ''}`} />
-          {isChecking ? 'در حال بررسی...' : 'بررسی مجدد سیستم'}
-        </button>
-      </div>
-
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center text-rose-600">
-              <Bug className="w-6 h-6" />
-            </div>
-            <span className="text-3xl font-black text-rose-600">{issues.filter(i => i.type === 'error').length}</span>
-          </div>
-          <div className="text-slate-700 font-bold text-sm">خطاهای ساختاری (Error)</div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
-              <AlertTriangle className="w-6 h-6" />
-            </div>
-            <span className="text-3xl font-black text-amber-600">{issues.filter(i => i.type === 'warning').length}</span>
-          </div>
-          <div className="text-slate-700 font-bold text-sm">هشدارهای منطقی (Warning)</div>
-        </div>
-        <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
-          <div className="flex items-center justify-between mb-4">
-            <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">
-              <CheckCircle className="w-6 h-6" />
-            </div>
-            <span className="text-3xl font-black text-emerald-600">
-              {isChecking ? '...' : (issues.length === 0 ? '۱۰۰٪' : 'نیاز به رفع')}
+      {/* Top Tabs: Unvouchered Financials vs Database Health */}
+      <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-4 border-b border-slate-200 pb-4">
+        <div className="flex items-center gap-2 p-1.5 bg-slate-100/90 rounded-2xl border border-slate-200/80 w-fit">
+          <button
+            onClick={() => setActiveTab('unvouchered')}
+            className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all ${
+              activeTab === 'unvouchered'
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <HandCoins className="w-4 h-4 text-indigo-600" />
+            <span>عملیات مالی فاقد سند حسابداری</span>
+            <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-indigo-50 text-indigo-700 border border-indigo-100">
+              ویژه
             </span>
-          </div>
-          <div className="text-slate-700 font-bold text-sm">وضعیت سلامت دیتابیس</div>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('database_health')}
+            className={`flex items-center gap-2.5 px-4 py-2.5 rounded-xl text-xs sm:text-sm font-black transition-all ${
+              activeTab === 'database_health'
+                ? 'bg-white text-indigo-700 shadow-sm'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/50'
+            }`}
+          >
+            <Database className="w-4 h-4 text-slate-500" />
+            <span>صحت‌سنجی ساختار دیتابیس</span>
+            {issues.length > 0 && (
+              <span className="px-2 py-0.5 rounded-full text-[10px] font-black bg-rose-50 text-rose-700 border border-rose-100">
+                {issues.length}
+              </span>
+            )}
+          </button>
         </div>
       </div>
 
-      <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-6">
-        <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
-          <ClipboardList className="w-5 h-5 text-indigo-600" />
-          گزارش خطاهای یافت شده
-        </h3>
-        
-        {isChecking ? (
-          <div className="py-12 flex flex-col items-center justify-center text-slate-400">
-            <Search className="w-12 h-12 mb-4 animate-pulse text-indigo-300" />
-            <p className="font-bold">ربات در حال اسکن تمامی جداول و ارتباطات پایگاه داده است...</p>
+      {activeTab === 'unvouchered' ? (
+        <UnvoucheredFinancialsManager
+          showNotification={showNotification}
+          storeSettings={storeSettings}
+          onVoucherCreated={() => runDiagnostics()}
+        />
+      ) : (
+        <div className="space-y-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-4">
+            <div>
+              <h1 className="text-2xl font-black text-slate-900 mb-1 flex items-center gap-2">
+                <ShieldAlert className="w-6 h-6 text-indigo-600" />
+                عیب‌یابی ساختار و روابط پایگاه داده
+              </h1>
+              <p className="text-slate-500 font-semibold text-sm">بررسی پیوستگی داده‌ها، مغایرت‌گیری و پیشنهاد راهکار رفع خطا</p>
+            </div>
+            <button
+              onClick={runDiagnostics}
+              disabled={isChecking}
+              className="bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-400 text-white px-5 py-2.5 rounded-xl font-bold flex items-center gap-2 transition-colors shadow-sm text-sm"
+            >
+              <RefreshCw className={`w-4 h-4 ${isChecking ? 'animate-spin' : ''}`} />
+              {isChecking ? 'در حال بررسی...' : 'بررسی مجدد ساختار'}
+            </button>
           </div>
-        ) : issues.length === 0 ? (
-          <div className="py-12 flex flex-col items-center justify-center bg-emerald-50 rounded-2xl border border-emerald-100 border-dashed">
-            <CheckCircle className="w-16 h-16 text-emerald-500 mb-4" />
-            <p className="font-black text-emerald-800 text-lg">تبریک! پایگاه داده شما در سلامت کامل است.</p>
-            <p className="text-emerald-600 font-semibold mt-1">هیچگونه مغایرت یا داده یتیم در سیستم یافت نشد.</p>
-          </div>
-        ) : (
-          <div className="space-y-4">
-            {issues.map(issue => (
-              <div key={issue.id} className={`p-5 rounded-2xl border ${issue.type === 'error' ? 'bg-rose-50/50 border-rose-200' : 'bg-amber-50/50 border-amber-200'}`}>
-                <div className="flex items-start gap-4">
-                  <div className={`p-2 rounded-xl mt-1 shrink-0 ${issue.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
-                    {issue.type === 'error' ? <Bug className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
-                  </div>
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <span className="text-[10px] font-black bg-white px-2 py-1 rounded border shadow-sm text-slate-600">{issue.module}</span>
-                      <h4 className={`font-black text-lg ${issue.type === 'error' ? 'text-rose-900' : 'text-amber-900'}`}>{issue.title}</h4>
-                    </div>
-                    <p className={`font-bold text-sm mb-4 ${issue.type === 'error' ? 'text-rose-700' : 'text-amber-700'}`}>{issue.description}</p>
-                    
-                    <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm relative group">
-                      <div className="absolute -top-2.5 right-4 bg-indigo-100 text-indigo-700 text-[9px] font-black px-2 py-0.5 rounded border border-indigo-200">
-                        پرامپت پیشنهادی برای هوش مصنوعی (AI Studio)
-                      </div>
-                      <p className="text-sm font-semibold text-slate-700 pr-2 pb-1 pt-1 leading-relaxed">{issue.prompt}</p>
-                      
-                      <button
-                        onClick={() => copyPrompt(issue.prompt, issue.id)}
-                        className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs transition-colors"
-                      >
-                        {copiedPrompt === issue.id ? (
-                          <><CheckCircle className="w-3.5 h-3.5" /> کپی شد</>
-                        ) : (
-                          <><Copy className="w-3.5 h-3.5" /> کپی کردن پرامپت</>
-                        )}
-                      </button>
-                    </div>
-                  </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-rose-100 rounded-xl flex items-center justify-center text-rose-600">
+                  <Bug className="w-6 h-6" />
                 </div>
+                <span className="text-3xl font-black text-rose-600">{issues.filter(i => i.type === 'error').length}</span>
               </div>
-            ))}
+              <div className="text-slate-700 font-bold text-sm">خطاهای ساختاری (Error)</div>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-amber-100 rounded-xl flex items-center justify-center text-amber-600">
+                  <AlertTriangle className="w-6 h-6" />
+                </div>
+                <span className="text-3xl font-black text-amber-600">{issues.filter(i => i.type === 'warning').length}</span>
+              </div>
+              <div className="text-slate-700 font-bold text-sm">هشدارهای منطقی (Warning)</div>
+            </div>
+            <div className="bg-white p-5 rounded-2xl border border-slate-200 shadow-sm flex flex-col justify-between">
+              <div className="flex items-center justify-between mb-4">
+                <div className="w-12 h-12 bg-emerald-100 rounded-xl flex items-center justify-center text-emerald-600">
+                  <CheckCircle className="w-6 h-6" />
+                </div>
+                <span className="text-3xl font-black text-emerald-600">
+                  {isChecking ? '...' : (issues.length === 0 ? '۱۰۰٪' : 'نیاز به رفع')}
+                </span>
+              </div>
+              <div className="text-slate-700 font-bold text-sm">وضعیت سلامت دیتابیس</div>
+            </div>
           </div>
-        )}
-      </div>
+
+          <div className="bg-white border border-slate-200 rounded-3xl overflow-hidden shadow-sm p-6">
+            <h3 className="text-lg font-black text-slate-800 mb-6 flex items-center gap-2">
+              <ClipboardList className="w-5 h-5 text-indigo-600" />
+              گزارش خطاهای یافت شده
+            </h3>
+            
+            {isChecking ? (
+              <div className="py-12 flex flex-col items-center justify-center text-slate-400">
+                <Search className="w-12 h-12 mb-4 animate-pulse text-indigo-300" />
+                <p className="font-bold">ربات در حال اسکن تمامی جداول و ارتباطات پایگاه داده است...</p>
+              </div>
+            ) : issues.length === 0 ? (
+              <div className="py-12 flex flex-col items-center justify-center bg-emerald-50 rounded-2xl border border-emerald-100 border-dashed">
+                <CheckCircle className="w-16 h-16 text-emerald-500 mb-4" />
+                <p className="font-black text-emerald-800 text-lg">تبریک! پایگاه داده شما در سلامت کامل است.</p>
+                <p className="text-emerald-600 font-semibold mt-1">هیچگونه مغایرت یا داده یتیم در سیستم یافت نشد.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {issues.map(issue => (
+                  <div key={issue.id} className={`p-5 rounded-2xl border ${issue.type === 'error' ? 'bg-rose-50/50 border-rose-200' : 'bg-amber-50/50 border-amber-200'}`}>
+                    <div className="flex items-start gap-4">
+                      <div className={`p-2 rounded-xl mt-1 shrink-0 ${issue.type === 'error' ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                        {issue.type === 'error' ? <Bug className="w-5 h-5" /> : <AlertTriangle className="w-5 h-5" />}
+                      </div>
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] font-black bg-white px-2 py-1 rounded border shadow-sm text-slate-600">{issue.module}</span>
+                          <h4 className={`font-black text-lg ${issue.type === 'error' ? 'text-rose-900' : 'text-amber-900'}`}>{issue.title}</h4>
+                        </div>
+                        <p className={`font-bold text-sm mb-4 ${issue.type === 'error' ? 'text-rose-700' : 'text-amber-700'}`}>{issue.description}</p>
+                        
+                        <div className="bg-white rounded-xl p-4 border border-slate-200 shadow-sm relative group">
+                          <div className="absolute -top-2.5 right-4 bg-indigo-100 text-indigo-700 text-[9px] font-black px-2 py-0.5 rounded border border-indigo-200">
+                            پرامپت پیشنهادی برای هوش مصنوعی (AI Studio)
+                          </div>
+                          <p className="text-sm font-semibold text-slate-700 pr-2 pb-1 pt-1 leading-relaxed">{issue.prompt}</p>
+                          
+                          <button
+                            onClick={() => copyPrompt(issue.prompt, issue.id)}
+                            className="mt-3 flex items-center gap-1.5 px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg font-bold text-xs transition-colors"
+                          >
+                            {copiedPrompt === issue.id ? (
+                              <><CheckCircle className="w-3.5 h-3.5" /> کپی شد</>
+                            ) : (
+                              <><Copy className="w-3.5 h-3.5" /> کپی کردن پرامپت</>
+                            )}
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </motion.div>
   );
 }

@@ -1020,14 +1020,29 @@ export default function App() {
 <Route path="/loans_settings" element={<LoansManager activeTab="settings" showNotification={showNotification} persons={persons} accounts={accounts} loans={loans} setLoans={setLoans} installments={installments} setInstallments={setInstallments} currentUser={user?.name || "کاربر سیستم"} userRole={user?.role} setAccounts={setAccounts} transactions={transactions} setTransactions={setTransactions} storeSettings={storeSettings} />} />
 
 <Route path="/system_info" element={<SystemInfo />} />
-<Route path="/system_diagnostics" element={<SystemDiagnostics persons={persons} products={products}
-                       
-                        invoices={invoices}
-                       
-                        transactions={transactions}
-                        warehouseStocks={warehouseStocks}
-                        issuedChecks={issuedChecks}
-                        receivedChecks={receivedChecks} />} />
+<Route path="/system_diagnostics" element={<SystemDiagnostics
+  persons={persons}
+  products={products}
+  invoices={invoices}
+  transactions={transactions}
+  warehouseStocks={warehouseStocks}
+  issuedChecks={issuedChecks}
+  receivedChecks={receivedChecks}
+  showNotification={showNotification}
+  storeSettings={storeSettings}
+/>} />
+<Route path="/unvouchered_financials" element={<SystemDiagnostics
+  persons={persons}
+  products={products}
+  invoices={invoices}
+  transactions={transactions}
+  warehouseStocks={warehouseStocks}
+  issuedChecks={issuedChecks}
+  receivedChecks={receivedChecks}
+  initialTab="unvouchered"
+  showNotification={showNotification}
+  storeSettings={storeSettings}
+/>} />
 <Route path="/users_manager" element={<UserManager />} />
 <Route path="/settings" element={<SettingsTab storeSettings={storeSettings} 
                         
