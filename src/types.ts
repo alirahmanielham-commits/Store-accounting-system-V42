@@ -176,6 +176,10 @@ export type Product = {
   pricePerMeter?: number;
   pricePerBranch?: number;
   pricingBasis?: 'kg' | 'meter' | 'branch';
+  currency?: string;
+  exchangeRate?: number;
+  sourcePriceToman?: number;
+  sourceCurrency?: string;
 };
 
 export type Account = {

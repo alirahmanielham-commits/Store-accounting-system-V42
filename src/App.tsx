@@ -754,6 +754,7 @@ export default function App() {
                         products={products}
                         setProducts={setProducts}
                         categories={productCategories}
+                        storeSettings={storeSettings}
                         showNotification={showNotification}
                         confirmAction={confirmAction}
                         setActiveTab={setActiveTab} />} />
