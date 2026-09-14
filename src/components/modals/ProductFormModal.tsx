@@ -10,6 +10,7 @@ import persian_fa from "react-date-object/locales/persian_fa";
 import CustomDatePicker from "../ui/CustomDatePicker";
 import { productSchema } from "../../schemas/validation";
 import CurrencyInput from "../ui/CurrencyInput";
+import { getUnitRatioDirection, getPriceForSelectedUnit, formatUnitConversionFormula, UnitRatioDirection } from "../../utils/unitConversion";
 const DatePicker = CustomDatePicker;
 
 interface ProductFormModalProps {
@@ -57,6 +58,7 @@ export default function ProductFormModal({
   const [newProductUnit, setNewProductUnit] = useState("");
   const [newProductSecondaryUnit, setNewProductSecondaryUnit] = useState("");
   const [newProductUnitRatio, setNewProductUnitRatio] = useState("");
+  const [newProductUnitRatioDirection, setNewProductUnitRatioDirection] = useState<UnitRatioDirection>("secondary_to_main");
   const [productFormTab, setProductFormTab] = useState<"general" | "inventory" | "sales" | "price_history" | "financial" | "history">("general");
   const [newProductDesc, setNewProductDesc] = useState("");
   const [newProductImageUrl, setNewProductImageUrl] = useState("");
@@ -88,6 +90,7 @@ export default function ProductFormModal({
           setNewProductUnit(product.unit || "");
           setNewProductSecondaryUnit(product.secondaryUnit || "");
           setNewProductUnitRatio(product.unitRatio ? String(product.unitRatio) : "");
+          setNewProductUnitRatioDirection(product.unitRatioDirection || getUnitRatioDirection(product));
           setNewProductDesc(product.description || "");
           setNewProductImageUrl(product.imageUrl || "");
           setNewProductIsActive(product.isActive !== false);
@@ -105,6 +108,7 @@ export default function ProductFormModal({
           setNewProductUnit(product.unit || "");
           setNewProductSecondaryUnit(product.secondaryUnit || "");
           setNewProductUnitRatio(product.unitRatio ? String(product.unitRatio) : "");
+          setNewProductUnitRatioDirection(product.unitRatioDirection || getUnitRatioDirection(product));
           // Clear everything else
           setNewProductPrice("");
           setNewProductCode("");
@@ -132,6 +136,7 @@ export default function ProductFormModal({
         setNewProductUnit("");
         setNewProductSecondaryUnit("");
         setNewProductUnitRatio("");
+        setNewProductUnitRatioDirection("secondary_to_main");
         setNewProductDesc("");
         setNewProductImageUrl("");
         setNewProductIsActive(true);
@@ -225,6 +230,7 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
         unit: newProductUnit || "عدد",
         secondaryUnit: newProductSecondaryUnit,
         unitRatio: Number(newProductUnitRatio || 1),
+        unitRatioDirection: newProductUnitRatioDirection,
         description: newProductDesc,
         imageUrl: newProductImageUrl,
         isActive: newProductIsActive,
@@ -479,15 +485,19 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
                                 </div>
                                 <div className="w-full">
                                   <label className="block text-xs font-bold text-blue-800 mb-2">
-                                    واحد فرعی (بسته‌بندی بزرگتر)
+                                    واحد فرعی
                                   </label>
                                   <input
                                     type="text"
                                     value={newProductSecondaryUnit}
-                                    onChange={(e) =>
-                                      setNewProductSecondaryUnit(e.target.value)
-                                    }
-                                    placeholder="مثال: کارتن، بسته"
+                                    onChange={(e) => {
+                                      const sec = e.target.value;
+                                      setNewProductSecondaryUnit(sec);
+                                      if (sec && newProductUnit) {
+                                        setNewProductUnitRatioDirection(getUnitRatioDirection(null, newProductUnit, sec));
+                                      }
+                                    }}
+                                    placeholder="مثال: متر، کارتن، کیلوگرم"
                                     className="w-full px-3 py-2.5 rounded-lg border border-blue-200 focus:ring-max focus:ring-blue-500 shadow-sm text-sm"
                                   />
                                   <p className="text-[10px] text-blue-600 mt-1 opacity-80">
@@ -496,7 +506,7 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
                                 </div>
                                 <div className="w-full">
                                   <label className="block text-xs font-bold text-blue-800 mb-2">
-                                    ضریب تبدیل (هر واحد فرعی چند واحد اصلی است؟)
+                                    ضریب تبدیل بین واحد اصلی و فرعی
                                   </label>
                                   <input
                                     type="number"
@@ -506,19 +516,52 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
                                     onChange={(e) =>
                                       setNewProductUnitRatio(e.target.value)
                                     }
-                                    placeholder="مثال: 2.5 یا 24"
+                                    placeholder="مثال: 6 یا 24"
                                     className="w-full px-3 py-2.5 rounded-lg border border-blue-200 focus:ring-max focus:ring-blue-500 shadow-sm text-sm"
                                     disabled={!newProductSecondaryUnit}
                                   />
-                                  {newProductSecondaryUnit &&
-                                    newProductUnitRatio &&
-                                    Number(newProductUnitRatio) > 0 &&
-                                    newProductUnit && (
-                                      <p className="text-xs font-bold text-emerald-600 mt-2">
-                                        1 {newProductSecondaryUnit} ={" "}
-                                        {newProductUnitRatio} {newProductUnit}
-                                      </p>
-                                    )}
+                                  {newProductSecondaryUnit && (
+                                    <div className="mt-2 space-y-2">
+                                      <div className="flex items-center gap-1.5 p-1 bg-blue-100/60 rounded-lg text-[11px]">
+                                        <button
+                                          type="button"
+                                          onClick={() => setNewProductUnitRatioDirection('secondary_to_main')}
+                                          className={`flex-1 py-1 px-2 rounded-md font-medium transition-all ${
+                                            newProductUnitRatioDirection === 'secondary_to_main'
+                                              ? 'bg-white text-blue-700 shadow-sm font-bold'
+                                              : 'text-gray-600 hover:text-gray-900'
+                                          }`}
+                                        >
+                                          هر ۱ {newProductSecondaryUnit} = X {newProductUnit || 'اصلی'}
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => setNewProductUnitRatioDirection('main_to_secondary')}
+                                          className={`flex-1 py-1 px-2 rounded-md font-medium transition-all ${
+                                            newProductUnitRatioDirection === 'main_to_secondary'
+                                              ? 'bg-white text-blue-700 shadow-sm font-bold'
+                                              : 'text-gray-600 hover:text-gray-900'
+                                          }`}
+                                        >
+                                          هر ۱ {newProductUnit || 'اصلی'} = X {newProductSecondaryUnit}
+                                        </button>
+                                      </div>
+                                      {newProductUnitRatio &&
+                                        Number(newProductUnitRatio) > 0 &&
+                                        newProductUnit && (
+                                          <p className="text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 rounded-lg">
+                                            فرمول نهایی:{" "}
+                                            {formatUnitConversionFormula(
+                                              newProductUnit,
+                                              newProductSecondaryUnit,
+                                              Number(newProductUnitRatio),
+                                              newProductUnitRatioDirection,
+                                              toPersianDigits
+                                            )}
+                                          </p>
+                                        )}
+                                    </div>
+                                  )}
                                 </div>
                               </div>
                             </div>
@@ -544,8 +587,7 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
                               </div>
                               <div className="w-full">
                                 <label className="block text-sm font-bold text-emerald-950 mb-2">
-                                  قیمت خرید بر اساس کوچکترین واحد (
-                                  {newProductUnit || "واحد اصلی"}) (
+                                  قیمت خرید بر اساس {newProductUnit || "واحد اصلی"} (
                                   {storeSettings?.currency || "تومان"})
                                 </label>
                                 <CurrencyInput
@@ -563,28 +605,24 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
                                     <p className="text-xs font-bold text-emerald-700 mt-1.5 bg-emerald-100/50 px-3 py-1.5 rounded-lg border border-emerald-200">
                                       معادل{" "}
                                       <span className="font-mono text-sm font-black text-indigo-700">
-                                        {Number(
-                                          Number(
-                                            newProductPurchasePrice.replace(
-                                              /,/g,
-                                              "",
-                                            ),
-                                          ) * Number(newProductUnitRatio),
+                                        {getPriceForSelectedUnit(
+                                          Number(newProductPurchasePrice.replace(/,/g, "")),
+                                          true,
+                                          Number(newProductUnitRatio),
+                                          newProductUnitRatioDirection
                                         )}
                                       </span>{" "}
                                       {storeSettings?.currency || "تومان"} به
                                       ازای هر{" "}
                                       <span className="underline">
                                         {newProductSecondaryUnit}
-                                      </span>{" "}
-                                      (ضریب {newProductUnitRatio})
+                                      </span>
                                     </p>
                                   )}
                               </div>
                               <div className="w-full">
                                 <label className="block text-sm font-bold text-emerald-950 mb-2">
-                                  قیمت فروش بر اساس کوچکترین واحد (
-                                  {newProductUnit || "واحد اصلی"}) (
+                                  قیمت فروش بر اساس {newProductUnit || "واحد اصلی"} (
                                   {storeSettings?.currency || "تومان"})
                                 </label>
                                 <CurrencyInput
@@ -602,18 +640,18 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
                                     <p className="text-xs font-bold text-indigo-700 mt-1.5 bg-indigo-50 px-3 py-1.5 rounded-lg border border-indigo-100">
                                       معادل{" "}
                                       <span className="font-mono text-sm font-black text-indigo-800">
-                                        {Number(
-                                          Number(
-                                            newProductPrice.replace(/,/g, ""),
-                                          ) * Number(newProductUnitRatio),
+                                        {getPriceForSelectedUnit(
+                                          Number(newProductPrice.replace(/,/g, "")),
+                                          true,
+                                          Number(newProductUnitRatio),
+                                          newProductUnitRatioDirection
                                         )}
                                       </span>{" "}
                                       {storeSettings?.currency || "تومان"} به
                                       ازای هر{" "}
                                       <span className="underline">
                                         {newProductSecondaryUnit}
-                                      </span>{" "}
-                                      (ضریب {newProductUnitRatio})
+                                      </span>
                                     </p>
                                   )}
                               </div>

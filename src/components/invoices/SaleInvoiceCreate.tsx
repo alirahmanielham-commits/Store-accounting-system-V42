@@ -15,6 +15,7 @@ import {
 , Calendar, CornerDownLeft, Sparkles, LayoutGrid} from "lucide-react";
 import FastItemEntryBar from "./FastItemEntryBar";
 import BulkProductPickerModal from "./BulkProductPickerModal";
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
 
 export default function SaleInvoiceCreate(props: any) {
   const {
@@ -177,8 +178,8 @@ export default function SaleInvoiceCreate(props: any) {
       const itemQty = Number(item.quantity) || 0;
       if (itemQty <= 0) return;
 
-      const ratio = item.isSecondaryUnit && prod.unitRatio ? Number(prod.unitRatio) : 1;
-      const neededQtyInBase = itemQty * ratio;
+      const dir = prod.unitRatioDirection || getUnitRatioDirection(prod);
+      const neededQtyInBase = convertQuantityToBaseUnit(itemQty, Boolean(item.isSecondaryUnit), Number(prod.unitRatio), dir);
 
       let availableInBase = 0;
       if (typeof getProductStockInfo === "function") {
@@ -207,11 +208,13 @@ export default function SaleInvoiceCreate(props: any) {
               (!oi.warehouseId && itemWhId === targetWhId))
         );
         if (origItem) {
-          const origRatio =
-            origItem.isSecondaryUnit && origItem.unitRatio
-              ? Number(origItem.unitRatio)
-              : 1;
-          originalQtyInBase = (Number(origItem.quantity) || 0) * origRatio;
+          const origDir = origItem.unitRatioDirection || dir;
+          originalQtyInBase = convertQuantityToBaseUnit(
+            origItem.quantity,
+            Boolean(origItem.isSecondaryUnit),
+            Number(origItem.unitRatio || prod.unitRatio),
+            origDir
+          );
         }
       }
 
@@ -224,13 +227,21 @@ export default function SaleInvoiceCreate(props: any) {
       );
 
       if (itemWhId && neededQtyInBase > availableForThisRowInBase) {
-        const availableInDisplayUnit =
-          ratio > 1
-            ? Number((availableForThisRowInBase / ratio).toFixed(2))
-            : availableForThisRowInBase;
-        const deficitInDisplayUnit = Number(
-          (itemQty - availableInDisplayUnit).toFixed(2)
-        );
+        const availableInDisplayUnit = item.isSecondaryUnit
+          ? (dir === "main_to_secondary"
+              ? Number((availableForThisRowInBase * (prod.unitRatio || 1)).toFixed(2))
+              : (prod.unitRatio && prod.unitRatio > 1
+                  ? Number((availableForThisRowInBase / prod.unitRatio).toFixed(2))
+                  : availableForThisRowInBase))
+          : availableForThisRowInBase;
+        const deficitInBase = neededQtyInBase - availableForThisRowInBase;
+        const deficitInDisplayUnit = item.isSecondaryUnit
+          ? (dir === "main_to_secondary"
+              ? Number((deficitInBase * (prod.unitRatio || 1)).toFixed(2))
+              : (prod.unitRatio && prod.unitRatio > 1
+                  ? Number((deficitInBase / prod.unitRatio).toFixed(2))
+                  : deficitInBase))
+          : Number(deficitInBase.toFixed(2));
         const unitName =
           item.isSecondaryUnit && prod.secondaryUnit
             ? prod.secondaryUnit
@@ -242,15 +253,7 @@ export default function SaleInvoiceCreate(props: any) {
           warehouseName,
           availableStock: Math.max(0, availableInDisplayUnit),
           requestedQty: itemQty,
-          deficit:
-            deficitInDisplayUnit > 0
-              ? deficitInDisplayUnit
-              : Number(
-                  Math.max(
-                    0,
-                    (neededQtyInBase - availableForThisRowInBase) / ratio
-                  ).toFixed(2)
-                ),
+          deficit: Math.max(0, deficitInDisplayUnit),
           unitName,
           rowNumber: index + 1,
         };
@@ -865,24 +868,23 @@ export default function SaleInvoiceCreate(props: any) {
                                     }
                                     className="w-full p-2 text-sm font-bold text-indigo-800 bg-indigo-50 border border-indigo-100/50 rounded-xl outline-none cursor-pointer focus:ring-2 focus:ring-indigo-400"
                                   >
-                                    <option value="false">
-                                      {product.unit} (اصلی) -{" "}
-                                      {formatNumber(
-                                        item.isSecondaryUnit
-                                          ? item.unitPrice /
-                                              (product.unitRatio || 1)
-                                          : item.unitPrice,
-                                      )}
-                                    </option>
-                                    <option value="true">
-                                      {product.secondaryUnit} (فرعی) -{" "}
-                                      {formatNumber(
-                                        item.isSecondaryUnit
-                                          ? item.unitPrice
-                                          : item.unitPrice *
-                                              (product.unitRatio || 1),
-                                      )}
-                                    </option>
+                                    {(() => {
+                                      const dir = product.unitRatioDirection || getUnitRatioDirection(product);
+                                      const baseP = item.isSecondaryUnit
+                                        ? getPriceForSelectedUnit(item.unitPrice, false, product.unitRatio, dir)
+                                        : item.unitPrice;
+                                      const secP = getPriceForSelectedUnit(baseP, true, product.unitRatio, dir);
+                                      return (
+                                        <>
+                                          <option value="false">
+                                            {product.unit} (اصلی) - {formatNumber(baseP)}
+                                          </option>
+                                          <option value="true">
+                                            {product.secondaryUnit} (فرعی) - {formatNumber(secP)}
+                                          </option>
+                                        </>
+                                      );
+                                    })()}
                                   </select>
                                 ) : product ? (
                                   <div className="w-full p-2 text-center text-indigo-700 font-bold bg-indigo-50/50 border border-indigo-100 rounded-xl text-sm shadow-sm">

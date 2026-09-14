@@ -1,3 +1,4 @@
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import CustomDatePicker from '../ui/CustomDatePicker';
@@ -506,24 +507,23 @@ import {
                                     }
                                     className="w-full p-2 text-sm font-bold text-emerald-800 bg-emerald-50 border border-emerald-100/50 rounded-xl outline-none cursor-pointer focus:ring-2 focus:ring-emerald-400"
                                   >
-                                    <option value="false">
-                                      {product.unit} (اصلی) -{" "}
-                                      {formatNumber(
-                                        item.isSecondaryUnit
-                                          ? item.unitPrice /
-                                              (product.unitRatio || 1)
-                                          : item.unitPrice,
-                                      )}
-                                    </option>
-                                    <option value="true">
-                                      {product.secondaryUnit} (فرعی) -{" "}
-                                      {formatNumber(
-                                        item.isSecondaryUnit
-                                          ? item.unitPrice
-                                          : item.unitPrice *
-                                              (product.unitRatio || 1),
-                                      )}
-                                    </option>
+                                    {(() => {
+                                      const dir = product.unitRatioDirection || getUnitRatioDirection(product);
+                                      const baseP = item.isSecondaryUnit
+                                        ? getPriceForSelectedUnit(item.unitPrice, false, product.unitRatio, dir)
+                                        : item.unitPrice;
+                                      const secP = getPriceForSelectedUnit(baseP, true, product.unitRatio, dir);
+                                      return (
+                                        <>
+                                          <option value="false">
+                                            {product.unit} (اصلی) - {formatNumber(baseP)}
+                                          </option>
+                                          <option value="true">
+                                            {product.secondaryUnit} (فرعی) - {formatNumber(secP)}
+                                          </option>
+                                        </>
+                                      );
+                                    })()}
                                   </select>
                                 ) : product ? (
                                   <div className="w-full p-2 text-center text-emerald-700 font-bold bg-emerald-50/50 border border-emerald-100 rounded-xl text-sm shadow-sm">

@@ -154,6 +154,7 @@ export type Product = {
   unit?: string;
   secondaryUnit?: string;
   unitRatio?: number;
+  unitRatioDirection?: 'main_to_secondary' | 'secondary_to_main';
   type: 'product' | 'service';
   category: string;
   categoryId?: string | number;
@@ -224,6 +225,7 @@ export type InvoiceItem = {
   totalPrice: number;
   selectedUnit?: string;
   unitRatio?: number;
+  unitRatioDirection?: 'main_to_secondary' | 'secondary_to_main';
   isSecondaryUnit?: boolean;
   warehouseId?: string | number;
   maxQuantity?: number;

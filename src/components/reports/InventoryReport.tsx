@@ -1,3 +1,4 @@
+import { getUnitRatioDirection, convertQuantityToBaseUnit } from "../../utils/unitConversion";
 import { convertToGregorian } from '../../utils/format';
 import React, { useState, useEffect, useMemo } from "react";
 import { Package, Search, Download, FileText, ArrowUpDown, Filter, Printer, Box, RefreshCw, AlertTriangle, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
@@ -91,10 +92,13 @@ const InventoryReport: React.FC<InventoryReportProps> = ({ showNotification, cat
           const whId = (i.warehouseId || inv.warehouseId || defaultWhId).toString();
           if (selectedWarehouseId !== 'all' && whId !== selectedWarehouseId) return;
 
-          let q = Number(i.quantity) || 0;
-          if (i.isSecondaryUnit && product.unitRatio) {
-            q = q * Number(product.unitRatio);
-          }
+          const prodDir = product.unitRatioDirection || getUnitRatioDirection(product);
+          let q = convertQuantityToBaseUnit(
+            i.quantity,
+            Boolean(i.isSecondaryUnit),
+            Number(product.unitRatio),
+            prodDir
+          );
 
           const isBeforeStart = startObj ? invDate < startObj : false;
           const isWithinPeriod = (!startObj || invDate >= startObj) && (!endObj || invDate <= endObj);

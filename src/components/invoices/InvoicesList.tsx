@@ -1,3 +1,4 @@
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
@@ -710,9 +711,10 @@ export default function InvoicesList(props: any) {
                                         const prod = products.find(
                                           (p) => p.id === it.productId,
                                         );
+                                        const prodDir = prod?.unitRatioDirection || getUnitRatioDirection(prod);
                                         let basePurchasePrice = Number(it.unitPrice) || 0;
                                         if (it.isSecondaryUnit && prod?.unitRatio && prod.unitRatio > 0) {
-                                          basePurchasePrice = Number((basePurchasePrice / prod.unitRatio).toFixed(4));
+                                          basePurchasePrice = getPriceForSelectedUnit(basePurchasePrice, false, prod.unitRatio, prodDir);
                                         }
                                         return {
                                           productId: it.productId,

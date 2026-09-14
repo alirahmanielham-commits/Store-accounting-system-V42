@@ -13,7 +13,8 @@ import { MessageSquare,
   Settings,
   Calendar,
   Activity,
-  UserCheck
+  UserCheck,
+  Globe
 } from "lucide-react";
 
 export interface SidebarItem {
@@ -72,12 +73,22 @@ export const allSidebarGroups: SidebarGroup[] = [
     items: [
       { id: "products", label: "مدیریت کالا و خدمات", roles: ["admin", "accountant"] },
       { id: "online_pipe_pricing", label: "استعلام و ثبت آنلاین انواع لوله", roles: ["admin", "accountant"] },
+      { id: "newpipe_pricing", label: "استعلام و بروزرسانی نیوپایپ (PDF)", roles: ["admin", "accountant"] },
       { id: "bulk_barcode_generator", label: "تولید گروهی بارکد", roles: ["admin", "accountant"] },
       { id: "product_categories", label: "گروه‌بندی کالاها", roles: ["admin", "accountant"] },
       { id: "product_view", label: "کارت کالا", roles: ["admin", "accountant", "viewer"] },
       { id: "quick_price_inquiry", label: "استعلام سریع قیمت", roles: ["admin", "accountant", "cashier", "viewer"] },
       { id: "kardex", label: "کاردکس کالا (تاریخچه)", roles: ["admin", "accountant", "viewer"] },
       { id: "inventory_report", label: "گزارش موجودی کالا", roles: ["admin", "accountant", "viewer"] },
+    ],
+  },
+  {
+    id: "online_pricing_hub",
+    label: "استعلام و بروزرسانی قیمت آنلاین",
+    icon: <Globe className="w-5 h-5" />,
+    items: [
+      { id: "online_pipe_pricing", label: "استعلام آنلاین لوله (سپاهان، کچو، مس، گالوانیزه)", roles: ["admin", "accountant"] },
+      { id: "newpipe_pricing", label: "استعلام و بروزرسانی نیوپایپ (فایل PDF)", roles: ["admin", "accountant"] },
     ],
   },
   {

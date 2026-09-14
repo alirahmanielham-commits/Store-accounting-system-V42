@@ -54,7 +54,7 @@ export default function ProductsTab(props: any) {
   // Destruct icons
   const { Globe, Percent, ArrowDownToLine, ArrowUpFromLine, FileSpreadsheet, Sparkles, Zap, CheckCircle, Tag, Activity, Printer, Edit2, Package, Plus, Search, Filter, ArrowUpDown, MoreVertical, Edit, Trash2, 
     X, Check, AlertCircle, ChevronDown, ChevronUp, Download, Upload, 
-    Copy, Barcode, Eye, FileText, Image
+    Copy, Barcode, Eye, FileText, Image, Flame
   } = lucide;
 
   const [openDropdownId, setOpenDropdownId] = useState<string | number | null>(null);
@@ -186,6 +186,16 @@ export default function ProductsTab(props: any) {
                                 >
                                   <Globe className="w-4 h-4 text-indigo-600" />
                                   استعلام و ثبت آنلاین انواع لوله
+                                </button>
+                                <button
+                                  onClick={() => {
+                                    setActiveTab("newpipe_pricing");
+                                    setIsProductActionsMenuOpen(false);
+                                  }}
+                                  className="w-full px-4 py-2 text-right text-sm text-red-700 hover:bg-red-50 transition-colors flex items-center gap-2 font-bold border-t border-slate-100 mt-1 pt-2"
+                                >
+                                  <Flame className="w-4 h-4 text-red-600" />
+                                  استعلام و بروزرسانی نیوپایپ (PDF)
                                 </button>
                                 <button
                                   onClick={() => {

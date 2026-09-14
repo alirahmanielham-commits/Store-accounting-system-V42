@@ -42,6 +42,7 @@ import CalculatorModal from "../components/modals/CalculatorModal";
 import SaleReturnInvoiceCreate from '../components/invoices/SaleReturnInvoiceCreate';
 import PurchaseInvoiceCreate from '../components/invoices/PurchaseInvoiceCreate';
 import PurchaseReturnInvoiceCreate from '../components/invoices/PurchaseReturnInvoiceCreate';
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../utils/unitConversion";
 import Barcode from "react-barcode";
 import {
   Building,
@@ -4302,6 +4303,7 @@ const handleFastBarcodeScan = (code: string) => {
               updatedItem.productName = product.name;
               updatedItem.selectedUnit = product.unit || "";
               updatedItem.unitRatio = product.unitRatio || 1;
+              updatedItem.unitRatioDirection = product.unitRatioDirection || getUnitRatioDirection(product);
               updatedItem.isSecondaryUnit = false;
 
               const isPurchase =
@@ -4348,6 +4350,25 @@ const handleFastBarcodeScan = (code: string) => {
                 updatedItem.selectedUnit = isSec
                   ? product.secondaryUnit || ""
                   : product.unit || "";
+                updatedItem.unitRatio = product.unitRatio || 1;
+                const dir = product.unitRatioDirection || getUnitRatioDirection(product);
+                updatedItem.unitRatioDirection = dir;
+
+                const isPurchase =
+                  activeTab === "create_purchase" ||
+                  (activeTab === "create_warehouse_doc" && invoiceType === "warehouse_receipt");
+                let baseP = getLastPriceForProduct(product.id, isPurchase);
+                if (!baseP || baseP === 0) {
+                  baseP = isPurchase && product.purchasePrice ? product.purchasePrice : product.price;
+                }
+                const convertedBasePrice = exchangeRate > 0 ? (baseP || 0) / exchangeRate : (baseP || 0);
+
+                updatedItem.unitPrice = getPriceForSelectedUnit(
+                  convertedBasePrice,
+                  isSec,
+                  product.unitRatio,
+                  dir
+                );
               }
             }
 
@@ -4958,12 +4979,22 @@ const getInvoiceNumber = (typeOverride?: string) => {
                   if (originalInvoice && originalInvoice.type === 'sale') {
                     const originalItem = originalInvoice.items.find((oi: any) => oi.productId?.toString() === item.productId?.toString() && (oi.warehouseId?.toString() === whId?.toString()));
                     if (originalItem) {
-                       originalQty = (Number(originalItem.quantity) || 0) * ((originalItem.isSecondaryUnit && originalItem.unitRatio) ? Number(originalItem.unitRatio) : 1);
+                       originalQty = convertQuantityToBaseUnit(
+                         originalItem.quantity,
+                         Boolean(originalItem.isSecondaryUnit),
+                         Number(originalItem.unitRatio),
+                         originalItem.unitRatioDirection || (prod ? (prod.unitRatioDirection || getUnitRatioDirection(prod)) : undefined)
+                       );
                     }
                   }
                 }
 
-                const neededQty = (Number(item.quantity) || 0) * ((item.isSecondaryUnit && item.unitRatio) ? Number(item.unitRatio) : 1);
+                const neededQty = convertQuantityToBaseUnit(
+                  item.quantity,
+                  Boolean(item.isSecondaryUnit),
+                  Number(item.unitRatio || prod.unitRatio),
+                  item.unitRatioDirection || prod.unitRatioDirection || getUnitRatioDirection(prod)
+                );
                 
                 if (currentStock + originalQty < neededQty) {
                     validationErrors.push(`• گیت ۵: موجودی کالای "${prod.name}" (ردیف ${idx + 1}) در انبار کافی نیست. موجودی: ${currentStock + originalQty}، مقدار درخواستی: ${neededQty}. (فروش با موجودی منفی غیرفعال است)`);
@@ -5244,9 +5275,13 @@ const getInvoiceNumber = (typeOverride?: string) => {
         if (!item.productId) continue;
         const productObj = products.find((p) => p.id === item.productId);
         if (productObj?.type === "service") continue;
-        const q =
-          (Number(item.quantity) || 0) *
-          (item.isSecondaryUnit && item.unitRatio ? Number(item.unitRatio) : 1);
+        const prodDir = productObj?.unitRatioDirection || getUnitRatioDirection(productObj);
+        const q = convertQuantityToBaseUnit(
+          item.quantity,
+          Boolean(item.isSecondaryUnit),
+          Number(item.unitRatio || productObj?.unitRatio),
+          prodDir
+        );
         requiredQty[item.productId] = (requiredQty[item.productId] || 0) + q;
       }
 
@@ -5332,9 +5367,13 @@ const getInvoiceNumber = (typeOverride?: string) => {
         if (!item.productId) continue;
         const productObj = products.find((p) => p.id === item.productId);
         if (productObj?.type === "service") continue;
-        const q =
-          (Number(item.quantity) || 0) *
-          (item.isSecondaryUnit && item.unitRatio ? Number(item.unitRatio) : 1);
+        const prodDir = productObj?.unitRatioDirection || getUnitRatioDirection(productObj);
+        const q = convertQuantityToBaseUnit(
+          item.quantity,
+          Boolean(item.isSecondaryUnit),
+          Number(item.unitRatio || productObj?.unitRatio),
+          prodDir
+        );
         const key = item.productId + "_" + (item.warehouseId || "global");
         requiredQty[key] = (requiredQty[key] || 0) + q;
       }
@@ -5768,9 +5807,10 @@ const getInvoiceNumber = (typeOverride?: string) => {
             })
             .map((it: any) => {
               const prod = products.find((p) => p.id === it.productId);
+              const prodDir = prod?.unitRatioDirection || getUnitRatioDirection(prod);
               let basePurchasePrice = Number(it.unitPrice) || 0;
               if (it.isSecondaryUnit && prod?.unitRatio && prod.unitRatio > 0) {
-                 basePurchasePrice = Number((basePurchasePrice / prod.unitRatio).toFixed(4));
+                 basePurchasePrice = getPriceForSelectedUnit(basePurchasePrice, false, prod.unitRatio, prodDir);
               }
               return {
 
@@ -6166,21 +6206,41 @@ const handleInvoicePreviewTrigger = () => {
                 (oi.warehouseId?.toString() === targetWhId || (!oi.warehouseId && targetWhId === invoiceWarehouseId?.toString()))
             );
             if (originalItem) {
-              const origRatio = (originalItem.isSecondaryUnit && originalItem.unitRatio) ? Number(originalItem.unitRatio) : 1;
-              originalQty = (Number(originalItem.quantity) || 0) * origRatio;
+              const origDir = originalItem.unitRatioDirection || (prod ? (prod.unitRatioDirection || getUnitRatioDirection(prod)) : undefined);
+              originalQty = convertQuantityToBaseUnit(
+                originalItem.quantity,
+                Boolean(originalItem.isSecondaryUnit),
+                Number(originalItem.unitRatio),
+                origDir
+              );
             }
           }
         }
 
-        const ratio = (item.isSecondaryUnit && prod.unitRatio) ? Number(prod.unitRatio) : 1;
-        const neededQty = (Number(item.quantity) || 0) * ratio;
+        const dir = prod.unitRatioDirection || getUnitRatioDirection(prod);
+        const neededQty = convertQuantityToBaseUnit(
+          item.quantity,
+          Boolean(item.isSecondaryUnit),
+          Number(prod.unitRatio),
+          dir
+        );
 
         if (currentStock + originalQty < neededQty) {
           const whObj = warehouses.find((w: any) => w.id?.toString() === targetWhId);
           const whName = whObj ? whObj.name : "انبار انتخاب شده";
           const unitName = (item.isSecondaryUnit && prod.secondaryUnit) ? prod.secondaryUnit : (prod.unit || "عدد");
-          const availDisplay = ratio > 1 ? Number(((currentStock + originalQty) / ratio).toFixed(2)) : (currentStock + originalQty);
-          const deficitDisplay = Number(((neededQty - (currentStock + originalQty)) / ratio).toFixed(2));
+          const availInBase = currentStock + originalQty;
+          const availDisplay = (item.isSecondaryUnit && dir === "main_to_secondary")
+            ? Number((availInBase * (prod.unitRatio || 1)).toFixed(2))
+            : ((item.isSecondaryUnit && prod.unitRatio && prod.unitRatio > 1)
+              ? Number((availInBase / prod.unitRatio).toFixed(2))
+              : availInBase);
+          const deficitInBase = neededQty - availInBase;
+          const deficitDisplay = (item.isSecondaryUnit && dir === "main_to_secondary")
+            ? Number((deficitInBase * (prod.unitRatio || 1)).toFixed(2))
+            : ((item.isSecondaryUnit && prod.unitRatio && prod.unitRatio > 1)
+              ? Number((deficitInBase / prod.unitRatio).toFixed(2))
+              : deficitInBase);
 
           const rowEl = document.getElementById(`sale-invoice-item-row-${item.id}`);
           if (rowEl) {
@@ -6303,10 +6363,13 @@ const handleInvoicePreviewTrigger = () => {
           const pid = i.productId?.toString();
           if (!pid || !map[pid]) return;
 
-          let q = Number(i.quantity) || 0;
-          if (i.isSecondaryUnit && map[pid].unitRatio) {
-            q = q * map[pid].unitRatio;
-          }
+          const prodDir = map[pid]?.unitRatioDirection || getUnitRatioDirection(map[pid]);
+          let q = convertQuantityToBaseUnit(
+            i.quantity,
+            Boolean(i.isSecondaryUnit),
+            Number(map[pid].unitRatio),
+            prodDir
+          );
 
           const whId = (
             i.warehouseId ||

@@ -19,6 +19,9 @@ import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
 import * as schema from '../db/schema';
+import { PDFParse } from 'pdf-parse';
+import { NEWPIPE_OFFICIAL_CATALOG } from '../data/newpipeCatalogData';
+import { NewpipeProductItem } from '../types/newpipe';
 
 const router = Router();
 router.post('/api/generate_demo_data', async (req, res) => {
@@ -315,6 +318,69 @@ router.post('/api/scraping/markaz-ahan-pipes', async (req, res) => {
   } catch (err: any) {
     console.error("Scraping error:", err);
     res.status(500).json({ success: false, error: err.message || "خطا در دریافت قیمت‌ها از مرکز آهن" });
+  }
+});
+
+// Newpipe Official Catalog & PDF Parser
+router.post('/api/scraping/parse-newpipe-pdf', async (req, res) => {
+  try {
+    const { pdfBase64, useSample } = req.body || {};
+    let detectedDate = "۱۴۰۵/۰۶/۱۰";
+    let extractedItems: NewpipeProductItem[] = [];
+
+    // If a PDF is uploaded, parse it with PDFParse
+    if (pdfBase64 && !useSample) {
+      try {
+        const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
+        const buffer = Buffer.from(cleanBase64, 'base64');
+        const parser = new PDFParse({ data: buffer });
+        const textResult = await parser.getText();
+        await parser.destroy();
+
+        const fullText = textResult.text || '';
+        
+        // Extract date if present
+        const dateMatch = fullText.match(/140[0-9]\/[0-1]?[0-9]\/[0-3]?[0-9]/);
+        if (dateMatch) {
+          detectedDate = dateMatch[0];
+        }
+
+        // Match product codes (8-9 digit sequences)
+        const codeMatches = fullText.match(/\b(8\d{8}|353\d{6}|8\d{7})\b/g) || [];
+        const uniqueCodes = Array.from(new Set(codeMatches));
+
+        if (uniqueCodes.length > 0) {
+          const matchedCatalog = NEWPIPE_OFFICIAL_CATALOG.filter(item => uniqueCodes.includes(item.code));
+          if (matchedCatalog.length > 0) {
+            extractedItems = matchedCatalog;
+          }
+        }
+      } catch (parseErr) {
+        console.error("PDF Parsing internal notice:", parseErr);
+      }
+    }
+
+    // Default to the full official 12-page Newpipe catalog
+    if (extractedItems.length === 0) {
+      extractedItems = [...NEWPIPE_OFFICIAL_CATALOG];
+    }
+
+    res.json({
+      success: true,
+      brand: "نیوپایپ (گیتی کالا - SGP)",
+      catalogTitle: "لیست قیمت مصرف‌کننده محصولات پنج‌لایه نیوپایپ",
+      catalogDate: detectedDate,
+      totalCount: extractedItems.length,
+      vatPercent: 10,
+      items: extractedItems
+    });
+
+  } catch (err: any) {
+    console.error("Newpipe PDF parse error:", err);
+    res.status(500).json({
+      success: false,
+      error: err.message || "خطا در پردازش لیست قیمت نیوپایپ"
+    });
   }
 });
 

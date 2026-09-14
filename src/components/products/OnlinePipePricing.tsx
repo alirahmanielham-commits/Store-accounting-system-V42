@@ -405,6 +405,10 @@ export default function OnlinePipePricing({
 
         const computedUnitRatio = getComputedUnitRatio(item);
         const ratioInfo = getUnitRatioDescription(item);
+        const unitRatioDirection: 'main_to_secondary' | 'secondary_to_main' =
+          (selectedMainUnit === "شاخه" || selectedMainUnit === "کلاف") && (selectedSecondaryUnit === "متر" || selectedSecondaryUnit === "کیلوگرم")
+            ? 'main_to_secondary'
+            : 'secondary_to_main';
 
         const productPayload: Partial<Product> = {
           name: item.name,
@@ -417,6 +421,7 @@ export default function OnlinePipePricing({
           unit: selectedMainUnit,
           secondaryUnit: selectedSecondaryUnit === "ندارد" ? undefined : selectedSecondaryUnit,
           unitRatio: computedUnitRatio,
+          unitRatioDirection: unitRatioDirection,
           description: `${item.name} | برند: ${item.brand || currentTabConfig.brand} | سایز: ${item.diameterInch} اینچ | ضخامت: ${item.thicknessMm}mm | قطر خارجی: ${item.diameterMm}mm | طول: ${item.lengthM}m | وزن شاخه: ${item.weightPerBranchKg}kg | واحد اصلی: ${selectedMainUnit} | واحد فرعی: ${selectedSecondaryUnit === 'ندارد' ? 'ندارد' : `${selectedSecondaryUnit} (${ratioInfo.formula})`} | نسبت تبدیل: ${computedUnitRatio} | واحد ارزی: ${activeCurrencyLabel} (نرخ تبدیل: ${activeCurrencyLabel === 'ریال' ? `هر ۱ تومان = ${exchangeRate} ریال` : `هر ۱ ${activeCurrencyLabel} = ${addCommas(exchangeRate)} تومان`}) | قیمت پایه مرکزآهن: ${addCommas(item.pricePerKg)} تومان/کیلو`,
           pipeDiameterInch: item.diameterInch,
           pipeThicknessMm: item.thicknessMm,
@@ -516,6 +521,19 @@ export default function OnlinePipePricing({
               </button>
             );
           })}
+
+          <div className="h-6 w-px bg-slate-200 mx-1" />
+          <button
+            type="button"
+            onClick={() => setActiveTab && setActiveTab("newpipe_pricing")}
+            className="px-4 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center gap-2 bg-gradient-to-r from-red-600 to-rose-600 text-white shadow-sm hover:from-red-700 hover:to-rose-700 cursor-pointer"
+          >
+            <FileText className="w-4 h-4 text-white" />
+            <span>نیوپایپ (کاتالوگ PDF)</span>
+            <span className="text-[10px] px-2 py-0.5 rounded-md font-normal bg-white/20 text-white">
+              بروزرسانی با PDF
+            </span>
+          </button>
         </div>
       </div>
 

@@ -362,6 +362,7 @@ const PersonIOModal = React.lazy(() => import('./components/modals/PersonIOModal
 const ProductCategoriesView = React.lazy(() => import('./components/products/ProductCategoriesView'));
 const OrderList = React.lazy(() => import('./components/inventory/OrderList'));
 const OnlinePipePricing = React.lazy(() => import('./components/products/OnlinePipePricing'));
+const NewpipePricing = React.lazy(() => import('./components/products/NewpipePricing'));
 
 
 
@@ -751,6 +752,14 @@ export default function App() {
                         persian_fa={persian_fa}
                         AIProductSearchModal={AIProductSearchModal} />} />
 <Route path="/online_pipe_pricing" element={<OnlinePipePricing 
+                        products={products}
+                        setProducts={setProducts}
+                        categories={productCategories}
+                        storeSettings={storeSettings}
+                        showNotification={showNotification}
+                        confirmAction={confirmAction}
+                        setActiveTab={setActiveTab} />} />
+<Route path="/newpipe_pricing" element={<NewpipePricing 
                         products={products}
                         setProducts={setProducts}
                         categories={productCategories}

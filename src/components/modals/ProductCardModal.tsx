@@ -5,6 +5,7 @@ import { Product, InvoiceItem, Warehouse } from '../../types';
 import { getInvoices, getProductPriceHistory, getInventoryTransactions } from '../../services/dataService';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { addCommas, toPersianDigits, formatDateDisplay, formatAmount } from '../../utils/format';
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, formatUnitConversionFormula } from '../../utils/unitConversion';
 
 export default function ProductCardModal({ product, warehouses = [], currency = 'تومان', onClose, isModal = true, persons = [], storeSettings }: { product: Product, warehouses?: Warehouse[], currency?: string, onClose: () => void, isModal?: boolean, persons?: any[], storeSettings?: any }) {
   const [history, setHistory] = useState<any[]>([]);
@@ -68,11 +69,12 @@ const fetchHistory = async () => {
           if (inv.items) {
              const items = inv.items.filter((i: any) => i.productId?.toString() === product.id?.toString());
              items.forEach((item: any) => {
+                const dir = product.unitRatioDirection || getUnitRatioDirection(product);
                 let qty = Number(item.quantity) || 0;
                 let uPrice = item.unitPrice;
                 if (item.isSecondaryUnit && product.unitRatio && product.unitRatio > 0) {
-                   qty = qty * product.unitRatio;
-                   uPrice = Number((Number(uPrice) / product.unitRatio).toFixed(4));
+                   qty = convertQuantityToBaseUnit(qty, true, product.unitRatio, dir);
+                   uPrice = getPriceForSelectedUnit(uPrice, false, product.unitRatio, dir);
                 }
                 prodHistory.push({
                    type: inv.type,
@@ -262,9 +264,19 @@ const fetchHistory = async () => {
                      <span className="text-xl font-sans font-black text-gray-800 z-10 relative" dir="ltr">
                         <span className="text-xs font-normal ml-1">{product.unit || 'عدد'}</span> {loading ? '...' : calculatedStock}
                      </span>
-                     {product.secondaryUnit && product.unitRatio && !loading && calculatedStock >= product.unitRatio && (
+                     {product.secondaryUnit && product.unitRatio && !loading && (
                        <div className="text-[10px] text-amber-700 mt-1 font-bold z-10 relative">
-                         معادل {Math.floor(calculatedStock / product.unitRatio)} {product.secondaryUnit} و {calculatedStock % product.unitRatio} {product.unit}
+                         {(() => {
+                           const dir = product.unitRatioDirection || getUnitRatioDirection(product);
+                           if (dir === 'main_to_secondary') {
+                             return `معادل ${toPersianDigits(calculatedStock * product.unitRatio)} ${product.secondaryUnit}`;
+                           } else {
+                             if (calculatedStock >= product.unitRatio) {
+                               return `معادل ${toPersianDigits(Math.floor(calculatedStock / product.unitRatio))} ${product.secondaryUnit} و ${toPersianDigits(calculatedStock % product.unitRatio)} ${product.unit}`;
+                             }
+                             return `کمتر از ۱ ${product.secondaryUnit}`;
+                           }
+                         })()}
                        </div>
                      )}
                      <Package className="w-16 h-16 text-amber-500/10 absolute -left-4 -bottom-4 z-0 rotate-12" />
@@ -286,7 +298,10 @@ const fetchHistory = async () => {
                    </div>
                    <div className="flex flex-col">
                      <span className="text-[10px] text-gray-500 font-bold mb-1">واحد اصلی / فرعی</span>
-                     <span className="text-sm font-bold text-gray-800">{product.unit || 'عدد'} {product.secondaryUnit ? ` / ${product.secondaryUnit} (نسبت: ${product.unitRatio})` : ''}</span>
+                     <span className="text-sm font-bold text-gray-800">
+                        {product.unit || 'عدد'}
+                        {product.secondaryUnit ? ` / ${product.secondaryUnit} (${formatUnitConversionFormula(product.unit || 'عدد', product.secondaryUnit, product.unitRatio || 1, product.unitRatioDirection || getUnitRatioDirection(product), toPersianDigits)})` : ''}
+                      </span>
                    </div>
                    <div className="flex flex-col">
                      <span className="text-[10px] text-gray-500 font-bold mb-1">حداقل موجودی</span>
