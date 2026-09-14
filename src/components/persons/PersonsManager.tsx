@@ -435,7 +435,7 @@ export default function PersonsManager(props: any) {
       </AnimatePresence>
 
       {/* Header */}
-      <div className="bg-white px-4 sm:px-6 md:px-8 py-4 sm:py-5 border-b border-slate-200 sticky top-0 z-30 shadow-sm">
+      <div className="hidden md:block bg-white px-4 sm:px-6 md:px-8 py-4 sm:py-5 border-b border-slate-200 sticky top-0 z-30 shadow-sm">
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
           <div>
             <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
@@ -560,6 +560,34 @@ export default function PersonsManager(props: any) {
             >
               <Filter className="w-4 h-4" />
               فیلترهای پیشرفته
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setEditingPersonId(null);
+                setNewPersonType("real");
+                setNewPersonTitle("");
+                setNewPersonAlias("");
+                setNewPersonFirstName("");
+                setNewPersonLastName("");
+                setNewPersonCompanyName("");
+                setNewPersonFatherName("");
+                setNewPersonNationalId("");
+                setNewPersonAccountingCode("");
+                setNewPersonAddress("");
+                setNewPersonImage("");
+                setNewPersonPhone("");
+                setNewPersonContacts([]);
+                setNewPersonRole("customer");
+                setNewPersonInitialBalance("");
+                setNewPersonInitialBalanceType("settled");
+                setNewPersonCreditLimit("");
+                setIsPersonModalOpen(true);
+              }}
+              className="md:hidden px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1.5 text-xs font-black shadow-xs mr-auto"
+            >
+              <Plus className="w-4 h-4" strokeWidth={2.5} />
+              شخص جدید
             </button>
             <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
             <div className="hidden md:flex bg-slate-100 p-1 rounded-lg border border-slate-200">

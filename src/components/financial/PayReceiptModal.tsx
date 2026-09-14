@@ -9,6 +9,7 @@ import DatePickerModule from "react-multi-date-picker";
 const DatePicker = CustomDatePicker;
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
+import { addCommas } from "../../utils/format";
 
 export default function PayReceiptModal(props: any) {
   const { isOpen, onClose, ...rest } = props;
@@ -175,24 +176,59 @@ const isReceive = false;
 
         const effectiveMapPerson = mapPersonToOption || defaultMapPersonToOption;
 
+        const personInvoices = (invoices || []).filter(
+          (inv: any) =>
+            !inv.isDraft &&
+            inv.status !== "draft" &&
+            inv.status !== "voided" &&
+            inv.type !== "proforma" &&
+            inv.customerId?.toString() === effectivePersonId.toString() &&
+            inv.paymentStatus !== "paid" &&
+            (inv.type === "purchase" || inv.type === "sale_return"),
+        );
+
+        const totalUnpaidInvoices = personInvoices.reduce((sum: number, inv: any) => {
+          const total =
+            (inv.totalAmount || 0) *
+            (typeof getDefaultExchangeRate === "function"
+              ? getDefaultExchangeRate(inv.currency, storeSettings?.currency)
+              : 1);
+          const paid = inv.paidAmount || 0;
+          return sum + Math.max(total - paid, 0);
+        }, 0);
+
         return (
-          <div className="w-full font-sans" dir="rtl">
-<div className="bg-white rounded-2xl shadow-sm border border-slate-200 w-full flex flex-col overflow-hidden relative">
+          <div className="w-full font-sans pb-32 md:pb-6" dir="rtl">
+            <div className="bg-white rounded-2xl shadow-sm border border-slate-200 w-full flex flex-col overflow-hidden relative">
               {/* Header */}
-              <div className="flex items-center justify-between px-4 md:px-6 py-4 border-b border-slate-100 bg-rose-50/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center">
+              <div className="flex items-center justify-between px-3.5 sm:px-6 py-3 sm:py-4 border-b border-slate-100 bg-rose-50/60">
+                <div className="flex items-center gap-2.5 sm:gap-3">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-rose-100 text-rose-600 flex items-center justify-center shrink-0">
                     <ArrowUpRight className="w-5 h-5" />
                   </div>
                   <div>
-                    <h2 className="text-lg font-black text-slate-800">ثبت رسید پرداخت وجه</h2>
-                    <p className="text-xs font-bold text-slate-500 mt-0.5">ثبت پرداختی‌های نقدی و چکی</p>
+                    <h2 className="text-base sm:text-lg font-black text-slate-800">ثبت رسید پرداخت وجه</h2>
+                    <p className="text-[11px] sm:text-xs font-bold text-slate-500 mt-0.5">ثبت پرداختی‌های نقدی، حواله بانکی و صدور چک</p>
                   </div>
                 </div>
-                
+                <div className="flex items-center gap-2">
+                  <span className="text-[11px] sm:text-xs font-mono font-bold bg-white px-2.5 py-1 rounded-lg border border-rose-200 text-rose-800 shadow-2xs whitespace-nowrap">
+                    شماره: {toPersianDigits(receiptNumber || "رزرو...")}
+                  </span>
+                  {typeof onClose === "function" && (
+                    <button
+                      type="button"
+                      onClick={onClose}
+                      className="p-1.5 sm:p-2 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                      title="بستن"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
               </div>
               
-              <div className="p-4 md:p-6 space-y-6">
+              <div className="p-3 sm:p-4 md:p-6 space-y-4 sm:space-y-6">
 
             {receiptHasDraft && (
               <div className="bg-amber-50 border border-amber-200 rounded-2xl p-4 flex flex-col md:flex-row justify-between items-center text-amber-800 shadow-sm col-span-full w-full">
@@ -217,7 +253,7 @@ const isReceive = false;
             )}
 
             {lastCreatedReceipt && (
-              <div className="bg-emerald-50 text-emerald-800 p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-emerald-200 shadow-xs font-bold animate-fadeIn">
+              <div className="bg-emerald-50 text-emerald-800 p-4 sm:p-5 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4 border border-emerald-200 shadow-xs font-bold animate-fadeIn">
                 <div className="flex items-center gap-3">
                   <CheckCircle className="w-6 h-6 text-emerald-600 block shrink-0" />
                   <div>
@@ -246,7 +282,7 @@ const isReceive = false;
                   <button
                     type="button"
                     onClick={() => setPrintingTransaction(lastCreatedReceipt)}
-                    className="px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-none shadow-sm cursor-pointer whitespace-nowrap"
+                    className="px-4 sm:px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 transition-all border-none shadow-sm cursor-pointer whitespace-nowrap"
                   >
                     <Printer className="w-4 h-4" />
                     چاپ و پیش‌نمایش رسید
@@ -269,22 +305,29 @@ const isReceive = false;
               </div>
             )}
 
-            <div className={`bg-white rounded-2xl p-4 md:p-6 shadow-sm border ${themeBorder} ${themeLightBg}`}>
-              
+            <div className={`bg-white rounded-2xl p-3 sm:p-5 md:p-6 shadow-xs border ${themeBorder} ${themeLightBg}`}>
 
-              <div className="flex flex-col sm:flex-row gap-2 max-w-[400px] mb-6 bg-slate-100 p-1.5 rounded-xl border border-slate-200">
+              <div className="flex flex-row gap-1.5 w-full sm:max-w-[420px] mb-5 bg-slate-100/90 p-1.5 rounded-xl border border-slate-200/80">
                 <button
                   type="button"
                   onClick={() => setReceiptMethod("cash")}
-                  className={`flex-1 flex gap-2 justify-center items-center py-2.5 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${receiptMethod === "cash" ? (isReceive ? "bg-white text-emerald-700 shadow-[0_2px_4px_rgba(16,185,129,0.1)] border-emerald-200" : "bg-white text-rose-700 shadow-[0_2px_4px_rgba(244,63,94,0.1)] border-rose-200") : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 block border border-transparent"}`}
+                  className={`flex-1 flex gap-1.5 sm:gap-2 justify-center items-center py-2.5 px-3 rounded-lg font-bold text-xs sm:text-sm min-h-[44px] transition-all ${
+                    receiptMethod === "cash"
+                      ? "bg-white text-rose-700 shadow-xs border border-rose-200"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                  }`}
                 >
                   <DollarSign className="w-4 h-4" />
-                  نقدی / فیش بانکی / حواله
+                  نقدی / حواله بانکی
                 </button>
                 <button
                   type="button"
                   onClick={() => setReceiptMethod("check")}
-                  className={`flex-1 flex gap-2 justify-center items-center py-2.5 px-4 rounded-lg font-bold text-sm transition-all duration-300 ${receiptMethod === "check" ? (isReceive ? "bg-white text-emerald-700 shadow-[0_2px_4px_rgba(16,185,129,0.1)] border-emerald-200" : "bg-white text-rose-700 shadow-[0_2px_4px_rgba(244,63,94,0.1)] border-rose-200") : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50 block border border-transparent"}`}
+                  className={`flex-1 flex gap-1.5 sm:gap-2 justify-center items-center py-2.5 px-3 rounded-lg font-bold text-xs sm:text-sm min-h-[44px] transition-all ${
+                    receiptMethod === "check"
+                      ? "bg-white text-rose-700 shadow-xs border border-rose-200"
+                      : "text-slate-500 hover:text-slate-700 hover:bg-slate-200/50"
+                  }`}
                 >
                   <CreditCard className="w-4 h-4" />
                   صدور چک
@@ -293,22 +336,23 @@ const isReceive = false;
 
               <form
                 onSubmit={(e) =>
-                  handleSubmitReceipt(isReceive ? "receive" : "pay", e)
+                  handleSubmitReceipt("pay", e)
                 }
-                className="space-y-6"
+                className="space-y-5"
               >
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-                  <div className="lg:col-span-1 md:col-span-2">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6">
+                  {/* Receipt Number - visible in desktop grid, badge shown in header on mobile */}
+                  <div className="hidden md:block lg:col-span-1 md:col-span-2">
                     <label className="block text-sm font-bold text-slate-700 mb-1 flex items-center gap-1">
                       <FileText className="w-4 h-4" /> شماره رسید
                     </label>
-                    <div className={`w-full p-2.5 border rounded-xl font-mono text-left opacity-70 flex items-center justify-end ${isReceive ? 'bg-emerald-50/20 border-emerald-100 font-bold text-emerald-800' : 'bg-rose-50/20 border-rose-100 font-bold text-rose-800'}`}>
-                        {receiptNumber || "در حال رزرو..."}
+                    <div className="w-full p-2.5 border rounded-xl font-mono text-left opacity-70 flex items-center justify-end bg-rose-50/20 border-rose-100 font-bold text-rose-800">
+                      {receiptNumber || "در حال رزرو..."}
                     </div>
                   </div>
-                  <div className="lg:col-span-3 md:col-span-2">
+                  <div className="col-span-1 md:col-span-2 lg:col-span-3">
                     <label className="block text-sm font-bold text-slate-700 mb-1 flex items-center gap-1">
-                      <User className="w-4 h-4" /> طرف حساب (شخص/شرکت)
+                      <User className="w-4 h-4" /> طرف حساب (شخص/شرکت) *
                     </label>
                     <div className="flex gap-2">
                       <div className="flex-1">
@@ -351,15 +395,19 @@ const isReceive = false;
                           placeholder="انتخاب یا جستجوی نام شخص..."
                           noOptionsMessage={() => "شخصی یافت نشد"}
                           isClearable
+                          menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                          menuPosition="fixed"
                           styles={{
+                            menuPortal: (base) => ({ ...base, zIndex: 99999 }),
                             control: (base) => ({
                               ...base,
                               borderRadius: "0.75rem",
-                              borderColor: "#E5E7EB",
+                              borderColor: "#E2E8F0",
+                              minHeight: "44px",
                               padding: "2px",
                               boxShadow: "none",
                               "&:hover": {
-                                borderColor: isReceive ? "#34D399" : "#FB7185",
+                                borderColor: "#FB7185",
                               },
                             }),
                           }}
@@ -368,7 +416,7 @@ const isReceive = false;
                       <button
                         type="button"
                         onClick={() => setIsPersonModalOpen && setIsPersonModalOpen(true)}
-                        className="bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl px-4 flex items-center justify-center transition-colors shadow-sm"
+                        className="w-11 h-11 shrink-0 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-xl flex items-center justify-center transition-colors shadow-xs active:bg-slate-100"
                         title="تعریف شخص جدید"
                       >
                         <UserPlus className="w-5 h-5" />
@@ -384,13 +432,13 @@ const isReceive = false;
                       typeof renderPersonInfoBox === "function" ? (
                         renderPersonInfoBox(
                           effectivePersonId,
-                          `${isReceive ? "bg-emerald-50/50 border-emerald-100/50" : "bg-rose-50/50 border-rose-100/50"} text-slate-600`
+                          "bg-rose-50/50 border-rose-100/50 text-slate-600"
                         )
                       ) : selectedPerson ? (
-                        <div className={`mt-2 text-xs font-bold w-full ${isReceive ? "bg-emerald-50/50 border-emerald-100/50" : "bg-rose-50/50 border-rose-100/50"} text-slate-600 border rounded-lg p-3 flex flex-col gap-2`}>
+                        <div className="mt-2 text-xs font-bold w-full bg-rose-50/50 border-rose-100/50 text-slate-600 border rounded-xl p-3 flex flex-col gap-2">
                           <div className="flex items-center justify-between pb-2 border-b border-black/5">
                             <div className="flex items-center gap-1.5 font-black text-slate-800 text-sm">
-                              <User className="w-4 h-4 text-indigo-600 shrink-0" />
+                              <User className="w-4 h-4 text-rose-600 shrink-0" />
                               <span>{resolvePersonName(selectedPerson)}</span>
                               {selectedPerson.personCode && (
                                 <span className="text-[11px] font-mono font-bold text-slate-500 bg-white/80 px-1.5 py-0.5 rounded border border-black/5">
@@ -415,10 +463,135 @@ const isReceive = false;
 
                   <div>
                     <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                      <DollarSign className={`w-4 h-4 ${themeIcon}`} /> مبلغ سند
+                      ({storeSettings?.currency || "تومان"}) *
+                    </label>
+                    <div className="relative">
+                      <CurrencyInput
+                        value={receiptAmount}
+                        onChange={(e: any) => setReceiptAmount(e.target.value)}
+                        className={`w-full pl-16 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 ${themeRing} outline-none font-sans font-mono font-black text-slate-900 text-right text-lg md:text-xl transition-all shadow-sm min-h-[44px]`}
+                        placeholder="۰"
+                        inputMode="numeric"
+                        required
+                      />
+                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 font-bold text-xs select-none">
+                        {storeSettings?.currency || "تومان"}
+                      </div>
+                    </div>
+
+                    {/* Quick Amount Helper Chips */}
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {[
+                        { label: "+۱ م", val: 1000000 },
+                        { label: "+۵ م", val: 5000000 },
+                        { label: "+۱۰ م", val: 10000000 },
+                        { label: "+۵۰ م", val: 50000000 },
+                      ].map((item) => (
+                        <button
+                          key={item.label}
+                          type="button"
+                          onClick={() => {
+                            const cur = Number(String(receiptAmount || "0").replace(/,/g, "")) || 0;
+                            setReceiptAmount(String(cur + item.val));
+                          }}
+                          className="px-2 py-1 bg-slate-50 hover:bg-slate-100 active:bg-slate-200 border border-slate-200 rounded-lg text-xs font-bold text-slate-700 transition-colors shadow-2xs"
+                        >
+                          {item.label}
+                        </button>
+                      ))}
+                      {receiptAmount && Number(String(receiptAmount).replace(/,/g, "")) > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => setReceiptAmount("")}
+                          className="px-2 py-1 bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 rounded-lg text-xs font-bold transition-colors"
+                        >
+                          پاک کردن
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Quick Full Unpaid Invoices Payoff Button */}
+                    {effectivePersonId && totalUnpaidInvoices > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setReceiptAmount(String(totalUnpaidInvoices));
+                          let remaining = totalUnpaidInvoices;
+                          const newAlloc: Record<string, number> = {};
+                          for (const inv of personInvoices) {
+                            const invTotal =
+                              (inv.totalAmount || 0) *
+                              (typeof getDefaultExchangeRate === "function"
+                                ? getDefaultExchangeRate(inv.currency, storeSettings?.currency)
+                                : 1);
+                            const invPaid = inv.paidAmount || 0;
+                            const invRemainder = Math.max(invTotal - invPaid, 0);
+                            if (invRemainder > 0 && remaining > 0) {
+                              const alloc = Math.min(invRemainder, remaining);
+                              newAlloc[inv.id] = alloc;
+                              remaining -= alloc;
+                            }
+                          }
+                          setReceiptLinkedInvoices(newAlloc);
+                        }}
+                        className="w-full mt-2 py-2 px-3 bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-800 rounded-xl text-xs font-black flex items-center justify-between transition-colors shadow-2xs"
+                      >
+                        <span className="flex items-center gap-1.5">
+                          <CheckSquare className="w-4 h-4 text-rose-600" />
+                          تسویه کامل تمام فاکتورهای بدهی
+                        </span>
+                        <span className="font-mono font-bold">
+                          {toPersianDigits(addCommas(totalUnpaidInvoices))} {storeSettings?.currency || "تومان"}
+                        </span>
+                      </button>
+                    )}
+
+                    {receiptAmount &&
+                      !isNaN(Number(String(receiptAmount).replace(/,/g, ""))) &&
+                      Number(String(receiptAmount).replace(/,/g, "")) > 0 && (
+                        <div
+                          className={`mt-2.5 p-3 sm:p-4 bg-gradient-to-br ${gradientBox} border rounded-2xl text-xs leading-relaxed text-right space-y-2 shadow-sm`}
+                        >
+                          <div className="text-slate-500 font-bold flex items-center gap-2 justify-start">
+                            <span
+                              className={`${themeBadge} text-[10px] px-2 py-0.5 rounded-md font-extrabold font-sans font-mono`}
+                            >
+                              جمع عددی:
+                            </span>
+                            <strong
+                              className="text-slate-900 font-mono font-black text-base md:text-lg tracking-wide inline-block"
+                              dir="ltr"
+                            >
+                              {formatNumber(Number(String(receiptAmount).replace(/,/g, "")))}
+                            </strong>
+                            <span className="text-slate-400 font-semibold">
+                              {storeSettings?.currency || "تومان"}
+                            </span>
+                          </div>
+                          <div className="h-px bg-slate-200/70 w-full" />
+                          <div className="text-slate-500 font-bold flex items-baseline gap-2 justify-start flex-wrap">
+                            <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-md font-extrabold font-sans font-mono">
+                              به حروف:
+                            </span>
+                            <strong className="text-slate-900 font-sans font-black text-xs md:text-sm inline-block leading-relaxed">
+                              {numToPersianWords(Number(String(receiptAmount).replace(/,/g, "")))}
+                            </strong>
+                            <span className="text-slate-600 font-semibold">
+                              {" "}
+                              {storeSettings?.currency || "تومان"} تمام.
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                  </div>
+
+                  <div>
+                    <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
                       <Calendar
                         className={`w-4 h-4 ${themeIcon} animate-pulse`}
                       />{" "}
-                      تاریخ سند (جلالی)
+                      تاریخ سند (جلالی) *
                     </label>
                     <div className="relative">
                       <DatePicker
@@ -435,7 +608,7 @@ const isReceive = false;
                             : persian_fa
                         }
                         calendarPosition="bottom-right"
-                        inputClass={`w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 ${themeRing} outline-none font-sans font-black text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base`}
+                        inputClass={`w-full pl-11 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 ${themeRing} outline-none font-sans font-black text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base min-h-[44px]`}
                         containerClassName="w-full"
                       />
                       <div
@@ -444,62 +617,6 @@ const isReceive = false;
                         <Calendar className="w-5 h-5" />
                       </div>
                     </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                      <DollarSign className={`w-4 h-4 ${themeIcon}`} /> مبلغ سند
-                      ({storeSettings.currency || "تومان"})
-                    </label>
-                    <div className="relative">
-                      <CurrencyInput
-                        value={receiptAmount}
-                        onChange={(e: any) => setReceiptAmount(e.target.value)}
-                        className={`w-full pl-16 pr-4 py-3 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 ${themeRing} outline-none font-sans font-mono font-black text-slate-900 text-right text-lg md:text-xl transition-all shadow-sm`}
-                        placeholder="۰"
-                        required
-                      />
-                      <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 font-bold text-xs select-none">
-                        {storeSettings?.currency || "تومان"}
-                      </div>
-                    </div>
-                    {receiptAmount &&
-                      !isNaN(Number(receiptAmount)) &&
-                      Number(receiptAmount) > 0 && (
-                        <div
-                          className={`mt-2.5 p-4 bg-gradient-to-br ${gradientBox} border rounded-2xl text-xs leading-relaxed text-right space-y-2 shadow-sm`}
-                        >
-                          <div className="text-slate-500 font-bold flex items-center gap-2 justify-start">
-                            <span
-                              className={`${themeBadge} text-[10px] px-2 py-0.5 rounded-md font-extrabold font-sans font-mono`}
-                            >
-                              جمع عددی:
-                            </span>
-                            <strong
-                              className="text-slate-900 font-mono font-black text-base md:text-lg tracking-wide inline-block"
-                              dir="ltr"
-                            >
-                              {formatNumber(Number(receiptAmount))}
-                            </strong>
-                            <span className="text-slate-400 font-semibold">
-                              {storeSettings?.currency || "تومان"}
-                            </span>
-                          </div>
-                          <div className="h-px bg-slate-200/70 w-full" />
-                          <div className="text-slate-500 font-bold flex items-baseline gap-2 justify-start flex-wrap">
-                            <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 rounded-md font-extrabold font-sans font-mono">
-                              به حروف:
-                            </span>
-                            <strong className="text-slate-900 font-sans font-black text-xs md:text-sm inline-block leading-relaxed">
-                              {numToPersianWords(Number(receiptAmount))}
-                            </strong>
-                            <span className="text-slate-600 font-semibold">
-                              {" "}
-                              {storeSettings?.currency || "تومان"} تمام.
-                            </span>
-                          </div>
-                        </div>
-                      )}
                   </div>
 
                   {receiptMethod === "cash" ? (
@@ -511,23 +628,26 @@ const isReceive = false;
                         <select
                           value={receiptResourceType}
                           onChange={(e) => {
-                            setReceiptResourceType(
-                              e.target.value as "bank" | "cashbox",
-                            );
-                            setReceiptResourceId("");
+                            const newType = e.target.value as "bank" | "cashbox";
+                            setReceiptResourceType(newType);
+                            if (newType === "bank") {
+                              setReceiptResourceId((accounts && accounts[0]?.id) || "");
+                            } else {
+                              setReceiptResourceId((cashboxes && cashboxes[0]?.id) || "");
+                            }
                           }}
-                          className={`w-full p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
+                          className={`w-full min-h-[44px] p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
                         >
-                          <option value="bank">حساب بانکی</option>
-                          <option value="cashbox">صندوق فروشگاهی</option>
+                          <option value="bank">حساب بانکی پرداخت‌کننده</option>
+                          <option value="cashbox">صندوق پرداخت‌کننده</option>
                         </select>
                       </div>
 
                       <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1">
                           {receiptResourceType === "bank"
-                            ? "بانک مقصد"
-                            : "صندوق مقصد"}
+                            ? "بانک پرداخت‌کننده"
+                            : "صندوق پرداخت‌کننده"}
                         </label>
                         {receiptResourceType === "bank" ? (
                           <select
@@ -535,11 +655,11 @@ const isReceive = false;
                             onChange={(e) =>
                               setReceiptResourceId(e.target.value)
                             }
-                            className={`w-full p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
+                            className={`w-full min-h-[44px] p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
                             required
                           >
                             <option value="">-- انتخاب بانک --</option>
-                            {(accounts || []).map((acc, idx) => (
+                            {(accounts || []).map((acc: any, idx: number) => (
                               <option key={acc.id ? `rpf-acc-${acc.id}-${idx}` : `rpf-acc-idx-${idx}`} value={acc.id}>
                                 {acc.bankName} - {acc.accountNumber}
                               </option>
@@ -551,66 +671,17 @@ const isReceive = false;
                             onChange={(e) =>
                               setReceiptResourceId(e.target.value)
                             }
-                            className={`w-full p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
+                            className={`w-full min-h-[44px] p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
                             required
                           >
                             <option value="">-- انتخاب صندوق --</option>
-                            {(cashboxes || []).map((cb) => (
+                            {(cashboxes || []).map((cb: any) => (
                               <option key={cb.id} value={cb.id}>
                                 {cb.name}
                               </option>
                             ))}
                           </select>
                         )}
-                      </div>
-                    </>
-                  ) : isReceive ? (
-                    <>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">
-                          شماره چک *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={receiptCheckNumber}
-                          onChange={(e) =>
-                            setReceiptCheckNumber(e.target.value)
-                          }
-                          className={`w-full p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} text-center font-bold text-sm text-slate-800 outline-none transition-shadow`}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                          <Calendar className={`w-4 h-4 ${themeIcon}`} /> تاریخ
-                          سررسید *
-                        </label>
-                        <div className="relative">
-                          <DatePicker
-                            value={receiptCheckDueDate}
-                            onChange={setReceiptCheckDueDate}
-                            calendar={persian}
-                            locale={persian_fa}
-                            calendarPosition="bottom-right"
-                            inputClass={`w-full px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 ${themeRing} outline-none font-sans font-black text-slate-900 text-center transition-all cursor-pointer shadow-sm text-sm`}
-                            containerClassName="w-full"
-                          />
-                        </div>
-                      </div>
-                      <div>
-                        <label className="block text-sm font-bold text-slate-700 mb-1">
-                          نام بانک صادرکننده چک *
-                        </label>
-                        <input
-                          type="text"
-                          required
-                          value={receiptCheckBankName}
-                          onChange={(e) =>
-                            setReceiptCheckBankName(e.target.value)
-                          }
-                          placeholder="مثال: ملت، ملی ..."
-                          className={`w-full p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
-                        />
                       </div>
                     </>
                   ) : (
@@ -630,18 +701,17 @@ const isReceive = false;
                               setReceiptCheckNumber("");
                             }
                           }}
-                          className={`w-full p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
+                          className={`w-full min-h-[44px] p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
                           required
                         >
                           <option value="">-- انتخاب دسته چک --</option>
-                          {(checkbooks || []).map((cb) => {
-                            const bankAccount = accounts.find(
-                              (a) => a.id === cb.accountId,
+                          {(checkbooks || []).map((cb: any) => {
+                            const bankAccount = (accounts || []).find(
+                              (a: any) => a.id === cb.accountId,
                             );
                             return (
                               <option key={cb.id} value={cb.id}>
-                                {bankAccount?.bankName} ({cb.startNumber} تا{" "}
-                                {cb.endNumber})
+                                {bankAccount?.bankName} ({cb.startNumber} تا {cb.endNumber})
                               </option>
                             );
                           })}
@@ -649,7 +719,7 @@ const isReceive = false;
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1">
-                          شماره چک *
+                          شماره برگه چک *
                         </label>
                         {receiptCheckbookId ? (
                           <select
@@ -657,22 +727,17 @@ const isReceive = false;
                             onChange={(e) =>
                               setReceiptCheckNumber(e.target.value)
                             }
-                            className={`w-full p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-bold text-sm text-slate-800 outline-none transition-shadow`}
+                            className={`w-full min-h-[44px] p-2.5 border border-slate-200 bg-white rounded-xl focus:ring-2 ${themeRing} font-mono font-bold text-sm text-slate-800 outline-none transition-shadow`}
                             required
                           >
                             <option value="">
-                              -- انتخاب از برگ‌های سفید --
+                              -- انتخاب از برگه‌های سفید --
                             </option>
                             {(() => {
-                              const cb = checkbooks.find(
-                                (c) =>
-                                  String(c.id) === String(receiptCheckbookId),
-                              );
-                              if (!cb) return null;
                               const available = (issuedChecks || []).filter((ic: any) => String(ic.checkbookId) === String(receiptCheckbookId) && ic.status === 'blank');
                               return available.map((c: any) => (
                                 <option key={c.id} value={c.checkNumber}>
-                                  {c.checkNumber}
+                                  برگه شماره: {c.checkNumber}
                                 </option>
                               ));
                             })()}
@@ -682,14 +747,13 @@ const isReceive = false;
                             type="text"
                             placeholder="ابتدا دسته چک را انتخاب کنید"
                             disabled
-                            className={`w-full p-2.5 border border-slate-200 bg-slate-100 rounded-xl text-center font-bold text-sm text-slate-500 outline-none cursor-not-allowed`}
+                            className="w-full min-h-[44px] p-2.5 border border-slate-200 bg-slate-100 rounded-xl text-center font-bold text-sm text-slate-500 outline-none cursor-not-allowed"
                           />
                         )}
                       </div>
                       <div>
                         <label className="block text-sm font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                          <Calendar className={`w-4 h-4 ${themeIcon}`} /> تاریخ
-                          سررسید *
+                          <Calendar className={`w-4 h-4 ${themeIcon}`} /> تاریخ سررسید چک *
                         </label>
                         <div className="relative">
                           <DatePicker
@@ -698,15 +762,22 @@ const isReceive = false;
                             calendar={persian}
                             locale={persian_fa}
                             calendarPosition="bottom-right"
-                            inputClass={`w-full px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 ${themeRing} outline-none font-sans font-black text-slate-900 text-center transition-all cursor-pointer shadow-sm text-sm`}
+                            inputClass={`w-full min-h-[44px] px-4 py-2 bg-white hover:bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 ${themeRing} outline-none font-sans font-black text-slate-900 text-center transition-all cursor-pointer shadow-sm text-base`}
                             containerClassName="w-full"
                           />
                         </div>
                       </div>
+
+                      {nearbyChecks && nearbyChecks.length > 0 && (
+                        <div className="col-span-full bg-amber-50 border border-amber-200 rounded-xl p-3 text-xs text-amber-800 flex items-center gap-2 font-bold shadow-2xs">
+                          <span className="bg-amber-200 text-amber-900 px-2 py-0.5 rounded text-[10px]">یادآوری سررسید</span>
+                          <span>{toPersianDigits(nearbyChecks.length)} فقره چک صادره دیگر در بازه ۳۰ روزه این تاریخ سررسید دارند.</span>
+                        </div>
+                      )}
                     </>
                   )}
 
-                  <div className="md:col-span-2 lg:col-span-4">
+                  <div className="col-span-full">
                     <label className="block text-sm font-bold text-slate-700 mb-1">
                       توضیحات و بابت
                     </label>
@@ -717,162 +788,250 @@ const isReceive = false;
                       rows={2}
                       placeholder="شرح تراکنش و بابت تراکنش..."
                     />
+                    <div className="flex flex-wrap gap-1.5 mt-2">
+                      {["تسویه فاکتور خرید", "بیعانه سفارش", "پرداخت هزینه", "پیش‌پرداخت خرید", "پرداخت بدهی"].map((qNote) => (
+                        <button
+                          key={qNote}
+                          type="button"
+                          onClick={() => setReceiptNote((prev: string) => prev ? `${prev} - ${qNote}` : qNote)}
+                          className="px-2.5 py-1 bg-slate-50 hover:bg-slate-100 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 transition-colors shadow-2xs"
+                        >
+                          {qNote}
+                        </button>
+                      ))}
+                    </div>
                   </div>
-                  
-                  
 
-                  {receiptPersonId &&
-                    (() => {
-                      const personInvoices = (invoices || []).filter(
-                        (inv) =>
-                          !inv.isDraft &&
-                          inv.status !== "draft" && inv.status !== "voided" &&
-                          inv.type !== "proforma" &&
-                          inv.customerId?.toString() ===
-                            receiptPersonId.toString() &&
-                          inv.paymentStatus !== "paid" &&
-                          ((isReceive &&
-                            (inv.type === "sale" ||
-                              inv.type === "purchase_return")) ||
-                            (!isReceive &&
-                              (inv.type === "purchase" ||
-                                inv.type === "sale_return"))),
-                      );
-                      if (personInvoices.length === 0) return null;
-                      return (
-                        <div className="md:col-span-2 lg:col-span-4 bg-slate-50 p-4 rounded-2xl border border-slate-200 shadow-sm mt-2">
-                          <h3 className="font-extrabold text-sm text-slate-700 mb-3 flex items-center gap-2">
-                            <CheckSquare className="w-4 h-4 text-indigo-500" />{" "}
-                            تخصیص به فاکتورهای باز (اختیاری)
-                          </h3>
-                          <p className="text-xs text-slate-500 font-bold mb-3">
-                            در صورتیکه این تراکنش بابت یک یا چند فاکتور خاص
-                            میباشد، میتوانید آن را مستقیم اینجا تسویه فرمایید
-                          </p>
-                          <div className="overflow-x-auto">
-                            <table className="w-full text-sm text-right bg-white rounded-xl border border-slate-200 overflow-hidden">
-                              <thead>
-                                <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
-                                  <th className="p-3">شماره فاکتور</th>
-                                  <th className="p-3">تاریخ</th>
-                                  <th className="p-3">مبلغ کل فاکتور</th>
-                                  <th className="p-3">مانده وتسویه نشده</th>
-                                  <th className="p-3">
-                                    مبلغ تخصیصی در این رسید
-                                  </th>
+                  {personInvoices.length > 0 && (
+                    <div className="col-span-full bg-slate-50 p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-xs mt-2">
+                      <h3 className="font-black text-sm text-slate-800 mb-1.5 flex items-center gap-2">
+                        <CheckSquare className="w-4 h-4 text-rose-600" />
+                        تخصیص به فاکتورهای بدهی (اختیاری)
+                      </h3>
+                      <p className="text-xs text-slate-500 font-bold mb-3">
+                        میتوانید مبلغ پرداختی را مستقیماً به تسویه فاکتورهای خرید اختصاص دهید
+                      </p>
+
+                      {/* Desktop Table View */}
+                      <div className="hidden md:block overflow-x-auto">
+                        <table className="w-full text-sm text-right bg-white rounded-xl border border-slate-200 overflow-hidden">
+                          <thead>
+                            <tr className="bg-slate-100 text-slate-600 font-bold border-b border-slate-200">
+                              <th className="p-3">شماره فاکتور</th>
+                              <th className="p-3">تاریخ</th>
+                              <th className="p-3">مبلغ کل فاکتور</th>
+                              <th className="p-3">مانده وتسویه نشده</th>
+                              <th className="p-3">مبلغ تخصیصی در این رسید</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {personInvoices.map((inv: any) => {
+                              const total =
+                                (inv.totalAmount || 0) *
+                                (typeof getDefaultExchangeRate === "function"
+                                  ? getDefaultExchangeRate(inv.currency, storeSettings?.currency)
+                                  : 1);
+                              const paid = inv.paidAmount || 0;
+                              const remainder = Math.max(total - paid, 0);
+                              const currentAllocated = receiptLinkedInvoices[inv.id] || 0;
+                              return (
+                                <tr key={inv.id} className="border-b border-slate-50 last:border-0 hover:bg-slate-50">
+                                  <td className="p-3 font-mono text-xs font-bold text-slate-600">
+                                    {toPersianDigits(inv.invoiceNumber) || `#${toPersianDigits(inv.id)}`}
+                                  </td>
+                                  <td className="p-3 font-mono text-xs">
+                                    {formatDateDisplay(inv.date || inv.jalaliDate)}
+                                  </td>
+                                  <td className="p-3 font-mono text-xs font-bold text-slate-700">
+                                    {formatCurrency ? formatCurrency(total) : addCommas(total)}
+                                  </td>
+                                  <td className="p-3 font-mono text-xs font-bold text-rose-600">
+                                    {formatCurrency ? formatCurrency(remainder) : addCommas(remainder)}
+                                  </td>
+                                  <td className="p-3">
+                                    <div className="flex items-center gap-2 justify-end">
+                                      <button
+                                        type="button"
+                                        className="p-1.5 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-md transition-colors border border-rose-100"
+                                        title="تخصیص حداکثری"
+                                        onClick={() => {
+                                          setReceiptLinkedInvoices((prev: any) => ({
+                                            ...prev,
+                                            [inv.id]: remainder,
+                                          }));
+                                        }}
+                                      >
+                                        <CheckSquare className="w-3.5 h-3.5" />
+                                      </button>
+                                      <input
+                                        type="number"
+                                        className="p-1.5 px-2 border border-slate-200 rounded-md text-xs font-mono w-28 outline-none focus:border-rose-400 focus:ring-1 focus:ring-rose-400 bg-white transition-all shadow-sm"
+                                        placeholder="0"
+                                        value={currentAllocated || ""}
+                                        onChange={(e) => {
+                                          const val = Number(e.target.value);
+                                          if (val > remainder) {
+                                            customAlert("مبلغ تخصیصی نمیتواند بیشتر از مانده فاکتور باشد");
+                                            return;
+                                          }
+                                          setReceiptLinkedInvoices((prev: any) => ({
+                                            ...prev,
+                                            [inv.id]: val,
+                                          }));
+                                        }}
+                                        min={0}
+                                        max={remainder}
+                                      />
+                                    </div>
+                                  </td>
                                 </tr>
-                              </thead>
-                              <tbody>
-                                {personInvoices.map((inv) => {
-                                  const total =
-                                    (inv.totalAmount || 0) *
-                                    getDefaultExchangeRate(
-                                      inv.currency,
-                                      storeSettings.currency,
-                                    );
-                                  const paid = inv.paidAmount || 0;
-                                  const remainder = Math.max(total - paid, 0);
-                                  const currentAllocated =
-                                    receiptLinkedInvoices[inv.id] || 0;
-                                  return (
-                                    <tr
-                                      key={inv.id}
-                                      className="border-b border-slate-50 last:border-0 hover:bg-slate-50"
-                                    >
-                                      <td className="p-3 font-mono text-xs font-bold text-slate-600">
-                                        {toPersianDigits(inv.invoiceNumber) ||
-                                          `#${toPersianDigits(inv.id)}`}
-                                      </td>
-                                      <td className="p-3 font-mono text-xs">
-                                        {formatDateDisplay(
-                                          inv.date || inv.jalaliDate,
-                                        )}
-                                      </td>
-                                      <td className="p-3 font-mono text-xs font-bold text-slate-700">
-                                        {formatCurrency(total)}
-                                      </td>
-                                      <td className="p-3 font-mono text-xs font-bold text-rose-600">
-                                        {formatCurrency(remainder)}
-                                      </td>
-                                      <td className="p-3">
-                                        <div className="flex items-center gap-2 justify-end">
-                                          <button
-                                            type="button"
-                                            className="p-1.5 bg-indigo-50 text-indigo-600 hover:bg-indigo-100 rounded-md transition-colors border border-indigo-100"
-                                            title="تخصیص حداکثری (تکمیل وجه)"
-                                            onClick={() => {
-                                              setReceiptLinkedInvoices(
-                                                (prev) => ({
-                                                  ...prev,
-                                                  [inv.id]: remainder,
-                                                }),
-                                              );
-                                            }}
-                                          >
-                                            <CheckSquare className="w-3.5 h-3.5" />
-                                          </button>
-                                          <input
-                                            type="number"
-                                            className="p-1.5 px-2 border border-slate-200 rounded-md text-xs font-mono w-28 outline-none focus:border-indigo-400 focus:ring-1 focus:ring-indigo-400 bg-white transition-all shadow-sm"
-                                            placeholder="0"
-                                            value={currentAllocated || ""}
-                                            onChange={(e) => {
-                                              const val = Number(
-                                                e.target.value,
-                                              );
-                                              if (val > remainder) {
-                                                customAlert(
-                                                  "مبلغ تخصیصی نمیتواند بیشتر از مانده فاکتور باشد",
-                                                );
-                                                return;
-                                              }
-                                              setReceiptLinkedInvoices(
-                                                (prev) => ({
-                                                  ...prev,
-                                                  [inv.id]: val,
-                                                }),
-                                              );
-                                            }}
-                                            min={0}
-                                            max={remainder}
-                                          />
-                                        </div>
-                                      </td>
-                                    </tr>
-                                  );
-                                })}
-                              </tbody>
-                            </table>
-                          </div>
-                          <div className="mt-3 text-xs font-bold text-slate-600 flex justify-end gap-2 items-center">
-                            جمع مبالغ تخصیص یافته:
-                            <span className="font-mono text-sm text-indigo-700">
-                              {formatCurrency(
+                              );
+                            })}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Mobile Cards View */}
+                      <div className="md:hidden space-y-2.5">
+                        {personInvoices.map((inv: any) => {
+                          const total =
+                            (inv.totalAmount || 0) *
+                            (typeof getDefaultExchangeRate === "function"
+                              ? getDefaultExchangeRate(inv.currency, storeSettings?.currency)
+                              : 1);
+                          const paid = inv.paidAmount || 0;
+                          const remainder = Math.max(total - paid, 0);
+                          const currentAllocated = receiptLinkedInvoices[inv.id] || 0;
+                          return (
+                            <div key={inv.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-2xs space-y-2">
+                              <div className="flex items-center justify-between">
+                                <span className="font-mono text-xs font-extrabold text-slate-800">
+                                  فاکتور {toPersianDigits(inv.invoiceNumber) || `#${toPersianDigits(inv.id)}`}
+                                </span>
+                                <span className="text-[11px] font-mono text-slate-500">
+                                  {formatDateDisplay(inv.date || inv.jalaliDate)}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-2 gap-2 text-xs py-1.5 border-y border-slate-100">
+                                <div>
+                                  <span className="text-slate-400 block text-[10px] font-bold">مبلغ کل فاکتور:</span>
+                                  <span className="font-mono font-bold text-slate-700">
+                                    {formatCurrency ? formatCurrency(total) : addCommas(total)} {storeSettings?.currency || "تومان"}
+                                  </span>
+                                </div>
+                                <div className="text-left">
+                                  <span className="text-slate-400 block text-[10px] font-bold">مانده تسویه‌نشده:</span>
+                                  <span className="font-mono font-black text-rose-600">
+                                    {formatCurrency ? formatCurrency(remainder) : addCommas(remainder)} {storeSettings?.currency || "تومان"}
+                                  </span>
+                                </div>
+                              </div>
+                              <div className="flex items-center gap-2 pt-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setReceiptLinkedInvoices((prev: any) => ({ ...prev, [inv.id]: remainder }));
+                                  }}
+                                  className={`px-3 py-2 rounded-xl text-xs font-black transition-colors whitespace-nowrap min-h-[38px] ${
+                                    currentAllocated === remainder
+                                      ? "bg-rose-600 text-white shadow-xs"
+                                      : "bg-rose-50 text-rose-700 hover:bg-rose-100 border border-rose-200"
+                                  }`}
+                                >
+                                  تسویه کامل
+                                </button>
+                                <div className="flex-1 relative">
+                                  <input
+                                    type="number"
+                                    inputMode="numeric"
+                                    className="w-full py-2 px-3 border border-slate-200 rounded-xl text-xs font-mono font-bold text-slate-800 outline-none focus:border-rose-500 focus:ring-1 focus:ring-rose-500 bg-white min-h-[38px]"
+                                    placeholder="مبلغ تخصیصی..."
+                                    value={currentAllocated || ""}
+                                    onChange={(e) => {
+                                      const val = Number(e.target.value);
+                                      if (val > remainder) {
+                                        customAlert("مبلغ تخصیصی نمیتواند بیشتر از مانده فاکتور باشد");
+                                        return;
+                                      }
+                                      setReceiptLinkedInvoices((prev: any) => ({
+                                        ...prev,
+                                        [inv.id]: val,
+                                      }));
+                                    }}
+                                    min={0}
+                                    max={remainder}
+                                  />
+                                </div>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      <div className="mt-3 text-xs font-bold text-slate-600 flex justify-between sm:justify-end gap-2 items-center pt-2 border-t border-slate-200">
+                        <span>جمع مبالغ تخصیص یافته:</span>
+                        <span className="font-mono text-sm font-black text-rose-700">
+                          {formatCurrency
+                            ? formatCurrency(
                                 Object.values(receiptLinkedInvoices).reduce(
                                   (a: any, b: any) => Number(a) + Number(b),
                                   0,
                                 ),
+                              )
+                            : addCommas(
+                                Number(
+                                  Object.values(receiptLinkedInvoices).reduce(
+                                    (a: any, b: any) => Number(a) + Number(b),
+                                    0,
+                                  ),
+                                ),
                               )}{" "}
-                              {storeSettings.currency}
-                            </span>
-                          </div>
-                        </div>
-                      );
-                    })()}
+                          {storeSettings?.currency || "تومان"}
+                        </span>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
+                {/* Desktop & Standard Submit Button */}
                 <div className="flex flex-col md:flex-row justify-end gap-3 pt-4 border-t border-slate-200">
                   <button
                     type="submit"
                     disabled={submittingReceipt}
-                    className={`px-8 py-3 ${themeBg} text-white rounded-xl font-bold flex items-center justify-center w-full md:w-auto gap-2 transition-colors border-none cursor-pointer shadow-sm`}
+                    className={`px-8 py-3 ${themeBg} text-white rounded-xl font-bold flex items-center justify-center w-full md:w-auto gap-2 transition-colors border-none cursor-pointer shadow-sm min-h-[48px]`}
                   >
                     {submittingReceipt ? (
                       <RefreshCw className="w-5 h-5 animate-spin" />
                     ) : (
                       <Save className="w-5 h-5" />
                     )}
-                    ثبت و صدور رسید تراکنش
+                    ثبت و صدور رسید پرداخت
+                  </button>
+                </div>
+
+                {/* Mobile Floating Bottom Bar */}
+                <div className="md:hidden fixed bottom-16 left-0 right-0 p-3 bg-white/95 backdrop-blur-md border-t border-slate-200 z-50 shadow-[0_-4px_16px_rgba(0,0,0,0.08)] flex items-center justify-between gap-3">
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-[10px] font-bold text-slate-500">مبلغ پرداخت:</span>
+                    <span className="font-mono font-black text-sm text-slate-900 truncate">
+                      {receiptAmount && Number(String(receiptAmount).replace(/,/g, "")) > 0 ? (
+                        `${toPersianDigits(addCommas(receiptAmount))} ${storeSettings?.currency || "تومان"}`
+                      ) : (
+                        "۰ تومان"
+                      )}
+                    </span>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={submittingReceipt || !receiptAmount || !effectivePersonId}
+                    className={`px-5 py-2.5 ${themeBg} text-white rounded-xl font-black text-xs flex items-center justify-center gap-2 transition-all shadow-sm disabled:opacity-50 min-h-[44px] shrink-0`}
+                  >
+                    {submittingReceipt ? (
+                      <RefreshCw className="w-4 h-4 animate-spin" />
+                    ) : (
+                      <Save className="w-4 h-4" />
+                    )}
+                    ثبت و صدور رسید
                   </button>
                 </div>
               </form>
