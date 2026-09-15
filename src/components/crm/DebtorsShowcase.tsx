@@ -10,6 +10,7 @@ import { Person } from '../../types';
 import { globalDateFormatter } from '../../utils/dateFormatter';
 import { toPersianDigits } from '../../utils/format';
 import { HackerDebtorCard } from './HackerDebtorCard';
+import { CyberLaserCardWrapper } from './CyberLaserCardWrapper';
 import { playHackerCardSwitchSound, playHackerAlertSound, playHackerDataBeep } from '../../utils/audio';
 
 interface DebtorsShowcaseProps {
@@ -36,7 +37,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   // Settings state
   const [theme, setTheme] = useState<'hacker' | 'standard'>('hacker');
   const [duration, setDuration] = useState<number>(5); // seconds
-  const [displayType, setDisplayType] = useState<'fade' | 'slide' | 'zoom'>('fade');
+  const [displayType, setDisplayType] = useState<'laser' | 'fade' | 'slide' | 'zoom'>('laser');
   const [cardSize, setCardSize] = useState<'sm' | 'md' | 'lg' | 'xl'>('lg');
   const [simultaneousCount, setSimultaneousCount] = useState<number>(1);
   const [idleTimeout, setIdleTimeout] = useState<number>(60); // seconds, 0 = disabled
@@ -192,6 +193,8 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
 
   const getAnimationProps = () => {
     switch (displayType) {
+      case 'laser':
+        return {}; // Managed by CyberLaserCardWrapper
       case 'slide':
         return {
           initial: { opacity: 0, y: 50 },
@@ -419,8 +422,8 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
           >
-            {currentDebtors.map((person, idx) => (
-              isHacker ? (
+            {currentDebtors.map((person, idx) => {
+              const cardComponent = isHacker ? (
                 /* Hacker Terminal Cyberpunk Card */
                 <HackerDebtorCard
                   key={`${person.id}-${idx}`}
@@ -428,7 +431,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                   currency={storeSettings?.currency || 'تومان'}
                   formatNumber={formatNumber}
                   cardSize={cardSize}
-                  animationProps={getAnimationProps()}
+                  animationProps={displayType === 'laser' ? {} : getAnimationProps()}
                   soundEnabled={soundEnabled}
                 />
               ) : (
@@ -478,8 +481,22 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                     )}
                   </div>
                 </motion.div>
-              )
-            ))}
+              );
+
+              return displayType === 'laser' ? (
+                <CyberLaserCardWrapper
+                  key={`cyber-laser-${person.id}-${currentIndex}-${idx}`}
+                  cardKey={`${person.id}-${currentIndex}`}
+                  isHackerTheme={isHacker}
+                >
+                  {cardComponent}
+                </CyberLaserCardWrapper>
+              ) : (
+                <div key={`norm-wrap-${person.id}-${idx}`} className="w-full flex items-center justify-center">
+                  {cardComponent}
+                </div>
+              );
+            })}
           </motion.div>
         </AnimatePresence>
       </div>
@@ -621,19 +638,35 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-gray-300 mb-2">نوع انیمیشن تعویض کارت</label>
-                  <div className="grid grid-cols-3 gap-2">
-                    {['fade', 'slide', 'zoom'].map(type => (
+                  <label className="block text-sm font-bold text-gray-300 mb-2">نوع انیمیشن نمایش و تعویض کارت</label>
+                  <div className="grid grid-cols-2 gap-2.5">
+                    {[
+                      { type: 'laser', label: 'شاتر لیزری هکری (پیش‌فرض)', icon: '⚡', desc: 'ظهور خط نئونی و باز شدن به دو طرف' },
+                      { type: 'fade', label: 'محو شدن نرم', icon: '✨', desc: 'محو و ظاهر شدن تدریجی' },
+                      { type: 'slide', label: 'اسلاید عمودی', icon: '↕️', desc: 'حرکت لغزشی از پایین به بالا' },
+                      { type: 'zoom', label: 'بزرگ‌نمایی هولوگرام', icon: '🔍', desc: 'زوم سه‌بعدی از عمق' },
+                    ].map(item => (
                       <button
-                        key={type}
-                        onClick={() => setDisplayType(type as any)}
-                        className={`py-3 rounded-xl font-bold text-sm transition-all border ${
-                          displayType === type 
-                            ? 'bg-[#00ff41]/20 text-[#00ff41] border-[#00ff41]' 
+                        key={item.type}
+                        onClick={() => setDisplayType(item.type as any)}
+                        className={`p-3 rounded-xl text-right transition-all border flex flex-col gap-1 ${
+                          displayType === item.type 
+                            ? 'bg-[#00ff41]/20 text-[#00ff41] border-[#00ff41] shadow-[0_0_12px_rgba(0,255,65,0.2)]' 
                             : 'bg-slate-800 text-gray-400 border-slate-700 hover:bg-slate-750'
                         }`}
                       >
-                        {type === 'fade' ? 'محو شدن' : type === 'slide' ? 'اسلاید لغزشی' : 'بزرگ‌نمایی'}
+                        <div className="font-black text-xs flex items-center justify-between">
+                          <span className="flex items-center gap-1.5">
+                            <span>{item.icon}</span>
+                            <span>{item.label}</span>
+                          </span>
+                          {item.type === 'laser' && (
+                            <span className="text-[9px] bg-[#00ff41] text-black px-1.5 py-0.5 rounded font-black">
+                              هکری
+                            </span>
+                          )}
+                        </div>
+                        <span className="text-[10px] text-gray-400 font-normal">{item.desc}</span>
                       </button>
                     ))}
                   </div>
