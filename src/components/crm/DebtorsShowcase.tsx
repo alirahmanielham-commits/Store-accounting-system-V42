@@ -4,14 +4,14 @@ import {
   Settings, Users, MonitorPlay, Maximize2, X, Phone, 
   UserCircle, CalendarClock, TrendingDown, Terminal, 
   Sparkles, RefreshCw, Radio, Play, Pause, ChevronLeft, ChevronRight,
-  Volume2, VolumeX, ShieldAlert, Zap, ListOrdered
+  Volume2, VolumeX, ShieldAlert, Zap, ListOrdered, Clock, CheckCircle2
 } from 'lucide-react';
 import { Person } from '../../types';
 import { globalDateFormatter } from '../../utils/dateFormatter';
 import { toPersianDigits } from '../../utils/format';
 import { HackerDebtorCard } from './HackerDebtorCard';
 import { CyberLaserCardWrapper } from './CyberLaserCardWrapper';
-import { CyberDebtorQueue } from './CyberDebtorQueue';
+import { CyberDebtorRightQueue, CyberDebtorLeftQueue } from './CyberDebtorQueue';
 import { playHackerCardSwitchSound, playHackerAlertSound, playHackerDataBeep } from '../../utils/audio';
 
 interface DebtorsShowcaseProps {
@@ -44,6 +44,8 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   const [idleTimeout, setIdleTimeout] = useState<number>(60); // seconds, 0 = disabled
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [showQueuePanel, setShowQueuePanel] = useState<boolean>(true);
+  const [isRightCollapsed, setIsRightCollapsed] = useState<boolean>(false);
+  const [isLeftCollapsed, setIsLeftCollapsed] = useState<boolean>(false);
   const [roundNumber, setRoundNumber] = useState<number>(1);
   const [currentIndex, setCurrentIndex] = useState(0);
 
@@ -368,10 +370,10 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                   ? 'bg-black/60 text-gray-500 border border-gray-800 hover:text-white'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
             }`}
-            title={showQueuePanel ? "مخفی‌سازی پنل رادار صف افراد" : "نمایش پنل رادار صف افراد"}
+            title={showQueuePanel ? "مخفی‌سازی رادارهای دوطرفه صف" : "نمایش رادارهای دوطرفه صف"}
           >
             <ListOrdered className="w-4 h-4" />
-            <span className="hidden sm:inline">{showQueuePanel ? 'صف افراد: باز' : 'صف افراد'}</span>
+            <span className="hidden sm:inline">{showQueuePanel ? 'رادار دوطرفه: فعال' : 'رادار دوطرفه: مخفی'}</span>
           </button>
 
           {/* Theme Switcher Button */}
@@ -468,112 +470,150 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
         </div>
       </div>
 
-      {/* Main Display Area with Side Queue Panel */}
-      <div className="flex-1 flex flex-col lg:flex-row gap-5 items-stretch overflow-hidden py-2 px-1 min-h-0">
-        {/* Main Display Stage for Current Active Card */}
-        <div className="flex-1 flex items-center justify-center overflow-hidden min-w-0">
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={currentIndex}
-              className={`grid gap-6 w-full ${getGridClasses()}`}
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              exit={{ opacity: 0 }}
-            >
-              {currentDebtors.map((person, idx) => {
-                const cardComponent = isHacker ? (
-                  /* Hacker Terminal Cyberpunk Card */
-                  <HackerDebtorCard
-                    key={`${person.id}-${idx}`}
-                    person={person as any}
-                    currency={storeSettings?.currency || 'تومان'}
-                    formatNumber={formatNumber}
-                    cardSize={cardSize}
-                    animationProps={displayType === 'laser' ? {} : getAnimationProps()}
-                    soundEnabled={soundEnabled}
-                  />
-                ) : (
-                  /* Classic Light Card */
-                  <motion.div
-                    key={`${person.id}-${idx}`}
-                    {...getAnimationProps()}
-                    className={`mx-auto w-full bg-gradient-to-br from-white to-rose-50/50 backdrop-blur-lg rounded-[2.2rem] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-rose-100 flex flex-col relative overflow-hidden ${getCardSizeClasses()}`}
-                  >
-                    <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-r from-rose-400 via-red-500 to-rose-600"></div>
-                    <div className="absolute -top-24 -right-24 w-48 h-48 bg-rose-200 rounded-full blur-3xl opacity-40"></div>
-                    <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-red-200 rounded-full blur-3xl opacity-40"></div>
-                    
-                    <div className="relative z-10 flex flex-col items-center text-center">
-                      <div className="w-28 h-28 bg-gradient-to-br from-rose-100 to-white rounded-full flex items-center justify-center mb-6 shadow-[0_8px_16px_rgba(225,29,72,0.1)] border border-white">
-                         <UserCircle className="w-14 h-14 text-rose-500" strokeWidth={1.5} />
-                      </div>
-                      
-                      <h3 className="font-black text-slate-800 mb-2 truncate w-full tracking-tight text-3xl md:text-4xl">
-                        {person.name}
-                      </h3>
-                      
-                      {person.phone && (
-                        <div className="flex items-center gap-2 text-slate-600 mt-2 font-black bg-white/90 backdrop-blur-md px-5 py-2 rounded-2xl shadow-sm border border-slate-100 text-sm">
-                          <Phone className="w-4 h-4 text-slate-400" />
-                          <span dir="ltr">{toPersianDigits(person.phone)}</span>
-                        </div>
-                      )}
-                      
-                      <div className="mt-7 w-full bg-white/75 backdrop-blur-md rounded-3xl p-6 border border-white shadow-sm flex flex-col items-center justify-center">
-                        <div className="text-sm font-bold text-slate-500 mb-2 flex items-center justify-center gap-2">
-                          <TrendingDown className="w-5 h-5 text-rose-500" />
-                          مانده بدهی معوقه
-                        </div>
-                        <div className="font-black text-rose-600 tracking-tight truncate drop-shadow-sm text-3xl md:text-5xl">
-                          {toPersianDigits(formatNumber(person.debtAmount))}
-                        </div>
-                        <div className="text-base font-black text-rose-400 mt-2">{storeSettings?.currency || 'تومان'}</div>
-                      </div>
-
-                      {(person as any).lastActivityDate && (
-                        <div className="mt-5 flex items-center justify-center gap-2 text-xs font-bold text-slate-500 bg-white/60 px-4 py-2 rounded-xl border border-slate-100/60">
-                          <CalendarClock className="w-4 h-4 text-slate-400" />
-                          <span>آخرین فعالیت مالی:</span>
-                          <span className="text-slate-800 font-black">{toPersianDigits(globalDateFormatter.formatDateOnly((person as any).lastActivityDate))}</span>
-                        </div>
-                      )}
-                    </div>
-                  </motion.div>
-                );
-
-                return displayType === 'laser' ? (
-                  <CyberLaserCardWrapper
-                    key={`cyber-laser-${person.id}-${currentIndex}-${idx}`}
-                    cardKey={`${person.id}-${currentIndex}`}
-                    isHackerTheme={isHacker}
-                  >
-                    {cardComponent}
-                  </CyberLaserCardWrapper>
-                ) : (
-                  <div key={`norm-wrap-${person.id}-${idx}`} className="w-full flex items-center justify-center">
-                    {cardComponent}
-                  </div>
-                );
-              })}
-            </motion.div>
-          </AnimatePresence>
-        </div>
-
-        {/* Side Random Queue Panel: Decreases from right, increases on left, loops on finish */}
+      {/* Main Display Area with Dual Side Queue Panels (Right -> Center -> Left) */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-3 xl:gap-5 items-stretch overflow-hidden py-1 px-1 min-h-0">
+        {/* 1. RIGHT SIDE: UPCOMING QUEUE (صف سمت راست: صف انتظار / کسر از راست) */}
         {showQueuePanel && debtors.length > 0 && (
-          <div className="w-full lg:w-[420px] xl:w-[450px] shrink-0 flex flex-col justify-start max-h-full overflow-y-auto styled-scrollbar">
-            <CyberDebtorQueue
+          <div className={`${isRightCollapsed ? 'w-12 lg:w-14' : 'w-full lg:w-72 xl:w-80 2xl:w-88'} shrink-0 flex flex-col justify-start max-h-[75vh] transition-all duration-300`}>
+            <CyberDebtorRightQueue
               debtors={debtors}
               currentIndex={currentIndex}
               currency={storeSettings?.currency || 'تومان'}
               formatNumber={formatNumber}
               isHacker={isHacker}
-              onSelectIndex={(newIdx) => {
-                setCurrentIndex(newIdx);
-              }}
+              onSelectIndex={(newIdx) => setCurrentIndex(newIdx)}
               roundNumber={roundNumber}
-              isCollapsed={false}
-              onToggleCollapse={() => setShowQueuePanel(false)}
+              isCollapsed={isRightCollapsed}
+              onToggleCollapse={() => setIsRightCollapsed(!isRightCollapsed)}
+            />
+          </div>
+        )}
+
+        {/* 2. CENTER: MAIN DISPLAY STAGE (کارت هدف فعال) */}
+        <div className="flex-1 flex flex-col items-center justify-center overflow-hidden min-w-0 px-1">
+          {/* Visual flow indicator connecting right and left queues */}
+          {showQueuePanel && (
+            <div className="hidden lg:flex items-center justify-center gap-2 py-1 px-3 mb-2 select-none text-[11px] font-bold">
+              <div className="flex items-center gap-1 text-amber-400">
+                <Clock className="w-3.5 h-3.5 animate-pulse" />
+                <span>صف انتظار راست ({toPersianDigits(Math.max(0, debtors.length - 1 - currentIndex))})</span>
+              </div>
+              <span className="text-gray-500 font-mono">◄───</span>
+              <div className={`px-2.5 py-0.5 rounded-lg border text-xs font-black flex items-center gap-1.5 ${
+                isHacker ? 'bg-black border-[#00ff41]/50 text-[#00ff41]' : 'bg-white border-slate-200 text-slate-700 shadow-xs'
+              }`}>
+                <span>🎯 کارت هدف فعال</span>
+              </div>
+              <span className="text-gray-500 font-mono">───►</span>
+              <div className="flex items-center gap-1 text-[#00ff41]">
+                <span>صف اسکن‌شده چپ ({toPersianDigits(currentIndex)})</span>
+                <CheckCircle2 className="w-3.5 h-3.5" />
+              </div>
+            </div>
+          )}
+
+          <div className="w-full flex items-center justify-center flex-1 overflow-hidden">
+            <AnimatePresence mode="wait">
+              <motion.div
+                key={currentIndex}
+                className={`grid gap-6 w-full ${getGridClasses()}`}
+                initial={{ opacity: 0 }}
+                animate={{ opacity: 1 }}
+                exit={{ opacity: 0 }}
+              >
+                {currentDebtors.map((person, idx) => {
+                  const cardComponent = isHacker ? (
+                    /* Hacker Terminal Cyberpunk Card */
+                    <HackerDebtorCard
+                      key={`${person.id}-${idx}`}
+                      person={person as any}
+                      currency={storeSettings?.currency || 'تومان'}
+                      formatNumber={formatNumber}
+                      cardSize={cardSize}
+                      animationProps={displayType === 'laser' ? {} : getAnimationProps()}
+                      soundEnabled={soundEnabled}
+                    />
+                  ) : (
+                    /* Classic Light Card */
+                    <motion.div
+                      key={`${person.id}-${idx}`}
+                      {...getAnimationProps()}
+                      className={`mx-auto w-full bg-gradient-to-br from-white to-rose-50/50 backdrop-blur-lg rounded-[2.2rem] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-rose-100 flex flex-col relative overflow-hidden ${getCardSizeClasses()}`}
+                    >
+                      <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-r from-rose-400 via-red-500 to-rose-600"></div>
+                      <div className="absolute -top-24 -right-24 w-48 h-48 bg-rose-200 rounded-full blur-3xl opacity-40"></div>
+                      <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-red-200 rounded-full blur-3xl opacity-40"></div>
+                      
+                      <div className="relative z-10 flex flex-col items-center text-center">
+                        <div className="w-28 h-28 bg-gradient-to-br from-rose-100 to-white rounded-full flex items-center justify-center mb-6 shadow-[0_8px_16px_rgba(225,29,72,0.1)] border border-white">
+                           <UserCircle className="w-14 h-14 text-rose-500" strokeWidth={1.5} />
+                        </div>
+                        
+                        <h3 className="font-black text-slate-800 mb-2 truncate w-full tracking-tight text-3xl md:text-4xl">
+                          {person.name}
+                        </h3>
+                        
+                        {person.phone && (
+                          <div className="flex items-center gap-2 text-slate-600 mt-2 font-black bg-white/90 backdrop-blur-md px-5 py-2 rounded-2xl shadow-sm border border-slate-100 text-sm">
+                            <Phone className="w-4 h-4 text-slate-400" />
+                            <span dir="ltr">{toPersianDigits(person.phone)}</span>
+                          </div>
+                        )}
+                        
+                        <div className="mt-7 w-full bg-white/75 backdrop-blur-md rounded-3xl p-6 border border-white shadow-sm flex flex-col items-center justify-center">
+                          <div className="text-sm font-bold text-slate-500 mb-2 flex items-center justify-center gap-2">
+                            <TrendingDown className="w-5 h-5 text-rose-500" />
+                            مانده بدهی معوقه
+                          </div>
+                          <div className="font-black text-rose-600 tracking-tight truncate drop-shadow-sm text-3xl md:text-5xl">
+                            {toPersianDigits(formatNumber(person.debtAmount))}
+                          </div>
+                          <div className="text-base font-black text-rose-400 mt-2">{storeSettings?.currency || 'تومان'}</div>
+                        </div>
+
+                        {(person as any).lastActivityDate && (
+                          <div className="mt-5 flex items-center justify-center gap-2 text-xs font-bold text-slate-500 bg-white/60 px-4 py-2 rounded-xl border border-slate-100/60">
+                            <CalendarClock className="w-4 h-4 text-slate-400" />
+                            <span>آخرین فعالیت مالی:</span>
+                            <span className="text-slate-800 font-black">{toPersianDigits(globalDateFormatter.formatDateOnly((person as any).lastActivityDate))}</span>
+                          </div>
+                        )}
+                      </div>
+                    </motion.div>
+                  );
+
+                  return displayType === 'laser' ? (
+                    <CyberLaserCardWrapper
+                      key={`cyber-laser-${person.id}-${currentIndex}-${idx}`}
+                      cardKey={`${person.id}-${currentIndex}`}
+                      isHackerTheme={isHacker}
+                    >
+                      {cardComponent}
+                    </CyberLaserCardWrapper>
+                  ) : (
+                    <div key={`norm-wrap-${person.id}-${idx}`} className="w-full flex items-center justify-center">
+                      {cardComponent}
+                    </div>
+                  );
+                })}
+              </motion.div>
+            </AnimatePresence>
+          </div>
+        </div>
+
+        {/* 3. LEFT SIDE: PROCESSED QUEUE (صف سمت چپ: اسکن‌شده‌ها / اضافه به چپ) */}
+        {showQueuePanel && debtors.length > 0 && (
+          <div className={`${isLeftCollapsed ? 'w-12 lg:w-14' : 'w-full lg:w-72 xl:w-80 2xl:w-88'} shrink-0 flex flex-col justify-start max-h-[75vh] transition-all duration-300`}>
+            <CyberDebtorLeftQueue
+              debtors={debtors}
+              currentIndex={currentIndex}
+              currency={storeSettings?.currency || 'تومان'}
+              formatNumber={formatNumber}
+              isHacker={isHacker}
+              onSelectIndex={(newIdx) => setCurrentIndex(newIdx)}
+              roundNumber={roundNumber}
+              isCollapsed={isLeftCollapsed}
+              onToggleCollapse={() => setIsLeftCollapsed(!isLeftCollapsed)}
             />
           </div>
         )}
@@ -660,10 +700,10 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                   <div>
                     <div className="text-sm font-black text-white flex items-center gap-2">
                       <ListOrdered className="w-4 h-4 text-[#00ff41]" />
-                      نمایش رادار و صف تصادفی افراد
+                      نمایش رادارهای دوطرفه صف بدهکاران
                     </div>
                     <div className="text-xs text-gray-400 mt-1">
-                      کسر شدن افراد از سمت راست، افزایش به سمت چپ، و شروع مجدد پس از پایان لیست
+                      صف انتظار در سمت راست (کسر شونده) و صف اسکن‌شده‌ها در سمت چپ (اضافه شونده)
                     </div>
                   </div>
                   <button
