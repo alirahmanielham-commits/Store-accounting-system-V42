@@ -1,7 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { AlertCircle, X, User, Terminal, ShieldAlert, Skull, Cpu, Crosshair, ArrowLeft } from "lucide-react";
-import { addCommas } from "../utils/format";
+import { AlertCircle, X, User, Terminal, ShieldAlert, Skull, Cpu, Crosshair, ArrowLeft, Volume2 } from "lucide-react";
+import { addCommas, toPersianDigits } from "../utils/format";
+import { playHackerAlertSound, playHackerDataBeep } from "../utils/audio";
 
 interface DebtorsNotificationProps {
   settings: any;
@@ -101,6 +102,10 @@ export default function DebtorsNotification({
         setVisible(true);
         setDismissedIds(new Set()); // Reset dismissed on new show
         localStorage.setItem("lastDebtorNotificationTime", now.toString());
+        // Play futuristic digital warning alert sound
+        try {
+          playHackerAlertSound(0.18);
+        } catch (e) {}
       }
     };
 
@@ -191,7 +196,7 @@ export default function DebtorsNotification({
                     animate={{ opacity: 1, scale: 1, x: 0, y: 0 }}
                     exit={{ opacity: 0, scale: 0.85, filter: 'blur(8px)' }}
                     transition={{ type: "spring", stiffness: 450, damping: 26 }}
-                    className="relative overflow-hidden rounded-2xl p-4 min-w-[320px] max-w-[420px] cursor-pointer pointer-events-auto shadow-[0_0_30px_rgba(0,255,65,0.25)] border border-[#00ff41]/50 bg-[#080d09]/95 backdrop-blur-xl group hover:border-[#00ff41] transition-all"
+                    className="relative overflow-hidden rounded-2xl p-4 min-w-[320px] max-w-[420px] cursor-pointer pointer-events-auto shadow-[0_0_30px_rgba(0,255,65,0.25)] border border-[#00ff41]/50 bg-[#080d09]/95 backdrop-blur-xl group hover:border-[#00ff41] transition-all font-['IRANYekanXFaNum','Vazirmatn',sans-serif]"
                     dir="rtl"
                     onClick={() => handleClickItem(debtor.id)}
                   >
@@ -205,13 +210,13 @@ export default function DebtorsNotification({
                     <div className="absolute bottom-1.5 left-1.5 w-2 h-2 border-b-2 border-l-2 border-[#00ff41]" />
 
                     {/* Hacker Header Bar */}
-                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#00ff41]/20 text-[11px] font-mono text-[#00ff41]/80">
-                      <div className="flex items-center gap-1.5">
-                        <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-pulse" />
-                        <span className="font-bold tracking-wider text-red-400">DEBTOR_INTERCEPT // مطالبات</span>
+                    <div className="flex items-center justify-between pb-2 mb-2 border-b border-[#00ff41]/20 text-[11px] text-[#00ff41]/90">
+                      <div className="flex items-center gap-1.5 font-bold">
+                        <span className="inline-block w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                        <span className="tracking-wider text-red-400">هشدار بدهی معوقه // RECOVERY</span>
                       </div>
-                      <div className="flex items-center gap-2 font-mono">
-                        <span className="text-[#00ff41]/60 text-[10px]">ID: #{String(debtor.id).padStart(4, '0')}</span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[#00ff41]/70 text-[11px] font-mono">#{toPersianDigits(String(debtor.id).padStart(4, '0'))}</span>
                         <button
                           onClick={(e) => handleCloseItem(e, debtor.id)}
                           className="p-1 hover:bg-[#00ff41]/20 text-[#00ff41] hover:text-white rounded transition-colors"
@@ -233,34 +238,34 @@ export default function DebtorsNotification({
                       
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <h3 className="font-black text-white text-base leading-tight truncate group-hover:text-[#00ff41] transition-colors">
+                          <h3 className="font-black text-white text-base leading-tight truncate group-hover:text-[#00ff41] transition-colors drop-shadow-sm">
                             {debtor.name}
                           </h3>
                         </div>
                         {debtor.phone && (
-                          <div className="text-[11px] font-mono text-emerald-400/80 tracking-wider mt-0.5" dir="ltr">
-                            TEL: {debtor.phone}
+                          <div className="text-xs font-bold text-emerald-400/90 tracking-wider mt-0.5" dir="ltr">
+                            {toPersianDigits(debtor.phone)}
                           </div>
                         )}
 
-                        <div className="mt-2.5 bg-black/70 rounded-xl p-2.5 border border-[#00ff41]/20 flex items-center justify-between">
-                          <span className="text-[11px] font-mono text-gray-400">مانده بدهی:</span>
+                        <div className="mt-2.5 bg-black/75 rounded-xl p-2.5 border border-[#00ff41]/20 flex items-center justify-between">
+                          <span className="text-xs font-bold text-gray-300">مانده بدهی:</span>
                           <div className="text-left" dir="ltr">
-                            <span className="font-black text-lg text-[#ff3333] font-mono tracking-wider hacker-glow-red">
-                              {addCommas(debtor.debtAmount)}
+                            <span className="font-black text-lg text-[#ff3333] tracking-wider hacker-glow-red">
+                              {toPersianDigits(addCommas(debtor.debtAmount))}
                             </span>
-                            <span className="text-[10px] text-gray-400 mr-1.5 font-sans">
+                            <span className="text-xs font-bold text-gray-400 mr-1.5 font-['IRANYekanXFaNum','Vazirmatn',sans-serif]">
                               {settings?.currency || "تومان"}
                             </span>
                           </div>
                         </div>
 
-                        <div className="mt-2 flex items-center justify-between text-[10px] text-[#00ff41]/70 font-mono">
-                          <span className="flex items-center gap-1">
-                            <Crosshair className="w-3 h-3 text-[#00ff41]" /> کلیک جهت ورود به پرونده
+                        <div className="mt-2 flex items-center justify-between text-xs text-[#00ff41]/80 font-bold">
+                          <span className="flex items-center gap-1 text-[11px]">
+                            <Crosshair className="w-3.5 h-3.5 text-[#00ff41]" /> کلیک جهت مشاهده پرونده
                           </span>
-                          <span className="text-red-400 font-bold bg-red-950/60 px-1.5 py-0.5 rounded border border-red-800/50">
-                            وضعیت: بدهکار
+                          <span className="text-red-400 font-black bg-red-950/70 px-2 py-0.5 rounded text-[10px] border border-red-800/60">
+                            بدهکار قطعی
                           </span>
                         </div>
                       </div>

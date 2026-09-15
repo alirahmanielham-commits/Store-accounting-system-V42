@@ -1,13 +1,16 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Settings, Users, MonitorPlay, Maximize2, X, Phone, 
   UserCircle, CalendarClock, TrendingDown, Terminal, 
-  Sparkles, RefreshCw, Radio, Play, Pause, ChevronLeft, ChevronRight
+  Sparkles, RefreshCw, Radio, Play, Pause, ChevronLeft, ChevronRight,
+  Volume2, VolumeX, ShieldAlert, Zap
 } from 'lucide-react';
 import { Person } from '../../types';
 import { globalDateFormatter } from '../../utils/dateFormatter';
+import { toPersianDigits } from '../../utils/format';
 import { HackerDebtorCard } from './HackerDebtorCard';
+import { playHackerCardSwitchSound, playHackerAlertSound, playHackerDataBeep } from '../../utils/audio';
 
 interface DebtorsShowcaseProps {
   persons: Person[];
@@ -37,7 +40,11 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   const [cardSize, setCardSize] = useState<'sm' | 'md' | 'lg' | 'xl'>('lg');
   const [simultaneousCount, setSimultaneousCount] = useState<number>(1);
   const [idleTimeout, setIdleTimeout] = useState<number>(60); // seconds, 0 = disabled
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
   const [currentIndex, setCurrentIndex] = useState(0);
+
+  const prevIndexRef = useRef<number>(0);
+  const isFirstRenderRef = useRef<boolean>(true);
 
   // Load settings
   useEffect(() => {
@@ -51,15 +58,30 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
         if (parsed.cardSize) setCardSize(parsed.cardSize);
         if (parsed.simultaneousCount) setSimultaneousCount(parsed.simultaneousCount);
         if (parsed.idleTimeout !== undefined) setIdleTimeout(parsed.idleTimeout);
+        if (parsed.soundEnabled !== undefined) setSoundEnabled(parsed.soundEnabled);
       }
     } catch (e) {}
   }, []);
 
   const saveSettings = () => {
-    const settings = { theme, duration, displayType, cardSize, simultaneousCount, idleTimeout };
+    const settings = { theme, duration, displayType, cardSize, simultaneousCount, idleTimeout, soundEnabled };
     localStorage.setItem('debtors_showcase_settings', JSON.stringify(settings));
     window.dispatchEvent(new CustomEvent('debtors_settings_updated', { detail: settings }));
     setIsSettingsOpen(false);
+  };
+
+  const toggleSound = () => {
+    const nextState = !soundEnabled;
+    setSoundEnabled(nextState);
+    try {
+      const saved = localStorage.getItem('debtors_showcase_settings');
+      const parsed = saved ? JSON.parse(saved) : {};
+      parsed.soundEnabled = nextState;
+      localStorage.setItem('debtors_showcase_settings', JSON.stringify(parsed));
+    } catch (e) {}
+    if (nextState) {
+      playHackerAlertSound(0.18);
+    }
   };
 
   // Calculate balances
@@ -89,6 +111,30 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
       .sort(() => Math.random() - 0.5); // Randomize order
   }, [persons, accountingDocuments]);
 
+  // Initial sound on load
+  useEffect(() => {
+    if (debtors.length > 0 && isFirstRenderRef.current) {
+      isFirstRenderRef.current = false;
+      if (soundEnabled) {
+        // Subtle alert sound for debtor entry
+        const t = setTimeout(() => {
+          playHackerAlertSound(0.15);
+        }, 500);
+        return () => clearTimeout(t);
+      }
+    }
+  }, [debtors, soundEnabled]);
+
+  // Trigger card switch sound on index change
+  useEffect(() => {
+    if (prevIndexRef.current !== currentIndex) {
+      prevIndexRef.current = currentIndex;
+      if (soundEnabled) {
+        playHackerCardSwitchSound(0.13);
+      }
+    }
+  }, [currentIndex, soundEnabled]);
+
   // Main slideshow loop
   useEffect(() => {
     if (debtors.length === 0 || isPaused) return;
@@ -104,6 +150,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   }, [debtors, duration, simultaneousCount, isPaused]);
 
   const handleNext = () => {
+    if (soundEnabled) playHackerCardSwitchSound(0.15);
     setCurrentIndex((prev) => {
       const next = prev + simultaneousCount;
       return next >= debtors.length ? 0 : next;
@@ -111,6 +158,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   };
 
   const handlePrev = () => {
+    if (soundEnabled) playHackerCardSwitchSound(0.15);
     setCurrentIndex((prev) => {
       const next = prev - simultaneousCount;
       return next < 0 ? Math.max(0, debtors.length - simultaneousCount) : next;
@@ -118,8 +166,13 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   };
 
   const handleShuffle = () => {
+    if (soundEnabled) playHackerAlertSound(0.16);
     if (debtors.length > 1) {
-      setCurrentIndex(Math.floor(Math.random() * debtors.length));
+      let newIdx = Math.floor(Math.random() * debtors.length);
+      if (newIdx === currentIndex) {
+        newIdx = (newIdx + 1) % debtors.length;
+      }
+      setCurrentIndex(newIdx);
     }
   };
 
@@ -188,10 +241,10 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
 
   if (debtors.length === 0) {
     return (
-      <div className="flex flex-col items-center justify-center h-[70vh] text-center" dir="rtl">
+      <div className="flex flex-col items-center justify-center h-[70vh] text-center font-['IRANYekanXFaNum','Vazirmatn',sans-serif]" dir="rtl">
         <MonitorPlay className="w-24 h-24 text-gray-300 mb-4" />
         <h2 className="text-2xl font-black text-slate-800">هیچ شخص بدهکاری یافت نشد</h2>
-        <p className="text-gray-500 mt-2">لیست بدهکاران در حال حاضر خالی است.</p>
+        <p className="text-gray-500 mt-2 font-bold">لیست مطالبات و اشخاص بدهکار در حال حاضر خالی است.</p>
       </div>
     );
   }
@@ -200,7 +253,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
 
   return (
     <div 
-      className={`relative flex flex-col font-sans transition-colors duration-500 select-none ${
+      className={`relative flex flex-col font-['IRANYekanXFaNum','Vazirmatn',sans-serif] transition-colors duration-500 select-none ${
         isFullscreen || isScreensaverMode 
           ? `fixed inset-0 z-50 h-screen w-screen p-6 md:p-8 ${isHacker ? 'bg-[#020502]' : 'bg-slate-900'}` 
           : `min-h-[85vh] p-4 md:p-6 rounded-3xl ${isHacker ? 'bg-[#030704] text-[#00ff41]' : 'bg-slate-50 text-slate-800'}`
@@ -218,7 +271,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
         <div className="flex items-center gap-3">
           <div className={`p-2.5 rounded-2xl ${
             isHacker 
-              ? 'bg-black/80 border border-[#00ff41]/40 shadow-[0_0_15px_rgba(0,255,65,0.3)]' 
+              ? 'bg-black/85 border border-[#00ff41]/40 shadow-[0_0_15px_rgba(0,255,65,0.3)]' 
               : 'bg-white shadow-sm border border-slate-200'
           }`}>
             {isHacker ? <Terminal className="w-7 h-7 text-[#00ff41] animate-pulse" /> : <MonitorPlay className="w-7 h-7 text-indigo-600" />}
@@ -228,22 +281,40 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
               <h1 className="text-2xl font-black tracking-tight">
                 {isHacker ? 'کنسول ره‌گیری بدهکاران' : 'نمایشگر بدهکاران'}
               </h1>
-              <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full font-mono ${
+              <span className={`text-xs font-bold px-2.5 py-0.5 rounded-full ${
                 isHacker 
                   ? 'bg-[#00ff41]/20 text-[#00ff41] border border-[#00ff41]/40' 
                   : 'bg-rose-100 text-rose-700'
               }`}>
-                {isHacker ? 'CYBER_HACKER_MODE' : 'ویترین خودکار'}
+                {isHacker ? 'تم هکری سایبر' : 'ویترین خودکار'}
               </span>
             </div>
-            <p className="text-xs opacity-75 mt-0.5">
-              نمایش تصادفی اشخاص بدهکار • کل بدهکاران: {debtors.length} نفر (قلم {currentIndex + 1} از {debtors.length})
+            <p className="text-xs opacity-80 mt-1 font-bold">
+              نمایش خودکار و تصادفی اشخاص بدهکار • کل بدهکاران: {toPersianDigits(debtors.length)} نفر (مورد {toPersianDigits(currentIndex + 1)} از {toPersianDigits(debtors.length)})
             </p>
           </div>
         </div>
 
         {/* Quick Actions & Controls */}
         <div className="flex items-center gap-2">
+          {/* Sound Toggle Button */}
+          <button
+            onClick={toggleSound}
+            className={`px-3.5 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+              soundEnabled
+                ? isHacker
+                  ? 'bg-[#00ff41]/20 text-[#00ff41] border border-[#00ff41]/60 shadow-[0_0_12px_rgba(0,255,65,0.3)]'
+                  : 'bg-emerald-50 text-emerald-700 border border-emerald-300'
+                : isHacker
+                  ? 'bg-black/60 text-gray-500 border border-gray-800 hover:bg-black/80'
+                  : 'bg-gray-100 text-gray-500 border border-gray-200'
+            }`}
+            title={soundEnabled ? 'صداهای دیجیتال فعال است (کلیک جهت بی‌صدا)' : 'صدا غیرفعال است (کلیک جهت فعال‌سازی)'}
+          >
+            {soundEnabled ? <Volume2 className="w-4 h-4 text-[#00ff41] animate-pulse" /> : <VolumeX className="w-4 h-4 text-gray-400" />}
+            <span>{soundEnabled ? 'صدا دیجیتال: فعال' : 'بی‌صدا'}</span>
+          </button>
+
           {/* Theme Switcher Button */}
           <button
             onClick={() => setTheme(isHacker ? 'standard' : 'hacker')}
@@ -255,7 +326,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
             title="تغییر تم (هکری / استاندارد)"
           >
             {isHacker ? <Sparkles className="w-4 h-4 text-[#00ff41]" /> : <Terminal className="w-4 h-4 text-emerald-600" />}
-            <span>{isHacker ? 'تم هکری فعال است' : 'تغییر به تم هکری'}</span>
+            <span>{isHacker ? 'قالب هکری' : 'قالب کلاسیک'}</span>
           </button>
 
           {/* Pause / Resume Slideshow */}
@@ -279,7 +350,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                 ? 'bg-black/60 border border-[#00ff41]/40 text-[#00ff41] hover:bg-[#00ff41]/20'
                 : 'bg-white border border-slate-200 text-slate-700 hover:bg-slate-100'
             }`}
-            title="شخص تصادفی بعدی"
+            title="بدهکار تصادفی بعدی"
           >
             <RefreshCw className="w-4 h-4" />
           </button>
@@ -358,13 +429,14 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                   formatNumber={formatNumber}
                   cardSize={cardSize}
                   animationProps={getAnimationProps()}
+                  soundEnabled={soundEnabled}
                 />
               ) : (
                 /* Classic Light Card */
                 <motion.div
                   key={`${person.id}-${idx}`}
                   {...getAnimationProps()}
-                  className={`mx-auto w-full bg-gradient-to-br from-white to-rose-50/50 backdrop-blur-lg rounded-[2rem] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-rose-100 flex flex-col relative overflow-hidden ${getCardSizeClasses()}`}
+                  className={`mx-auto w-full bg-gradient-to-br from-white to-rose-50/50 backdrop-blur-lg rounded-[2.2rem] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-rose-100 flex flex-col relative overflow-hidden ${getCardSizeClasses()}`}
                 >
                   <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-r from-rose-400 via-red-500 to-rose-600"></div>
                   <div className="absolute -top-24 -right-24 w-48 h-48 bg-rose-200 rounded-full blur-3xl opacity-40"></div>
@@ -375,33 +447,33 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                        <UserCircle className="w-14 h-14 text-rose-500" strokeWidth={1.5} />
                     </div>
                     
-                    <h3 className="font-black text-slate-800 mb-3 truncate w-full tracking-tight" style={{ fontSize: cardSize === 'xl' ? '3rem' : cardSize === 'lg' ? '2.2rem' : '1.5rem' }}>
+                    <h3 className="font-black text-slate-800 mb-2 truncate w-full tracking-tight text-3xl md:text-4xl">
                       {person.name}
                     </h3>
                     
                     {person.phone && (
-                      <div className="flex items-center gap-2 text-slate-600 mt-2 font-bold bg-white/80 backdrop-blur-md px-5 py-2.5 rounded-2xl shadow-sm border border-slate-100">
+                      <div className="flex items-center gap-2 text-slate-600 mt-2 font-black bg-white/90 backdrop-blur-md px-5 py-2 rounded-2xl shadow-sm border border-slate-100 text-sm">
                         <Phone className="w-4 h-4 text-slate-400" />
-                        <span dir="ltr" className="tracking-wider">{person.phone}</span>
+                        <span dir="ltr">{toPersianDigits(person.phone)}</span>
                       </div>
                     )}
                     
-                    <div className="mt-8 w-full bg-white/60 backdrop-blur-md rounded-3xl p-6 border border-white shadow-sm flex flex-col items-center justify-center">
+                    <div className="mt-7 w-full bg-white/75 backdrop-blur-md rounded-3xl p-6 border border-white shadow-sm flex flex-col items-center justify-center">
                       <div className="text-sm font-bold text-slate-500 mb-2 flex items-center justify-center gap-2">
                         <TrendingDown className="w-5 h-5 text-rose-500" />
-                        مانده بدهی
+                        مانده بدهی معوقه
                       </div>
-                      <div className="font-black text-rose-600 tracking-tight truncate drop-shadow-sm" style={{ fontSize: cardSize === 'xl' ? '3.5rem' : cardSize === 'lg' ? '2.8rem' : '2rem' }}>
-                        {formatNumber(person.debtAmount)}
+                      <div className="font-black text-rose-600 tracking-tight truncate drop-shadow-sm text-3xl md:text-5xl">
+                        {toPersianDigits(formatNumber(person.debtAmount))}
                       </div>
-                      <div className="text-lg font-bold text-rose-400 mt-2">{storeSettings?.currency || 'تومان'}</div>
+                      <div className="text-base font-black text-rose-400 mt-2">{storeSettings?.currency || 'تومان'}</div>
                     </div>
 
                     {(person as any).lastActivityDate && (
-                      <div className="mt-6 flex items-center justify-center gap-2 text-sm font-bold text-slate-500 bg-white/50 px-4 py-2.5 rounded-xl border border-slate-100/50">
-                        <CalendarClock className="w-5 h-5 text-slate-400" />
+                      <div className="mt-5 flex items-center justify-center gap-2 text-xs font-bold text-slate-500 bg-white/60 px-4 py-2 rounded-xl border border-slate-100/60">
+                        <CalendarClock className="w-4 h-4 text-slate-400" />
                         <span>آخرین فعالیت مالی:</span>
-                        <span className="text-slate-800 font-black">{globalDateFormatter.formatDateOnly((person as any).lastActivityDate)}</span>
+                        <span className="text-slate-800 font-black">{toPersianDigits(globalDateFormatter.formatDateOnly((person as any).lastActivityDate))}</span>
                       </div>
                     )}
                   </div>
@@ -419,7 +491,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4"
+            className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex justify-center items-center p-4 font-['IRANYekanXFaNum','Vazirmatn',sans-serif]"
           >
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
@@ -439,6 +511,32 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
               </div>
 
               <div className="space-y-6 max-h-[60vh] overflow-y-auto pl-2 styled-scrollbar">
+                {/* Sound FX Toggle */}
+                <div className="p-4 rounded-2xl bg-black/50 border border-slate-750 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-black text-white flex items-center gap-2">
+                      <Volume2 className="w-4 h-4 text-[#00ff41]" />
+                      صدای بیپ و دیجیتال هنگام تعویض کارت و هشدار
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      پخش افکت صوتی رادار، سوئیچ کارت‌ها و اعلان‌های هشدار
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setSoundEnabled(!soundEnabled)}
+                    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
+                      soundEnabled ? 'bg-[#00ff41]' : 'bg-gray-700'
+                    }`}
+                  >
+                    <div
+                      className={`bg-black w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                        soundEnabled ? '-translate-x-6' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
+                </div>
+
                 {/* Theme Selector */}
                 <div>
                   <label className="block text-sm font-bold text-gray-200 mb-2">طراحی و استایل کارت</label>
@@ -465,7 +563,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                       }`}
                     >
                       <UserCircle className="w-4 h-4" />
-                      کلاسیک سفید
+                      کلاسیک روشن
                     </button>
                   </div>
                 </div>
@@ -482,7 +580,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                     className="w-full accent-[#00ff41]"
                   />
                   <div className="text-center font-bold text-[#00ff41] mt-2">
-                    {idleTimeout === 0 ? 'غیرفعال' : `${idleTimeout} ثانیه`}
+                    {idleTimeout === 0 ? 'غیرفعال' : `${toPersianDigits(idleTimeout)} ثانیه`}
                   </div>
                 </div>
 
@@ -496,11 +594,11 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                     onChange={(e) => setDuration(Number(e.target.value))}
                     className="w-full accent-[#00ff41]"
                   />
-                  <div className="text-center font-bold text-[#00ff41] mt-2">{duration} ثانیه</div>
+                  <div className="text-center font-bold text-[#00ff41] mt-2">{toPersianDigits(duration)} ثانیه</div>
                 </div>
 
                 <div>
-                  <label className="block text-sm font-bold text-gray-300 mb-2">نوع انیمیشن ورود/خروج</label>
+                  <label className="block text-sm font-bold text-gray-300 mb-2">نوع انیمیشن تعویض کارت</label>
                   <div className="grid grid-cols-3 gap-2">
                     {['fade', 'slide', 'zoom'].map(type => (
                       <button
@@ -512,7 +610,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                             : 'bg-slate-800 text-gray-400 border-slate-700 hover:bg-slate-750'
                         }`}
                       >
-                        {type === 'fade' ? 'محو شدن' : type === 'slide' ? 'اسلاید' : 'بزرگ‌نمایی'}
+                        {type === 'fade' ? 'محو شدن' : type === 'slide' ? 'اسلاید لغزشی' : 'بزرگ‌نمایی'}
                       </button>
                     ))}
                   </div>
@@ -549,7 +647,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                       className="flex-1 accent-[#00ff41]"
                     />
                     <div className="w-12 text-center font-bold text-[#00ff41] bg-black/50 border border-[#00ff41]/30 py-1 rounded-lg">
-                      {simultaneousCount}
+                      {toPersianDigits(simultaneousCount)}
                     </div>
                   </div>
                 </div>
