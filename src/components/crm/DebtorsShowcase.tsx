@@ -4,13 +4,14 @@ import {
   Settings, Users, MonitorPlay, Maximize2, X, Phone, 
   UserCircle, CalendarClock, TrendingDown, Terminal, 
   Sparkles, RefreshCw, Radio, Play, Pause, ChevronLeft, ChevronRight,
-  Volume2, VolumeX, ShieldAlert, Zap
+  Volume2, VolumeX, ShieldAlert, Zap, ListOrdered
 } from 'lucide-react';
 import { Person } from '../../types';
 import { globalDateFormatter } from '../../utils/dateFormatter';
 import { toPersianDigits } from '../../utils/format';
 import { HackerDebtorCard } from './HackerDebtorCard';
 import { CyberLaserCardWrapper } from './CyberLaserCardWrapper';
+import { CyberDebtorQueue } from './CyberDebtorQueue';
 import { playHackerCardSwitchSound, playHackerAlertSound, playHackerDataBeep } from '../../utils/audio';
 
 interface DebtorsShowcaseProps {
@@ -42,10 +43,22 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   const [simultaneousCount, setSimultaneousCount] = useState<number>(1);
   const [idleTimeout, setIdleTimeout] = useState<number>(60); // seconds, 0 = disabled
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [showQueuePanel, setShowQueuePanel] = useState<boolean>(true);
+  const [roundNumber, setRoundNumber] = useState<number>(1);
   const [currentIndex, setCurrentIndex] = useState(0);
 
   const prevIndexRef = useRef<number>(0);
   const isFirstRenderRef = useRef<boolean>(true);
+
+  // Helper for Fisher-Yates array shuffling
+  const shuffleList = <T,>(arr: T[]): T[] => {
+    const copy = [...arr];
+    for (let i = copy.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [copy[i], copy[j]] = [copy[j], copy[i]];
+    }
+    return copy;
+  };
 
   // Load settings
   useEffect(() => {
@@ -60,12 +73,13 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
         if (parsed.simultaneousCount) setSimultaneousCount(parsed.simultaneousCount);
         if (parsed.idleTimeout !== undefined) setIdleTimeout(parsed.idleTimeout);
         if (parsed.soundEnabled !== undefined) setSoundEnabled(parsed.soundEnabled);
+        if (parsed.showQueuePanel !== undefined) setShowQueuePanel(parsed.showQueuePanel);
       }
     } catch (e) {}
   }, []);
 
   const saveSettings = () => {
-    const settings = { theme, duration, displayType, cardSize, simultaneousCount, idleTimeout, soundEnabled };
+    const settings = { theme, duration, displayType, cardSize, simultaneousCount, idleTimeout, soundEnabled, showQueuePanel };
     localStorage.setItem('debtors_showcase_settings', JSON.stringify(settings));
     window.dispatchEvent(new CustomEvent('debtors_settings_updated', { detail: settings }));
     setIsSettingsOpen(false);
@@ -86,7 +100,7 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   };
 
   // Calculate balances
-  const debtors = useMemo(() => {
+  const rawDebtors = useMemo(() => {
     return persons.map(person => {
       let balance = 0;
       let lastActivityDate: string | null = null;
@@ -108,9 +122,24 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
         }
       });
       return { ...person, debtAmount: balance, lastActivityDate };
-    }).filter(p => p.debtAmount > 0)
-      .sort(() => Math.random() - 0.5); // Randomize order
+    }).filter(p => p.debtAmount > 0);
   }, [persons, accountingDocuments]);
+
+  // Maintain randomized debtors array
+  const [randomizedDebtors, setRandomizedDebtors] = useState<typeof rawDebtors>([]);
+
+  useEffect(() => {
+    if (rawDebtors.length > 0) {
+      setRandomizedDebtors(shuffleList(rawDebtors));
+      setCurrentIndex(0);
+      setRoundNumber(1);
+    } else {
+      setRandomizedDebtors([]);
+    }
+  }, [rawDebtors]);
+
+  // Alias debtors to the active randomized queue
+  const debtors = randomizedDebtors;
 
   // Initial sound on load
   useEffect(() => {
@@ -136,25 +165,36 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
     }
   }, [currentIndex, soundEnabled]);
 
-  // Main slideshow loop
+  // Main slideshow loop (infinite cycle: resets from beginning when list ends)
   useEffect(() => {
     if (debtors.length === 0 || isPaused) return;
 
     const timer = setInterval(() => {
       setCurrentIndex((prevIndex) => {
         const nextIndex = prevIndex + simultaneousCount;
-        return nextIndex >= debtors.length ? 0 : nextIndex;
+        if (nextIndex >= debtors.length) {
+          // Reached end of list! Re-shuffle from start and restart cycle
+          setRoundNumber((r) => r + 1);
+          setRandomizedDebtors(shuffleList(rawDebtors));
+          return 0;
+        }
+        return nextIndex;
       });
     }, duration * 1000);
 
     return () => clearInterval(timer);
-  }, [debtors, duration, simultaneousCount, isPaused]);
+  }, [debtors.length, rawDebtors, duration, simultaneousCount, isPaused]);
 
   const handleNext = () => {
     if (soundEnabled) playHackerCardSwitchSound(0.15);
     setCurrentIndex((prev) => {
       const next = prev + simultaneousCount;
-      return next >= debtors.length ? 0 : next;
+      if (next >= debtors.length) {
+        setRoundNumber((r) => r + 1);
+        setRandomizedDebtors(shuffleList(rawDebtors));
+        return 0;
+      }
+      return next;
     });
   };
 
@@ -169,11 +209,9 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   const handleShuffle = () => {
     if (soundEnabled) playHackerAlertSound(0.16);
     if (debtors.length > 1) {
-      let newIdx = Math.floor(Math.random() * debtors.length);
-      if (newIdx === currentIndex) {
-        newIdx = (newIdx + 1) % debtors.length;
-      }
-      setCurrentIndex(newIdx);
+      setRandomizedDebtors(shuffleList(rawDebtors));
+      setCurrentIndex(0);
+      setRoundNumber((r) => r + 1);
     }
   };
 
@@ -318,6 +356,24 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
             <span>{soundEnabled ? 'صدا دیجیتال: فعال' : 'بی‌صدا'}</span>
           </button>
 
+          {/* Queue Radar Toggle Button */}
+          <button
+            onClick={() => setShowQueuePanel(!showQueuePanel)}
+            className={`px-3 py-2 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 shadow-sm ${
+              showQueuePanel
+                ? isHacker
+                  ? 'bg-[#00ff41]/20 text-[#00ff41] border border-[#00ff41]/60 shadow-[0_0_12px_rgba(0,255,65,0.25)]'
+                  : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                : isHacker
+                  ? 'bg-black/60 text-gray-500 border border-gray-800 hover:text-white'
+                  : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+            }`}
+            title={showQueuePanel ? "مخفی‌سازی پنل رادار صف افراد" : "نمایش پنل رادار صف افراد"}
+          >
+            <ListOrdered className="w-4 h-4" />
+            <span className="hidden sm:inline">{showQueuePanel ? 'صف افراد: باز' : 'صف افراد'}</span>
+          </button>
+
           {/* Theme Switcher Button */}
           <button
             onClick={() => setTheme(isHacker ? 'standard' : 'hacker')}
@@ -412,93 +468,115 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
         </div>
       </div>
 
-      {/* Main Display Area */}
-      <div className="flex-1 flex items-center justify-center overflow-hidden py-4">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={currentIndex}
-            className={`grid gap-6 w-full ${getGridClasses()}`}
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-          >
-            {currentDebtors.map((person, idx) => {
-              const cardComponent = isHacker ? (
-                /* Hacker Terminal Cyberpunk Card */
-                <HackerDebtorCard
-                  key={`${person.id}-${idx}`}
-                  person={person as any}
-                  currency={storeSettings?.currency || 'تومان'}
-                  formatNumber={formatNumber}
-                  cardSize={cardSize}
-                  animationProps={displayType === 'laser' ? {} : getAnimationProps()}
-                  soundEnabled={soundEnabled}
-                />
-              ) : (
-                /* Classic Light Card */
-                <motion.div
-                  key={`${person.id}-${idx}`}
-                  {...getAnimationProps()}
-                  className={`mx-auto w-full bg-gradient-to-br from-white to-rose-50/50 backdrop-blur-lg rounded-[2.2rem] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-rose-100 flex flex-col relative overflow-hidden ${getCardSizeClasses()}`}
-                >
-                  <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-r from-rose-400 via-red-500 to-rose-600"></div>
-                  <div className="absolute -top-24 -right-24 w-48 h-48 bg-rose-200 rounded-full blur-3xl opacity-40"></div>
-                  <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-red-200 rounded-full blur-3xl opacity-40"></div>
-                  
-                  <div className="relative z-10 flex flex-col items-center text-center">
-                    <div className="w-28 h-28 bg-gradient-to-br from-rose-100 to-white rounded-full flex items-center justify-center mb-6 shadow-[0_8px_16px_rgba(225,29,72,0.1)] border border-white">
-                       <UserCircle className="w-14 h-14 text-rose-500" strokeWidth={1.5} />
-                    </div>
+      {/* Main Display Area with Side Queue Panel */}
+      <div className="flex-1 flex flex-col lg:flex-row gap-5 items-stretch overflow-hidden py-2 px-1 min-h-0">
+        {/* Main Display Stage for Current Active Card */}
+        <div className="flex-1 flex items-center justify-center overflow-hidden min-w-0">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={currentIndex}
+              className={`grid gap-6 w-full ${getGridClasses()}`}
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              {currentDebtors.map((person, idx) => {
+                const cardComponent = isHacker ? (
+                  /* Hacker Terminal Cyberpunk Card */
+                  <HackerDebtorCard
+                    key={`${person.id}-${idx}`}
+                    person={person as any}
+                    currency={storeSettings?.currency || 'تومان'}
+                    formatNumber={formatNumber}
+                    cardSize={cardSize}
+                    animationProps={displayType === 'laser' ? {} : getAnimationProps()}
+                    soundEnabled={soundEnabled}
+                  />
+                ) : (
+                  /* Classic Light Card */
+                  <motion.div
+                    key={`${person.id}-${idx}`}
+                    {...getAnimationProps()}
+                    className={`mx-auto w-full bg-gradient-to-br from-white to-rose-50/50 backdrop-blur-lg rounded-[2.2rem] shadow-[0_20px_60px_-15px_rgba(225,29,72,0.2)] border border-rose-100 flex flex-col relative overflow-hidden ${getCardSizeClasses()}`}
+                  >
+                    <div className="absolute top-0 right-0 w-full h-3 bg-gradient-to-r from-rose-400 via-red-500 to-rose-600"></div>
+                    <div className="absolute -top-24 -right-24 w-48 h-48 bg-rose-200 rounded-full blur-3xl opacity-40"></div>
+                    <div className="absolute -bottom-24 -left-24 w-48 h-48 bg-red-200 rounded-full blur-3xl opacity-40"></div>
                     
-                    <h3 className="font-black text-slate-800 mb-2 truncate w-full tracking-tight text-3xl md:text-4xl">
-                      {person.name}
-                    </h3>
-                    
-                    {person.phone && (
-                      <div className="flex items-center gap-2 text-slate-600 mt-2 font-black bg-white/90 backdrop-blur-md px-5 py-2 rounded-2xl shadow-sm border border-slate-100 text-sm">
-                        <Phone className="w-4 h-4 text-slate-400" />
-                        <span dir="ltr">{toPersianDigits(person.phone)}</span>
+                    <div className="relative z-10 flex flex-col items-center text-center">
+                      <div className="w-28 h-28 bg-gradient-to-br from-rose-100 to-white rounded-full flex items-center justify-center mb-6 shadow-[0_8px_16px_rgba(225,29,72,0.1)] border border-white">
+                         <UserCircle className="w-14 h-14 text-rose-500" strokeWidth={1.5} />
                       </div>
-                    )}
-                    
-                    <div className="mt-7 w-full bg-white/75 backdrop-blur-md rounded-3xl p-6 border border-white shadow-sm flex flex-col items-center justify-center">
-                      <div className="text-sm font-bold text-slate-500 mb-2 flex items-center justify-center gap-2">
-                        <TrendingDown className="w-5 h-5 text-rose-500" />
-                        مانده بدهی معوقه
+                      
+                      <h3 className="font-black text-slate-800 mb-2 truncate w-full tracking-tight text-3xl md:text-4xl">
+                        {person.name}
+                      </h3>
+                      
+                      {person.phone && (
+                        <div className="flex items-center gap-2 text-slate-600 mt-2 font-black bg-white/90 backdrop-blur-md px-5 py-2 rounded-2xl shadow-sm border border-slate-100 text-sm">
+                          <Phone className="w-4 h-4 text-slate-400" />
+                          <span dir="ltr">{toPersianDigits(person.phone)}</span>
+                        </div>
+                      )}
+                      
+                      <div className="mt-7 w-full bg-white/75 backdrop-blur-md rounded-3xl p-6 border border-white shadow-sm flex flex-col items-center justify-center">
+                        <div className="text-sm font-bold text-slate-500 mb-2 flex items-center justify-center gap-2">
+                          <TrendingDown className="w-5 h-5 text-rose-500" />
+                          مانده بدهی معوقه
+                        </div>
+                        <div className="font-black text-rose-600 tracking-tight truncate drop-shadow-sm text-3xl md:text-5xl">
+                          {toPersianDigits(formatNumber(person.debtAmount))}
+                        </div>
+                        <div className="text-base font-black text-rose-400 mt-2">{storeSettings?.currency || 'تومان'}</div>
                       </div>
-                      <div className="font-black text-rose-600 tracking-tight truncate drop-shadow-sm text-3xl md:text-5xl">
-                        {toPersianDigits(formatNumber(person.debtAmount))}
-                      </div>
-                      <div className="text-base font-black text-rose-400 mt-2">{storeSettings?.currency || 'تومان'}</div>
-                    </div>
 
-                    {(person as any).lastActivityDate && (
-                      <div className="mt-5 flex items-center justify-center gap-2 text-xs font-bold text-slate-500 bg-white/60 px-4 py-2 rounded-xl border border-slate-100/60">
-                        <CalendarClock className="w-4 h-4 text-slate-400" />
-                        <span>آخرین فعالیت مالی:</span>
-                        <span className="text-slate-800 font-black">{toPersianDigits(globalDateFormatter.formatDateOnly((person as any).lastActivityDate))}</span>
-                      </div>
-                    )}
+                      {(person as any).lastActivityDate && (
+                        <div className="mt-5 flex items-center justify-center gap-2 text-xs font-bold text-slate-500 bg-white/60 px-4 py-2 rounded-xl border border-slate-100/60">
+                          <CalendarClock className="w-4 h-4 text-slate-400" />
+                          <span>آخرین فعالیت مالی:</span>
+                          <span className="text-slate-800 font-black">{toPersianDigits(globalDateFormatter.formatDateOnly((person as any).lastActivityDate))}</span>
+                        </div>
+                      )}
+                    </div>
+                  </motion.div>
+                );
+
+                return displayType === 'laser' ? (
+                  <CyberLaserCardWrapper
+                    key={`cyber-laser-${person.id}-${currentIndex}-${idx}`}
+                    cardKey={`${person.id}-${currentIndex}`}
+                    isHackerTheme={isHacker}
+                  >
+                    {cardComponent}
+                  </CyberLaserCardWrapper>
+                ) : (
+                  <div key={`norm-wrap-${person.id}-${idx}`} className="w-full flex items-center justify-center">
+                    {cardComponent}
                   </div>
-                </motion.div>
-              );
+                );
+              })}
+            </motion.div>
+          </AnimatePresence>
+        </div>
 
-              return displayType === 'laser' ? (
-                <CyberLaserCardWrapper
-                  key={`cyber-laser-${person.id}-${currentIndex}-${idx}`}
-                  cardKey={`${person.id}-${currentIndex}`}
-                  isHackerTheme={isHacker}
-                >
-                  {cardComponent}
-                </CyberLaserCardWrapper>
-              ) : (
-                <div key={`norm-wrap-${person.id}-${idx}`} className="w-full flex items-center justify-center">
-                  {cardComponent}
-                </div>
-              );
-            })}
-          </motion.div>
-        </AnimatePresence>
+        {/* Side Random Queue Panel: Decreases from right, increases on left, loops on finish */}
+        {showQueuePanel && debtors.length > 0 && (
+          <div className="w-full lg:w-[420px] xl:w-[450px] shrink-0 flex flex-col justify-start max-h-full overflow-y-auto styled-scrollbar">
+            <CyberDebtorQueue
+              debtors={debtors}
+              currentIndex={currentIndex}
+              currency={storeSettings?.currency || 'تومان'}
+              formatNumber={formatNumber}
+              isHacker={isHacker}
+              onSelectIndex={(newIdx) => {
+                setCurrentIndex(newIdx);
+              }}
+              roundNumber={roundNumber}
+              isCollapsed={false}
+              onToggleCollapse={() => setShowQueuePanel(false)}
+            />
+          </div>
+        )}
       </div>
 
       {/* Settings Modal */}
@@ -575,6 +653,32 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
                       </button>
                     </div>
                   )}
+                </div>
+
+                {/* Queue Panel Toggle */}
+                <div className="p-4 rounded-2xl bg-black/50 border border-slate-750 flex items-center justify-between">
+                  <div>
+                    <div className="text-sm font-black text-white flex items-center gap-2">
+                      <ListOrdered className="w-4 h-4 text-[#00ff41]" />
+                      نمایش رادار و صف تصادفی افراد
+                    </div>
+                    <div className="text-xs text-gray-400 mt-1">
+                      کسر شدن افراد از سمت راست، افزایش به سمت چپ، و شروع مجدد پس از پایان لیست
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowQueuePanel(!showQueuePanel)}
+                    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors shrink-0 ${
+                      showQueuePanel ? 'bg-[#00ff41]' : 'bg-gray-700'
+                    }`}
+                  >
+                    <div
+                      className={`bg-black w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                        showQueuePanel ? '-translate-x-6' : 'translate-x-0'
+                      }`}
+                    />
+                  </button>
                 </div>
 
                 {/* Theme Selector */}
