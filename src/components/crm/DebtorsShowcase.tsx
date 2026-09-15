@@ -512,29 +512,52 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
 
               <div className="space-y-6 max-h-[60vh] overflow-y-auto pl-2 styled-scrollbar">
                 {/* Sound FX Toggle */}
-                <div className="p-4 rounded-2xl bg-black/50 border border-slate-750 flex items-center justify-between">
-                  <div>
-                    <div className="text-sm font-black text-white flex items-center gap-2">
-                      <Volume2 className="w-4 h-4 text-[#00ff41]" />
-                      صدای بیپ و دیجیتال هنگام تعویض کارت و هشدار
+                <div className="p-4 rounded-2xl bg-black/50 border border-slate-750 flex flex-col gap-3">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <div className="text-sm font-black text-white flex items-center gap-2">
+                        <Volume2 className="w-4 h-4 text-[#00ff41]" />
+                        صدای بیپ دیجیتال تعویض کارت و هشدار
+                      </div>
+                      <div className="text-xs text-gray-400 mt-1">
+                        صدای الکترونیک دیجیتال ترمینال (بدون افکت‌های پلق‌پلق و حبابی)
+                      </div>
                     </div>
-                    <div className="text-xs text-gray-400 mt-1">
-                      پخش افکت صوتی رادار، سوئیچ کارت‌ها و اعلان‌های هشدار
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setSoundEnabled(!soundEnabled)}
-                    className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors ${
-                      soundEnabled ? 'bg-[#00ff41]' : 'bg-gray-700'
-                    }`}
-                  >
-                    <div
-                      className={`bg-black w-4 h-4 rounded-full shadow-md transform transition-transform ${
-                        soundEnabled ? '-translate-x-6' : 'translate-x-0'
+                    <button
+                      type="button"
+                      onClick={() => setSoundEnabled(!soundEnabled)}
+                      className={`w-12 h-6 flex items-center rounded-full p-1 transition-colors shrink-0 ${
+                        soundEnabled ? 'bg-[#00ff41]' : 'bg-gray-700'
                       }`}
-                    />
-                  </button>
+                    >
+                      <div
+                        className={`bg-black w-4 h-4 rounded-full shadow-md transform transition-transform ${
+                          soundEnabled ? '-translate-x-6' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                  </div>
+
+                  {soundEnabled && (
+                    <div className="flex items-center gap-2 pt-2 border-t border-slate-800/80">
+                      <button
+                        type="button"
+                        onClick={() => playHackerCardSwitchSound(0.14)}
+                        className="flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold bg-[#00ff41]/10 text-[#00ff41] border border-[#00ff41]/30 hover:bg-[#00ff41]/20 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <Zap className="w-3.5 h-3.5" />
+                        تست بیپ دیجیتال کارت
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => playHackerAlertSound(0.18)}
+                        className="flex-1 py-1.5 px-2.5 rounded-lg text-xs font-bold bg-red-950/40 text-red-400 border border-red-800/50 hover:bg-red-950/70 transition-all flex items-center justify-center gap-1.5"
+                      >
+                        <ShieldAlert className="w-3.5 h-3.5" />
+                        تست آلارم دیجیتال
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Theme Selector */}

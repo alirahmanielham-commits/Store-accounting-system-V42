@@ -1,23 +1,37 @@
+// Singleton AudioContext for instant, reliable playback without latency
+let sharedAudioCtx: AudioContext | null = null;
+
+const getAudioContext = (): AudioContext | null => {
+  try {
+    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
+    if (!AudioCtx) return null;
+    if (!sharedAudioCtx || sharedAudioCtx.state === 'closed') {
+      sharedAudioCtx = new AudioCtx();
+    }
+    if (sharedAudioCtx.state === 'suspended') {
+      sharedAudioCtx.resume().catch(() => {});
+    }
+    return sharedAudioCtx;
+  } catch {
+    return null;
+  }
+};
+
 export const playAudioFeedback = (type: "success" | "error" | "info" | "warning" | "scan" | "scan_error") => {
   try {
-    const AudioContext = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioContext) return;
+    const ctx = getAudioContext();
+    if (!ctx) return;
     
-    const ctx = new AudioContext();
-    // Resume context if it was suspended by the browser
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-    
-    const playTone = (freq: number, type: OscillatorType, startTime: number, duration: number, vol: number = 0.1) => {
+    const playTone = (freq: number, oscType: OscillatorType, startTime: number, duration: number, vol: number = 0.1) => {
         const osc = ctx.createOscillator();
         const gainNode = ctx.createGain();
-        osc.type = type;
+        osc.type = oscType;
         osc.frequency.setValueAtTime(freq, startTime);
         
-        gainNode.gain.setValueAtTime(0, startTime);
-        gainNode.gain.linearRampToValueAtTime(vol, startTime + 0.02);
-        gainNode.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+        gainNode.gain.setValueAtTime(0.001, startTime);
+        gainNode.gain.linearRampToValueAtTime(vol, startTime + 0.01);
+        gainNode.gain.setValueAtTime(vol, startTime + duration - 0.02);
+        gainNode.gain.exponentialRampToValueAtTime(0.0001, startTime + duration);
         
         osc.connect(gainNode);
         gainNode.connect(ctx.destination);
@@ -29,30 +43,27 @@ export const playAudioFeedback = (type: "success" | "error" | "info" | "warning"
     const now = ctx.currentTime;
 
     if (type === "scan") {
-      // Classic barcode scanner beep (high pitch, short duration)
-      playTone(1500, 'sine', now, 0.1, 0.15);
+      // Classic digital barcode scanner beep (crisp 1850Hz)
+      playTone(1850, 'square', now, 0.08, 0.12);
     } else if (type === "scan_error") {
-      // Classic barcode scanner error (double low beep)
-      playTone(300, 'square', now, 0.15, 0.1);
-      playTone(300, 'square', now + 0.2, 0.15, 0.1);
+      // Digital error (double low square buzz)
+      playTone(320, 'square', now, 0.12, 0.12);
+      playTone(280, 'square', now + 0.15, 0.15, 0.12);
     } else if (type === "success") {
-      // Satisfying ascending chime (C4, E4, G4, C5) - Indicates successful recording
-      playTone(261.63, 'sine', now, 0.2, 0.1);
-      playTone(329.63, 'sine', now + 0.1, 0.2, 0.1);
-      playTone(392.00, 'sine', now + 0.2, 0.3, 0.1);
-      playTone(523.25, 'sine', now + 0.3, 0.6, 0.15);
+      // Ascending digital melody
+      playTone(523.25, 'square', now, 0.08, 0.08);
+      playTone(659.25, 'square', now + 0.09, 0.08, 0.08);
+      playTone(783.99, 'square', now + 0.18, 0.08, 0.08);
+      playTone(1046.50, 'square', now + 0.27, 0.18, 0.1);
     } else if (type === "error") {
-      // Downward discordant buzz - Indicates failure
-      playTone(300, 'triangle', now, 0.2, 0.2);
-      playTone(250, 'triangle', now + 0.15, 0.3, 0.2);
-      playTone(200, 'sawtooth', now + 0.3, 0.4, 0.1);
+      playTone(350, 'sawtooth', now, 0.12, 0.15);
+      playTone(220, 'sawtooth', now + 0.13, 0.22, 0.15);
     } else if (type === "warning") {
-      // Quick double beep (attention) - Indicates a warning or prompt
-      playTone(440, 'square', now, 0.15, 0.05);
-      playTone(440, 'square', now + 0.2, 0.15, 0.05);
+      playTone(880, 'square', now, 0.08, 0.1);
+      playTone(880, 'square', now + 0.12, 0.08, 0.1);
     } else {
-      // Info: Gentle single pop/chime - Indicates generic info
-      playTone(600, 'sine', now, 0.3, 0.1);
+      // Digital UI blip
+      playTone(1200, 'square', now, 0.05, 0.08);
     }
   } catch (e) {
     console.error("Audio feedback failed:", e);
@@ -60,122 +71,117 @@ export const playAudioFeedback = (type: "success" | "error" | "info" | "warning"
 };
 
 /**
- * Cyber/Hacker futuristic card switch sound effect (digital laser swipe/chirp)
- * Plays when cards switch, slide, shuffle, or navigate.
+ * Authentic digital electronic beep for card transitions
+ * Crisp two-step digital terminal blip (high-tech cyber electronic beep, NO fluid/plop sine waves)
  */
 export const playHackerCardSwitchSound = (vol: number = 0.12) => {
   try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
-
-    const now = ctx.currentTime;
-    const osc1 = ctx.createOscillator();
-    const osc2 = ctx.createOscillator();
-    const gainNode = ctx.createGain();
-
-    osc1.type = 'sine';
-    osc2.type = 'triangle';
-
-    // Frequency sweep up then quick settle (high-tech blip/whoosh)
-    osc1.frequency.setValueAtTime(520, now);
-    osc1.frequency.exponentialRampToValueAtTime(1450, now + 0.04);
-    osc1.frequency.exponentialRampToValueAtTime(880, now + 0.09);
-
-    osc2.frequency.setValueAtTime(1040, now);
-    osc2.frequency.exponentialRampToValueAtTime(2200, now + 0.04);
-    osc2.frequency.exponentialRampToValueAtTime(1760, now + 0.09);
-
-    gainNode.gain.setValueAtTime(0.001, now);
-    gainNode.gain.linearRampToValueAtTime(vol, now + 0.015);
-    gainNode.gain.exponentialRampToValueAtTime(0.0001, now + 0.11);
-
-    osc1.connect(gainNode);
-    osc2.connect(gainNode);
-    gainNode.connect(ctx.destination);
-
-    osc1.start(now);
-    osc2.start(now);
-    osc1.stop(now + 0.12);
-    osc2.stop(now + 0.12);
-  } catch (e) {
-    // Audio may be blocked by browser autoplay policy before user gesture
-  }
-};
-
-/**
- * Cyber/Hacker warning alert beep sound effect
- * Distinct high-tech warning chirps for overdue debtor detection
- */
-export const playHackerAlertSound = (vol: number = 0.18) => {
-  try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
+    const ctx = getAudioContext();
+    if (!ctx) return;
 
     const now = ctx.currentTime;
 
-    const playChirp = (startTime: number, startFreq: number, endFreq: number, duration: number, oscType: OscillatorType = 'sawtooth') => {
+    // Helper for crisp square-wave digital blip
+    const playDigitalStep = (freq: number, startTime: number, duration: number, stepVol: number) => {
       const osc = ctx.createOscillator();
       const gain = ctx.createGain();
       const filter = ctx.createBiquadFilter();
 
-      osc.type = oscType;
-      osc.frequency.setValueAtTime(startFreq, startTime);
-      osc.frequency.exponentialRampToValueAtTime(endFreq, startTime + duration);
+      // Square wave with highpass to remove muddy low frequencies -> pure crisp digital sound
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, startTime);
 
-      filter.type = 'bandpass';
-      filter.frequency.setValueAtTime(1200, startTime);
-      filter.Q.setValueAtTime(3, startTime);
+      filter.type = 'highpass';
+      filter.frequency.setValueAtTime(800, startTime);
 
       gain.gain.setValueAtTime(0.001, startTime);
-      gain.gain.linearRampToValueAtTime(vol, startTime + 0.02);
-      gain.gain.exponentialRampToValueAtTime(0.001, startTime + duration);
+      gain.gain.linearRampToValueAtTime(stepVol, startTime + 0.004);
+      gain.gain.setValueAtTime(stepVol, startTime + duration - 0.006);
+      gain.gain.linearRampToValueAtTime(0.0001, startTime + duration);
 
       osc.connect(filter);
       filter.connect(gain);
       gain.connect(ctx.destination);
 
       osc.start(startTime);
-      osc.stop(startTime + duration);
+      osc.stop(startTime + duration + 0.005);
     };
 
-    // Double high-tech cyber radar ping/chirp
-    playChirp(now, 1760, 880, 0.12, 'sawtooth');
-    playChirp(now + 0.14, 2340, 1170, 0.14, 'square');
+    // Crisp high-tech digital two-tone chirp: 1600Hz -> 2400Hz (35ms each)
+    // Sounds 100% like a sci-fi console or electronic barcode reader switching records
+    playDigitalStep(1650, now, 0.035, vol * 0.9);
+    playDigitalStep(2480, now + 0.038, 0.045, vol);
+  } catch (e) {
+    // Audio autoplay restrictions fallback
+  }
+};
+
+/**
+ * High-tech cyber warning digital alert beep
+ * Double high-frequency electronic warning beeps for debtor detection
+ */
+export const playHackerAlertSound = (vol: number = 0.16) => {
+  try {
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
+    const now = ctx.currentTime;
+
+    const playDigitalBeep = (freq: number, startTime: number, duration: number) => {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      const filter = ctx.createBiquadFilter();
+
+      osc.type = 'square';
+      osc.frequency.setValueAtTime(freq, startTime);
+
+      filter.type = 'bandpass';
+      filter.frequency.setValueAtTime(freq, startTime);
+      filter.Q.setValueAtTime(2, startTime);
+
+      gain.gain.setValueAtTime(0.001, startTime);
+      gain.gain.linearRampToValueAtTime(vol, startTime + 0.008);
+      gain.gain.setValueAtTime(vol, startTime + duration - 0.01);
+      gain.gain.linearRampToValueAtTime(0.0001, startTime + duration);
+
+      osc.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+
+      osc.start(startTime);
+      osc.stop(startTime + duration + 0.005);
+    };
+
+    // Double digital warning beep (1900Hz and 2200Hz) - unmistakably digital electronic alarm
+    playDigitalBeep(1960, now, 0.07);
+    playDigitalBeep(2350, now + 0.09, 0.09);
   } catch (e) {
     // Graceful fallback
   }
 };
 
 /**
- * Quick cyber data tick/click
+ * Crisp electronic digital tick / micro-beep for buttons and touch
  */
 export const playHackerDataBeep = (vol: number = 0.08) => {
   try {
-    const AudioCtx = window.AudioContext || (window as any).webkitAudioContext;
-    if (!AudioCtx) return;
-    const ctx = new AudioCtx();
-    if (ctx.state === 'suspended') {
-      ctx.resume();
-    }
+    const ctx = getAudioContext();
+    if (!ctx) return;
+
     const now = ctx.currentTime;
     const osc = ctx.createOscillator();
     const gain = ctx.createGain();
-    osc.type = 'sine';
-    osc.frequency.setValueAtTime(2400, now);
-    osc.frequency.exponentialRampToValueAtTime(1200, now + 0.03);
+
+    osc.type = 'square';
+    osc.frequency.setValueAtTime(2800, now);
+
     gain.gain.setValueAtTime(vol, now);
-    gain.gain.exponentialRampToValueAtTime(0.001, now + 0.03);
+    gain.gain.linearRampToValueAtTime(0.0001, now + 0.025);
+
     osc.connect(gain);
     gain.connect(ctx.destination);
+
     osc.start(now);
-    osc.stop(now + 0.035);
+    osc.stop(now + 0.03);
   } catch (e) {}
 };
