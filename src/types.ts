@@ -403,6 +403,7 @@ export type CompanySettings = {
   debtorNotificationLocation?: 'top-right' | 'top-left' | 'bottom-right' | 'bottom-left' | 'top-center' | 'bottom-center' | 'modal';
   debtorNotificationColor?: string;
   debtorNotificationOrder?: 'random' | 'largest' | 'smallest';
+  debtorNotificationTheme?: 'standard' | 'hacker';
   debtorNotificationMaxCount?: number;
   inventoryControlEnabled?: boolean;
   lowStockThresholdsByCategory?: Record<string, number>;

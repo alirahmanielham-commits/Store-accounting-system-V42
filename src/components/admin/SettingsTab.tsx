@@ -2150,6 +2150,24 @@ export default function SettingsTab(props: any) {
                                         <option value="random">تصادفی</option>
                                       </select>
                                     </div>
+                                    <div className="w-full text-right">
+                                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        قالب بصری کارت بدهکار
+                                      </label>
+                                      <select
+                                        value={settingsForm.debtorNotificationTheme || "hacker"}
+                                        onChange={(e) =>
+                                          setSettingsForm({
+                                            ...settingsForm,
+                                            debtorNotificationTheme: e.target.value as 'standard' | 'hacker',
+                                          })
+                                        }
+                                        className="w-full rounded-xl border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 shadow-sm px-4 py-3 bg-gray-50/50"
+                                      >
+                                        <option value="hacker">🟢 تم هکری پیشرفته (Cyber Hacker Terminal)</option>
+                                        <option value="standard">کلاسیک ساده</option>
+                                      </select>
+                                    </div>
                                   </div>
                                 )}
                               </div>
