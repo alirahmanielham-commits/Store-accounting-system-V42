@@ -299,17 +299,13 @@ export default function ExtraModals(props: any) {
         <GenerateBarcodesModal
           isOpen={isGenerateBarcodesModalOpen}
           onClose={() => setIsGenerateBarcodesModalOpen(false)}
-          barcodeFormat={barcodeFormat}
-          setBarcodeFormat={setBarcodeFormat}
-          barcodePrefix={barcodePrefix}
-          setBarcodePrefix={setBarcodePrefix}
-          barcodeLength={barcodeLength}
-          setBarcodeLength={setBarcodeLength}
           products={props.products}
-          handleGenerateBarcodes={async () => {
-            await handleGenerateBarcodes();
-            setIsGenerateBarcodesModalOpen(false);
-          }}
+          categories={props.productCategories || []}
+          toPersianDigits={props.toPersianDigits}
+          updateProduct={props.updateProduct}
+          fetchProducts={props.fetchProducts}
+          storeSettings={props.storeSettings}
+          showNotification={props.showNotification}
         />
       )}
       

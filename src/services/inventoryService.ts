@@ -116,15 +116,70 @@ export const deleteStocktaking = async (id: string | number) => {
 };
 
 export const getInventoryTransactions = async (productId?: string | number, warehouseId?: string | number) => {
-  const history = await getLocalData<any[]>('InventoryTransactions', []);
-  let filtered = history;
-  if (productId) {
-    filtered = filtered.filter(h => h.productId?.toString() === productId?.toString());
+  try {
+    let history: any[] = [];
+    if (productId) {
+      const res = await fetch(`/api/kardex/${productId}${warehouseId && warehouseId !== 'all' ? `?warehouseId=${warehouseId}` : ''}`);
+      if (res.ok) {
+        const json = await res.json();
+        if (json.data && Array.isArray(json.data)) history = json.data;
+      }
+    }
+    if (history.length === 0) {
+      history = (await getLocalData<any[]>('kardex', [])) || (await getLocalData<any[]>('InventoryTransactions', [])) || [];
+    }
+
+    if (history.length === 0) {
+      await recalculateAllWarehouseStocks();
+      history = (await getLocalData<any[]>('kardex', [])) || (await getLocalData<any[]>('InventoryTransactions', [])) || [];
+    }
+
+    let filtered = history;
+    if (productId) {
+      filtered = filtered.filter(h => h.productId?.toString() === productId?.toString());
+    }
+    if (warehouseId && warehouseId !== 'all') {
+      filtered = filtered.filter(h => h.warehouseId?.toString() === warehouseId?.toString());
+    }
+    return filtered.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0));
+  } catch (err) {
+    console.error('Error in getInventoryTransactions:', err);
+    return [];
   }
-  if (warehouseId) {
-    filtered = filtered.filter(h => h.warehouseId?.toString() === warehouseId?.toString());
-  }
-  return filtered.sort((a, b) => b.timestamp - a.timestamp);
+};
+
+export const getProductKardex = async (productId: string | number, warehouseId?: string | number) => {
+  const transactions = await getInventoryTransactions(productId, warehouseId);
+  // Sort ascending for ledger calculation
+  const chronological = [...transactions].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  
+  let runningBalance = 0;
+  const ledger = chronological.map((t, idx) => {
+    const isInput = t.type === 'in';
+    const qty = Number(t.quantity) || 0;
+    const balanceBefore = runningBalance;
+    if (isInput) {
+      runningBalance += qty;
+    } else {
+      runningBalance -= qty;
+    }
+    return {
+      ...t,
+      rowNumber: idx + 1,
+      balanceBefore,
+      balanceAfter: runningBalance
+    };
+  });
+
+  const totalIn = ledger.filter(r => r.type === 'in').reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+  const totalOut = ledger.filter(r => r.type === 'out').reduce((sum, r) => sum + (Number(r.quantity) || 0), 0);
+
+  return {
+    ledger,
+    totalIn,
+    totalOut,
+    currentStock: runningBalance
+  };
 };
 
 export const getProductInventoryHistory = getInventoryTransactions;

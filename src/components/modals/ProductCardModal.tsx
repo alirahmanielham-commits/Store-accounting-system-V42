@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
-import { X, Package, TrendingUp, TrendingDown, History, BarChart2 } from 'lucide-react';
+import { X, Package, TrendingUp, TrendingDown, History, BarChart2, FileText, ArrowDownToLine, ArrowUpFromLine, Layers, Filter, CheckCircle2 } from 'lucide-react';
 import { Product, InvoiceItem, Warehouse } from '../../types';
 import { getInvoices, getProductPriceHistory, getInventoryTransactions } from '../../services/dataService';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
@@ -9,10 +9,12 @@ import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUn
 
 export default function ProductCardModal({ product, warehouses = [], currency = 'تومان', onClose, isModal = true, persons = [], storeSettings }: { product: Product, warehouses?: Warehouse[], currency?: string, onClose: () => void, isModal?: boolean, persons?: any[], storeSettings?: any }) {
   const [history, setHistory] = useState<any[]>([]);
+  const [kardexLedger, setKardexLedger] = useState<any[]>([]);
+  const [kardexWarehouseFilter, setKardexWarehouseFilter] = useState<string>('all');
   const [loading, setLoading] = useState(true);
   const [calculatedStock, setCalculatedStock] = useState<number>(0);
   const [stockPerWarehouse, setStockPerWarehouse] = useState<{ [key: string]: number }>({});
-  const [activeTab, setActiveTab] = useState<'info' | 'sales' | 'purchases' | 'warehouse' | 'price_chart' | 'persons'>('info');
+  const [activeTab, setActiveTab] = useState<'kardex' | 'info' | 'sales' | 'purchases' | 'warehouse' | 'price_chart' | 'persons'>('kardex');
   const [priceHistory, setPriceHistory] = useState<any[]>([]);
   const [currentPurchasePrice, setCurrentPurchasePrice] = useState(product.purchasePrice || 0);
   const [currentSalePrice, setCurrentSalePrice] = useState(product.price || 0);
@@ -36,92 +38,139 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
   }, [priceHistory]);
 
   useEffect(() => {
-    
-const fetchHistory = async () => {
-       const invs = await getInvoices();
-       const ph = await getProductPriceHistory(product.id.toString());
-       setPriceHistory(ph.sort((a: any,b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
-       
-       // Note: we can use getInventoryTransactions() but for compatibility with existing UI we will keep the current structure for other tabs, and inject the history tab.
-       const trueHistory = await getInventoryTransactions(product.id.toString());
+    const fetchHistory = async () => {
+       setLoading(true);
+       try {
+         const invs = await getInvoices();
+         const ph = await getProductPriceHistory(product.id.toString());
+         setPriceHistory(ph.sort((a: any,b: any) => new Date(b.date).getTime() - new Date(a.date).getTime()));
+         
+         // Fetch dedicated Kardex transactions
+         let trueHistory = await getInventoryTransactions(product.id.toString());
 
-       const prodHistory: any[] = [];
-       let totalStock = product.stock ? Number(product.stock) : 0;
-       const defaultWhId = product.warehouseId?.toString() || 'unknown';
-       const whStock: { [key: string]: number } = {};
-       
-       if (totalStock > 0 || totalStock < 0) {
-           whStock[defaultWhId] = totalStock;
-           prodHistory.push({
-               type: 'opening_balance',
-               date: '---', 
-               invoiceNumber: '---',
-               quantity: Math.abs(totalStock),
-               isSecondaryUnit: false,
-               unitPrice: product.purchasePrice || 0,
-               personName: '---',
-               warehouseId: defaultWhId
-           });
-       }
-
-       invs.forEach(inv => {
-          if (inv.status === 'voided' || inv.isDeleted || inv.status === 'draft' || inv.isDraft) return;
-          if (inv.items) {
-             const items = inv.items.filter((i: any) => i.productId?.toString() === product.id?.toString());
-             items.forEach((item: any) => {
-                const dir = product.unitRatioDirection || getUnitRatioDirection(product);
-                let qty = Number(item.quantity) || 0;
-                let uPrice = item.unitPrice;
-                if (item.isSecondaryUnit && product.unitRatio && product.unitRatio > 0) {
-                   qty = convertQuantityToBaseUnit(qty, true, product.unitRatio, dir);
-                   uPrice = getPriceForSelectedUnit(uPrice, false, product.unitRatio, dir);
-                }
-                prodHistory.push({
-                   type: inv.type,
-                   date: inv.jalaliDate || new Date(inv.date || inv.createdAt).toLocaleDateString("fa-IR"),
-                   invoiceNumber: inv.invoiceNumber,
-                   quantity: qty,
-                   isSecondaryUnit: false,
-                   unitPrice: uPrice,
-                   personName: persons?.find((p: any) => p.id?.toString() === (inv.customerId || inv.personId)?.toString())?.name || inv.customerName || inv.personName || "---",
-                   warehouseId: item.warehouseId || inv.warehouseId
-                });
-                
-                const whId = (item.warehouseId || inv.warehouseId || product.warehouseId)?.toString() || 'unknown';
-
-                if (!whStock[whId]) whStock[whId] = 0;
-
-                if (inv.type === 'warehouse_receipt') {
-                   totalStock += qty;
-                   whStock[whId] += qty;
-                } else if (inv.type === 'warehouse_remittance') {
-                   totalStock -= qty;
-                   whStock[whId] -= qty;
-                }
+         // If trueHistory is empty or has no receipts/remittances recorded, construct comprehensive kardex
+         const prodHistory: any[] = [];
+         let initialStock = product.stock ? Number(product.stock) : 0;
+         const defaultWhId = product.warehouseId?.toString() || (warehouses[0]?.id?.toString()) || 'unknown';
+         const whStock: { [key: string]: number } = {};
+         
+         // 1. Initial balance
+         if (initialStock !== 0) {
+             whStock[defaultWhId] = (whStock[defaultWhId] || 0) + initialStock;
+             prodHistory.push({
+                 type: 'initial_stock',
+                 date: (product as any).createdAt ? new Date((product as any).createdAt).toLocaleDateString("fa-IR") : '---', 
+                 invoiceNumber: product.code || 'INIT',
+                 quantity: Math.abs(initialStock),
+                 inQuantity: initialStock > 0 ? initialStock : 0,
+                 outQuantity: initialStock < 0 ? Math.abs(initialStock) : 0,
+                 isSecondaryUnit: false,
+                 unitPrice: product.purchasePrice || 0,
+                 totalPrice: Math.abs(initialStock) * (product.purchasePrice || 0),
+                 personName: 'سیستم (موجودی اولیه)',
+                 warehouseId: defaultWhId,
+                 description: 'موجودی اولیه کالا',
+                 timestamp: (product as any).createdAt ? new Date((product as any).createdAt).getTime() : 1
              });
-          }
-       });
+         }
 
-       // Now augment prodHistory with the true history from product_inventory_history table for the warehouse tab
-       trueHistory.forEach((h: any) => {
-          if (h.documentType === 'warehouse_receipt' || h.documentType === 'warehouse_remittance') {
-             // Let's rely on trueHistory for the warehouse tab if needed.
-             // Actually, the existing prodHistory is already structured for the UI. Let's just set the state.
-          }
-       });
+         // 2. Add records from trueHistory or invoices
+         if (trueHistory && trueHistory.length > 0) {
+           trueHistory.forEach((h: any) => {
+             if (h.documentType === 'initial_stock') return; // already accounted or merge
+             const isInput = h.type === 'in';
+             const qty = Number(h.quantity) || 0;
+             const whId = (h.warehouseId || defaultWhId).toString();
+             whStock[whId] = (whStock[whId] || 0) + (isInput ? qty : -qty);
 
-       setCalculatedStock(totalStock);
-       setStockPerWarehouse(whStock);
-       setHistory(prodHistory.sort((a,b) => {
-          const dateA = a.date !== '---' ? new Date(a.date).getTime() : 0;
-          const dateB = b.date !== '---' ? new Date(b.date).getTime() : 0;
-          return dateB - dateA;
-       }));
-       setLoading(false);
+             prodHistory.push({
+               type: h.documentType || (isInput ? 'warehouse_receipt' : 'warehouse_remittance'),
+               date: h.date || (h.timestamp ? new Date(h.timestamp).toLocaleDateString("fa-IR") : '---'),
+               invoiceNumber: h.documentNumber || h.invoiceNumber || '---',
+               quantity: qty,
+               inQuantity: isInput ? qty : 0,
+               outQuantity: !isInput ? qty : 0,
+               isSecondaryUnit: false,
+               unitPrice: Number(h.unitPrice || 0),
+               totalPrice: Number(h.totalPrice || (qty * (h.unitPrice || 0))),
+               personName: h.personName || persons?.find((p: any) => String(p.id) === String(h.personId))?.name || '---',
+               warehouseId: whId,
+               description: h.description || (isInput ? 'ورود به انبار' : 'خروج از انبار'),
+               timestamp: h.timestamp || Date.now()
+             });
+           });
+         } else {
+           // Fallback to iterating invoices if trueHistory table wasn't yet seeded
+           invs.forEach(inv => {
+              if (inv.status === 'voided' || inv.isDeleted || inv.status === 'draft' || inv.isDraft) return;
+              if (inv.items) {
+                 const items = inv.items.filter((i: any) => i.productId?.toString() === product.id?.toString());
+                 items.forEach((item: any) => {
+                    const dir = product.unitRatioDirection || getUnitRatioDirection(product);
+                    let qty = Number(item.quantity) || 0;
+                    let uPrice = item.unitPrice;
+                    if (item.isSecondaryUnit && product.unitRatio && product.unitRatio > 0) {
+                       qty = convertQuantityToBaseUnit(qty, true, product.unitRatio, dir);
+                       uPrice = getPriceForSelectedUnit(uPrice, false, product.unitRatio, dir);
+                    }
+                    const whId = (item.warehouseId || inv.warehouseId || defaultWhId)?.toString();
+                    const isReceipt = inv.type === 'warehouse_receipt' || inv.type === 'sales_return';
+                    const isRemittance = inv.type === 'warehouse_remittance' || inv.type === 'purchase_return' || inv.type === 'waste';
+
+                    if (isReceipt || isRemittance) {
+                       whStock[whId] = (whStock[whId] || 0) + (isReceipt ? qty : -qty);
+                    }
+
+                    prodHistory.push({
+                       type: inv.type,
+                       date: inv.jalaliDate || new Date(inv.date || inv.createdAt).toLocaleDateString("fa-IR"),
+                       invoiceNumber: inv.invoiceNumber || inv.documentNumber || '---',
+                       quantity: qty,
+                       inQuantity: isReceipt ? qty : 0,
+                       outQuantity: isRemittance ? qty : 0,
+                       isSecondaryUnit: false,
+                       unitPrice: uPrice,
+                       totalPrice: qty * Number(uPrice || 0),
+                       personName: persons?.find((p: any) => p.id?.toString() === (inv.customerId || inv.personId)?.toString())?.name || inv.customerName || inv.personName || "---",
+                       warehouseId: whId,
+                       description: inv.description || (isReceipt ? `رسید انبار ${inv.invoiceNumber || ''}` : isRemittance ? `حواله انبار ${inv.invoiceNumber || ''}` : `فاکتور ${inv.invoiceNumber || ''}`),
+                       timestamp: inv.createdAt ? new Date(inv.createdAt).getTime() : Date.now()
+                    });
+                 });
+              }
+           });
+         }
+
+         // Calculate chronological running balance for Kardex
+         const chronological = [...prodHistory].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+         let runBal = 0;
+         const finalKardex = chronological.map((row, idx) => {
+           const inQ = Number(row.inQuantity || (row.type === 'warehouse_receipt' || row.type === 'initial_stock' || row.type === 'sales_return' ? row.quantity : 0));
+           const outQ = Number(row.outQuantity || (row.type === 'warehouse_remittance' || row.type === 'waste' || row.type === 'purchase_return' ? row.quantity : 0));
+           const beforeBal = runBal;
+           runBal = runBal + inQ - outQ;
+           return {
+             ...row,
+             rowNumber: idx + 1,
+             inQuantity: inQ,
+             outQuantity: outQ,
+             balanceBefore: beforeBal,
+             balanceAfter: runBal
+           };
+         });
+
+         setKardexLedger(finalKardex);
+         setCalculatedStock(runBal);
+         setStockPerWarehouse(whStock);
+         setHistory(prodHistory.sort((a,b) => (b.timestamp || 0) - (a.timestamp || 0)));
+       } catch (err) {
+         console.error('Error fetching product card history:', err);
+       } finally {
+         setLoading(false);
+       }
     };
     fetchHistory();
-
-  }, [product.id, product.warehouseId]);
+  }, [product.id, product.warehouseId, product.stock]);
 
   const { recentSalePriceChanges, recentPurchasePriceChanges } = useMemo(() => {
     const saleChanges: any[] = [];
@@ -198,6 +247,14 @@ const fetchHistory = async () => {
 
          <div className="border-b border-gray-100 px-6 pt-4 flex gap-6 bg-white overflow-x-auto">
             <button
+               onClick={() => setActiveTab('kardex')}
+               className={`pb-3 font-bold text-sm whitespace-nowrap transition-colors relative flex items-center gap-2 ${activeTab === 'kardex' ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-500'}`}
+            >
+               <FileText className="w-4 h-4" />
+               کاردکس کالا (گردش موجودی)
+               {activeTab === 'kardex' && <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-indigo-600 rounded-t-full"></span>}
+            </button>
+            <button
                onClick={() => setActiveTab('info')}
                className={`pb-3 font-bold text-sm whitespace-nowrap transition-colors relative ${activeTab === 'info' ? 'text-indigo-600' : 'text-gray-500 hover:text-indigo-500'}`}
             >
@@ -242,6 +299,183 @@ const fetchHistory = async () => {
          </div>
 
          <div className="p-6 overflow-y-auto flex-1 bg-white">
+            {activeTab === 'kardex' && (
+              <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}} className="space-y-6">
+                {/* Kardex Filters & Controls */}
+                <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 bg-slate-50 p-4 rounded-xl border border-slate-200">
+                  <div className="flex items-center gap-3 w-full sm:w-auto">
+                    <Filter className="w-5 h-5 text-indigo-600" />
+                    <span className="text-xs font-bold text-slate-700">فیلتر انبار:</span>
+                    <select
+                      value={kardexWarehouseFilter}
+                      onChange={(e) => setKardexWarehouseFilter(e.target.value)}
+                      className="bg-white border border-slate-300 text-slate-800 text-xs font-bold rounded-lg px-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 flex-1 sm:flex-none"
+                    >
+                      <option value="all">تمام انبارها (کاردکس کل)</option>
+                      {warehouses.map((w, idx) => (
+                        <option key={w.id || idx} value={String(w.id)}>{w.name || (w as any).title}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-slate-600 font-medium">
+                    <span className="inline-block w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    موجودی معتبر بر اساس گردش واقعی جدول کاردکس
+                  </div>
+                </div>
+
+                {/* Kardex Metrics Summary */}
+                {(() => {
+                  const filtered = kardexWarehouseFilter === 'all'
+                    ? kardexLedger
+                    : kardexLedger.filter(k => String(k.warehouseId) === String(kardexWarehouseFilter));
+                  
+                  const initStockRow = filtered.find(k => k.type === 'initial_stock');
+                  const initialQty = initStockRow ? Number(initStockRow.inQuantity || initStockRow.quantity || 0) : 0;
+                  const totalIn = filtered.reduce((s, k) => s + (Number(k.inQuantity) || 0), 0);
+                  const totalOut = filtered.reduce((s, k) => s + (Number(k.outQuantity) || 0), 0);
+                  const finalBalance = totalIn - totalOut;
+
+                  return (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                      <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-xl">
+                        <span className="text-[11px] font-bold text-slate-500 block mb-1">موجودی اول دوره</span>
+                        <span className="text-lg font-mono font-black text-slate-700" dir="ltr">
+                          {formatNum(initialQty)} <span className="text-[11px] font-sans font-normal text-slate-400">{product.unit || 'عدد'}</span>
+                        </span>
+                      </div>
+                      <div className="bg-emerald-50/60 border border-emerald-200 p-3.5 rounded-xl">
+                        <span className="text-[11px] font-bold text-emerald-700 block mb-1">جمع وارده (رسید / ورود)</span>
+                        <span className="text-lg font-mono font-black text-emerald-700" dir="ltr">
+                          +{formatNum(totalIn)} <span className="text-[11px] font-sans font-normal text-emerald-600">{product.unit || 'عدد'}</span>
+                        </span>
+                      </div>
+                      <div className="bg-rose-50/60 border border-rose-200 p-3.5 rounded-xl">
+                        <span className="text-[11px] font-bold text-rose-700 block mb-1">جمع صادره (حواله / خروج)</span>
+                        <span className="text-lg font-mono font-black text-rose-700" dir="ltr">
+                          -{formatNum(totalOut)} <span className="text-[11px] font-sans font-normal text-rose-600">{product.unit || 'عدد'}</span>
+                        </span>
+                      </div>
+                      <div className="bg-indigo-50 border border-indigo-200 p-3.5 rounded-xl shadow-sm">
+                        <span className="text-[11px] font-bold text-indigo-700 block mb-1 flex items-center gap-1">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
+                          مانده موجودی نهایی کاردکس
+                        </span>
+                        <span className="text-xl font-mono font-black text-indigo-900" dir="ltr">
+                          {formatNum(finalBalance)} <span className="text-xs font-sans font-normal text-indigo-700">{product.unit || 'عدد'}</span>
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Kardex Detailed Table */}
+                {loading ? (
+                   <div className="text-center py-12 text-slate-400 font-bold animate-pulse">در حال فراخوانی و استخراج جدول کاردکس کالا...</div>
+                ) : (() => {
+                  const filtered = kardexWarehouseFilter === 'all'
+                    ? kardexLedger
+                    : kardexLedger.filter(k => String(k.warehouseId) === String(kardexWarehouseFilter));
+
+                  // Calculate per-warehouse running balance if filtered
+                  let runningBalance = 0;
+                  const displayRows = filtered.map((row, idx) => {
+                    const inQ = Number(row.inQuantity) || 0;
+                    const outQ = Number(row.outQuantity) || 0;
+                    runningBalance = runningBalance + inQ - outQ;
+                    return {
+                      ...row,
+                      displayRowIdx: idx + 1,
+                      runningBalanceAfter: runningBalance
+                    };
+                  });
+
+                  if (displayRows.length === 0) {
+                    return (
+                      <div className="text-center py-12 text-slate-400 bg-slate-50 rounded-xl border border-slate-100 font-medium">
+                        هیچ گردش یا سندی برای این کالا در انبار انتخابی ثبت نشده است.
+                      </div>
+                    );
+                  }
+
+                  return (
+                    <div className="overflow-x-auto border border-slate-200 rounded-xl shadow-sm">
+                      <table className="w-full text-right text-xs">
+                        <thead className="bg-slate-100 text-slate-700 border-b border-slate-200 font-bold">
+                          <tr>
+                            <th className="px-3 py-3 text-center w-12">ردیف</th>
+                            <th className="px-3 py-3 whitespace-nowrap">تاریخ</th>
+                            <th className="px-3 py-3 whitespace-nowrap">نوع سند</th>
+                            <th className="px-3 py-3 whitespace-nowrap">شماره سند</th>
+                            <th className="px-3 py-3 whitespace-nowrap">انبار</th>
+                            <th className="px-3 py-3">طرف حساب / شخص</th>
+                            <th className="px-3 py-3 text-center whitespace-nowrap text-emerald-700 font-bold">وارده (+)</th>
+                            <th className="px-3 py-3 text-center whitespace-nowrap text-rose-700 font-bold">صادره (-)</th>
+                            <th className="px-3 py-3 text-center whitespace-nowrap bg-indigo-100/60 text-indigo-900 border-x border-indigo-200 font-black">
+                              مانده موجودی
+                            </th>
+                            <th className="px-3 py-3 text-left whitespace-nowrap">فی (قیمت)</th>
+                            <th className="px-3 py-3">شرح سند</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 bg-white">
+                          {displayRows.map((r) => {
+                            const wh = warehouses.find(w => String(w.id) === String(r.warehouseId));
+                            const isInitial = r.type === 'initial_stock';
+                            const isReceipt = r.type === 'warehouse_receipt' || r.type === 'sales_return';
+                            const isRemittance = r.type === 'warehouse_remittance' || r.type === 'purchase_return' || r.type === 'waste';
+
+                            return (
+                              <tr key={r.id || r.rowNumber || r.displayRowIdx} className="hover:bg-indigo-50/40 transition-colors">
+                                <td className="px-3 py-3 text-center font-mono text-slate-400 font-bold">{r.displayRowIdx}</td>
+                                <td className="px-3 py-3 text-slate-600 font-mono whitespace-nowrap" dir="ltr">{r.date}</td>
+                                <td className="px-3 py-3 whitespace-nowrap">
+                                  {isInitial ? (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-700 border border-slate-200">
+                                      موجودی اول دوره
+                                    </span>
+                                  ) : isReceipt ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                                      <ArrowDownToLine className="w-3 h-3" />
+                                      {r.type === 'sales_return' ? 'برگشت فروش' : 'رسید انبار (ورود)'}
+                                    </span>
+                                  ) : isRemittance ? (
+                                    <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                      <ArrowUpFromLine className="w-3 h-3" />
+                                      {r.type === 'waste' ? 'ضایعات انبار' : r.type === 'purchase_return' ? 'برگشت خرید' : 'حواله انبار (خروج)'}
+                                    </span>
+                                  ) : (
+                                    <span className="inline-flex items-center px-2 py-0.5 rounded text-[10px] font-bold bg-slate-100 text-slate-600">
+                                      {r.type}
+                                    </span>
+                                  )}
+                                </td>
+                                <td className="px-3 py-3 font-mono font-bold text-indigo-600 whitespace-nowrap">{r.invoiceNumber || '---'}</td>
+                                <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">{wh?.name || (wh as any)?.title || 'انبار اصلی'}</td>
+                                <td className="px-3 py-3 text-slate-800 font-medium truncate max-w-[140px]" title={r.personName}>{r.personName || '---'}</td>
+                                <td className="px-3 py-3 text-center font-mono font-bold text-emerald-700">
+                                  {r.inQuantity > 0 ? `+${formatNum(r.inQuantity)}` : '-'}
+                                </td>
+                                <td className="px-3 py-3 text-center font-mono font-bold text-rose-700">
+                                  {r.outQuantity > 0 ? `-${formatNum(r.outQuantity)}` : '-'}
+                                </td>
+                                <td className="px-3 py-3 text-center font-mono font-black text-sm bg-indigo-50/70 text-indigo-900 border-x border-indigo-200" dir="ltr">
+                                  {formatNum(r.runningBalanceAfter)}
+                                </td>
+                                <td className="px-3 py-3 text-left font-mono text-slate-600 whitespace-nowrap" dir="ltr">
+                                  {r.unitPrice ? formatCur(r.unitPrice) : '---'}
+                                </td>
+                                <td className="px-3 py-3 text-slate-500 text-[11px] max-w-[180px] truncate" title={r.description}>{r.description || '---'}</td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+                  );
+                })()}
+              </motion.div>
+            )}
+
             {activeTab === 'info' && (
               <motion.div initial={{opacity: 0, y: 10}} animate={{opacity: 1, y: 0}}>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">

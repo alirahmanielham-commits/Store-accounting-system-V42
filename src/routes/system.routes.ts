@@ -24,16 +24,53 @@ const router = Router();
 router.post('/api/db/recalculate-stocks', async (req, res) => {
     try {
       const products = (await getDbData('products')) || [];
-      const invoices = (await getDbData('invoices')) || [];
       const warehouses = (await getDbData('warehouses')) || [];
+      const persons = (await getDbData('persons')) || [];
 
-      // Sort invoices by createdAt to process chronologically
-      const sortedInvoices = [...invoices].sort((a: any, b: any) => (a.createdAt || 0) - (b.createdAt || 0));
+      // Fetch from all possible document tables
+      const docTableKeys = [
+        'invoices',
+        'warehouse_receipts',
+        'warehouse_remittances',
+        'sales_invoices',
+        'purchase_invoices',
+        'sale_returns',
+        'purchase_returns',
+        'wastes'
+      ];
+      const allDocsRaw: any[] = [];
+      for (const tKey of docTableKeys) {
+        const d = await getDbData(tKey);
+        if (Array.isArray(d)) {
+          d.forEach((item: any) => {
+            if (item && item.id) {
+              allDocsRaw.push({ ...item, _originTable: tKey });
+            }
+          });
+        }
+      }
+
+      // Deduplicate by ID
+      const docsMap = new Map();
+      allDocsRaw.forEach(doc => {
+        if (!docsMap.has(String(doc.id))) {
+          docsMap.set(String(doc.id), doc);
+        }
+      });
+      const allDocs = Array.from(docsMap.values());
+
+      // Sort invoices by date / createdAt to process chronologically
+      const sortedInvoices = [...allDocs].sort((a: any, b: any) => {
+        const tA = a.createdAt ? new Date(a.createdAt).getTime() : (a.timestamp || 0);
+        const tB = b.createdAt ? new Date(b.createdAt).getTime() : (b.timestamp || 0);
+        return tA - tB;
+      });
 
       const stocksMap: Record<string, any> = {};
       const historyList: any[] = [];
       const generateId = () => Math.random().toString(36).substring(2, 15);
 
+      // 1. Initial stocks from products definition
       products.forEach((p: any) => {
         if (p.type === 'service') return;
         const baseStock = Number(p.stock) || 0;
@@ -51,16 +88,20 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
              id: generateId(),
              productId: p.id,
              warehouseId: defaultWhId,
-             date: new Date().toISOString().split('T')[0],
+             date: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
              type: 'in',
              quantity: baseStock,
+             unitPrice: Number(p.purchasePrice || p.price || 0),
+             totalPrice: baseStock * Number(p.purchasePrice || p.price || 0),
              documentType: 'initial_stock',
              documentId: p.id,
-             documentNumber: p.code || '',
-             description: 'موجودی اولیه',
+             documentNumber: p.code || 'INIT',
+             description: 'موجودی اولیه کالا',
+             personId: '',
+             personName: 'سیستم (موجودی اولیه)',
              balanceBefore: before,
              balanceAfter: stocksMap[key].physicalStock,
-             timestamp: 0,
+             timestamp: p.createdAt ? new Date(p.createdAt).getTime() : 1,
            });
         }
       });
@@ -71,6 +112,12 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
       sortedInvoices.forEach((inv: any) => {
         if (inv.isDraft || inv.status === 'draft' || inv.status === 'voided' || inv.isDeleted) return;
         if (!inv.items || !Array.isArray(inv.items)) return;
+
+        // Resolve document type
+        const docType = inv.type || (inv._originTable === 'warehouse_receipts' ? 'warehouse_receipt' : inv._originTable === 'warehouse_remittances' ? 'warehouse_remittance' : 'sale');
+        const person = persons.find((per: any) => String(per.id) === String(inv.personId || inv.customerId));
+        const personName = person?.name || inv.customerName || inv.personName || '';
+
         inv.items.forEach((i: any) => {
           const prodId = i.productId;
           if (!prodId) return;
@@ -86,50 +133,66 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
 
           if (!stocksMap[key]) stocksMap[key] = { productId: prodId, warehouseId: whId, physicalStock: 0, reservedStock: 0, availableStock: 0 };
 
-          if (inv.type === 'warehouse_receipt') {
+          const uPrice = Number(i.unitPrice || i.price || product.purchasePrice || 0);
+          const tPrice = q * uPrice;
+          const docNum = inv.invoiceNumber || inv.documentNumber || inv.number || '';
+          const docDate = inv.date || (inv.createdAt ? new Date(inv.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+          const docTs = inv.createdAt ? new Date(inv.createdAt).getTime() : (inv.timestamp || Date.now());
+
+          if (docType === 'warehouse_receipt' || docType === 'sales_return') {
             const before = stocksMap[key].physicalStock;
             stocksMap[key].physicalStock += q;
             historyList.push({
                id: generateId(),
                productId: prodId,
                warehouseId: whId,
-               date: inv.date || new Date(inv.createdAt || Date.now()).toISOString().split('T')[0],
+               date: docDate,
                type: 'in',
                quantity: q,
-               documentType: 'warehouse_receipt',
+               unitPrice: uPrice,
+               totalPrice: tPrice,
+               documentType: docType,
                documentId: inv.id,
-               documentNumber: inv.invoiceNumber || inv.documentNumber || '',
-               description: `رسید انبار ${inv.invoiceNumber || inv.documentNumber || ''}`,
+               documentNumber: docNum,
+               description: inv.description || (docType === 'warehouse_receipt' ? `رسید انبار ${docNum}` : `برگشت از فروش ${docNum}`),
+               personId: inv.personId || inv.customerId || '',
+               personName: personName,
                balanceBefore: before,
                balanceAfter: stocksMap[key].physicalStock,
-               timestamp: inv.createdAt || Date.now(),
+               timestamp: docTs,
             });
-          } else if (inv.type === 'warehouse_remittance') {
+          } else if (docType === 'warehouse_remittance' || docType === 'purchase_return' || docType === 'waste') {
             const before = stocksMap[key].physicalStock;
             stocksMap[key].physicalStock -= q;
             historyList.push({
                id: generateId(),
                productId: prodId,
                warehouseId: whId,
-               date: inv.date || new Date(inv.createdAt || Date.now()).toISOString().split('T')[0],
+               date: docDate,
                type: 'out',
                quantity: q,
-               documentType: 'warehouse_remittance',
+               unitPrice: uPrice,
+               totalPrice: tPrice,
+               documentType: docType,
                documentId: inv.id,
-               documentNumber: inv.invoiceNumber || inv.documentNumber || '',
-               description: `حواله انبار ${inv.invoiceNumber || inv.documentNumber || ''}`,
+               documentNumber: docNum,
+               description: inv.description || (docType === 'warehouse_remittance' ? `حواله انبار ${docNum}` : docType === 'waste' ? `ضایعات انبار ${docNum}` : `برگشت از خرید ${docNum}`),
+               personId: inv.personId || inv.customerId || '',
+               personName: personName,
                balanceBefore: before,
                balanceAfter: stocksMap[key].physicalStock,
-               timestamp: inv.createdAt || Date.now(),
+               timestamp: docTs,
             });
 
             if (inv.sourceInvoiceId) {
-              const sourceInv = invoices.find((sinv: any) => sinv.id?.toString() === inv.sourceInvoiceId?.toString());
-              if (sourceInv && sourceInv.type === 'sale') remittedSaleQtysMap[key] = (remittedSaleQtysMap[key] || 0) + q;
+              const sourceInv = allDocs.find((sinv: any) => sinv.id?.toString() === inv.sourceInvoiceId?.toString());
+              if (sourceInv && (sourceInv.type === 'sale' || sourceInv._originTable === 'sales_invoices')) {
+                remittedSaleQtysMap[key] = (remittedSaleQtysMap[key] || 0) + q;
+              }
             } else {
               remittedSaleQtysMap[key] = (remittedSaleQtysMap[key] || 0) + q;
             }
-          } else if (inv.type === 'sale') {
+          } else if (docType === 'sale') {
             saleQtysMap[key] = (saleQtysMap[key] || 0) + q;
           }
         });
@@ -171,13 +234,35 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
         };
       });
 
+      // Save Kardex ledger into all standard tables
       await setDbData('InventoryTransactions', historyList);
+      await setDbData('kardex', historyList);
+      await setDbData('inventory_transactions', historyList);
       await setDbData('warehouse_stocks', finalStocksList);
-      res.json({ success: true, data: finalStocksList });
+
+      res.json({ success: true, data: finalStocksList, count: historyList.length });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
+
+router.get('/api/kardex/:productId?', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { warehouseId } = req.query;
+    let list = (await getDbData('kardex')) || (await getDbData('InventoryTransactions')) || [];
+    if (productId) {
+      list = list.filter((item: any) => String(item.productId) === String(productId));
+    }
+    if (warehouseId && warehouseId !== 'all') {
+      list = list.filter((item: any) => String(item.warehouseId) === String(warehouseId));
+    }
+    list.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+    res.json({ success: true, data: list });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 
 router.post('/api/sys/dirs', async (req, res) => {
     try {

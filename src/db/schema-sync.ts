@@ -13,15 +13,15 @@ export const KNOWN_TABLES = ['notifications', 'customers_risk_profile', 'repayme
   'roles', 'database_logs', 'backupConfig',
   'purchase_invoices', 'purchase_invoice_items',
   'sales_invoices', 'sales_invoice_items',
-  'warehouse_receipts', 'warehouse_receipt_items',
-  'warehouse_remittances', 'warehouse_remittance_items',
+  'warehouse_receipts', 'warehouse_receipt_items', 'warehouse_receipts_item', 'warehouse_receipts_items',
+  'warehouse_remittances', 'warehouse_remittance_items', 'warehouse_remittances_item', 'warehouse_remittances_items',
   'proforma_invoices', 'proforma_invoice_items',
   'sale_returns', 'sale_return_items',
   'purchase_returns', 'purchase_return_items',
   'wastes', 'waste_items',
   'receipt_transactions', 'payment_transactions',
   'issued_checks', 'received_checks', 'payslips'
-, 'InventoryTransactions', 'personal_notes',
+, 'InventoryTransactions', 'inventory_transactions', 'kardex', 'personal_notes',
   'sms_providers', 'sms_provider_settings', 'sms_templates', 'sms_campaigns',
   'sms_delivery_logs', 'sms_retry_logs', 'sms_settings', 'sms_quota_logs', 'sms_audit_logs', 'employee_orders', 'employee_profiles', 'order_templates', 'workplaces'];
 export const tableSchemas = new Map<string, Set<string>>();

@@ -1844,7 +1844,16 @@ const fetchInventoryTransactions = async () => {
 const fetchInvoices = async () => {
     try {
       const data = await getInvoices();
-      setInvoices(data as any);
+      const patched = (data || []).map((inv: any) => {
+        if ((inv?.type === "warehouse_receipt" || inv?.type === "warehouse_remittance") && !inv.warehouseId) {
+          const itemWhId = inv.items?.find((it: any) => it?.warehouseId)?.warehouseId;
+          if (itemWhId) {
+            return { ...inv, warehouseId: itemWhId };
+          }
+        }
+        return inv;
+      });
+      setInvoices(patched as any);
       await fetchInventoryTransactions();
     } catch (error) {
       console.error("Error fetching invoices", error);
@@ -4560,14 +4569,17 @@ const handleVoidInvoice = async (id: string | number) => {
 const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
     if (!warehouseId) {
       customAlert("انتخاب انبار الزامی است.");
-      return;
+      return null;
     }
     
     // Check if receipt already exists
     const existing = invoices.find(i => i.type === "warehouse_receipt" && i.sourceInvoiceId?.toString() === inv.id?.toString() && i.status !== "voided" && !i.isDeleted);
     if (existing) {
        customAlert("رسید انبار برای این فاکتور قبلا ثبت شده است.");
-       return;
+       if (setViewingInvoice) {
+         setViewingInvoice(existing);
+       }
+       return existing;
     }
 
     updateAppProcessing("در حال ثبت رسید انبار...");
@@ -4575,11 +4587,12 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
     try {
         const payload = {
             type: "warehouse_receipt",
+            warehouseId: warehouseId,
             operationType: "purchase_invoice",
             sourceInvoiceId: inv.id,
             customerId: inv.customerId,
             date: new Date().toISOString(),
-            items: inv.items.map((item: any) => ({
+            items: (inv.items || []).map((item: any) => ({
                 ...item,
                 warehouseId: warehouseId
             })),
@@ -4590,13 +4603,20 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
             invoiceDescription: `رسید اتوماتیک انبار برای فاکتور خرید ${inv.invoiceNumber || inv.id}`
         };
         
-        await addInvoice(payload as any, false);
+        const added = await addInvoice(payload as any, false);
         await fetchInvoices();
         setSuccessMsg("رسید انبار با موفقیت ثبت شد.");
         setTimeout(() => setSuccessMsg(""), 3000);
+
+        const createdReceipt = added || payload;
+        if (setViewingInvoice && createdReceipt) {
+          setViewingInvoice(createdReceipt);
+        }
+        return createdReceipt;
     } catch (e) {
         console.error("Fast receipt error:", e);
         customAlert("خطا در ثبت رسید انبار");
+        return null;
     } finally {
         stopAppProcessing();
     }
@@ -4631,6 +4651,7 @@ const handleEditInvoiceAction = async (inv: any) => {
       setInvoiceType(inv.type);
       setInvoiceCurrency(inv.currency || storeSettings.currency);
       setCustomerId(inv.customerId);
+      setInvoiceWarehouseId(inv.warehouseId || inv.items?.find((i: any) => i?.warehouseId)?.warehouseId || "");
       setSourceInvoiceId(inv.sourceInvoiceId || "");
       setItems((inv.items || []).map((i: any) => ({ ...i, id: i.id || generateId() })));
       setOverallDiscountPercent(inv.overallDiscountPercent || 0);
@@ -5688,7 +5709,16 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
       if (!isDraft && payload.type !== "proforma") {
         recalculateAllWarehouseStocks()
-          .then(() => fetchWarehouses())
+          .then(async () => {
+            await fetchWarehouses();
+            await fetchInventoryTransactions();
+            try {
+              const st = await getWarehouseStocks();
+              setWarehouseStocks(st as any);
+            } catch (e) {
+              console.error("Error refreshing warehouse stocks:", e);
+            }
+          })
           .catch(console.error);
       }
 
@@ -6390,9 +6420,11 @@ const handleInvoicePreviewTrigger = () => {
         });
       });
     } else {
+      const productsInKardex = new Set<string>();
       inventoryTransactions.forEach((t) => {
         const pid = t.productId?.toString();
         if (!pid || !map[pid]) return;
+        productsInKardex.add(pid);
         const whId = (t.warehouseId || map[pid].defaultWhId).toString();
         const qty =
           t.type === "in" ? Number(t.quantity) || 0 : -(Number(t.quantity) || 0);
@@ -6403,6 +6435,22 @@ const handleInvoicePreviewTrigger = () => {
           map[pid].warehouses[whId] = { physical: 0, reserved: 0, available: 0 };
         }
         map[pid].warehouses[whId].physical += qty;
+      });
+
+      // For any product not yet recorded in the kardex ledger, retain its initial stock definition
+      products.forEach((p) => {
+        const pid = p.id.toString();
+        if (!productsInKardex.has(pid)) {
+          const baseStock = Number(p.stock) || 0;
+          const defaultWhId = map[pid].defaultWhId;
+          map[pid].totalPhysical = baseStock;
+          if (baseStock !== 0) {
+            if (!map[pid].warehouses[defaultWhId]) {
+              map[pid].warehouses[defaultWhId] = { physical: 0, reserved: 0, available: 0 };
+            }
+            map[pid].warehouses[defaultWhId].physical = baseStock;
+          }
+        }
       });
     }
 
@@ -6876,7 +6924,7 @@ const renderTabContent = () => {
 
       case "create_warehouse_doc":
         return (
-          <WarehouseDocCreate setIsPersonModalOpen={setIsPersonModalOpen} invoiceNumber={invoiceNumber} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} storeSettings={storeSettings} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} formatCurrency={formatCurrency} submitting={submitting} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} Plus={Plus} Trash2={Trash2} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Tag={Tag} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} formatProductStockDetails={formatProductStockDetails} warehouseOperationType={warehouseOperationType} setWarehouseOperationType={setWarehouseOperationType} warehouseWizardStep={warehouseWizardStep} setWarehouseWizardStep={setWarehouseWizardStep} setSourceInvoiceId={setSourceInvoiceId} customAlert={customAlert} invoices={invoices} hasRemainingWarehouseItems={hasRemainingWarehouseItems} sourceInvoiceId={sourceInvoiceId} deletePreviousDocs={deletePreviousDocs} setDeletePreviousDocs={setDeletePreviousDocs} setInvoiceCurrency={setInvoiceCurrency} setExchangeRate={setExchangeRate} setExchangeRateInput={setExchangeRateInput} deleteInvoice={deleteInvoice} handleVoidInvoice={handleVoidInvoice} setInvoices={setInvoices} fetchInvoices={fetchInvoices} generateId={generateId} handleAddItem={handleAddItem} />
+          <WarehouseDocCreate setIsPersonModalOpen={setIsPersonModalOpen} invoiceNumber={invoiceNumber} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} storeSettings={storeSettings} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} formatCurrency={formatCurrency} submitting={submitting} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} Plus={Plus} Trash2={Trash2} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Tag={Tag} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} formatProductStockDetails={formatProductStockDetails} warehouseOperationType={warehouseOperationType} setWarehouseOperationType={setWarehouseOperationType} warehouseWizardStep={warehouseWizardStep} setWarehouseWizardStep={setWarehouseWizardStep} setSourceInvoiceId={setSourceInvoiceId} customAlert={customAlert} invoices={invoices} hasRemainingWarehouseItems={hasRemainingWarehouseItems} sourceInvoiceId={sourceInvoiceId} deletePreviousDocs={deletePreviousDocs} setDeletePreviousDocs={setDeletePreviousDocs} setInvoiceCurrency={setInvoiceCurrency} setExchangeRate={setExchangeRate} setExchangeRateInput={setExchangeRateInput} deleteInvoice={deleteInvoice} handleVoidInvoice={handleVoidInvoice} setInvoices={setInvoices} fetchInvoices={fetchInvoices} generateId={generateId} handleAddItem={handleAddItem} getProductStockInfo={getProductStockInfo} />
         );
 
       case "create_purchase_return":

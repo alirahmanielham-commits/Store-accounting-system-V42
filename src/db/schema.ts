@@ -146,6 +146,74 @@ export const warehouseStocks = pgTable('warehouse_stocks', {
   stock: numeric('stock').default('0'),
 });
 
+export const warehouseReceipts = pgTable('warehouse_receipts', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
+  date: varchar('date', { length: 50 }).notNull(),
+  warehouseId: varchar('warehouse_id', { length: 50 }),
+  personId: varchar('person_id', { length: 50 }),
+  sourceInvoiceId: varchar('source_invoice_id', { length: 50 }),
+  sourceType: varchar('source_type', { length: 50 }),
+  description: text('description'),
+  status: varchar('status', { length: 50 }).default('approved'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const warehouseReceiptItems = pgTable('warehouse_receipt_items', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  invoiceId: varchar('invoice_id', { length: 50 }).notNull(),
+  productId: varchar('product_id', { length: 50 }).notNull(),
+  warehouseId: varchar('warehouse_id', { length: 50 }),
+  quantity: numeric('quantity').notNull(),
+  unitPrice: numeric('unit_price').default('0'),
+  isSecondaryUnit: boolean('is_secondary_unit').default(false),
+  description: text('description'),
+});
+
+export const warehouseRemittances = pgTable('warehouse_remittances', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
+  date: varchar('date', { length: 50 }).notNull(),
+  warehouseId: varchar('warehouse_id', { length: 50 }),
+  personId: varchar('person_id', { length: 50 }),
+  sourceInvoiceId: varchar('source_invoice_id', { length: 50 }),
+  sourceType: varchar('source_type', { length: 50 }),
+  description: text('description'),
+  status: varchar('status', { length: 50 }).default('approved'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
+export const warehouseRemittanceItems = pgTable('warehouse_remittance_items', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  invoiceId: varchar('invoice_id', { length: 50 }).notNull(),
+  productId: varchar('product_id', { length: 50 }).notNull(),
+  warehouseId: varchar('warehouse_id', { length: 50 }),
+  quantity: numeric('quantity').notNull(),
+  unitPrice: numeric('unit_price').default('0'),
+  isSecondaryUnit: boolean('is_secondary_unit').default(false),
+  description: text('description'),
+});
+
+export const kardex = pgTable('kardex', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  productId: varchar('product_id', { length: 50 }).notNull(),
+  warehouseId: varchar('warehouse_id', { length: 50 }),
+  date: varchar('date', { length: 50 }).notNull(),
+  type: varchar('type', { length: 20 }).notNull(), // 'in' | 'out'
+  quantity: numeric('quantity').notNull(),
+  unitPrice: numeric('unit_price').default('0'),
+  totalPrice: numeric('total_price').default('0'),
+  balanceAfter: numeric('balance_after').notNull(),
+  documentType: varchar('document_type', { length: 50 }).notNull(), // 'initial_stock' | 'warehouse_receipt' | 'warehouse_remittance' | ...
+  documentId: varchar('document_id', { length: 50 }),
+  documentNumber: varchar('document_number', { length: 50 }),
+  personId: varchar('person_id', { length: 50 }),
+  personName: varchar('person_name', { length: 255 }),
+  description: text('description'),
+  timestamp: numeric('timestamp').default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+});
+
 
 export const roles = pgTable('roles', {
   id: varchar('id', { length: 50 }).primaryKey(),

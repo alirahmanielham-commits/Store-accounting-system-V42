@@ -1,5 +1,5 @@
 import React from 'react';
-import { toPersianDigits, formatDateDisplay, numToPersianWords, addCommas } from '../../utils/format';
+import { toPersianDigits, formatDateDisplay, numToPersianWords, addCommas, convertToGregorian } from '../../utils/format';
 import { ReceiptPrintSettings, defaultReceiptPrintSettings } from './ReceiptPrintTypes';
 import {
   Phone,
@@ -50,9 +50,29 @@ export default function ReceiptPrintTemplate({
   // Format date
   let formattedDate = '';
   try {
-    formattedDate = toPersianDigits(formatDateDisplay(data.jalaliDate || data.date, storeSettings?.calendarType));
+    const calType = storeSettings?.calendarType === 'gregorian' ? 'gregorian' : 'jalali';
+    const rawDate = calType === 'gregorian'
+      ? (data.date || (data.jalaliDate ? convertToGregorian(data.jalaliDate) : null))
+      : (data.jalaliDate || data.date);
+    const res = formatDateDisplay(rawDate, calType);
+    formattedDate = calType === 'gregorian' ? res : toPersianDigits(res);
   } catch (e) {
-    formattedDate = toPersianDigits(String(data.jalaliDate || data.date || ''));
+    formattedDate = storeSettings?.calendarType === 'gregorian' ? String(data.date || data.jalaliDate || '') : toPersianDigits(String(data.jalaliDate || data.date || ''));
+  }
+
+  // Check due date
+  let formattedCheckDueDate = 'ثبت نشده';
+  if (data.checkDueDate) {
+    try {
+      const calType = storeSettings?.calendarType === 'gregorian' ? 'gregorian' : 'jalali';
+      const rawDate = calType === 'gregorian'
+        ? (data.checkDueDate.includes('-') && !data.checkDueDate.includes('/') ? data.checkDueDate : convertToGregorian(data.checkDueDate))
+        : data.checkDueDate;
+      const res = formatDateDisplay(rawDate, calType);
+      formattedCheckDueDate = calType === 'gregorian' ? res : toPersianDigits(res);
+    } catch {
+      formattedCheckDueDate = storeSettings?.calendarType === 'gregorian' ? data.checkDueDate : toPersianDigits(data.checkDueDate);
+    }
   }
 
   // Format time
@@ -99,17 +119,45 @@ export default function ReceiptPrintTemplate({
   const linkedInvoicesList = React.useMemo(() => {
     if (!data.linkedInvoices || typeof data.linkedInvoices !== 'object') return [];
     const entries = Object.entries(data.linkedInvoices);
+    const calType = storeSettings?.calendarType === 'gregorian' ? 'gregorian' : 'jalali';
+
     return entries.map(([invId, allocAmount]) => {
       const inv = (invoices || []).find((i: any) => String(i.id) === String(invId));
+      
+      let formattedInvoiceDate = '-';
+      if (inv) {
+        if (calType === 'gregorian') {
+          const rawDate = inv.date || (inv.jalaliDate ? convertToGregorian(inv.jalaliDate) : null);
+          if (rawDate) {
+            try {
+              formattedInvoiceDate = formatDateDisplay(rawDate, 'gregorian');
+            } catch {
+              formattedInvoiceDate = String(rawDate);
+            }
+          }
+        } else {
+          // Jalali calendar
+          if (inv.jalaliDate) {
+            formattedInvoiceDate = toPersianDigits(inv.jalaliDate);
+          } else if (inv.date) {
+            try {
+              formattedInvoiceDate = formatDateDisplay(inv.date, 'jalali');
+            } catch {
+              formattedInvoiceDate = toPersianDigits(String(inv.date));
+            }
+          }
+        }
+      }
+
       return {
         id: invId,
         invoiceNumber: inv?.invoiceNumber || `#${invId}`,
-        date: inv?.jalaliDate || inv?.date || '-',
+        date: formattedInvoiceDate,
         total: Number(inv?.totalAmount || inv?.finalAmount || 0),
         allocated: Number(allocAmount) || 0,
       };
     });
-  }, [data.linkedInvoices, invoices]);
+  }, [data.linkedInvoices, invoices, storeSettings?.calendarType]);
 
   // Page style rules based on paperSize
   const getPageStyle = () => {
@@ -371,7 +419,7 @@ export default function ReceiptPrintTemplate({
                   <div>
                     <span className="font-bold text-indigo-700 block text-[10.5px]">تاریخ سررسید:</span>
                     <span className="font-black text-xs mt-0.5 block">
-                      {toPersianDigits(data.checkDueDate || 'ثبت نشده')}
+                      {formattedCheckDueDate}
                     </span>
                   </div>
                   <div>
@@ -407,11 +455,17 @@ export default function ReceiptPrintTemplate({
                 <tbody className="divide-y divide-slate-100">
                   {linkedInvoicesList.map((item, idx) => (
                     <tr key={idx} className="hover:bg-slate-50/50">
-                      <td className="py-1 px-2.5 font-mono font-bold text-slate-900">{toPersianDigits(item.invoiceNumber)}</td>
-                      <td className="py-1 px-2.5 font-bold text-slate-600">{toPersianDigits(item.date)}</td>
-                      <td className="py-1 px-2.5 font-mono text-slate-800">{toPersianDigits(addCommas(item.total))} {currency}</td>
+                      <td className="py-1 px-2.5 font-mono font-bold text-slate-900">
+                        {storeSettings?.calendarType === 'gregorian' ? item.invoiceNumber : toPersianDigits(item.invoiceNumber)}
+                      </td>
+                      <td className="py-1 px-2.5 font-bold text-slate-600" dir="ltr">
+                        {item.date}
+                      </td>
+                      <td className="py-1 px-2.5 font-mono text-slate-800">
+                        {storeSettings?.calendarType === 'gregorian' ? addCommas(item.total) : toPersianDigits(addCommas(item.total))} {currency}
+                      </td>
                       <td className="py-1 px-2.5 font-mono font-black text-indigo-900 text-left">
-                        {toPersianDigits(addCommas(item.allocated))} {currency}
+                        {storeSettings?.calendarType === 'gregorian' ? addCommas(item.allocated) : toPersianDigits(addCommas(item.allocated))} {currency}
                       </td>
                     </tr>
                   ))}

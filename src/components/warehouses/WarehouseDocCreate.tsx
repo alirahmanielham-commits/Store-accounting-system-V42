@@ -169,7 +169,8 @@ export default function WarehouseDocCreate(props: any) {
     fetchInvoices,
     generateId,
     handleAddItem,
-    handleVoidInvoice
+    handleVoidInvoice,
+    getProductStockInfo
   
   } = props;
 
@@ -209,7 +210,7 @@ const isReceipt = [
                         .filter((w) => w.isActive !== false)
                         .map((v, index) => (
                           <option key={`${v.id}-${index}`} value={v.id}>
-                            {v.name}
+                            {v.name || v.title || `انبار ${v.id}`}
                           </option>
                         ))}
                     </select>
@@ -614,10 +615,13 @@ const isReceipt = [
                       انبار انتخابی
                     </label>
                     <div className="w-full p-2.5 bg-gray-50 text-gray-700 font-bold rounded-xl border border-gray-200 text-center">
-                      {warehouses.find(
-                        (w) =>
-                          w.id?.toString() === invoiceWarehouseId?.toString(),
-                      )?.name || "نامشخص"}
+                      {(() => {
+                        const wh = warehouses.find(
+                          (w) =>
+                            w.id?.toString() === invoiceWarehouseId?.toString(),
+                        );
+                        return wh?.name || wh?.title || "نامشخص";
+                      })()}
                     </div>
                   </div>
                   <div className="lg:col-span-2 mt-2">
@@ -734,24 +738,57 @@ const isReceipt = [
                                   const p = products.find(
                                     (prod) => prod.id === item.productId,
                                   );
+                                  const stockInfo = getProductStockInfo ? getProductStockInfo(item.productId) : null;
+                                  const targetWh = (invoiceWarehouseId || p?.warehouseId || "").toString();
+                                  const currentStockInWh = targetWh && stockInfo?.warehouses?.[targetWh]
+                                    ? Number(stockInfo.warehouses[targetWh].physical || 0)
+                                    : (stockInfo ? Number(stockInfo.totalPhysical || 0) : Number(p?.stock || 0));
+                                  const itemQty = Number(item.quantity) || 0;
+                                  const isRemittance = !isReceipt;
+                                  const isShortage = isRemittance && itemQty > currentStockInWh;
+
                                   return (
-                                    <span className="text-xs text-slate-400 font-normal flex gap-2">
-                                      کالای سیستمی{" "}
-                                      {p?.code ? (
-                                        <span className="font-mono bg-slate-100 px-1 rounded">
-                                          کد: {p.code}
+                                    <div className="flex flex-col gap-1 mt-0.5">
+                                      <span className="text-xs text-slate-400 font-normal flex gap-2 flex-wrap items-center">
+                                        کالای سیستمی{" "}
+                                        {p?.code ? (
+                                          <span className="font-mono bg-slate-100 px-1 rounded">
+                                            کد: {p.code}
+                                          </span>
+                                        ) : (
+                                          ""
+                                        )}{" "}
+                                        {p?.barcode ? (
+                                          <span className="font-mono bg-slate-100 px-1 rounded">
+                                            بارکد: {p.barcode}
+                                          </span>
+                                        ) : (
+                                          ""
+                                        )}
+                                      </span>
+                                      <div className="flex items-center gap-2 flex-wrap text-[11px] font-sans mt-0.5">
+                                        <span className="text-slate-500 font-medium">موجودی کاردکس در انبار:</span>
+                                        <span className={`font-bold font-mono px-1.5 py-0.5 rounded ${currentStockInWh > 0 ? "bg-slate-100 text-indigo-700" : "bg-rose-50 text-rose-600"}`} dir="ltr">
+                                          {currentStockInWh} {p?.unit || item.selectedUnit || "عدد"}
                                         </span>
-                                      ) : (
-                                        ""
-                                      )}{" "}
-                                      {p?.barcode ? (
-                                        <span className="font-mono bg-slate-100 px-1 rounded">
-                                          بارکد: {p.barcode}
-                                        </span>
-                                      ) : (
-                                        ""
-                                      )}
-                                    </span>
+                                        {isReceipt && itemQty > 0 && (
+                                          <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold text-[10px]" dir="ltr">
+                                            مانده بعد از ورود: {currentStockInWh + itemQty}
+                                          </span>
+                                        )}
+                                        {isRemittance && itemQty > 0 && !isShortage && (
+                                          <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded font-bold text-[10px]" dir="ltr">
+                                            مانده بعد از خروج: {currentStockInWh - itemQty}
+                                          </span>
+                                        )}
+                                        {isRemittance && isShortage && (
+                                          <span className="bg-rose-100 text-rose-700 px-2 py-0.5 rounded font-black text-[10px] flex items-center gap-1 animate-pulse">
+                                            <AlertTriangle className="w-3 h-3 text-rose-600 inline" />
+                                            کسری موجودی: {itemQty - currentStockInWh} {p?.unit || ""}
+                                          </span>
+                                        )}
+                                      </div>
+                                    </div>
                                   );
                                 })()}
                               </div>
@@ -870,7 +907,34 @@ const isReceipt = [
                 </div>
                 <div className="p-4 bg-gray-50 flex justify-end">
                   <button
-                    onClick={handleInvoicePreviewTrigger}
+                    onClick={() => {
+                      if (!isReceipt && getProductStockInfo) {
+                        const targetWh = invoiceWarehouseId ? invoiceWarehouseId.toString() : "";
+                        const shortages: string[] = [];
+                        (items || []).forEach((it: any) => {
+                          if (it.productId) {
+                            const p = products.find((prod) => prod.id === it.productId);
+                            if (p && p.type !== "service") {
+                              const sInfo = getProductStockInfo(it.productId);
+                              const cur = targetWh && sInfo?.warehouses?.[targetWh]
+                                ? Number(sInfo.warehouses[targetWh].physical || 0)
+                                : (sInfo ? Number(sInfo.totalPhysical || 0) : Number(p.stock || 0));
+                              const q = Number(it.quantity) || 0;
+                              if (q > cur) {
+                                shortages.push(`• ${it.productName}: موجودی انبار ${cur} ${p.unit || ""}، مقدار حواله ${q} ${p.unit || ""} (کسری: ${q - cur})`);
+                              }
+                            }
+                          }
+                        });
+                        if (shortages.length > 0) {
+                          const confirmContinue = window.confirm(
+                            `هشدار کسری موجودی در کاردکس انبار:\n\n${shortages.join("\n")}\n\nآیا مایلید سند حواله با وجود کسری موجودی در کاردکس ثبت شود؟`
+                          );
+                          if (!confirmContinue) return;
+                        }
+                      }
+                      handleInvoicePreviewTrigger();
+                    }}
                     disabled={submitting || (items || []).length === 0}
                     className="px-10 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-xl font-bold flex items-center justify-center gap-3 transition-colors shadow-sm focus:ring-4 focus:ring-indigo-500/20"
                   >

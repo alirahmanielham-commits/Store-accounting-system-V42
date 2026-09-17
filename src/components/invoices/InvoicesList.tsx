@@ -2,7 +2,7 @@ import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUn
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
-const { Tag, Wallet, Ban, ChevronDown, Search, Plus, Filter, FileText, Download, CheckCircle, Edit2, Trash2, Printer, Check, X, ArrowUpRight, ArrowDownRight, ArrowRight, CornerDownLeft, Package, User, Clock, CheckCircle2, ChevronLeft, ChevronRight, Share2, Eye, Truck, MoreVertical, DollarSign, RefreshCw, XCircle } = lucide as any;
+const { Tag, Wallet, Ban, ChevronDown, Search, Plus, Filter, FileText, Download, CheckCircle, Edit2, Trash2, Printer, Check, X, ArrowUpRight, ArrowDownRight, ArrowRight, CornerDownLeft, Package, User, Clock, CheckCircle2, ChevronLeft, ChevronRight, Share2, Eye, Truck, MoreVertical, DollarSign, RefreshCw, XCircle, Warehouse } = lucide as any;
 
 export default function InvoicesList(props: any) {
   const {
@@ -16,6 +16,64 @@ export default function InvoicesList(props: any) {
     products, setPricingWizardItems, setPricingWizardInvoice, setSuccessMsg, setReceiptPersonId, setViewingInvoice, handleEditInvoiceAction, handleVoidInvoice, handleFastWarehouseReceipt,
     ...rest
   } = props;
+
+  const getDocWarehouseName = (inv: any): string => {
+    if (!inv) return "نامشخص";
+
+    // 1. Direct warehouseId on invoice root
+    let targetWhId = inv.warehouseId;
+
+    // 2. Target / to / destination / from warehouse
+    if (!targetWhId) {
+      targetWhId = inv.targetWarehouseId || inv.toWarehouseId || inv.destinationWarehouseId || inv.fromWarehouseId;
+    }
+
+    // 3. Search in invoice items
+    if (!targetWhId && Array.isArray(inv.items) && inv.items.length > 0) {
+      const itemWhIds = inv.items
+        .map((it: any) => it?.warehouseId)
+        .filter((id: any) => id !== undefined && id !== null && id !== "");
+      const uniqueItemWhIds = Array.from(new Set(itemWhIds.map((id: any) => String(id))));
+
+      if (uniqueItemWhIds.length === 1) {
+        targetWhId = uniqueItemWhIds[0];
+      } else if (uniqueItemWhIds.length > 1) {
+        const foundNames = uniqueItemWhIds
+          .map((id: any) => {
+            const w = (warehouses || []).find((wh: any) => String(wh.id) === String(id));
+            return w?.name || w?.title;
+          })
+          .filter(Boolean);
+        if (foundNames.length > 0) {
+          return foundNames.join("، ");
+        }
+      }
+    }
+
+    // 4. Source invoice (e.g. if generated from purchase or sale invoice)
+    if (!targetWhId && inv.sourceInvoiceId) {
+      const sourceInv = (invoices || []).find((si: any) => String(si.id) === String(inv.sourceInvoiceId));
+      if (sourceInv) {
+        targetWhId = sourceInv.warehouseId || sourceInv.items?.find((it: any) => it?.warehouseId)?.warehouseId;
+      }
+    }
+
+    // Lookup in warehouses list
+    if (targetWhId) {
+      const wh = (warehouses || []).find((w: any) => String(w.id) === String(targetWhId));
+      if (wh) return wh.name || wh.title || `انبار ${wh.id}`;
+    }
+
+    // 5. Fallback: if only one active warehouse exists in system, or only 1 warehouse total
+    const activeWarehouses = (warehouses || []).filter((w: any) => w.isActive !== false);
+    if (activeWarehouses.length === 1) {
+      return activeWarehouses[0].name || activeWarehouses[0].title || "نامشخص";
+    } else if ((warehouses || []).length === 1) {
+      return warehouses[0].name || warehouses[0].title || "نامشخص";
+    }
+
+    return "نامشخص";
+  };
 
   
   const [fastReceiptInvoice, setFastReceiptInvoice] = useState<any>(null);
@@ -171,10 +229,12 @@ export default function InvoicesList(props: any) {
             const pName = (p?.alias || p?.name || "نامشخص").toLowerCase();
             const invNum = (inv.invoiceNumber || "").toLowerCase();
             const sellNum = (inv.sellerInvoiceNumber || "").toLowerCase();
+            const whName = activeTab.includes("warehouse") ? getDocWarehouseName(inv).toLowerCase() : "";
             return (
               pName.includes(term) ||
               invNum.includes(term) ||
-              sellNum.includes(term)
+              sellNum.includes(term) ||
+              whName.includes(term)
             );
           });
 
@@ -602,11 +662,14 @@ export default function InvoicesList(props: any) {
                             </td>
                             {activeTab.includes("warehouse") ? (
                               <td className="p-4 font-bold text-indigo-900 text-center">
-                                {warehouses.find(
-                                  (w) =>
-                                    w.id?.toString() ===
-                                    inv.warehouseId?.toString(),
-                                )?.name || "نامشخص"}
+                                <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl bg-indigo-50 text-indigo-900 text-xs font-bold border border-indigo-100/70 shadow-2xs">
+                                  {Warehouse ? (
+                                    <Warehouse className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  ) : (
+                                    <Package className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                  )}
+                                  <span>{getDocWarehouseName(inv)}</span>
+                                </span>
                               </td>
                             ) : (
                               <td className="p-4 text-left">
@@ -774,6 +837,8 @@ export default function InvoicesList(props: any) {
                                 <button
                                   onClick={() => {
                                     setFastReceiptInvoice(inv);
+                                    const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses && warehouses.length > 0 ? warehouses[0].id : "");
+                                    setFastReceiptWarehouseId(defaultWh ? String(defaultWh) : "");
                                   }}
                                   className="p-1.5 text-gray-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg cursor-pointer bg-transparent border-none"
                                   title="رسید سریع به انبار"
@@ -970,7 +1035,7 @@ export default function InvoicesList(props: any) {
                   >
                     <option value="">-- انتخاب انبار --</option>
                     {(warehouses || []).map((wh: any) => (
-                      <option key={wh.id} value={wh.id}>{wh.title}</option>
+                      <option key={wh.id} value={wh.id}>{wh.name || wh.title || `انبار ${wh.id}`}</option>
                     ))}
                   </select>
                 </div>
@@ -985,15 +1050,18 @@ export default function InvoicesList(props: any) {
                     انصراف
                   </button>
                   <button
-                    onClick={() => {
-                      handleFastWarehouseReceipt(fastReceiptInvoice, fastReceiptWarehouseId);
+                    onClick={async () => {
+                      const receipt = await handleFastWarehouseReceipt(fastReceiptInvoice, fastReceiptWarehouseId);
                       setFastReceiptInvoice(null);
                       setFastReceiptWarehouseId("");
+                      if (receipt && setViewingInvoice) {
+                        setViewingInvoice(receipt);
+                      }
                     }}
                     disabled={!fastReceiptWarehouseId}
-                    className="flex-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-200 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-colors shadow-sm"
+                    className="flex-1 px-6 py-3 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-200 disabled:cursor-not-allowed text-white rounded-xl font-bold transition-colors shadow-sm cursor-pointer"
                   >
-                    ثبت رسید انبار
+                    ثبت و مشاهده رسید انبار
                   </button>
                 </div>
               </div>

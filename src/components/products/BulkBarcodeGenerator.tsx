@@ -2,13 +2,15 @@ import React, { useState, useEffect, useMemo } from "react";
 import { Check, Package, Search, Filter, RefreshCw, Printer, AlertCircle, Settings, AlertTriangle } from "lucide-react";
 
 export default function BulkBarcodeGenerator({
-  products,
-  categories,
-  toPersianDigits,
+  products = [],
+  categories = [],
+  toPersianDigits = (v: any) => v,
   updateProduct,
   fetchProducts,
   storeSettings,
-  showNotification
+  showNotification,
+  isModal = false,
+  onClose
 }: any) {
   const [selectedProducts, setSelectedProducts] = useState<string[]>([]);
   const [barcodeFormat, setBarcodeFormat] = useState("numeric_only");
@@ -37,7 +39,7 @@ export default function BulkBarcodeGenerator({
   const [searchQuery, setSearchQuery] = useState("");
   const [filterMissingOnly, setFilterMissingOnly] = useState(true);
 
-  const filteredProducts = products.filter((p: any) => {
+  const filteredProducts = (products || []).filter((p: any) => {
     if (filterCategory !== "all" && p.category !== filterCategory) return false;
     if (filterMissingOnly && p.barcode && p.barcode.trim() !== "") return false;
     if (searchQuery) {
@@ -132,16 +134,18 @@ export default function BulkBarcodeGenerator({
   };
 
   return (
-    <div className="p-4 md:p-6 max-w-7xl mx-auto space-y-6" dir="rtl">
-      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
-            <RefreshCw className="w-6 h-6 text-indigo-500" />
-            تولید گروهی بارکد
-          </h1>
-          <p className="text-slate-500 mt-1 font-medium">ایجاد و تخصیص هوشمند بارکد به کالاها</p>
+    <div className={isModal ? "p-1 md:p-2 space-y-4" : "p-4 md:p-6 max-w-7xl mx-auto space-y-6"} dir="rtl">
+      {!isModal && (
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
+          <div>
+            <h1 className="text-2xl font-black text-slate-800 flex items-center gap-2">
+              <RefreshCw className="w-6 h-6 text-indigo-500" />
+              تولید گروهی بارکد
+            </h1>
+            <p className="text-slate-500 mt-1 font-medium">ایجاد و تخصیص هوشمند بارکد به کالاها</p>
+          </div>
         </div>
-      </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-1 space-y-6">
@@ -259,9 +263,10 @@ export default function BulkBarcodeGenerator({
               className="px-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-sm font-medium outline-none"
             >
               <option value="all">همه دسته‌بندی‌ها</option>
-              {categories.map((c: any) => (
-                <option key={c.id} value={c.name}>{c.name}</option>
-              ))}
+              {(categories || []).map((c: any) => {
+                const name = typeof c === 'string' ? c : (c.name || c.title || '');
+                return <option key={c.id || name} value={name}>{name}</option>;
+              })}
             </select>
             <button
               onClick={() => setFilterMissingOnly(!filterMissingOnly)}

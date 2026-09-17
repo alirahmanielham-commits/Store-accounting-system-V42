@@ -146,24 +146,33 @@ export async function innerSetDbData(key: string, data: any) {
   }
 }
 
+export function getChildTableCandidates(key: string): string[] {
+    if (key === "warehouse_receipts") return ["warehouse_receipt_items", "warehouse_receipts_item", "warehouse_receipts_items"];
+    if (key === "warehouse_remittances") return ["warehouse_remittance_items", "warehouse_remittances_item", "warehouse_remittances_items"];
+    if (key === "invoices") return ["invoice_items"];
+    if (key.endsWith('s')) return [key.substring(0, key.length - 1) + "_items"];
+    return [key + "_items"];
+}
+
 export async function handleRelations(key: string, data: any) {
     if ((key === "invoices" || key === "sales_invoices" || key === "purchase_invoices" || key === "warehouse_receipts" || key === "warehouse_remittances" || key === "proforma_invoices" || key === "sale_returns" || key === "purchase_returns" || key === "wastes") && data && data.items) {
-       const childTable = key === "invoices" ? "invoice_items" : (key.endsWith('s') ? key.substring(0, key.length - 1) + "_items" : key + "_items");
+       const childCandidates = getChildTableCandidates(key);
+       const childTable = childCandidates[0];
        const items = data.items.map((it: any) => ({...it, invoiceId: data.id, id: it.id || Math.random().toString(36).substring(2,15)}));
        delete data.items;
-       return { strippedData: data, childTable, items };
+       return { strippedData: data, childTable, items, allChildTables: childCandidates };
     }
     if (key === "accounting_documents" && data && data.items) {
        const items = data.items.map((it: any) => ({...it, documentId: data.id, id: it.id || Math.random().toString(36).substring(2,15)}));
        delete data.items;
-       return { strippedData: data, childTable: "accounting_document_items", items };
+       return { strippedData: data, childTable: "accounting_document_items", items, allChildTables: ["accounting_document_items"] };
     }
     if (key === "stocktakings" && data && data.items) {
        const items = data.items.map((it: any) => ({...it, stocktakingId: data.id, id: it.id || Math.random().toString(36).substring(2,15)}));
        delete data.items;
-       return { strippedData: data, childTable: "stocktaking_items", items };
+       return { strippedData: data, childTable: "stocktaking_items", items, allChildTables: ["stocktaking_items"] };
     }
-    return { strippedData: data, childTable: null, items: [] };
+    return { strippedData: data, childTable: null, items: [], allChildTables: [] };
 }
 
 export async function getDbData(key: string) {
@@ -171,10 +180,21 @@ export async function getDbData(key: string) {
   if (!data) return data;
   
   if ((key === 'invoices' || key === 'sales_invoices' || key === 'purchase_invoices' || key === 'warehouse_receipts' || key === 'warehouse_remittances' || key === 'proforma_invoices' || key === 'sale_returns' || key === 'purchase_returns' || key === 'wastes') && Array.isArray(data)) {
-      const childTable = key === "invoices" ? "invoice_items" : (key.endsWith('s') ? key.substring(0, key.length - 1) + "_items" : key + "_items");
-      const items = await innerGetDbData(childTable) || [];
+      const candidates = getChildTableCandidates(key);
+      let items: any[] = [];
+      for (const cand of candidates) {
+        const candItems = await innerGetDbData(cand);
+        if (candItems && Array.isArray(candItems) && candItems.length > 0) {
+          items = items.concat(candItems);
+        }
+      }
+      // Deduplicate items by id
+      const uniqueItemsMap = new Map();
+      items.forEach(it => { if (it && it.id) uniqueItemsMap.set(it.id, it); });
+      const finalItems = Array.from(uniqueItemsMap.values());
+
       data.forEach((inv: any) => {
-          inv.items = items.filter((it: any) => String(it.invoiceId) === String(inv.id));
+          inv.items = finalItems.filter((it: any) => String(it.invoiceId) === String(inv.id));
       });
   } else if (key === 'accounting_documents' && Array.isArray(data)) {
       const items = await innerGetDbData('accounting_document_items') || [];
@@ -192,7 +212,8 @@ export async function getDbData(key: string) {
 
 export async function setDbData(key: string, data: any) {
   if ((key === 'invoices' || key === 'sales_invoices' || key === 'purchase_invoices' || key === 'warehouse_receipts' || key === 'warehouse_remittances' || key === 'proforma_invoices' || key === 'sale_returns' || key === 'purchase_returns' || key === 'wastes') && Array.isArray(data)) {
-      const childTable = key === "invoices" ? "invoice_items" : (key.endsWith('s') ? key.substring(0, key.length - 1) + "_items" : key + "_items");
+      const childCandidates = getChildTableCandidates(key);
+      const childTable = childCandidates[0];
       let hasItemsKey = data.some((inv: any) => 'items' in inv);
       const items: any[] = [];
       const strippedData = data.map((inv: any) => {
@@ -204,7 +225,9 @@ export async function setDbData(key: string, data: any) {
           const { items: _, ...rest } = inv;
           return rest;
       });
-      if (hasItemsKey) await innerSetDbData(childTable, items);
+      if (hasItemsKey) {
+        await innerSetDbData(childTable, items);
+      }
       await innerSetDbData(key, strippedData);
       return;
   } else if (key === 'accounting_documents' && Array.isArray(data)) {

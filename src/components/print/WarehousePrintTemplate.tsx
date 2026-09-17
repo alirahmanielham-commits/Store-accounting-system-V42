@@ -33,11 +33,16 @@ export default function WarehousePrintTemplate({
     (p) => p.id === data.customerId,
   );
 
-  const warehouse = warehouses.find(
-    (w) =>
-      w.id?.toString() === data.warehouseId?.toString() ||
-      w.id?.toString() === data.items?.[0]?.warehouseId?.toString(),
-  );
+  const resolvedWhId = data.warehouseId ||
+    data.targetWarehouseId ||
+    data.toWarehouseId ||
+    data.destinationWarehouseId ||
+    data.fromWarehouseId ||
+    data.items?.find((it: any) => it?.warehouseId)?.warehouseId;
+
+  const warehouse = (warehouses || []).find(
+    (w: any) => String(w.id) === String(resolvedWhId)
+  ) || ((warehouses || []).length === 1 ? warehouses[0] : null);
 
   return (
     <div className="w-full text-sm text-slate-800 font-sans p-4 print:p-0">
@@ -223,7 +228,7 @@ export default function WarehousePrintTemplate({
             <div>
               انبار مرتبط:{" "}
               <span className="text-slate-900">
-                {warehouse?.name || "نامشخص"}
+                {warehouse?.name || warehouse?.title || "نامشخص"}
               </span>
             </div>
             <div>
