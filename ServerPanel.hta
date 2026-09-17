@@ -142,7 +142,15 @@
             var projectDir = fso.GetParentFolderName(htaPath);
             shell.CurrentDirectory = projectDir;
             
-            logFile = projectDir + "\\server_logs.txt";
+            var logsDir = projectDir + "\\.logs";
+            if (!fso.FolderExists(logsDir)) {
+                try { fso.CreateFolder(logsDir); } catch(e) {}
+            }
+            if (fso.FolderExists(logsDir)) {
+                logFile = logsDir + "\\server_logs.txt";
+            } else {
+                logFile = projectDir + "\\server_logs.txt";
+            }
             
             try {
                 var f = fso.CreateTextFile(logFile, true);

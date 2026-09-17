@@ -4,5 +4,12 @@ dist/
 coverage/
 .DS_Store
 *.log
+server_logs.txt
+.logs/
+*.sqlite*
+*.db*
+data.json
+database.json
+temp.txt
 .env*
 !.env.example

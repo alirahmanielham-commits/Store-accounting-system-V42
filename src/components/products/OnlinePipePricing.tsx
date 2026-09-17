@@ -5,7 +5,8 @@ import {
   ExternalLink, Layers, Scale, Ruler, Hash, CheckSquare, Square, 
   ArrowRight, ShieldCheck, Tag, PlusCircle, Check, Info, 
   FileText, Sliders, ChevronDown, Clock, Search, Sparkles,
-  Coins, DollarSign, ArrowRightLeft, Repeat, Building2, Flame, FileSpreadsheet
+  Coins, DollarSign, ArrowRightLeft, Repeat, Building2, Flame, FileSpreadsheet,
+  WifiOff, Wifi, AlertTriangle
 } from 'lucide-react';
 import { Product, ProductCategory } from '../../types';
 import { addProduct, updateProduct, getProducts, getProductCategories, addProductCategory } from '../../services/dataService';
@@ -17,7 +18,8 @@ import {
   OnlinePipePricingProps, 
   CURRENCY_PRESETS, 
   UNIT_PRESETS, 
-  CurrencyPreset 
+  CurrencyPreset,
+  DEFAULT_FALLBACK_PIPES
 } from './pipePricingConfig';
 
 export default function OnlinePipePricing({
@@ -43,6 +45,13 @@ export default function OnlinePipePricing({
   const [lastFetchedTime, setLastFetchedTime] = useState<string | null>(null);
   const [onlinePipes, setOnlinePipes] = useState<PipeOnlineItem[]>([]);
   const [selectedItemIds, setSelectedItemIds] = useState<string[]>([]);
+
+  // Connectivity & Offline Support State
+  const [isOnline, setIsOnline] = useState<boolean>(typeof navigator !== 'undefined' ? navigator.onLine : true);
+  const [isOfflineMode, setIsOfflineMode] = useState<boolean>(false);
+  const [dataSourceType, setDataSourceType] = useState<'live' | 'cache' | 'fallback'>('live');
+  const [offlineNotice, setOfflineNotice] = useState<string | null>(null);
+  const [cachedDate, setCachedDate] = useState<string | null>(null);
   
   // Customization controls for import/update
   const [pricingBasis, setPricingBasis] = useState<'kg' | 'branch' | 'meter'>('branch');
@@ -268,36 +277,130 @@ export default function OnlinePipePricing({
     };
   };
 
-  // Fetch online prices for a specific tab
+  // Fetch online prices for a specific tab with offline fallback and cache support
   const fetchOnlinePricesForTab = async (typeId: PipeCategoryType, urlToFetch?: string) => {
     setLoading(true);
     setSyncResults(null);
     const targetUrl = urlToFetch || sourceUrl;
+
+    const loadLocalFallbackOrCache = (reasonMsg: string) => {
+      try {
+        const cacheKey = `pipe_pricing_cache_${typeId}`;
+        const raw = localStorage.getItem(cacheKey);
+        if (raw) {
+          const parsed = JSON.parse(raw);
+          if (Array.isArray(parsed.items) && parsed.items.length > 0) {
+            setOnlinePipes(parsed.items);
+            setSelectedItemIds(parsed.items.map((i: PipeOnlineItem) => i.id));
+            setLastFetchedTime(parsed.fetchedTime || null);
+            setCachedDate(parsed.fetchedDate || null);
+            setIsOfflineMode(true);
+            setDataSourceType('cache');
+            setOfflineNotice(`اطلاعات از آخرین استعلام آنلاین ذخیره‌شده (${toPersianDigits(parsed.fetchedDate || '')} ساعت ${toPersianDigits(parsed.fetchedTime || '')}) بارگذاری شد.`);
+            showNotification(`عدم دسترسی به اینترنت: ${reasonMsg}؛ قیمت‌های آخرین استعلام ذخیره‌شده بارگذاری شد.`, "warning");
+            return;
+          }
+        }
+      } catch (e) {
+        console.warn("Error reading pipe cache:", e);
+      }
+
+      // Default reference dataset
+      const fallbackItems = DEFAULT_FALLBACK_PIPES[typeId] || DEFAULT_FALLBACK_PIPES.sepahan;
+      setOnlinePipes(fallbackItems);
+      setSelectedItemIds(fallbackItems.map((i: PipeOnlineItem) => i.id));
+      setIsOfflineMode(true);
+      setDataSourceType('fallback');
+      setOfflineNotice("ارتباط با اینترنت برقرار نیست. مشخصات استاندارد و قیمت‌های مرجع لوله بارگذاری گردید.");
+      showNotification(`عدم دسترسی به اینترنت: ${reasonMsg}؛ داده‌های استاندارد مرجع بارگذاری شد.`, "warning");
+    };
+
+    // If client is explicitly offline in navigator
+    if (typeof navigator !== 'undefined' && !navigator.onLine) {
+      setIsOnline(false);
+      loadLocalFallbackOrCache("دستگاه شما به شبکه اینترنت متصل نیست");
+      setLoading(false);
+      return;
+    }
+
     try {
       const res = await fetch("/api/scraping/markaz-ahan-pipes", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: targetUrl, type: typeId })
       });
+
+      if (!res.ok) {
+        throw new Error(`خطای سرور (${res.status})`);
+      }
+
       const data = await res.json();
-      if (data.success && Array.isArray(data.items)) {
+      if (data.success && Array.isArray(data.items) && data.items.length > 0) {
+        const nowTime = new Date().toLocaleTimeString('fa-IR');
+        const nowDate = new Date().toLocaleDateString('fa-IR');
         setOnlinePipes(data.items);
-        setLastFetchedTime(new Date().toLocaleTimeString('fa-IR'));
+        setLastFetchedTime(nowTime);
+        setCachedDate(nowDate);
         setSelectedItemIds(data.items.map((i: PipeOnlineItem) => i.id));
-        showNotification(`تعداد ${toPersianDigits(data.items.length)} مشخصه ${data.title || 'لوله'} با موفقیت دریافت شد.`, "success");
+
+        // Save to cache for offline availability
+        try {
+          localStorage.setItem(`pipe_pricing_cache_${typeId}`, JSON.stringify({
+            items: data.items,
+            fetchedTime: nowTime,
+            fetchedDate: nowDate,
+            title: data.title || currentTabConfig.title
+          }));
+        } catch (e) {}
+
+        if (data.isOfflineFallback) {
+          setIsOfflineMode(true);
+          setDataSourceType('fallback');
+          setOfflineNotice("سرور به دلیل عدم اتصال به سایت مرکزآهن، قیمت‌های مرجع استاندارد را بارگذاری کرد.");
+          showNotification(`ارتباط اینترنتی سرور با مرکزآهن برقرار نشد؛ داده‌های مرجع ${data.title || 'لوله'} نمایش داده شد.`, "warning");
+        } else {
+          setIsOfflineMode(false);
+          setIsOnline(true);
+          setDataSourceType('live');
+          setOfflineNotice(null);
+          showNotification(`تعداد ${toPersianDigits(data.items.length)} مشخصه ${data.title || 'لوله'} با موفقیت از مرکز آهن دریافت شد.`, "success");
+        }
       } else {
-        throw new Error(data.error || "پاسخ نامعتبر از سرور دریافت شد");
+        throw new Error(data.error || "اطلاعاتی از مرکز آهن دریافت نشد");
       }
     } catch (err: any) {
-      console.error("Error loading pipe data:", err);
-      showNotification(err.message || "خطا در برقراری ارتباط با مرکز آهن", "error");
+      console.warn("Pipe scraping fetch error, switching to cache/fallback:", err);
+      setIsOnline(false);
+      loadLocalFallbackOrCache("ارتباط با وب‌سایت مرکز آهن یا سرور برقرار نشد");
     } finally {
       setLoading(false);
     }
   };
 
+  // Connection status event listeners
   useEffect(() => {
+    const handleOnline = () => {
+      setIsOnline(true);
+      showNotification("اتصال اینترنت برقرار شد. در حال استعلام به‌روز قیمت‌ها...", "info");
+      fetchOnlinePricesForTab(activeCategoryTab, currentTabConfig.url);
+    };
+
+    const handleOffline = () => {
+      setIsOnline(false);
+      setIsOfflineMode(true);
+      showNotification("ارتباط با اینترنت قطع شد. سیستم در حالت کار با داده‌های ذخیره‌شده و آفلاین قرار گرفت.", "warning");
+    };
+
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+
+    // Initial fetch on mount
     fetchOnlinePricesForTab(activeCategoryTab, currentTabConfig.url);
+
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
   }, []);
 
   // Filtered pipes by search query
@@ -602,11 +705,70 @@ export default function OnlinePipePricing({
               </span>
             </div>
             <div className="flex items-center gap-2">
-              <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-              <span className="font-semibold text-emerald-200">وضعیت اتصال: آنلاین</span>
+              {isOfflineMode || !isOnline ? (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/20 border border-amber-400/30 text-amber-300 font-bold text-xs">
+                  <WifiOff className="w-3.5 h-3.5 text-amber-400" />
+                  <span>وضعیت: آفلاین ({dataSourceType === 'cache' ? 'کش مرورگر' : 'داده مرجع'})</span>
+                </div>
+              ) : (
+                <div className="flex items-center gap-1.5 px-3 py-1 rounded-lg bg-emerald-500/20 border border-emerald-400/30 text-emerald-300 font-bold text-xs">
+                  <span className="inline-block w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                  <Wifi className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>وضعیت اتصال: آنلاین</span>
+                </div>
+              )}
             </div>
           </div>
         </div>
+
+        {/* Offline Warning & Persistence Banner */}
+        <AnimatePresence>
+          {(isOfflineMode || !isOnline) && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: 'auto' }}
+              exit={{ opacity: 0, height: 0 }}
+              className="bg-gradient-to-r from-amber-500/10 via-orange-500/10 to-amber-500/10 border-b border-amber-300/40 p-4"
+            >
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-950">
+                <div className="flex items-start gap-3">
+                  <div className="p-2.5 rounded-xl bg-amber-100 text-amber-800 border border-amber-200 shadow-xs shrink-0 mt-0.5 sm:mt-0">
+                    <WifiOff className="w-5 h-5" />
+                  </div>
+                  <div>
+                    <div className="flex items-center gap-2 font-black text-sm text-amber-900">
+                      <span>حالت کار آفلاین (عدم دسترسی به اینترنت)</span>
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-200/70 text-amber-800 font-bold">
+                        {dataSourceType === 'cache' ? 'نمایش آخرین استعلام ذخیره‌شده' : 'نمایش مشخصات مرجع استاندارد'}
+                      </span>
+                    </div>
+                    <p className="text-xs text-amber-800/90 mt-0.5 leading-relaxed">
+                      {offlineNotice || "ارتباط با شبکه اینترنت برقرار نیست. سیستم به صورت خودکار اطلاعات را از حافظه بارگذاری نموده و شما بدون توقف می‌توانید محاسبات قیمت و ثبت در انبار را انجام دهید."}
+                    </p>
+                    {cachedDate && (
+                      <div className="flex items-center gap-2 mt-1 text-[11px] text-amber-700 font-medium">
+                        <Clock className="w-3 h-3 text-amber-600" />
+                        <span>تاریخ آخرین استعلام ثبت‌شده: {toPersianDigits(cachedDate)} {lastFetchedTime ? `(ساعت ${toPersianDigits(lastFetchedTime)})` : ''}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 shrink-0 self-end sm:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => fetchOnlinePricesForTab(activeCategoryTab, sourceUrl)}
+                    disabled={loading}
+                    className="px-3.5 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold transition-all shadow-sm flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                    {loading ? "در حال بررسی..." : "تلاش مجدد اتصال"}
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
 
         {/* Sync Result Toast Banner */}
         {syncResults && (
@@ -1146,6 +1308,39 @@ export default function OnlinePipePricing({
                   </tr>
                 );
               })}
+
+              {filteredPipes.length === 0 && (
+                <tr>
+                  <td colSpan={10} className="p-12 text-center">
+                    <div className="flex flex-col items-center justify-center gap-3 text-slate-500">
+                      <div className="w-14 h-14 rounded-2xl bg-slate-100 flex items-center justify-center text-slate-400">
+                        {isOfflineMode || !isOnline ? (
+                          <WifiOff className="w-7 h-7 text-amber-500" />
+                        ) : (
+                          <Search className="w-7 h-7" />
+                        )}
+                      </div>
+                      <div className="font-bold text-sm text-slate-700">
+                        {searchQuery ? "هیچ موردی با عبارت جستجوی شما مطابقت ندارد." : "داده‌ای در این بخش یافت نشد."}
+                      </div>
+                      <p className="text-xs text-slate-400 max-w-md">
+                        {isOfflineMode || !isOnline
+                          ? "ارتباط اینترنتی برقرار نیست. با استفاده از دکمه زیر می‌توانید اطلاعات مرجع را بارگذاری نمایید."
+                          : "جهت دریافت لیست مشخصات و آخرین نرخ‌های روز روی دکمه استعلام آنلاین کلیک کنید."}
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => fetchOnlinePricesForTab(activeCategoryTab, sourceUrl)}
+                        disabled={loading}
+                        className="mt-2 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold rounded-xl flex items-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                      >
+                        <RefreshCw className={`w-3.5 h-3.5 ${loading ? 'animate-spin' : ''}`} />
+                        {loading ? "در حال دریافت..." : "بارگذاری مجدد اطلاعات"}
+                      </button>
+                    </div>
+                  </td>
+                </tr>
+              )}
             </tbody>
           </table>
         </div>

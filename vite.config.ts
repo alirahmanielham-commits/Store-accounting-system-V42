@@ -47,7 +47,41 @@ export default defineConfig(() => {
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== 'true',
       // Disable file watching when DISABLE_HMR is true to save CPU during agent edits.
-      watch: process.env.DISABLE_HMR === 'true' ? null : { ignored: ['**/data.json', '**/database.json', 'data.json', 'database.json', '**/*.json', '**/*.sqlite', '**/*.db', '**/db_config.json'] },
+      watch: process.env.DISABLE_HMR === 'true' ? null : {
+        ignored: [
+          '**/server_logs.txt',
+          '**/server_logs*',
+          '**/*.log',
+          '**/*.txt',
+          '**/logs/**',
+          '**/.logs/**',
+          '**/data.json',
+          '**/database.json',
+          'data.json',
+          'database.json',
+          '**/*.json',
+          '**/*.sqlite',
+          '**/*.sqlite-journal',
+          '**/*.sqlite-wal',
+          '**/*.sqlite-shm',
+          '**/*.db',
+          '**/*.db-journal',
+          '**/*.db-wal',
+          '**/*.db-shm',
+          '**/db_config.json',
+          '**/backups/**',
+          '**/my_backups/**',
+          '**/tmp/**',
+          '**/temp/**',
+          '**/*.tmp',
+          '**/*.bak',
+          '**/*.bat',
+          '**/*.hta',
+          '**/*.py',
+          '**/*.sh',
+          '**/*.md'
+        ]
+      },
       allowedHosts: 'all'
     },
   };

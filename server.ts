@@ -68,7 +68,30 @@ async function startServer() {
 
   if (process.env.NODE_ENV !== "production") {
     const vite = await createViteServer({
-      server: { middlewareMode: true },
+      server: {
+        middlewareMode: true,
+        watch: {
+          ignored: [
+            '**/server_logs.txt',
+            '**/server_logs*',
+            '**/*.log',
+            '**/*.txt',
+            '**/logs/**',
+            '**/.logs/**',
+            '**/data.json',
+            '**/database.json',
+            '**/db_config.json',
+            '**/*.sqlite*',
+            '**/*.db*',
+            '**/backups/**',
+            '**/my_backups/**',
+            '**/tmp/**',
+            '**/temp/**',
+            '**/*.tmp',
+            '**/*.bak'
+          ]
+        }
+      },
       appType: "spa",
     });
     app.use(vite.middlewares);
