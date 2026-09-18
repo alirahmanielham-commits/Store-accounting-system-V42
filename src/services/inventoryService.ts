@@ -1,5 +1,8 @@
-import { getInvoices } from './invoiceService';
+import { getInvoices, addInvoice, deleteInvoice } from './invoiceService';
 import { checkFinancialYear } from './settingsService';
+import { getProducts } from './productService';
+import { addAccountingDocument, deleteAccountingDocument, getLedgerAccounts, addLedgerAccount } from './accountingService';
+import { Stocktaking, StocktakingItem } from '../types';
 
 import { 
   getLocalData, 
@@ -183,4 +186,296 @@ export const getProductKardex = async (productId: string | number, warehouseId?:
 };
 
 export const getProductInventoryHistory = getInventoryTransactions;
+
+export const applyStocktakingSession = async (
+  session: Stocktaking,
+  currentUser: string = 'مدیر سیستم',
+  options?: { createAccountingDoc?: boolean }
+) => {
+  if (!session) throw new Error('اطلاعات انبارگردانی یافت نشد');
+  if (session.status === 'applied') throw new Error('این انبارگردانی قبلا در سیستم اعمال شده است.');
+  if (!session.warehouseId) throw new Error('انبار مشخص نشده است');
+  if (!session.items || session.items.length === 0) throw new Error('هیچ کالایی برای انبارگردانی ثبت نشده است');
+
+  const countedItems = (session.items || []).filter(it => it.countedStock !== null);
+  if (countedItems.length === 0) {
+    throw new Error('حداقل باید موجودی یک کالا شمارش شده باشد');
+  }
+
+  const products = await getProducts();
+
+  // Separate surpluses (positive diff) and deficits (negative diff)
+  const surplusItems = countedItems.filter(it => Number(it.difference) > 0);
+  const deficitItems = countedItems.filter(it => Number(it.difference) < 0);
+
+  let createdReceipt: any = null;
+  let createdRemittance: any = null;
+  let receiptNumber: string | undefined = undefined;
+  let remittanceNumber: string | undefined = undefined;
+
+  const docDate = session.date || new Date().toLocaleDateString('fa-IR');
+
+  // 1. Create Warehouse Receipt for Surplus (اضافه انبارگردانی)
+  if (surplusItems.length > 0) {
+    receiptNumber = await generateDocNumber('warehouse_receipt');
+    const receiptItems = surplusItems.map(it => {
+      const p = products.find(prod => String(prod.id) === String(it.productId));
+      const cost = Number(it.unitPrice || p?.purchasePrice || p?.price || 0);
+      const qty = Number(it.difference);
+      return {
+        id: generateId(),
+        productId: it.productId,
+        productName: it.productName,
+        quantity: qty,
+        unitPrice: cost,
+        totalPrice: qty * cost,
+        warehouseId: session.warehouseId,
+        selectedUnit: it.unit || p?.unit || 'عدد',
+        isSecondaryUnit: false,
+        unitRatio: 1,
+        unitRatioDirection: 'secondary_to_main',
+        baseQuantity: qty,
+        baseUnitPrice: cost,
+      };
+    });
+
+    const totalSurplus = receiptItems.reduce((sum, it) => sum + it.totalPrice, 0);
+
+    const receiptPayload = {
+      type: 'warehouse_receipt',
+      warehouseId: session.warehouseId,
+      operationType: 'stocktaking_surplus',
+      sourceInvoiceId: session.id,
+      invoiceNumber: receiptNumber,
+      date: docDate,
+      invoiceDescription: `رسید انبار (مازاد انبارگردانی) - جلسه شماره ${session.id}`,
+      items: receiptItems,
+      totalAmount: totalSurplus,
+      status: 'final',
+      isDraft: false,
+      createdBy: currentUser,
+    };
+
+    createdReceipt = await addInvoice(receiptPayload, true, true);
+    if (receiptNumber) {
+      await updateDocCounter('warehouse_receipt', receiptNumber);
+    }
+  }
+
+  // 2. Create Warehouse Remittance for Deficit (کسری انبارگردانی)
+  if (deficitItems.length > 0) {
+    remittanceNumber = await generateDocNumber('warehouse_remittance');
+    const remittanceItems = deficitItems.map(it => {
+      const p = products.find(prod => String(prod.id) === String(it.productId));
+      const cost = Number(it.unitPrice || p?.purchasePrice || p?.price || 0);
+      const qty = Math.abs(Number(it.difference));
+      return {
+        id: generateId(),
+        productId: it.productId,
+        productName: it.productName,
+        quantity: qty,
+        unitPrice: cost,
+        totalPrice: qty * cost,
+        warehouseId: session.warehouseId,
+        selectedUnit: it.unit || p?.unit || 'عدد',
+        isSecondaryUnit: false,
+        unitRatio: 1,
+        unitRatioDirection: 'secondary_to_main',
+        baseQuantity: qty,
+        baseUnitPrice: cost,
+      };
+    });
+
+    const totalDeficit = remittanceItems.reduce((sum, it) => sum + it.totalPrice, 0);
+
+    const remittancePayload = {
+      type: 'warehouse_remittance',
+      warehouseId: session.warehouseId,
+      operationType: 'stocktaking_deficit',
+      sourceInvoiceId: session.id,
+      invoiceNumber: remittanceNumber,
+      date: docDate,
+      invoiceDescription: `حواله انبار (کسری انبارگردانی) - جلسه شماره ${session.id}`,
+      items: remittanceItems,
+      totalAmount: totalDeficit,
+      status: 'final',
+      isDraft: false,
+      createdBy: currentUser,
+    };
+
+    createdRemittance = await addInvoice(remittancePayload, true, true);
+    if (remittanceNumber) {
+      await updateDocCounter('warehouse_remittance', remittanceNumber);
+    }
+  }
+
+  // Calculate totals
+  let totalDeficitVal = 0;
+  let totalSurplusVal = 0;
+  session.items.forEach(it => {
+    const p = products.find(prod => String(prod.id) === String(it.productId));
+    const cost = Number(it.unitPrice || p?.purchasePrice || p?.price || 0);
+    const diff = Number(it.difference || 0);
+    if (it.countedStock !== null) {
+      if (diff < 0) totalDeficitVal += Math.abs(diff) * cost;
+      if (diff > 0) totalSurplusVal += diff * cost;
+    }
+  });
+
+  // 3. Optional Accounting Document
+  let accountingDocId: string | number | undefined = undefined;
+  let accountingDocNumber: string | number | undefined = undefined;
+
+  if (options?.createAccountingDoc !== false && (totalDeficitVal > 0 || totalSurplusVal > 0)) {
+    try {
+      const ledgerAccounts = await getLedgerAccounts();
+      const invAccount = ledgerAccounts.find((a: any) => a.code === '13' || a.title?.includes('موجودی مواد و کالا')) || ledgerAccounts[0];
+
+      let diffAccount = ledgerAccounts.find((a: any) => a.title?.includes('کسری و اضافی انبار'));
+      if (!diffAccount) {
+        const expenseGroup = ledgerAccounts.find((a: any) => a.code === '53' || a.code === '51' || a.nature === 'debit');
+        diffAccount = await addLedgerAccount({
+          id: generateId(),
+          code: '5399',
+          title: 'کسری و اضافی انبار',
+          type: 'subsidiary',
+          nature: 'debit',
+          parentId: expenseGroup?.id || null,
+        });
+      }
+
+      const journalItems: any[] = [];
+      if (totalDeficitVal > 0 && invAccount && diffAccount) {
+        journalItems.push({
+          id: generateId(),
+          ledgerAccountId: diffAccount.id,
+          description: `کسری انبارگردانی جلسه ${session.id}`,
+          debit: totalDeficitVal,
+          credit: 0,
+        });
+        journalItems.push({
+          id: generateId(),
+          ledgerAccountId: invAccount.id,
+          description: `بستانکار شدن موجودی کالا بابت کسری انبارگردانی جلسه ${session.id}`,
+          debit: 0,
+          credit: totalDeficitVal,
+        });
+      }
+
+      if (totalSurplusVal > 0 && invAccount && diffAccount) {
+        journalItems.push({
+          id: generateId(),
+          ledgerAccountId: invAccount.id,
+          description: `بدهکار شدن موجودی کالا بابت اضافه انبارگردانی جلسه ${session.id}`,
+          debit: totalSurplusVal,
+          credit: 0,
+        });
+        journalItems.push({
+          id: generateId(),
+          ledgerAccountId: diffAccount.id,
+          description: `اضافه انبارگردانی جلسه ${session.id}`,
+          debit: 0,
+          credit: totalSurplusVal,
+        });
+      }
+
+      if (journalItems.length > 0) {
+        const docNumber = await generateDocNumber('accounting_document');
+        const accountingDoc = await addAccountingDocument({
+          documentNumber: docNumber,
+          date: docDate,
+          description: `سند حسابداری تعدیل انبارگردانی جلسه شماره ${session.id}`,
+          status: 'approved',
+          sourceType: 'stocktaking',
+          sourceId: session.id,
+          items: journalItems,
+          createdBy: currentUser,
+        });
+        accountingDocId = accountingDoc?.id;
+        accountingDocNumber = docNumber;
+        if (docNumber) {
+          await updateDocCounter('accounting_document', docNumber);
+        }
+      }
+    } catch (accErr) {
+      console.error('Error creating accounting document for stocktaking:', accErr);
+    }
+  }
+
+  // 4. Force stock recalculation immediately
+  await recalculateAllWarehouseStocks();
+
+  // 5. Update session in database
+  const updatedSession: Stocktaking = {
+    ...session,
+    status: 'applied',
+    appliedDate: new Date().toLocaleDateString('fa-IR'),
+    receiptId: createdReceipt?.id,
+    receiptNumber: createdReceipt?.invoiceNumber || receiptNumber,
+    remittanceId: createdRemittance?.id,
+    remittanceNumber: createdRemittance?.invoiceNumber || remittanceNumber,
+    accountingDocId,
+    accountingDocNumber,
+    totalDeficitValue: totalDeficitVal,
+    totalSurplusValue: totalSurplusVal,
+  };
+
+  await updateStocktaking(session.id, updatedSession);
+
+  return {
+    session: updatedSession,
+    receipt: createdReceipt,
+    remittance: createdRemittance,
+    accountingDocId,
+    accountingDocNumber,
+  };
+};
+
+export const rollbackStocktakingSession = async (stocktakingId: string | number) => {
+  const stocktakings = await getStocktakings();
+  const session = stocktakings.find((s: any) => String(s.id) === String(stocktakingId));
+  if (!session) throw new Error('جلسه انبارگردانی یافت نشد');
+  if (session.status !== 'applied') throw new Error('این جلسه در وضعیت اعمال شده نیست');
+
+  if (session.receiptId) {
+    try {
+      await deleteInvoice(String(session.receiptId), true, true);
+    } catch (e) {
+      console.warn('Error deleting stocktaking receipt:', e);
+    }
+  }
+
+  if (session.remittanceId) {
+    try {
+      await deleteInvoice(String(session.remittanceId), true, true);
+    } catch (e) {
+      console.warn('Error deleting stocktaking remittance:', e);
+    }
+  }
+
+  if (session.accountingDocId) {
+    try {
+      await deleteAccountingDocument(session.accountingDocId);
+    } catch (e) {
+      console.warn('Error deleting stocktaking accounting doc:', e);
+    }
+  }
+
+  await recalculateAllWarehouseStocks();
+
+  const rolledBackSession: Stocktaking = {
+    ...session,
+    status: 'in_progress',
+    appliedDate: undefined,
+    receiptId: undefined,
+    receiptNumber: undefined,
+    remittanceId: undefined,
+    remittanceNumber: undefined,
+    accountingDocId: undefined,
+    accountingDocNumber: undefined,
+  };
+
+  await updateStocktaking(session.id, rolledBackSession);
+  return rolledBackSession;
+};
 

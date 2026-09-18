@@ -440,6 +440,17 @@ export type StocktakingItem = {
   countedStock: number | null;
   difference: number; // countedStock - expectedStock
   costValue?: number; // unit cost * difference (positive for surplus, negative for deficit)
+  unitPrice?: number;
+  unit?: string;
+  secondaryUnit?: string;
+  unitRatio?: number;
+  unitRatioDirection?: string;
+  countedBoxes?: number | null;
+  countedUnits?: number | null;
+  countRound1?: number | null;
+  countRound2?: number | null;
+  countRound3?: number | null;
+  note?: string;
 };
 
 export type Stocktaking = {
@@ -454,6 +465,15 @@ export type Stocktaking = {
   appliedDate?: string;
   totalDeficitValue?: number;
   totalSurplusValue?: number;
+  receiptId?: string | number;
+  receiptNumber?: string;
+  remittanceId?: string | number;
+  remittanceNumber?: string;
+  accountingDocId?: string | number;
+  accountingDocNumber?: string | number;
+  verifierName?: string;
+  counterName?: string;
+  countingTurn?: 1 | 2 | 3;
 };
 
 export type LedgerAccount = {
