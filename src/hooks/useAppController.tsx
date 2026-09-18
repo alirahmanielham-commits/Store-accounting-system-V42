@@ -4606,10 +4606,27 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
             sourceInvoiceId: inv.id,
             customerId: inv.customerId,
             date: new Date().toISOString(),
-            items: (inv.items || []).map((item: any) => ({
-                ...item,
-                warehouseId: warehouseId
-            })),
+            items: (inv.items || []).map((item: any) => {
+                const productObj = products.find((p) => p.id?.toString() === item.productId?.toString());
+                const isSec = Boolean(item.isSecondaryUnit) || (Boolean(productObj?.secondaryUnit) && item.selectedUnit === productObj?.secondaryUnit);
+                const ratio = Number(item.unitRatio || productObj?.unitRatio || 1);
+                const dir = item.unitRatioDirection || productObj?.unitRatioDirection || (productObj ? getUnitRatioDirection(productObj) : 'secondary_to_main');
+                const rawPrice = Number(item.unitPrice || item.price || 0);
+                const rawQty = Number(item.quantity) || 0;
+                const baseUnitPrice = convertPriceToBaseUnit(rawPrice, isSec, ratio, dir);
+                const baseQuantity = convertQuantityToBaseUnit(rawQty, isSec, ratio, dir);
+
+                return {
+                    ...item,
+                    warehouseId: warehouseId,
+                    isSecondaryUnit: isSec,
+                    unitRatio: ratio,
+                    unitRatioDirection: dir,
+                    selectedUnit: item.selectedUnit || (isSec ? productObj?.secondaryUnit : productObj?.unit),
+                    baseUnitPrice,
+                    baseQuantity,
+                };
+            }),
             status: "final",
             isDraft: false,
             totalAmount: inv.totalAmount,
@@ -4618,8 +4635,10 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
         };
         
         const added = await addInvoice(payload as any, false);
+        await recalculateAllWarehouseStocks();
         await fetchInvoices();
-        setSuccessMsg("رسید انبار با موفقیت ثبت شد.");
+        await fetchProducts();
+        setSuccessMsg("رسید انبار با موفقیت ثبت شد و کاردکس کالاها به‌روزرسانی گردید.");
         setTimeout(() => setSuccessMsg(""), 3000);
 
         const createdReceipt = added || payload;
@@ -5257,18 +5276,20 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
     const mapItemWithBase = (item: any) => {
       const productObj = products.find((p) => p.id?.toString() === item.productId?.toString());
-      const isSec = Boolean(item.isSecondaryUnit);
+      const isSec = Boolean(item.isSecondaryUnit) || (Boolean(productObj?.secondaryUnit) && item.selectedUnit === productObj?.secondaryUnit);
       const ratio = Number(item.unitRatio || productObj?.unitRatio || 1);
       const dir = item.unitRatioDirection || productObj?.unitRatioDirection || (productObj ? getUnitRatioDirection(productObj) : 'secondary_to_main');
-      const baseUnitPrice = item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice))
-        ? Number(item.baseUnitPrice)
-        : convertPriceToBaseUnit(Number(item.unitPrice) || 0, isSec, ratio, dir);
-      const baseQuantity = item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity))
-        ? Number(item.baseQuantity)
-        : convertQuantityToBaseUnit(Number(item.quantity) || 0, isSec, ratio, dir);
+      const rawPrice = Number(item.unitPrice || item.price || 0);
+      const rawQty = Number(item.quantity) || 0;
+      const baseUnitPrice = convertPriceToBaseUnit(rawPrice, isSec, ratio, dir);
+      const baseQuantity = convertQuantityToBaseUnit(rawQty, isSec, ratio, dir);
 
       return {
         ...item,
+        isSecondaryUnit: isSec,
+        unitRatio: ratio,
+        unitRatioDirection: dir,
+        selectedUnit: item.selectedUnit || (isSec ? productObj?.secondaryUnit : productObj?.unit),
         baseUnitPrice,
         baseQuantity,
       };

@@ -97,6 +97,11 @@ import {
     Calendar,
     CornerDownLeft
 } from 'lucide-react';
+import {
+  convertQuantityToBaseUnit,
+  convertPriceToBaseUnit,
+  getUnitRatioDirection
+} from "../../utils/unitConversion";
 
 export default function WarehouseDocCreate(props: any) {
   const {
@@ -453,6 +458,7 @@ const isReceipt = [
                                 return prod?.type !== "service";
                               })
                               .map((it) => {
+                                const prod = products.find((p: any) => p.id?.toString() === it.productId?.toString());
                                 const key = String(
                                   it.productId || it.productName || "",
                                 );
@@ -461,11 +467,24 @@ const isReceipt = [
                                   : 0;
                                 const remaining =
                                   (Number(it.quantity) || 0) - processed;
+                                const remQty = remaining > 0 ? remaining : 0;
+                                const isSec = Boolean(it.isSecondaryUnit) || (Boolean(prod?.secondaryUnit) && it.selectedUnit === prod?.secondaryUnit);
+                                const ratio = Number(it.unitRatio || prod?.unitRatio || 1);
+                                const dir = it.unitRatioDirection || prod?.unitRatioDirection || (prod ? getUnitRatioDirection(prod) : 'secondary_to_main');
+                                const rawPrice = Number(it.unitPrice || it.price || 0);
+                                const baseQty = convertQuantityToBaseUnit(remQty, isSec, ratio, dir);
+                                const baseUnitPrice = convertPriceToBaseUnit(rawPrice, isSec, ratio, dir);
                                 return {
                                   ...it,
                                   id: generateId(),
-                                  maxQuantity: remaining > 0 ? remaining : 0,
-                                  quantity: remaining > 0 ? remaining : 0,
+                                  maxQuantity: remQty,
+                                  quantity: remQty,
+                                  isSecondaryUnit: isSec,
+                                  unitRatio: ratio,
+                                  unitRatioDirection: dir,
+                                  selectedUnit: it.selectedUnit || (isSec ? prod?.secondaryUnit : prod?.unit),
+                                  baseQuantity: baseQty,
+                                  baseUnitPrice: baseUnitPrice,
                                   warehouseId: invoiceWarehouseId,
                                 };
                               })
@@ -743,9 +762,13 @@ const isReceipt = [
                                   const currentStockInWh = targetWh && stockInfo?.warehouses?.[targetWh]
                                     ? Number(stockInfo.warehouses[targetWh].physical || 0)
                                     : (stockInfo ? Number(stockInfo.totalPhysical || 0) : Number(p?.stock || 0));
-                                  const itemQty = Number(item.quantity) || 0;
+                                  const isSec = Boolean(item.isSecondaryUnit) || (Boolean(p?.secondaryUnit) && item.selectedUnit === p?.secondaryUnit);
+                                  const ratio = Number(item.unitRatio || p?.unitRatio || 1);
+                                  const dir = item.unitRatioDirection || p?.unitRatioDirection || (p ? getUnitRatioDirection(p) : 'secondary_to_main');
+                                  const itemRawQty = Number(item.quantity) || 0;
+                                  const itemBaseQty = convertQuantityToBaseUnit(itemRawQty, isSec, ratio, dir);
                                   const isRemittance = !isReceipt;
-                                  const isShortage = isRemittance && itemQty > currentStockInWh;
+                                  const isShortage = isRemittance && itemBaseQty > currentStockInWh;
 
                                   return (
                                     <div className="flex flex-col gap-1 mt-0.5">
@@ -771,20 +794,20 @@ const isReceipt = [
                                         <span className={`font-bold font-mono px-1.5 py-0.5 rounded ${currentStockInWh > 0 ? "bg-slate-100 text-indigo-700" : "bg-rose-50 text-rose-600"}`} dir="ltr">
                                           {currentStockInWh} {p?.unit || item.selectedUnit || "عدد"}
                                         </span>
-                                        {isReceipt && itemQty > 0 && (
+                                        {isReceipt && itemBaseQty > 0 && (
                                           <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded font-bold text-[10px]" dir="ltr">
-                                            مانده بعد از ورود: {currentStockInWh + itemQty}
+                                            مانده بعد از ورود: {currentStockInWh + itemBaseQty}
                                           </span>
                                         )}
-                                        {isRemittance && itemQty > 0 && !isShortage && (
+                                        {isRemittance && itemBaseQty > 0 && !isShortage && (
                                           <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded font-bold text-[10px]" dir="ltr">
-                                            مانده بعد از خروج: {currentStockInWh - itemQty}
+                                            مانده بعد از خروج: {currentStockInWh - itemBaseQty}
                                           </span>
                                         )}
                                         {isRemittance && isShortage && (
                                           <span className="bg-rose-100 text-rose-700 px-2 py-0.5 rounded font-black text-[10px] flex items-center gap-1 animate-pulse">
                                             <AlertTriangle className="w-3 h-3 text-rose-600 inline" />
-                                            کسری موجودی: {itemQty - currentStockInWh} {p?.unit || ""}
+                                            کسری موجودی: {itemBaseQty - currentStockInWh} {p?.unit || ""}
                                           </span>
                                         )}
                                       </div>

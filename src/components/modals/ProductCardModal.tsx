@@ -109,17 +109,21 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
               if (inv.items) {
                  const items = inv.items.filter((i: any) => i.productId?.toString() === product.id?.toString());
                  items.forEach((item: any) => {
-                    const dir = product.unitRatioDirection || getUnitRatioDirection(product);
-                    const isSec = Boolean(item.isSecondaryUnit);
+                    const isSec = Boolean(item.isSecondaryUnit) || (Boolean(product.secondaryUnit) && item.selectedUnit === product.secondaryUnit);
                     const ratio = Number(item.unitRatio || product.unitRatio || 1);
+                    const dir = item.unitRatioDirection || product.unitRatioDirection || (product ? getUnitRatioDirection(product) : 'secondary_to_main');
                     const rawUnitPrice = Number(item.unitPrice) || 0;
                     const rawQuantity = Number(item.quantity) || 0;
-                    const qty = item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity))
-                       ? Number(item.baseQuantity)
-                       : convertQuantityToBaseUnit(rawQuantity, isSec, ratio, dir);
-                    const uPrice = item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice))
-                       ? Number(item.baseUnitPrice)
-                       : convertPriceToBaseUnit(rawUnitPrice, isSec, ratio, dir);
+                    const qty = isSec && ratio > 0
+                       ? convertQuantityToBaseUnit(rawQuantity, true, ratio, dir)
+                       : (item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity)) && Number(item.baseQuantity) > 0
+                           ? Number(item.baseQuantity)
+                           : rawQuantity);
+                    const uPrice = isSec && ratio > 0
+                       ? convertPriceToBaseUnit(rawUnitPrice, true, ratio, dir)
+                       : (item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice)) && Number(item.baseUnitPrice) > 0
+                           ? Number(item.baseUnitPrice)
+                           : rawUnitPrice);
                     const whId = (item.warehouseId || inv.warehouseId || defaultWhId)?.toString();
                     const isReceipt = inv.type === 'warehouse_receipt' || inv.type === 'sales_return';
                     const isRemittance = inv.type === 'warehouse_remittance' || inv.type === 'purchase_return' || inv.type === 'waste';

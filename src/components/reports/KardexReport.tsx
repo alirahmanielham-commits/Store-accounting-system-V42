@@ -289,15 +289,23 @@ export default function KardexReport() {
 
           if (alreadyInMap) return;
 
-          const isSecUnit = Boolean(item.isSecondaryUnit);
-          let baseQty = Number(item.quantity) || 0;
-          let baseUnitPrice = Number(item.unitPrice || item.price || 0);
+          const isSecUnit = Boolean(item.isSecondaryUnit) || (Boolean(product.secondaryUnit) && item.selectedUnit === product.secondaryUnit);
+          const ratio = Number(item.unitRatio || product.unitRatio || 1);
+          const dir = item.unitRatioDirection || product.unitRatioDirection || getUnitRatioDirection(product);
+          const rawQty = Number(item.quantity) || 0;
+          const rawPrice = Number(item.unitPrice || item.price || 0);
 
-          if (isSecUnit && product.unitRatio && product.secondaryUnit) {
-            const dir = product.unitRatioDirection || getUnitRatioDirection(product);
-            baseQty = convertQuantityToBaseUnit(baseQty, product.unitRatio, dir);
-            baseUnitPrice = convertPriceToBaseUnit(baseUnitPrice, product.unitRatio, dir);
-          }
+          let baseQty = isSecUnit && ratio > 0
+            ? convertQuantityToBaseUnit(rawQty, true, ratio, dir)
+            : (item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity)) && Number(item.baseQuantity) > 0
+                ? Number(item.baseQuantity)
+                : rawQty);
+
+          let baseUnitPrice = isSecUnit && ratio > 0
+            ? convertPriceToBaseUnit(rawPrice, true, ratio, dir)
+            : (item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice)) && Number(item.baseUnitPrice) > 0
+                ? Number(item.baseUnitPrice)
+                : rawPrice);
 
           const whId = (item.warehouseId || inv.warehouseId || defaultWhId).toString();
           const whName = warehouses.find(w => w.id?.toString() === whId)?.name || 'انبار اصلی';
@@ -915,6 +923,15 @@ export default function KardexReport() {
               </span>
               <span className="text-[11px] text-indigo-700 font-bold">{selectedProduct.unit || 'عدد'}</span>
             </div>
+            {selectedProduct.secondaryUnit && selectedProduct.unitRatio && (
+              <div className="text-[10px] text-indigo-600 font-bold mt-1 accounting-num">
+                معادل {formatNumFa(
+                  (selectedProduct.unitRatioDirection || getUnitRatioDirection(selectedProduct)) === 'main_to_secondary'
+                    ? periodClosingBalance * Number(selectedProduct.unitRatio)
+                    : periodClosingBalance / Number(selectedProduct.unitRatio)
+                )} {selectedProduct.secondaryUnit}
+              </div>
+            )}
           </div>
 
           {/* Valuation */}
