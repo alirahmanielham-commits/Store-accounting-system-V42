@@ -78,31 +78,39 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
         const defaultWhId = (p.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
         const key = `${p.id}_${defaultWhId}`;
         
-        if (!stocksMap[key]) {
-          stocksMap[key] = { productId: p.id, warehouseId: defaultWhId, physicalStock: 0, reservedStock: 0, availableStock: 0 };
+        const targetWhId = (p.initialStockWarehouseId || p.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
+        const targetKey = `${p.id}_${targetWhId}`;
+        
+        if (!stocksMap[targetKey]) {
+          stocksMap[targetKey] = { productId: p.id, warehouseId: targetWhId, physicalStock: 0, reservedStock: 0, availableStock: 0 };
         }
         
         if (baseStock > 0) {
-           const before = stocksMap[key].physicalStock;
-           stocksMap[key].physicalStock += baseStock;
+           const before = stocksMap[targetKey].physicalStock;
+           stocksMap[targetKey].physicalStock += baseStock;
+           const docNum = p.initialStockDocNumber || (p.code ? `OPN-${p.code}` : 'موجودی اولیه');
+           const docDate = p.initialStockDate || (p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+           const docDesc = p.initialStockDescription || 'سند موجودی اول دوره و افتتاحیه انبار';
+           const docTs = p.initialStockTimestamp || (p.createdAt ? new Date(p.createdAt).getTime() : 1);
+           
            historyList.push({
              id: generateId(),
              productId: p.id,
-             warehouseId: defaultWhId,
-             date: p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0],
+             warehouseId: targetWhId,
+             date: docDate,
              type: 'in',
              quantity: baseStock,
              unitPrice: Number(p.purchasePrice || p.price || 0),
              totalPrice: baseStock * Number(p.purchasePrice || p.price || 0),
              documentType: 'initial_stock',
              documentId: p.id,
-             documentNumber: p.code || 'INIT',
-             description: 'موجودی اولیه کالا',
+             documentNumber: docNum,
+             description: docDesc,
              personId: '',
-             personName: 'سیستم (موجودی اولیه)',
+             personName: 'سیستم (سند افتتاحیه انبار)',
              balanceBefore: before,
-             balanceAfter: stocksMap[key].physicalStock,
-             timestamp: p.createdAt ? new Date(p.createdAt).getTime() : 1,
+             balanceAfter: stocksMap[targetKey].physicalStock,
+             timestamp: docTs,
            });
         }
       });

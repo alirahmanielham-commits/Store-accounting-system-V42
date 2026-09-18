@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from "react";
+import React, { useState, useEffect, useMemo } from "react";
 import {
   Package,
   Search,
@@ -16,7 +16,10 @@ import {
   Building2,
   Coins,
   ChevronDown,
-  Info
+  Info,
+  FileCheck2,
+  PlusCircle,
+  Sparkles
 } from "lucide-react";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -27,29 +30,47 @@ import {
   getStoreSettings,
   getPersons,
   getProductInventoryHistory,
-  recalculateAllWarehouseStocks
-} from '../../services/dataService';
-import { Product, Warehouse } from '../../types';
+  recalculateAllWarehouseStocks,
+  getProductCategories
+} from "../../services/dataService";
+import { Product, Warehouse } from "../../types";
 import CustomDatePicker from "../ui/CustomDatePicker";
 import {
   convertQuantityToBaseUnit,
   convertPriceToBaseUnit,
   getUnitRatioDirection,
   formatUnitConversionFormula
-} from '../../utils/unitConversion';
+} from "../../utils/unitConversion";
+import { toPersianDigits, addCommas } from "../../utils/format";
+import AdvancedProductSearchSelect from "../kardex/AdvancedProductSearchSelect";
+import InitialStockModal from "../kardex/InitialStockModal";
 
 const DatePicker = CustomDatePicker;
 
-const formatNum = (num: number | string) => {
+// Persian digit and number formatters
+const formatNumFa = (num: number | string | null | undefined, maxDecimals = 3) => {
+  if (num === null || num === undefined || num === '') return '۰';
   const n = Number(num);
   if (isNaN(n)) return '۰';
-  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 3 }).format(n);
+  if (Number.isInteger(n)) {
+    return toPersianDigits(addCommas(n));
+  }
+  const str = n.toFixed(maxDecimals);
+  const trimmed = parseFloat(str).toString();
+  const [intP, decP] = trimmed.split('.');
+  return toPersianDigits(`${addCommas(intP)}${decP ? '.' + decP : ''}`);
 };
 
-const formatCur = (num: number | string) => {
+const formatCurFa = (num: number | string | null | undefined) => {
+  if (num === null || num === undefined || num === '') return '۰';
   const n = Number(num);
   if (isNaN(n)) return '۰';
-  return new Intl.NumberFormat('fa-IR', { maximumFractionDigits: 0 }).format(Math.round(n));
+  return toPersianDigits(addCommas(Math.round(n)));
+};
+
+const formatDigits = (val: string | number | null | undefined) => {
+  if (val === null || val === undefined) return '';
+  return toPersianDigits(String(val));
 };
 
 interface KardexTransaction {
@@ -81,17 +102,20 @@ export default function KardexReport() {
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [persons, setPersons] = useState<any[]>([]);
+  const [categories, setCategories] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
 
   const [isLoading, setIsLoading] = useState(true);
   const [isRefreshing, setIsRefreshing] = useState(false);
   const [selectedProductId, setSelectedProductId] = useState<string>('');
-  const [productSearch, setProductSearch] = useState<string>('');
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string>('all');
   const [selectedDocType, setSelectedDocType] = useState<string>('all'); // all, in, out
   const [tableSearch, setTableSearch] = useState<string>('');
   const [startDate, setStartDate] = useState<Date | null>(null);
   const [endDate, setEndDate] = useState<Date | null>(null);
+
+  // Initial Stock Document Modal
+  const [isInitialStockModalOpen, setIsInitialStockModalOpen] = useState(false);
 
   const [allRawTransactions, setAllRawTransactions] = useState<KardexTransaction[]>([]);
 
@@ -102,12 +126,13 @@ export default function KardexReport() {
   const fetchInitialData = async () => {
     setIsLoading(true);
     try {
-      const [prods, whs, invs, pers, sett] = await Promise.all([
+      const [prods, whs, invs, pers, sett, cats] = await Promise.all([
         getProducts(),
         getWarehouses(),
         getInvoices(),
         getPersons(),
-        getStoreSettings()
+        getStoreSettings(),
+        getProductCategories().catch(() => [])
       ]);
       const physicalProds = prods.filter(p => p.type !== 'service');
       setProducts(physicalProds);
@@ -115,6 +140,7 @@ export default function KardexReport() {
       setInvoices(invs || []);
       setPersons(pers || []);
       setSettings(sett || {});
+      setCategories(cats || []);
 
       // Auto-select first product if none selected
       if (physicalProds.length > 0 && !selectedProductId) {
@@ -139,13 +165,16 @@ export default function KardexReport() {
   const loadProductKardexData = async (prodId: string) => {
     setIsRefreshing(true);
     try {
-      const product = products.find(p => p.id?.toString() === prodId.toString());
+      // Re-fetch products to ensure we have the latest stock & initial stock doc details
+      const latestProds = await getProducts();
+      const product = latestProds.find(p => p.id?.toString() === prodId.toString());
       if (!product) {
         setAllRawTransactions([]);
         return;
       }
+      setProducts(latestProds.filter(p => p.type !== 'service'));
 
-      const defaultWhId = (product.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
+      const defaultWhId = ((product as any).initialStockWarehouseId || product.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
       const defaultWhName = warehouses.find(w => w.id?.toString() === defaultWhId)?.name || 'انبار اصلی';
 
       // 1. Fetch server kardex transactions
@@ -158,30 +187,36 @@ export default function KardexReport() {
 
       const transactionMap = new Map<string, KardexTransaction>();
 
-      // A. Initial Stock from product definition
+      // A. Initial Stock from product definition (Registered Initial Stock Document)
       const initialStockQty = Number(product.stock) || 0;
-      if (initialStockQty !== 0) {
-        const initTs = (product as any).createdAt ? new Date((product as any).createdAt).getTime() : 1;
+      const initialDocNum = (product as any).initialStockDocNumber || (product.code ? `OPN-${product.code}` : 'سند افتتاحیه');
+      const initialDocDate = (product as any).initialStockJalaliDate ||
+        ((product as any).initialStockDate
+          ? new Date((product as any).initialStockDate).toLocaleDateString("fa-IR")
+          : ((product as any).createdAt ? new Date((product as any).createdAt).toLocaleDateString("fa-IR") : 'ابتدای دوره'));
+      const initialDocDesc = (product as any).initialStockDescription || 'سند موجودی اول دوره و افتتاحیه انبار';
+      const initialUnitPrice = Number((product as any).initialStockUnitPrice || product.purchasePrice || (product as any).buyPrice || product.price || 0);
+
+      if (initialStockQty !== 0 || (product as any).initialStockRegistered) {
+        const initTs = (product as any).initialStockTimestamp || ((product as any).createdAt ? new Date((product as any).createdAt).getTime() : 1);
         const initKey = `init_${prodId}`;
         transactionMap.set(initKey, {
           id: initKey,
           timestamp: initTs,
-          date: (product as any).createdAt
-            ? new Date((product as any).createdAt).toLocaleDateString("fa-IR")
-            : 'ابتدای دوره',
+          date: initialDocDate,
           time: '۰۰:۰۰',
           warehouseId: defaultWhId,
           warehouseName: defaultWhName,
           documentType: 'initial_stock',
-          documentNumber: product.code ? `INIT-${product.code}` : 'موجودی اولیه',
-          personName: 'سیستم (موجودی اولیه)',
-          description: 'موجودی اولیه ثبت‌شده در تعریف کالا',
+          documentNumber: initialDocNum,
+          personName: 'سیستم (سند افتتاحیه انبار)',
+          description: initialDocDesc,
           type: initialStockQty >= 0 ? 'in' : 'out',
           quantity: Math.abs(initialStockQty),
           originalQuantity: Math.abs(initialStockQty),
-          unitPrice: Number(product.purchasePrice || 0),
-          originalUnitPrice: Number(product.purchasePrice || 0),
-          totalPrice: Math.abs(initialStockQty) * Number(product.purchasePrice || 0),
+          unitPrice: initialUnitPrice,
+          originalUnitPrice: initialUnitPrice,
+          totalPrice: Math.abs(initialStockQty) * initialUnitPrice,
           isSecondaryUnit: false,
           selectedUnit: product.unit || 'عدد'
         });
@@ -190,7 +225,8 @@ export default function KardexReport() {
       // B. Process server history items
       if (serverHistory && serverHistory.length > 0) {
         serverHistory.forEach((h: any) => {
-          if (h.documentType === 'initial_stock' && transactionMap.has(`init_${prodId}`)) {
+          if (h.documentType === 'initial_stock') {
+            // Already handled with custom registered details in A above
             return;
           }
           const isInput = h.type === 'in';
@@ -229,7 +265,7 @@ export default function KardexReport() {
         });
       }
 
-      // C. Cross-check invoices/warehouse documents to ensure no receipt or remittance was missed
+      // C. Cross-check invoices/warehouse documents
       invoices.forEach((inv: any) => {
         if (inv.status === 'voided' || inv.isDeleted || inv.status === 'draft' || inv.isDraft) return;
         if (!inv.items || !Array.isArray(inv.items)) return;
@@ -242,74 +278,81 @@ export default function KardexReport() {
           const isReceipt = docType === 'warehouse_receipt' || docType === 'sales_return';
           const isRemittance = docType === 'warehouse_remittance' || docType === 'purchase_return' || docType === 'waste';
 
-          // If document is not a warehouse movement, skip
           if (!isReceipt && !isRemittance) return;
 
           const docNum = inv.invoiceNumber || inv.documentNumber || inv.number || '---';
           const docKeyCheck = `${docType}_${docNum}`;
 
-          // Check if already captured via server history
-          let alreadyExists = false;
-          for (const val of transactionMap.values()) {
-            if (val.documentNumber === docNum && val.documentType === docType) {
-              alreadyExists = true;
-              break;
-            }
+          const alreadyInMap = Array.from(transactionMap.values()).some(
+            t => t.documentNumber === docNum && (t.documentType === docType || t.documentId === inv.id)
+          );
+
+          if (alreadyInMap) return;
+
+          const isSecUnit = Boolean(item.isSecondaryUnit);
+          let baseQty = Number(item.quantity) || 0;
+          let baseUnitPrice = Number(item.unitPrice || item.price || 0);
+
+          if (isSecUnit && product.unitRatio && product.secondaryUnit) {
+            const dir = product.unitRatioDirection || getUnitRatioDirection(product);
+            baseQty = convertQuantityToBaseUnit(baseQty, product.unitRatio, dir);
+            baseUnitPrice = convertPriceToBaseUnit(baseUnitPrice, product.unitRatio, dir);
           }
-
-          if (alreadyExists) return;
-
-          const dir = product.unitRatioDirection || getUnitRatioDirection(product);
-          const isSec = Boolean(item.isSecondaryUnit);
-          const ratio = Number(item.unitRatio || product.unitRatio || 1);
-          const rawQuantity = Number(item.quantity) || 0;
-          const rawUnitPrice = Number(item.unitPrice || item.price || 0);
-
-          const q = item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity))
-            ? Number(item.baseQuantity)
-            : convertQuantityToBaseUnit(rawQuantity, isSec, ratio, dir);
-
-          const uPrice = item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice))
-            ? Number(item.baseUnitPrice)
-            : convertPriceToBaseUnit(rawUnitPrice, isSec, ratio, dir);
 
           const whId = (item.warehouseId || inv.warehouseId || defaultWhId).toString();
           const whName = warehouses.find(w => w.id?.toString() === whId)?.name || 'انبار اصلی';
+          const person = persons.find(p => p.id?.toString() === (inv.personId || inv.customerId || inv.supplierId)?.toString());
+          const personName = person?.name || inv.personName || inv.customerName || inv.supplierName || '---';
 
-          const docTs = inv.createdAt ? new Date(inv.createdAt).getTime() : (inv.timestamp || Date.now());
-          const docDate = inv.jalaliDate || (inv.date ? inv.date : new Date(docTs).toLocaleDateString('fa-IR'));
-          const counterpartyName = persons.find(p => p.id?.toString() === (inv.customerId || inv.personId)?.toString())?.name
-            || inv.customerName || inv.personName || '---';
+          let parsedDate = inv.date || inv.invoiceDate;
+          let ts = Date.now();
+          if (parsedDate) {
+            const d = new Date(parsedDate);
+            if (!isNaN(d.getTime())) {
+              ts = d.getTime();
+              parsedDate = d.toLocaleDateString('fa-IR');
+            }
+          } else if (inv.createdAt) {
+            ts = new Date(inv.createdAt).getTime();
+            parsedDate = new Date(inv.createdAt).toLocaleDateString('fa-IR');
+          }
 
-          const key = `inv_${inv.id || docNum}_${itemIdx}`;
-          transactionMap.set(key, {
-            id: key,
-            timestamp: docTs,
-            date: docDate,
+          const uniqueKey = `inv_${inv.id || docNum}_${item.id || itemIdx}`;
+          transactionMap.set(uniqueKey, {
+            id: uniqueKey,
+            timestamp: ts,
+            date: parsedDate || '---',
             time: inv.time || '',
             warehouseId: whId,
             warehouseName: whName,
             documentType: docType,
             documentNumber: docNum,
             documentId: inv.id,
-            personName: counterpartyName,
-            description: inv.description || (isReceipt ? `رسید انبار شماره ${docNum}` : `حواله انبار شماره ${docNum}`),
+            personName: personName,
+            description: item.description || inv.notes || (isReceipt ? 'رسید انبار' : 'حواله انبار'),
             type: isReceipt ? 'in' : 'out',
-            quantity: q,
-            originalQuantity: rawQuantity,
-            unitPrice: uPrice,
-            originalUnitPrice: rawUnitPrice,
-            totalPrice: Number(item.totalPrice) > 0 ? Number(item.totalPrice) : q * uPrice,
-            isSecondaryUnit: isSec,
-            selectedUnit: item.selectedUnit || (isSec ? product.secondaryUnit : product.unit)
+            quantity: baseQty,
+            originalQuantity: Number(item.quantity) || 0,
+            unitPrice: baseUnitPrice,
+            originalUnitPrice: Number(item.unitPrice || item.price || 0),
+            totalPrice: baseQty * baseUnitPrice,
+            isSecondaryUnit: isSecUnit,
+            selectedUnit: isSecUnit ? product.secondaryUnit : product.unit
           });
         });
       });
 
-      const list = Array.from(transactionMap.values());
-      // Sort strictly ascending by timestamp
-      list.sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
-      setAllRawTransactions(list);
+      // Convert map to array and sort chronologically
+      const sortedTransactions = Array.from(transactionMap.values()).sort((a, b) => {
+        if (a.timestamp !== b.timestamp) {
+          return a.timestamp - b.timestamp;
+        }
+        if (a.documentType === 'initial_stock') return -1;
+        if (b.documentType === 'initial_stock') return 1;
+        return a.id.localeCompare(b.id);
+      });
+
+      setAllRawTransactions(sortedTransactions);
     } catch (err) {
       console.error('Error loading product kardex transactions:', err);
     } finally {
@@ -317,25 +360,24 @@ export default function KardexReport() {
     }
   };
 
+  const selectedProduct = useMemo(() => {
+    return products.find(p => p.id?.toString() === selectedProductId?.toString()) || null;
+  }, [products, selectedProductId]);
+
+  // Recalculate Stocks on server
   const handleManualRecalculate = async () => {
     setIsRefreshing(true);
     try {
       await recalculateAllWarehouseStocks();
-      const invs = await getInvoices();
-      setInvoices(invs);
       if (selectedProductId) {
         await loadProductKardexData(selectedProductId);
       }
-    } catch (err) {
-      console.error('Recalculate failed:', err);
+    } catch (e) {
+      console.error('Recalculate error:', e);
     } finally {
       setIsRefreshing(false);
     }
   };
-
-  const selectedProduct = useMemo(() => {
-    return products.find(p => p.id?.toString() === selectedProductId?.toString());
-  }, [products, selectedProductId]);
 
   // Filtered and Chronologically calculated Ledger
   const { ledgerRows, openingBalance, periodInTotal, periodOutTotal, periodClosingBalance, totalValuation } = useMemo(() => {
@@ -417,7 +459,7 @@ export default function KardexReport() {
     });
 
     const finalBal = opBal + periodIn - periodOut;
-    const unitPriceForValuation = Number(selectedProduct.purchasePrice || selectedProduct.price || 0);
+    const unitPriceForValuation = Number(selectedProduct.purchasePrice || (selectedProduct as any).buyPrice || selectedProduct.price || 0);
     const valuation = Math.max(0, finalBal) * unitPriceForValuation;
 
     return {
@@ -451,19 +493,19 @@ export default function KardexReport() {
     ];
 
     const rows = ledgerRows.map(r => [
-      r.rowNumber,
-      `"${r.date}"`,
-      `"${r.time || ''}"`,
+      formatDigits(r.rowNumber),
+      `"${formatDigits(r.date)}"`,
+      `"${formatDigits(r.time || '')}"`,
       `"${getDocumentTypeLabel(r.documentType)}"`,
-      `"${r.documentNumber}"`,
+      `"${formatDigits(r.documentNumber)}"`,
       `"${r.warehouseName}"`,
       `"${r.personName || '-'}"`,
       `"${(r.description || '').replace(/"/g, '""')}"`,
-      r.type === 'in' ? r.quantity : 0,
-      r.type === 'out' ? r.quantity : 0,
-      r.balanceAfter,
-      r.unitPrice,
-      r.totalPrice
+      r.type === 'in' ? formatNumFa(r.quantity) : 0,
+      r.type === 'out' ? formatNumFa(r.quantity) : 0,
+      formatNumFa(r.balanceAfter),
+      formatCurFa(r.unitPrice),
+      formatCurFa(r.totalPrice)
     ]);
 
     const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
@@ -477,7 +519,6 @@ export default function KardexReport() {
     document.body.removeChild(link);
   };
 
-  // Print Kardex Report
   const handlePrint = () => {
     window.print();
   };
@@ -486,7 +527,7 @@ export default function KardexReport() {
     switch (docType) {
       case 'warehouse_receipt': return 'رسید انبار';
       case 'warehouse_remittance': return 'حواله انبار';
-      case 'initial_stock': return 'موجودی اول دوره';
+      case 'initial_stock': return 'سند موجودی اول دوره';
       case 'sales_return': return 'برگشت از فروش (رسید)';
       case 'purchase_return': return 'برگشت از خرید (حواله)';
       case 'waste': return 'ضایعات انبار';
@@ -502,7 +543,8 @@ export default function KardexReport() {
 
     if (docType === 'initial_stock') {
       return (
-        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-bold bg-amber-50 text-amber-700 border border-amber-200">
+        <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-[11px] font-black bg-amber-100 text-amber-900 border border-amber-300 shadow-2xs">
+          <FileCheck2 className="w-3.5 h-3.5 text-amber-700" />
           {label}
         </span>
       );
@@ -525,37 +567,45 @@ export default function KardexReport() {
     );
   };
 
-  const filteredProducts = useMemo(() => {
-    if (!productSearch.trim()) return products;
-    const q = productSearch.trim().toLowerCase();
-    return products.filter(p =>
-      p.name?.toLowerCase().includes(q) ||
-      p.code?.toLowerCase().includes(q) ||
-      p.barcode?.toLowerCase().includes(q)
-    );
-  }, [products, productSearch]);
+  const hasInitialStockRegistered = Boolean(
+    selectedProduct &&
+    ((selectedProduct as any).initialStockRegistered || Number(selectedProduct.stock || 0) > 0)
+  );
 
   return (
-    <div className="space-y-6 print:space-y-4 print:p-0">
+    <div className="space-y-6 print:space-y-4 print:p-0 font-sans" dir="rtl">
       {/* Top Header - Hidden in Print */}
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 print:hidden">
         <div>
           <h1 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-100">
+            <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-100">
               <FileText className="w-5 h-5" />
             </div>
             کاردکس کالا (گردش دقیق موجودی و اسناد انبار)
           </h1>
-          <p className="text-xs text-slate-500 mt-1 mr-13">
-            ردیابی دقیق و گام‌به‌گام رسیدها، حواله‌ها و محاسبه بلادرنگ موجودی لحظه‌ای کالا
+          <p className="text-xs text-slate-500 mt-1 mr-13 font-medium">
+            ردیابی خط‌به‌خط اسناد رسید، حواله، ثبت سند افتتاحیه و مانده‌گیری بلادرنگ موجودی
           </p>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
+          {/* Register Initial Stock Document Button */}
+          <button
+            onClick={() => setIsInitialStockModalOpen(true)}
+            disabled={!selectedProduct}
+            className="flex items-center gap-2 px-4 py-2 bg-amber-500 hover:bg-amber-600 text-white rounded-xl transition-all font-black shadow-sm shadow-amber-200 text-xs disabled:opacity-50 cursor-pointer"
+            title="ثبت یا ویرایش سند افتتاحیه و موجودی اول دوره کالا در انبار"
+          >
+            <FileCheck2 className="w-4 h-4" />
+            <span>
+              {hasInitialStockRegistered ? "ویرایش سند موجودی اول دوره" : "ثبت سند موجودی اول دوره"}
+            </span>
+          </button>
+
           <button
             onClick={handleManualRecalculate}
             disabled={!selectedProductId || isRefreshing}
-            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all font-bold shadow-sm text-xs disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-2 px-3.5 py-2 bg-white border border-slate-200 text-slate-700 rounded-xl hover:bg-slate-50 transition-all font-bold shadow-2xs text-xs disabled:opacity-50 cursor-pointer"
             title="بازسازی و همگام‌سازی مانده‌های کاردکس از دیتابیس"
           >
             <RefreshCw className={`w-3.5 h-3.5 text-slate-500 ${isRefreshing ? 'animate-spin text-indigo-600' : ''}`} />
@@ -565,7 +615,7 @@ export default function KardexReport() {
           <button
             onClick={handleExportCSV}
             disabled={!selectedProduct || ledgerRows.length === 0}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all font-bold shadow-sm text-xs disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all font-bold shadow-2xs text-xs disabled:opacity-50 cursor-pointer"
           >
             <Download className="w-3.5 h-3.5" />
             خروجی اکسل (CSV)
@@ -574,7 +624,7 @@ export default function KardexReport() {
           <button
             onClick={handlePrint}
             disabled={!selectedProduct || ledgerRows.length === 0}
-            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition-all font-bold shadow-md shadow-indigo-100 text-xs disabled:opacity-50 cursor-pointer"
+            className="flex items-center gap-1.5 px-4 py-2 bg-indigo-600 text-white hover:bg-indigo-700 rounded-xl transition-all font-black shadow-md shadow-indigo-100 text-xs disabled:opacity-50 cursor-pointer"
           >
             <Printer className="w-3.5 h-3.5" />
             چاپ کاردکس
@@ -583,67 +633,57 @@ export default function KardexReport() {
       </div>
 
       {/* Official Print Header - Visible ONLY in Print */}
-      <div className="hidden print:block border-b-2 border-slate-800 pb-3 mb-4">
+      <div className="hidden print:block border-b-2 border-slate-800 pb-3 mb-4 font-sans">
         <div className="flex justify-between items-center">
           <div>
             <h2 className="text-xl font-black text-slate-900">{settings?.storeName || settings?.companyName || 'گزارش رسمی کاردکس انبار'}</h2>
             <p className="text-xs text-slate-600 font-bold mt-1">کاردکس گردش مقداری و ریالی کالا</p>
           </div>
-          <div className="text-left text-xs font-mono space-y-1">
-            <div>تاریخ چاپ: {new Date().toLocaleDateString('fa-IR')}</div>
+          <div className="text-left text-xs space-y-1">
+            <div>تاریخ چاپ: {formatDigits(new Date().toLocaleDateString('fa-IR'))}</div>
             <div>انبار: {selectedWarehouseId === 'all' ? 'تمام انبارها' : (warehouses.find(w => w.id?.toString() === selectedWarehouseId)?.name || 'انبار')}</div>
           </div>
         </div>
         {selectedProduct && (
-          <div className="grid grid-cols-4 gap-2 mt-3 pt-2 border-t border-slate-200 text-xs">
+          <div className="grid grid-cols-4 gap-2 mt-3 pt-2 border-t border-slate-200 text-xs font-medium">
             <div><strong>کالا:</strong> {selectedProduct.name}</div>
-            <div><strong>کد کالا:</strong> {selectedProduct.code || '-'}</div>
+            <div><strong>کد کالا:</strong> {formatDigits(selectedProduct.code || '-')}</div>
             <div><strong>واحد اصلی:</strong> {selectedProduct.unit || 'عدد'}</div>
             <div><strong>واحد فرعی:</strong> {selectedProduct.secondaryUnit || '-'}</div>
           </div>
         )}
       </div>
 
-      {/* Control Bar: Filters & Product Selector - Hidden in Print */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 space-y-4 print:hidden">
+      {/* Control Bar: Filters & Advanced Product Selector - Hidden in Print */}
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-200/80 p-5 space-y-4 print:hidden">
         <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-          {/* Product Picker */}
-          <div className="md:col-span-4 space-y-1.5">
+          {/* Advanced Product Picker */}
+          <div className="md:col-span-5 space-y-1.5">
             <label className="text-xs font-black text-slate-700 flex items-center justify-between">
-              <span>انتخاب کالا (الزامی)</span>
-              <span className="text-[10px] text-indigo-600 font-normal">تعداد کالاها: {products.length}</span>
+              <span className="flex items-center gap-1.5">
+                <Package className="w-3.5 h-3.5 text-indigo-600" />
+                انتخاب و جستجوی پیشرفته کالا (الزامی)
+              </span>
+              <span className="text-[11px] text-indigo-600 font-bold">
+                تعداد کل: {formatDigits(products.length)} کالا
+              </span>
             </label>
-            <div className="space-y-1">
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 absolute right-3 top-3 text-slate-400" />
-                <input
-                  type="text"
-                  placeholder="جستجوی سریع نام یا کد کالا..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white pr-9 pl-3 py-2 outline-none"
-                />
-              </div>
-              <select
-                className="w-full bg-slate-50 border border-slate-200 text-slate-900 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none font-bold"
-                value={selectedProductId}
-                onChange={(e) => setSelectedProductId(e.target.value)}
-              >
-                <option value="">-- لطفاً یک کالا انتخاب کنید --</option>
-                {filteredProducts.map((p) => (
-                  <option key={p.id} value={p.id}>
-                    {p.name} {p.code ? `[کد: ${p.code}]` : ''} ({p.unit || 'عدد'})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <AdvancedProductSearchSelect
+              products={products}
+              selectedProductId={selectedProductId}
+              onSelectProduct={(id) => setSelectedProductId(id)}
+              categories={categories}
+            />
           </div>
 
           {/* Warehouse Picker */}
           <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-bold text-slate-600">انبار هدف</label>
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <Building2 className="w-3.5 h-3.5 text-slate-500" />
+              انبار هدف
+            </label>
             <select
-              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none font-medium"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none font-bold"
               value={selectedWarehouseId}
               onChange={(e) => setSelectedWarehouseId(e.target.value)}
             >
@@ -656,9 +696,12 @@ export default function KardexReport() {
 
           {/* Document Type Filter */}
           <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-bold text-slate-600">نوع تراکنش</label>
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <Filter className="w-3.5 h-3.5 text-slate-500" />
+              نوع تراکنش
+            </label>
             <select
-              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none font-medium"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none font-bold"
               value={selectedDocType}
               onChange={(e) => setSelectedDocType(e.target.value)}
             >
@@ -669,36 +712,42 @@ export default function KardexReport() {
           </div>
 
           {/* Start Date */}
-          <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-bold text-slate-600">از تاریخ</label>
+          <div className="md:col-span-1.5 space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+              از تاریخ
+            </label>
             <DatePicker
               calendar={persian}
               locale={persian_fa}
               value={startDate}
               onChange={(d: any) => setStartDate(d?.toDate() || null)}
               format="YYYY/MM/DD"
-              inputClass="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none font-mono text-center"
+              inputClass="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none text-center font-bold"
               placeholder="ابتدای دوره"
             />
           </div>
 
           {/* End Date */}
-          <div className="md:col-span-2 space-y-1.5">
-            <label className="text-xs font-bold text-slate-600">تا تاریخ</label>
+          <div className="md:col-span-1.5 space-y-1.5">
+            <label className="text-xs font-bold text-slate-700 flex items-center gap-1">
+              <Calendar className="w-3.5 h-3.5 text-slate-500" />
+              تا تاریخ
+            </label>
             <DatePicker
               calendar={persian}
               locale={persian_fa}
               value={endDate}
               onChange={(d: any) => setEndDate(d?.toDate() || null)}
               format="YYYY/MM/DD"
-              inputClass="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none font-mono text-center"
+              inputClass="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none text-center font-bold"
               placeholder="امروز (پایان دوره)"
             />
           </div>
         </div>
 
         {/* Sub-bar with instant in-table search and reset */}
-        <div className="flex flex-col sm:flex-row items-center justify-between pt-2 border-t border-slate-100 gap-3">
+        <div className="flex flex-col sm:flex-row items-center justify-between pt-3 border-t border-slate-100 gap-3">
           <div className="relative w-full sm:w-80">
             <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
             <input
@@ -706,7 +755,7 @@ export default function KardexReport() {
               placeholder="فیلتر در شماره سند، طرف حساب یا شرح..."
               value={tableSearch}
               onChange={(e) => setTableSearch(e.target.value)}
-              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-lg pr-9 pl-3 py-1.5 outline-none focus:ring-1 focus:ring-indigo-500"
+              className="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl pr-9 pl-3 py-2 outline-none focus:ring-2 focus:ring-indigo-500 font-medium"
             />
           </div>
 
@@ -720,7 +769,7 @@ export default function KardexReport() {
                   setSelectedDocType('all');
                   setTableSearch('');
                 }}
-                className="text-xs text-rose-600 hover:text-rose-700 font-bold px-2 py-1 bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                className="text-xs text-rose-600 hover:text-rose-700 font-bold px-3 py-1.5 bg-rose-50 rounded-xl transition-colors cursor-pointer"
               >
                 پاک کردن فیلترها
               </button>
@@ -729,9 +778,34 @@ export default function KardexReport() {
         </div>
       </div>
 
+      {/* Alert Banner if Initial Stock Document is not registered yet */}
+      {selectedProduct && !hasInitialStockRegistered && (
+        <div className="bg-amber-50 border-2 border-dashed border-amber-300 rounded-2xl p-4 flex flex-col sm:flex-row items-center justify-between gap-3 text-amber-900 print:hidden">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-200/80 flex items-center justify-center shrink-0">
+              <AlertTriangle className="w-5 h-5 text-amber-700" />
+            </div>
+            <div>
+              <p className="text-xs font-black">
+                برای این کالا هنوز سند موجودی اول دوره (افتتاحیه انبار) ثبت نشده است
+              </p>
+              <p className="text-[11px] text-amber-700 mt-0.5">
+                ثبت سند افتتاحیه باعث می‌شود نقطه شروع کاردکس، بهای تمام‌شده پایه و مانده افتتاحیه کالا به‌صورت دقیق مستند شود.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={() => setIsInitialStockModalOpen(true)}
+            className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black shadow-sm transition-all shrink-0 cursor-pointer"
+          >
+            ثبت سند موجودی اول دوره
+          </button>
+        </div>
+      )}
+
       {/* Product Summary Card (Visible in UI and Print) */}
       {selectedProduct && (
-        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl p-4 shadow-md">
+        <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-3xl p-5 shadow-md">
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4 items-center">
             <div className="space-y-0.5">
               <span className="text-[10px] text-slate-400 font-bold block">نام کالا</span>
@@ -740,8 +814,8 @@ export default function KardexReport() {
 
             <div className="space-y-0.5">
               <span className="text-[10px] text-slate-400 font-bold block">کد کالا / بارکد</span>
-              <span className="text-xs font-mono font-bold text-indigo-200">
-                {selectedProduct.code || '-'} {selectedProduct.barcode ? `| ${selectedProduct.barcode}` : ''}
+              <span className="text-xs font-bold text-indigo-200 accounting-num">
+                {formatDigits(selectedProduct.code || '-')} {selectedProduct.barcode ? `| ${formatDigits(selectedProduct.barcode)}` : ''}
               </span>
             </div>
 
@@ -759,7 +833,7 @@ export default function KardexReport() {
 
             <div className="space-y-0.5">
               <span className="text-[10px] text-slate-400 font-bold block">ضریب تبدیل واحد</span>
-              <span className="text-xs font-mono font-bold text-amber-300" dir="ltr">
+              <span className="text-xs font-bold text-amber-300 accounting-num">
                 {selectedProduct.secondaryUnit && selectedProduct.unitRatio
                   ? formatUnitConversionFormula(
                       selectedProduct.unit || 'عدد',
@@ -773,15 +847,15 @@ export default function KardexReport() {
 
             <div className="space-y-0.5">
               <span className="text-[10px] text-slate-400 font-bold block">نقطه سفارش (حداقل)</span>
-              <span className="text-xs font-mono font-bold text-rose-300">
-                {selectedProduct.minStockLevel !== undefined ? formatNum(selectedProduct.minStockLevel) : '-'} {selectedProduct.unit || 'عدد'}
+              <span className="text-xs font-bold text-rose-300 accounting-num">
+                {selectedProduct.minStockLevel !== undefined ? formatNumFa(selectedProduct.minStockLevel) : '-'} {selectedProduct.unit || 'عدد'}
               </span>
             </div>
 
             <div className="space-y-0.5">
-              <span className="text-[10px] text-slate-400 font-bold block">آخرین نرخ خرید واحد اصلی</span>
-              <span className="text-xs font-mono font-bold text-indigo-200" dir="ltr">
-                {selectedProduct.purchasePrice ? `${formatCur(selectedProduct.purchasePrice)} تومان` : '---'}
+              <span className="text-[10px] text-slate-400 font-bold block">آخرین فی خرید واحد اصلی</span>
+              <span className="text-xs font-bold text-indigo-200 accounting-num">
+                {selectedProduct.purchasePrice ? `${formatCurFa(selectedProduct.purchasePrice)} تومان` : '---'}
               </span>
             </div>
           </div>
@@ -790,75 +864,75 @@ export default function KardexReport() {
 
       {/* KPI Metrics Summary Cards */}
       {selectedProduct && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3.5">
           {/* Opening Stock */}
-          <div className="bg-white border border-slate-200 p-3.5 rounded-2xl shadow-xs">
+          <div className="bg-white border border-slate-200 p-4 rounded-3xl shadow-2xs">
             <span className="text-[11px] font-bold text-slate-500 block mb-1">
               موجودی ابتدای دوره
-              {startDate && <span className="text-[10px] text-indigo-600 font-mono mr-1">(انتقالی)</span>}
+              {startDate && <span className="text-[10px] text-indigo-600 font-bold mr-1">(انتقالی)</span>}
             </span>
-            <div className="flex items-baseline gap-1" dir="ltr">
-              <span className={`text-lg font-mono font-black ${openingBalance < 0 ? 'text-rose-600' : 'text-slate-800'}`}>
-                {formatNum(openingBalance)}
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-xl font-black accounting-num ${openingBalance < 0 ? 'text-rose-600' : 'text-slate-800'}`}>
+                {formatNumFa(openingBalance)}
               </span>
-              <span className="text-[11px] text-slate-400 font-sans">{selectedProduct.unit || 'عدد'}</span>
+              <span className="text-[11px] text-slate-400 font-bold">{selectedProduct.unit || 'عدد'}</span>
             </div>
           </div>
 
           {/* Period Receipts (In) */}
-          <div className="bg-emerald-50/50 border border-emerald-200 p-3.5 rounded-2xl shadow-xs">
+          <div className="bg-emerald-50/60 border border-emerald-200 p-4 rounded-3xl shadow-2xs">
             <span className="text-[11px] font-bold text-emerald-800 block mb-1 flex items-center gap-1">
               <ArrowDownToLine className="w-3.5 h-3.5 text-emerald-600" />
               جمع وارده در دوره
             </span>
-            <div className="flex items-baseline gap-1 text-emerald-700" dir="ltr">
-              <span className="text-lg font-mono font-black">+{formatNum(periodInTotal)}</span>
-              <span className="text-[11px] font-sans">{selectedProduct.unit || 'عدد'}</span>
+            <div className="flex items-baseline gap-1 text-emerald-700">
+              <span className="text-xl font-black accounting-num">+{formatNumFa(periodInTotal)}</span>
+              <span className="text-[11px] font-bold">{selectedProduct.unit || 'عدد'}</span>
             </div>
           </div>
 
           {/* Period Remittances (Out) */}
-          <div className="bg-rose-50/50 border border-rose-200 p-3.5 rounded-2xl shadow-xs">
+          <div className="bg-rose-50/60 border border-rose-200 p-4 rounded-3xl shadow-2xs">
             <span className="text-[11px] font-bold text-rose-800 block mb-1 flex items-center gap-1">
               <ArrowUpFromLine className="w-3.5 h-3.5 text-rose-600" />
               جمع صادره در دوره
             </span>
-            <div className="flex items-baseline gap-1 text-rose-700" dir="ltr">
-              <span className="text-lg font-mono font-black">-{formatNum(periodOutTotal)}</span>
-              <span className="text-[11px] font-sans">{selectedProduct.unit || 'عدد'}</span>
+            <div className="flex items-baseline gap-1 text-rose-700">
+              <span className="text-xl font-black accounting-num">-{formatNumFa(periodOutTotal)}</span>
+              <span className="text-[11px] font-bold">{selectedProduct.unit || 'عدد'}</span>
             </div>
           </div>
 
           {/* Real-time Closing Stock (authoritative running balance) */}
-          <div className="bg-indigo-50/70 border border-indigo-200 p-3.5 rounded-2xl shadow-xs">
+          <div className="bg-indigo-50/80 border border-indigo-200 p-4 rounded-3xl shadow-2xs">
             <span className="text-[11px] font-bold text-indigo-900 block mb-1 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
               موجودی لحظه‌ای (پایان دوره)
             </span>
-            <div className="flex items-baseline gap-1" dir="ltr">
-              <span className={`text-xl font-mono font-black ${periodClosingBalance < 0 ? 'text-rose-600' : 'text-indigo-950'}`}>
-                {formatNum(periodClosingBalance)}
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-2xl font-black accounting-num ${periodClosingBalance < 0 ? 'text-rose-600' : 'text-indigo-950'}`}>
+                {formatNumFa(periodClosingBalance)}
               </span>
-              <span className="text-[11px] font-sans text-indigo-600 font-bold">{selectedProduct.unit || 'عدد'}</span>
+              <span className="text-[11px] text-indigo-700 font-bold">{selectedProduct.unit || 'عدد'}</span>
             </div>
           </div>
 
           {/* Valuation */}
-          <div className="bg-slate-50 border border-slate-200 p-3.5 rounded-2xl shadow-xs col-span-2 sm:col-span-4 lg:col-span-1">
-            <span className="text-[11px] font-bold text-slate-500 block mb-1 flex items-center gap-1">
+          <div className="bg-slate-50 border border-slate-200 p-4 rounded-3xl shadow-2xs col-span-2 sm:col-span-4 lg:col-span-1">
+            <span className="text-[11px] font-bold text-slate-600 block mb-1 flex items-center gap-1">
               <Coins className="w-3.5 h-3.5 text-amber-500" />
               ارزش ریالی مانده انبار
             </span>
-            <div className="flex items-baseline gap-1 text-slate-900" dir="ltr">
-              <span className="text-base font-mono font-black">{formatCur(totalValuation)}</span>
-              <span className="text-[10px] text-slate-500 font-sans">تومان</span>
+            <div className="flex items-baseline gap-1 text-slate-900">
+              <span className="text-lg font-black accounting-num">{formatCurFa(totalValuation)}</span>
+              <span className="text-[11px] text-slate-500 font-bold mr-1">تومان</span>
             </div>
           </div>
         </div>
       )}
 
       {/* Main Kardex Ledger Table */}
-      <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+      <div className="bg-white rounded-3xl shadow-sm border border-slate-200 overflow-hidden">
         {isLoading ? (
           <div className="h-64 flex flex-col items-center justify-center gap-3">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
@@ -878,101 +952,112 @@ export default function KardexReport() {
           <div className="h-64 flex flex-col items-center justify-center text-slate-400 gap-3">
             <AlertTriangle className="w-12 h-12 text-amber-300" />
             <p className="font-bold text-sm text-slate-600">هیچ تراکنش یا گردش انباری برای این کالا با فیلترهای انتخابی یافت نشد.</p>
-            <p className="text-xs text-slate-400">می‌توانید فیلتر انبار یا تاریخ را تغییر دهید یا دکمه همگام‌سازی را بزنید.</p>
+            <p className="text-xs text-slate-400">می‌توانید فیلتر انبار یا تاریخ را تغییر دهید یا سند موجودی اول دوره را ثبت نمایید.</p>
           </div>
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-100/80 text-slate-700 border-b border-slate-200 font-black">
+              <thead className="bg-slate-100/90 text-slate-700 border-b border-slate-200 font-black">
                 <tr>
-                  <th className="px-3 py-3 text-center whitespace-nowrap w-12">ردیف</th>
-                  <th className="px-3 py-3 whitespace-nowrap">تاریخ و زمان</th>
-                  <th className="px-3 py-3 whitespace-nowrap">نوع سند</th>
-                  <th className="px-3 py-3 whitespace-nowrap">شماره سند</th>
-                  <th className="px-3 py-3 whitespace-nowrap">انبار</th>
-                  <th className="px-3 py-3 whitespace-nowrap">طرف حساب</th>
-                  <th className="px-4 py-3 min-w-[180px]">شرح تراکنش</th>
-                  <th className="px-3 py-3 text-center whitespace-nowrap bg-emerald-50/50 text-emerald-800">
+                  <th className="px-3 py-3.5 text-center whitespace-nowrap w-12">ردیف</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">تاریخ و زمان</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">نوع سند</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">شماره سند</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">انبار</th>
+                  <th className="px-3 py-3.5 whitespace-nowrap">طرف حساب</th>
+                  <th className="px-4 py-3.5 min-w-[180px]">شرح سند و تراکنش</th>
+                  <th className="px-3 py-3.5 text-center whitespace-nowrap bg-emerald-50/60 text-emerald-800">
                     وارده (+)
-                    <div className="text-[10px] font-normal text-slate-400">({selectedProduct?.unit || 'واحد'})</div>
+                    <div className="text-[10px] font-normal text-slate-500">({selectedProduct?.unit || 'واحد'})</div>
                   </th>
-                  <th className="px-3 py-3 text-center whitespace-nowrap bg-rose-50/50 text-rose-800">
+                  <th className="px-3 py-3.5 text-center whitespace-nowrap bg-rose-50/60 text-rose-800">
                     صادره (-)
-                    <div className="text-[10px] font-normal text-slate-400">({selectedProduct?.unit || 'واحد'})</div>
+                    <div className="text-[10px] font-normal text-slate-500">({selectedProduct?.unit || 'واحد'})</div>
                   </th>
-                  <th className="px-4 py-3 text-center whitespace-nowrap bg-indigo-100/70 text-indigo-950 font-black border-x border-indigo-200">
+                  <th className="px-4 py-3.5 text-center whitespace-nowrap bg-indigo-100/80 text-indigo-950 font-black border-x border-indigo-200">
                     موجودی لحظه‌ای (مانده)
-                    <div className="text-[10px] font-normal text-indigo-700">({selectedProduct?.unit || 'واحد'})</div>
+                    <div className="text-[10px] font-bold text-indigo-700">({selectedProduct?.unit || 'واحد'})</div>
                   </th>
-                  <th className="px-3 py-3 text-left whitespace-nowrap">فی واحد اصلی</th>
-                  <th className="px-3 py-3 text-left whitespace-nowrap">مبلغ کل (تومان)</th>
+                  <th className="px-3 py-3.5 text-left whitespace-nowrap">فی واحد اصلی</th>
+                  <th className="px-3 py-3.5 text-left whitespace-nowrap">مبلغ کل (تومان)</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100 bg-white">
-                {/* Opening Balance Row if date filter or previous transactions exist */}
+                {/* Opening Balance Row if date filter was applied */}
                 {startDate && (
                   <tr className="bg-amber-50/40 font-bold border-b border-amber-200">
-                    <td className="px-3 py-2.5 text-center text-amber-800 font-mono text-[11px]">-</td>
-                    <td className="px-3 py-2.5 text-amber-800 font-mono text-[11px]" dir="ltr">
-                      قبل از {startDate.toLocaleDateString('fa-IR')}
+                    <td className="px-3 py-3 text-center text-amber-800 text-xs">-</td>
+                    <td className="px-3 py-3 text-amber-800 text-xs accounting-num">
+                      قبل از {formatDigits(startDate.toLocaleDateString('fa-IR'))}
                     </td>
-                    <td className="px-3 py-2.5">
-                      <span className="px-2 py-0.5 rounded-md text-[10px] bg-amber-100 text-amber-800 font-bold border border-amber-300">
-                        مانده انتقالی
+                    <td className="px-3 py-3">
+                      <span className="px-2.5 py-0.5 rounded-md text-[10px] bg-amber-100 text-amber-900 font-bold border border-amber-300">
+                        مانده منقول از قبل
                       </span>
                     </td>
-                    <td className="px-3 py-2.5 font-mono text-slate-500">-</td>
-                    <td className="px-3 py-2.5 text-slate-600">
+                    <td className="px-3 py-3 text-slate-400">-</td>
+                    <td className="px-3 py-3 text-slate-700 font-bold">
                       {selectedWarehouseId === 'all' ? 'تمام انبارها' : (warehouses.find(w => w.id?.toString() === selectedWarehouseId)?.name || 'انبار')}
                     </td>
-                    <td className="px-3 py-2.5 text-slate-500">-</td>
-                    <td className="px-4 py-2.5 text-amber-900 font-bold">
-                      مانده منقول از دوره قبل (موجودی ابتدای بازه گزارش)
+                    <td className="px-3 py-3 text-slate-400">-</td>
+                    <td className="px-4 py-3 text-amber-950 font-bold">
+                      مانده منقول از دوره قبل (موجودی در شروع بازه گزارش)
                     </td>
-                    <td className="px-3 py-2.5 text-center font-mono text-slate-400">-</td>
-                    <td className="px-3 py-2.5 text-center font-mono text-slate-400">-</td>
-                    <td className="px-4 py-2.5 text-center font-mono font-black text-sm bg-indigo-50/80 text-indigo-950 border-x border-indigo-200" dir="ltr">
-                      {formatNum(openingBalance)}
+                    <td className="px-3 py-3 text-center text-slate-400">-</td>
+                    <td className="px-3 py-3 text-center text-slate-400">-</td>
+                    <td className="px-4 py-3 text-center font-black text-sm bg-indigo-50/90 text-indigo-950 border-x border-indigo-200 accounting-num">
+                      {formatNumFa(openingBalance)}
                     </td>
-                    <td className="px-3 py-2.5 text-left font-mono text-slate-400">-</td>
-                    <td className="px-3 py-2.5 text-left font-mono text-slate-400">-</td>
+                    <td className="px-3 py-3 text-left text-slate-400">-</td>
+                    <td className="px-3 py-3 text-left text-slate-400">-</td>
                   </tr>
                 )}
 
                 {/* Detailed Transactions */}
                 {ledgerRows.map((row) => {
                   const isInput = row.type === 'in';
+                  const isInitialStock = row.documentType === 'initial_stock';
+
                   return (
-                    <tr key={row.id} className="hover:bg-indigo-50/30 transition-colors">
-                      <td className="px-3 py-3 text-center text-slate-400 font-mono text-xs">{row.rowNumber}</td>
-                      <td className="px-3 py-3 font-mono text-slate-600 whitespace-nowrap" dir="ltr">
-                        <div>{row.date}</div>
-                        {row.time && <div className="text-[10px] text-slate-400">{row.time}</div>}
+                    <tr
+                      key={row.id}
+                      className={`transition-colors ${
+                        isInitialStock
+                          ? "bg-amber-50/30 hover:bg-amber-50/60"
+                          : "hover:bg-indigo-50/30"
+                      }`}
+                    >
+                      <td className="px-3 py-3 text-center text-slate-500 text-xs font-bold accounting-num">
+                        {formatDigits(row.rowNumber)}
+                      </td>
+                      <td className="px-3 py-3 text-slate-700 whitespace-nowrap text-xs font-bold accounting-num">
+                        <div>{formatDigits(row.date)}</div>
+                        {row.time && <div className="text-[10px] text-slate-400">{formatDigits(row.time)}</div>}
                       </td>
                       <td className="px-3 py-3 whitespace-nowrap">
                         {getDocumentTypeBadge(row.documentType, row.type)}
                       </td>
-                      <td className="px-3 py-3 font-mono font-bold text-indigo-700 whitespace-nowrap">
-                        {row.documentNumber || '-'}
+                      <td className="px-3 py-3 font-bold text-indigo-700 whitespace-nowrap text-xs accounting-num">
+                        {formatDigits(row.documentNumber || '-')}
                       </td>
                       <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">
                         {row.warehouseName}
                       </td>
-                      <td className="px-3 py-3 text-slate-800 font-medium truncate max-w-[130px]" title={row.personName}>
+                      <td className="px-3 py-3 text-slate-800 font-medium truncate max-w-[140px]" title={row.personName}>
                         {row.personName || '---'}
                       </td>
-                      <td className="px-4 py-3 text-slate-600 text-[11px] max-w-[240px] truncate" title={row.description}>
+                      <td className="px-4 py-3 text-slate-600 text-[11px] max-w-[240px] truncate font-medium" title={row.description}>
                         {row.description || '---'}
                       </td>
 
                       {/* Inbound Quantity */}
-                      <td className="px-3 py-3 text-center font-mono font-bold text-emerald-700 bg-emerald-50/20" dir="ltr">
+                      <td className="px-3 py-3 text-center font-black text-emerald-700 bg-emerald-50/30 accounting-num">
                         {isInput ? (
                           <div>
-                            <div className="font-black text-sm">+{formatNum(row.quantity)}</div>
+                            <div className="text-sm font-black">+{formatNumFa(row.quantity)}</div>
                             {row.isSecondaryUnit && row.originalQuantity && (
-                              <div className="text-[10px] text-indigo-600 font-sans font-normal" dir="rtl">
-                                معادل {formatNum(row.originalQuantity)} {row.selectedUnit || selectedProduct?.secondaryUnit}
+                              <div className="text-[10px] text-indigo-600 font-normal">
+                                معادل {formatNumFa(row.originalQuantity)} {row.selectedUnit || selectedProduct?.secondaryUnit}
                               </div>
                             )}
                           </div>
@@ -980,34 +1065,34 @@ export default function KardexReport() {
                       </td>
 
                       {/* Outbound Quantity */}
-                      <td className="px-3 py-3 text-center font-mono font-bold text-rose-700 bg-rose-50/20" dir="ltr">
+                      <td className="px-3 py-3 text-center font-black text-rose-700 bg-rose-50/30 accounting-num">
                         {!isInput ? (
                           <div>
-                            <div className="font-black text-sm">-{formatNum(row.quantity)}</div>
+                            <div className="text-sm font-black">-{formatNumFa(row.quantity)}</div>
                             {row.isSecondaryUnit && row.originalQuantity && (
-                              <div className="text-[10px] text-indigo-600 font-sans font-normal" dir="rtl">
-                                معادل {formatNum(row.originalQuantity)} {row.selectedUnit || selectedProduct?.secondaryUnit}
+                              <div className="text-[10px] text-indigo-600 font-normal">
+                                معادل {formatNumFa(row.originalQuantity)} {row.selectedUnit || selectedProduct?.secondaryUnit}
                               </div>
                             )}
                           </div>
                         ) : '-'}
                       </td>
 
-                      {/* Autoritative Real-Time Running Balance */}
-                      <td className="px-4 py-3 text-center font-mono font-black text-sm bg-indigo-50/90 text-indigo-950 border-x border-indigo-200" dir="ltr">
-                        <span className={row.balanceAfter < 0 ? 'text-rose-600' : 'text-indigo-950'}>
-                          {formatNum(row.balanceAfter)}
+                      {/* Running Balance */}
+                      <td className="px-4 py-3 text-center font-black text-sm bg-indigo-50/90 text-indigo-950 border-x border-indigo-200 accounting-num">
+                        <span className={row.balanceAfter !== undefined && row.balanceAfter < 0 ? 'text-rose-600' : 'text-indigo-950'}>
+                          {formatNumFa(row.balanceAfter)}
                         </span>
                       </td>
 
                       {/* Unit Price */}
-                      <td className="px-3 py-3 text-left font-mono text-slate-700 whitespace-nowrap" dir="ltr">
+                      <td className="px-3 py-3 text-left text-slate-700 whitespace-nowrap accounting-num">
                         {row.unitPrice ? (
                           <div>
-                            <div className="font-bold">{formatCur(row.unitPrice)}</div>
+                            <div className="font-bold">{formatCurFa(row.unitPrice)}</div>
                             {row.isSecondaryUnit && row.originalUnitPrice && (
-                              <div className="text-[10px] text-indigo-600 font-sans" dir="rtl">
-                                {formatCur(row.originalUnitPrice)} ({row.selectedUnit || selectedProduct?.secondaryUnit})
+                              <div className="text-[10px] text-indigo-600">
+                                {formatCurFa(row.originalUnitPrice)} ({row.selectedUnit || selectedProduct?.secondaryUnit})
                               </div>
                             )}
                           </div>
@@ -1015,8 +1100,8 @@ export default function KardexReport() {
                       </td>
 
                       {/* Total Price */}
-                      <td className="px-3 py-3 text-left font-mono font-black text-slate-800 whitespace-nowrap" dir="ltr">
-                        {row.totalPrice ? formatCur(row.totalPrice) : '---'}
+                      <td className="px-3 py-3 text-left font-black text-slate-800 whitespace-nowrap accounting-num">
+                        {row.totalPrice ? formatCurFa(row.totalPrice) : '---'}
                       </td>
                     </tr>
                   );
@@ -1026,20 +1111,20 @@ export default function KardexReport() {
               {/* Table Footer: Totals */}
               <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-black text-slate-800">
                 <tr>
-                  <td colSpan={7} className="px-4 py-3 text-left text-xs font-bold text-slate-600">
+                  <td colSpan={7} className="px-4 py-3.5 text-left text-xs font-bold text-slate-700">
                     جمع کل گردش دوره:
                   </td>
-                  <td className="px-3 py-3 text-center font-mono font-black text-emerald-800 bg-emerald-100/60" dir="ltr">
-                    +{formatNum(periodInTotal)}
+                  <td className="px-3 py-3.5 text-center font-black text-emerald-800 bg-emerald-100/70 accounting-num text-sm">
+                    +{formatNumFa(periodInTotal)}
                   </td>
-                  <td className="px-3 py-3 text-center font-mono font-black text-rose-800 bg-rose-100/60" dir="ltr">
-                    -{formatNum(periodOutTotal)}
+                  <td className="px-3 py-3.5 text-center font-black text-rose-800 bg-rose-100/70 accounting-num text-sm">
+                    -{formatNumFa(periodOutTotal)}
                   </td>
-                  <td className="px-4 py-3 text-center font-mono font-black text-base bg-indigo-200/70 text-indigo-950 border-x border-indigo-300" dir="ltr">
-                    {formatNum(periodClosingBalance)}
+                  <td className="px-4 py-3.5 text-center font-black text-base bg-indigo-200/80 text-indigo-950 border-x border-indigo-300 accounting-num">
+                    {formatNumFa(periodClosingBalance)}
                   </td>
-                  <td colSpan={2} className="px-4 py-3 text-left font-mono font-black text-slate-900" dir="ltr">
-                    ارزش کل: {formatCur(totalValuation)} تومان
+                  <td colSpan={2} className="px-4 py-3.5 text-left font-black text-slate-900 accounting-num">
+                    ارزش کل مانده: {formatCurFa(totalValuation)} تومان
                   </td>
                 </tr>
               </tfoot>
@@ -1049,7 +1134,7 @@ export default function KardexReport() {
       </div>
 
       {/* Official Signatures Section - Visible ONLY in Print */}
-      <div className="hidden print:grid grid-cols-3 gap-8 pt-8 mt-6 border-t border-slate-300 text-center text-xs">
+      <div className="hidden print:grid grid-cols-3 gap-8 pt-8 mt-6 border-t border-slate-300 text-center text-xs font-sans">
         <div className="space-y-12">
           <span className="font-bold text-slate-700">امضای انباردار / تحویل‌دهنده:</span>
           <div className="border-b border-dotted border-slate-400 w-3/4 mx-auto"></div>
@@ -1063,6 +1148,22 @@ export default function KardexReport() {
           <div className="border-b border-dotted border-slate-400 w-3/4 mx-auto"></div>
         </div>
       </div>
+
+      {/* Initial Stock Document Modal */}
+      {selectedProduct && (
+        <InitialStockModal
+          isOpen={isInitialStockModalOpen}
+          onClose={() => setIsInitialStockModalOpen(false)}
+          product={selectedProduct}
+          warehouses={warehouses}
+          onSaved={async () => {
+            await fetchInitialData();
+            if (selectedProductId) {
+              await loadProductKardexData(selectedProductId);
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
