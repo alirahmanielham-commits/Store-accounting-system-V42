@@ -1,4 +1,4 @@
-import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../../utils/unitConversion";
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
@@ -776,13 +776,21 @@ export default function InvoicesList(props: any) {
                                         );
                                         const prodDir = prod?.unitRatioDirection || getUnitRatioDirection(prod);
                                         let basePurchasePrice = Number(it.unitPrice) || 0;
-                                        if (it.isSecondaryUnit && prod?.unitRatio && prod.unitRatio > 0) {
-                                          basePurchasePrice = getPriceForSelectedUnit(basePurchasePrice, false, prod.unitRatio, prodDir);
+                                        const isSecUnit = Boolean(it.isSecondaryUnit);
+                                        if (isSecUnit && prod?.unitRatio && prod.unitRatio > 0) {
+                                          basePurchasePrice = convertPriceToBaseUnit(basePurchasePrice, true, prod.unitRatio, prodDir);
                                         }
                                         return {
                                           productId: it.productId,
                                           productName: it.productName,
-                                          purchasePrice: basePurchasePrice,
+                                          purchasePrice: Math.round(basePurchasePrice),
+                                          originalUnitPrice: Number(it.unitPrice) || 0,
+                                          isSecondaryUnit: isSecUnit,
+                                          invoiceUnit: isSecUnit ? (prod?.secondaryUnit || 'واحد فرعی') : (prod?.unit || 'واحد اصلی'),
+                                          mainUnit: prod?.unit || 'عدد',
+                                          secondaryUnit: prod?.secondaryUnit || '',
+                                          unitRatio: prod?.unitRatio || 1,
+                                          unitRatioDirection: prodDir,
                                           marginPercent: 0,
                                           salePrice: prod
                                             ? Number(prod.price)

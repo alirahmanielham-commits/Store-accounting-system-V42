@@ -1,4 +1,4 @@
-import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../../utils/unitConversion";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import CustomDatePicker from '../ui/CustomDatePicker';
@@ -578,7 +578,7 @@ import BulkProductPickerModal from './BulkProductPickerModal';
                                     {(() => {
                                       const dir = product.unitRatioDirection || getUnitRatioDirection(product);
                                       const baseP = item.isSecondaryUnit
-                                        ? getPriceForSelectedUnit(item.unitPrice, false, product.unitRatio, dir)
+                                        ? convertPriceToBaseUnit(item.unitPrice, true, product.unitRatio, dir)
                                         : item.unitPrice;
                                       const secP = getPriceForSelectedUnit(baseP, true, product.unitRatio, dir);
                                       return (
