@@ -42,7 +42,7 @@ import CalculatorModal from "../components/modals/CalculatorModal";
 import SaleReturnInvoiceCreate from '../components/invoices/SaleReturnInvoiceCreate';
 import PurchaseInvoiceCreate from '../components/invoices/PurchaseInvoiceCreate';
 import PurchaseReturnInvoiceCreate from '../components/invoices/PurchaseReturnInvoiceCreate';
-import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../utils/unitConversion";
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../utils/unitConversion";
 import Barcode from "react-barcode";
 import {
   Building,
@@ -4014,7 +4014,15 @@ const productLastPrices = useMemo(() => {
           };
         }
 
-        const price = (Number(item.unitPrice) || 0) * rate;
+        const product = products.find((p: any) => p.id?.toString() === pid);
+        const isSec = Boolean(item.isSecondaryUnit);
+        const ratio = Number(item.unitRatio || product?.unitRatio || 1);
+        const dir = item.unitRatioDirection || product?.unitRatioDirection || (product ? getUnitRatioDirection(product) : 'secondary_to_main');
+        const effectiveBasePrice = item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice))
+          ? Number(item.baseUnitPrice)
+          : convertPriceToBaseUnit(Number(item.unitPrice) || 0, isSec, ratio, dir);
+
+        const price = effectiveBasePrice * rate;
         if (price > 0) {
           if (isPurchase && invDate > prices[pid].purchase.date) {
             prices[pid].purchase.date = invDate;
@@ -4425,6 +4433,12 @@ const handleFastBarcodeScan = (code: string) => {
             const subtotal = qty * price;
             const total = subtotal * (1 - discPercent / 100);
             updatedItem.totalPrice = total > 0 ? total : 0;
+
+            const product = products.find(p => p.id?.toString() === updatedItem.productId?.toString());
+            const ratio = Number(updatedItem.unitRatio || product?.unitRatio || 1);
+            const dir = updatedItem.unitRatioDirection || product?.unitRatioDirection || (product ? getUnitRatioDirection(product) : 'secondary_to_main');
+            updatedItem.baseUnitPrice = convertPriceToBaseUnit(price, isSec, ratio, dir);
+            updatedItem.baseQuantity = convertQuantityToBaseUnit(qty, isSec, ratio, dir);
           }
 
           return updatedItem;
@@ -5241,9 +5255,29 @@ const getInvoiceNumber = (typeOverride?: string) => {
       }
     }
 
+    const mapItemWithBase = (item: any) => {
+      const productObj = products.find((p) => p.id?.toString() === item.productId?.toString());
+      const isSec = Boolean(item.isSecondaryUnit);
+      const ratio = Number(item.unitRatio || productObj?.unitRatio || 1);
+      const dir = item.unitRatioDirection || productObj?.unitRatioDirection || (productObj ? getUnitRatioDirection(productObj) : 'secondary_to_main');
+      const baseUnitPrice = item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice))
+        ? Number(item.baseUnitPrice)
+        : convertPriceToBaseUnit(Number(item.unitPrice) || 0, isSec, ratio, dir);
+      const baseQuantity = item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity))
+        ? Number(item.baseQuantity)
+        : convertQuantityToBaseUnit(Number(item.quantity) || 0, isSec, ratio, dir);
+
+      return {
+        ...item,
+        baseUnitPrice,
+        baseQuantity,
+      };
+    };
+
     const payload = customPayload
       ? {
           ...customPayload,
+          items: (customPayload.items || []).map(mapItemWithBase),
           isDraft,
           status: isDraft ? "draft" : "final",
           invoiceNumber: (function () {
@@ -5270,7 +5304,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
           customerId,
           sourceInvoiceId,
           items: cleanItems.map((item) => ({
-            ...item,
+            ...mapItemWithBase(item),
             warehouseId:
               (storeSettings.requireWarehouse ||
                 activeTab.includes("warehouse") ||

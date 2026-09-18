@@ -227,6 +227,8 @@ export type InvoiceItem = {
   unitRatio?: number;
   unitRatioDirection?: 'main_to_secondary' | 'secondary_to_main';
   isSecondaryUnit?: boolean;
+  baseUnitPrice?: number; // Price converted to base unit (e.g., price per single item)
+  baseQuantity?: number; // Quantity converted to base unit
   warehouseId?: string | number;
   maxQuantity?: number;
 };

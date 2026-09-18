@@ -24,6 +24,7 @@ import {
 } from './coreService';
 import { CompanySettings } from '../types';
 import { convertToGregorian } from '../utils/format';
+import { convertPriceToBaseUnit, convertQuantityToBaseUnit, getUnitRatioDirection } from '../utils/unitConversion';
 
 
 export const syncInvoiceAllocations = async (tx: any) => {
@@ -1014,36 +1015,52 @@ const internalAddInvoice = async (invoice: any, skipRecalc: boolean = false, ski
   if (finalSavedInvoice.type === 'purchase' || finalSavedInvoice.type === 'sale') {
      const affectedProducts = new Set<string>();
      if (finalSavedInvoice.items && Array.isArray(finalSavedInvoice.items)) {
-         const historyItems: any[] = [];
-         for (const item of finalSavedInvoice.items) {
-             if (item.productId && Number(item.unitPrice) > 0) {
-                 historyItems.push({
-                     id: generateId(),
-                     productId: item.productId,
-                     date: finalSavedInvoice.date || new Date().toISOString().split('T')[0],
-                     type: finalSavedInvoice.type,
-                     price: Number(item.unitPrice),
-                     invoiceId: finalSavedInvoice.id,
-                     quantity: Number(item.quantity) || 0,
-                     invoiceItemId: item.id || generateId()
-                 });
-                 affectedProducts.add(String(item.productId));
-             }
-         }
-         if (historyItems.length > 0 || affectedProducts.size > 0) {
-             (async () => {
-                 try {
-                     if (historyItems.length > 0) {
-                         await batchLocalData(historyItems.map(h => ({ type: 'append', key: 'product_price_history', data: h })));
+         (async () => {
+             try {
+                 const products = await getLocalData<any[]>('products', []);
+                 const historyItems: any[] = [];
+                 for (const item of finalSavedInvoice.items) {
+                     if (item.productId && Number(item.unitPrice) > 0) {
+                         const product = products.find((p: any) => String(p.id) === String(item.productId));
+                         const isSec = Boolean(item.isSecondaryUnit);
+                         const ratio = Number(item.unitRatio || product?.unitRatio || 1);
+                         const dir = item.unitRatioDirection || product?.unitRatioDirection || (product ? getUnitRatioDirection(product) : 'secondary_to_main');
+                         const baseUnitPrice = item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice))
+                           ? Number(item.baseUnitPrice)
+                           : convertPriceToBaseUnit(Number(item.unitPrice) || 0, isSec, ratio, dir);
+                         const baseQty = item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity))
+                           ? Number(item.baseQuantity)
+                           : convertQuantityToBaseUnit(Number(item.quantity) || 0, isSec, ratio, dir);
+
+                         historyItems.push({
+                             id: generateId(),
+                             productId: item.productId,
+                             date: finalSavedInvoice.date || new Date().toISOString().split('T')[0],
+                             type: finalSavedInvoice.type,
+                             price: baseUnitPrice,
+                             originalUnitPrice: Number(item.unitPrice),
+                             isSecondaryUnit: isSec,
+                             selectedUnit: item.selectedUnit || (isSec ? product?.secondaryUnit : product?.unit) || '',
+                             unitRatio: ratio,
+                             unitRatioDirection: dir,
+                             invoiceId: finalSavedInvoice.id,
+                             quantity: baseQty,
+                             originalQuantity: Number(item.quantity) || 0,
+                             invoiceItemId: item.id || generateId()
+                         });
+                         affectedProducts.add(String(item.productId));
                      }
-                     if (affectedProducts.size > 0) {
-                         await syncProductsLatestPrices(Array.from(affectedProducts));
-                     }
-                 } catch (e) {
-                     console.error('Error updating price history in background:', e);
                  }
-             })();
-         }
+                 if (historyItems.length > 0) {
+                     await batchLocalData(historyItems.map(h => ({ type: 'append', key: 'product_price_history', data: h })));
+                 }
+                 if (affectedProducts.size > 0) {
+                     await syncProductsLatestPrices(Array.from(affectedProducts));
+                 }
+             } catch (e) {
+                 console.error('Error updating price history in background:', e);
+             }
+         })();
      }
   }
 
@@ -1127,16 +1144,34 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
               
               const affectedProducts = new Set<string>();
               if (newInvoice.items && Array.isArray(newInvoice.items)) {
+                  const products = await getLocalData<any[]>('products', []);
                   for (const item of newInvoice.items) {
                       if (item.productId && Number(item.unitPrice) > 0) {
+                          const product = products.find((p: any) => String(p.id) === String(item.productId));
+                          const isSec = Boolean(item.isSecondaryUnit);
+                          const ratio = Number(item.unitRatio || product?.unitRatio || 1);
+                          const dir = item.unitRatioDirection || product?.unitRatioDirection || (product ? getUnitRatioDirection(product) : 'secondary_to_main');
+                          const baseUnitPrice = item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice))
+                            ? Number(item.baseUnitPrice)
+                            : convertPriceToBaseUnit(Number(item.unitPrice) || 0, isSec, ratio, dir);
+                          const baseQty = item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity))
+                            ? Number(item.baseQuantity)
+                            : convertQuantityToBaseUnit(Number(item.quantity) || 0, isSec, ratio, dir);
+
                           filteredHistories.push({
                               id: generateId(),
                               productId: item.productId,
                               date: newInvoice.date || new Date().toISOString().split('T')[0],
                               type: newInvoice.type,
-                              price: Number(item.unitPrice),
+                              price: baseUnitPrice,
+                              originalUnitPrice: Number(item.unitPrice),
+                              isSecondaryUnit: isSec,
+                              selectedUnit: item.selectedUnit || (isSec ? product?.secondaryUnit : product?.unit) || '',
+                              unitRatio: ratio,
+                              unitRatioDirection: dir,
                               invoiceId: newInvoice.id,
-                              quantity: Number(item.quantity) || 0,
+                              quantity: baseQty,
+                              originalQuantity: Number(item.quantity) || 0,
                               invoiceItemId: item.id || generateId()
                           });
                           affectedProducts.add(String(item.productId));

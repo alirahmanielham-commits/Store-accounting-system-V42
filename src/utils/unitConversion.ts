@@ -81,6 +81,29 @@ export function getPriceForSelectedUnit(
 }
 
 /**
+ * Calculates the price per 1 Main (Base) Unit from a given price in the selected unit.
+ * e.g. If bought 1 carton (24 pcs) at 240,000 T, base unit price = 240,000 / 24 = 10,000 T.
+ * e.g. If bought 1 meter (where 1 branch = 6 meters) at 100,000 T, base unit price = 100,000 * 6 = 600,000 T.
+ */
+export function convertPriceToBaseUnit(
+  selectedUnitPrice: number,
+  isSecondaryUnit: boolean,
+  unitRatio?: number,
+  direction?: UnitRatioDirection
+): number {
+  const price = Number(selectedUnitPrice) || 0;
+  if (!isSecondaryUnit || !unitRatio || unitRatio <= 0) {
+    return price;
+  }
+
+  if (direction === 'main_to_secondary') {
+    return Number((price * unitRatio).toFixed(4));
+  } else {
+    return Number((price / unitRatio).toFixed(4));
+  }
+}
+
+/**
  * Formats a human-readable conversion formula for display
  * e.g. "۱ شاخه = ۶ متر" or "۱ کارتن = ۲۴ عدد"
  */

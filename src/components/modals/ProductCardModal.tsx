@@ -5,7 +5,7 @@ import { Product, InvoiceItem, Warehouse } from '../../types';
 import { getInvoices, getProductPriceHistory, getInventoryTransactions } from '../../services/dataService';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { addCommas, toPersianDigits, formatDateDisplay, formatAmount } from '../../utils/format';
-import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, formatUnitConversionFormula } from '../../utils/unitConversion';
+import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, convertPriceToBaseUnit, formatUnitConversionFormula } from '../../utils/unitConversion';
 
 export default function ProductCardModal({ product, warehouses = [], currency = 'تومان', onClose, isModal = true, persons = [], storeSettings }: { product: Product, warehouses?: Warehouse[], currency?: string, onClose: () => void, isModal?: boolean, persons?: any[], storeSettings?: any }) {
   const [history, setHistory] = useState<any[]>([]);
@@ -88,9 +88,12 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
                date: h.date || (h.timestamp ? new Date(h.timestamp).toLocaleDateString("fa-IR") : '---'),
                invoiceNumber: h.documentNumber || h.invoiceNumber || '---',
                quantity: qty,
+               originalQuantity: h.originalQuantity !== undefined ? Number(h.originalQuantity) : qty,
+               originalUnitPrice: h.originalUnitPrice !== undefined ? Number(h.originalUnitPrice) : Number(h.unitPrice || 0),
+               selectedUnit: h.selectedUnit || (h.isSecondaryUnit ? product.secondaryUnit : product.unit),
                inQuantity: isInput ? qty : 0,
                outQuantity: !isInput ? qty : 0,
-               isSecondaryUnit: false,
+               isSecondaryUnit: Boolean(h.isSecondaryUnit),
                unitPrice: Number(h.unitPrice || 0),
                totalPrice: Number(h.totalPrice || (qty * (h.unitPrice || 0))),
                personName: h.personName || persons?.find((p: any) => String(p.id) === String(h.personId))?.name || '---',
@@ -107,12 +110,16 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
                  const items = inv.items.filter((i: any) => i.productId?.toString() === product.id?.toString());
                  items.forEach((item: any) => {
                     const dir = product.unitRatioDirection || getUnitRatioDirection(product);
-                    let qty = Number(item.quantity) || 0;
-                    let uPrice = item.unitPrice;
-                    if (item.isSecondaryUnit && product.unitRatio && product.unitRatio > 0) {
-                       qty = convertQuantityToBaseUnit(qty, true, product.unitRatio, dir);
-                       uPrice = getPriceForSelectedUnit(uPrice, false, product.unitRatio, dir);
-                    }
+                    const isSec = Boolean(item.isSecondaryUnit);
+                    const ratio = Number(item.unitRatio || product.unitRatio || 1);
+                    const rawUnitPrice = Number(item.unitPrice) || 0;
+                    const rawQuantity = Number(item.quantity) || 0;
+                    const qty = item.baseQuantity !== undefined && item.baseQuantity !== null && !isNaN(Number(item.baseQuantity))
+                       ? Number(item.baseQuantity)
+                       : convertQuantityToBaseUnit(rawQuantity, isSec, ratio, dir);
+                    const uPrice = item.baseUnitPrice !== undefined && item.baseUnitPrice !== null && !isNaN(Number(item.baseUnitPrice))
+                       ? Number(item.baseUnitPrice)
+                       : convertPriceToBaseUnit(rawUnitPrice, isSec, ratio, dir);
                     const whId = (item.warehouseId || inv.warehouseId || defaultWhId)?.toString();
                     const isReceipt = inv.type === 'warehouse_receipt' || inv.type === 'sales_return';
                     const isRemittance = inv.type === 'warehouse_remittance' || inv.type === 'purchase_return' || inv.type === 'waste';
@@ -126,11 +133,14 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
                        date: inv.jalaliDate || new Date(inv.date || inv.createdAt).toLocaleDateString("fa-IR"),
                        invoiceNumber: inv.invoiceNumber || inv.documentNumber || '---',
                        quantity: qty,
+                       originalQuantity: rawQuantity,
+                       originalUnitPrice: rawUnitPrice,
+                       selectedUnit: item.selectedUnit || (isSec ? product.secondaryUnit : product.unit),
                        inQuantity: isReceipt ? qty : 0,
                        outQuantity: isRemittance ? qty : 0,
-                       isSecondaryUnit: false,
+                       isSecondaryUnit: isSec,
                        unitPrice: uPrice,
-                       totalPrice: qty * Number(uPrice || 0),
+                       totalPrice: Number(item.totalPrice) > 0 ? Number(item.totalPrice) : qty * Number(uPrice || 0),
                        personName: persons?.find((p: any) => p.id?.toString() === (inv.customerId || inv.personId)?.toString())?.name || inv.customerName || inv.personName || "---",
                        warehouseId: whId,
                        description: inv.description || (isReceipt ? `رسید انبار ${inv.invoiceNumber || ''}` : isRemittance ? `حواله انبار ${inv.invoiceNumber || ''}` : `فاکتور ${inv.invoiceNumber || ''}`),
@@ -453,16 +463,43 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
                                 <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">{wh?.name || (wh as any)?.title || 'انبار اصلی'}</td>
                                 <td className="px-3 py-3 text-slate-800 font-medium truncate max-w-[140px]" title={r.personName}>{r.personName || '---'}</td>
                                 <td className="px-3 py-3 text-center font-mono font-bold text-emerald-700">
-                                  {r.inQuantity > 0 ? `+${formatNum(r.inQuantity)}` : '-'}
+                                  {r.inQuantity > 0 ? (
+                                    <div>
+                                      <div>+{formatNum(r.inQuantity)} <span className="text-[10px] text-slate-400 font-sans">({product.unit || 'عدد'})</span></div>
+                                      {r.isSecondaryUnit && r.originalQuantity && (
+                                        <div className="text-[10px] text-indigo-600 font-sans font-normal">
+                                          معادل +{formatNum(r.originalQuantity)} {r.selectedUnit || product.secondaryUnit}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : '-'}
                                 </td>
                                 <td className="px-3 py-3 text-center font-mono font-bold text-rose-700">
-                                  {r.outQuantity > 0 ? `-${formatNum(r.outQuantity)}` : '-'}
+                                  {r.outQuantity > 0 ? (
+                                    <div>
+                                      <div>-{formatNum(r.outQuantity)} <span className="text-[10px] text-slate-400 font-sans">({product.unit || 'عدد'})</span></div>
+                                      {r.isSecondaryUnit && r.originalQuantity && (
+                                        <div className="text-[10px] text-indigo-600 font-sans font-normal">
+                                          معادل -{formatNum(r.originalQuantity)} {r.selectedUnit || product.secondaryUnit}
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : '-'}
                                 </td>
                                 <td className="px-3 py-3 text-center font-mono font-black text-sm bg-indigo-50/70 text-indigo-900 border-x border-indigo-200" dir="ltr">
                                   {formatNum(r.runningBalanceAfter)}
                                 </td>
                                 <td className="px-3 py-3 text-left font-mono text-slate-600 whitespace-nowrap" dir="ltr">
-                                  {r.unitPrice ? formatCur(r.unitPrice) : '---'}
+                                  {r.unitPrice ? (
+                                    <div>
+                                      <div>{formatCur(r.unitPrice)} <span className="text-[10px] text-slate-400 font-sans">({product.unit || 'عدد'})</span></div>
+                                      {r.isSecondaryUnit && r.originalUnitPrice && (
+                                        <div className="text-[10px] text-indigo-600 font-sans">
+                                          {formatCur(r.originalUnitPrice)} ({r.selectedUnit || product.secondaryUnit})
+                                        </div>
+                                      )}
+                                    </div>
+                                  ) : '---'}
                                 </td>
                                 <td className="px-3 py-3 text-slate-500 text-[11px] max-w-[180px] truncate" title={r.description}>{r.description || '---'}</td>
                               </tr>
@@ -660,9 +697,21 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
                                 <span className="text-emerald-600" dir="ltr">
                                    {formatNum(h.quantity)}
                                 </span>
+                                {h.isSecondaryUnit && h.originalQuantity && (
+                                  <div className="text-[11px] text-indigo-600 font-sans font-normal">
+                                    معادل {formatNum(h.originalQuantity)} {h.selectedUnit || product.secondaryUnit}
+                                  </div>
+                                )}
                              </td>
-                             <td className="px-4 py-3 font-black text-indigo-700">{Number(h.unitPrice).toLocaleString()}</td>
-                             <td className="px-4 py-3 font-black text-indigo-700">{(Number(h.unitPrice) * Number(h.quantity)).toLocaleString()}</td>
+                             <td className="px-4 py-3 font-black text-indigo-700">
+                                <div>{Number(h.unitPrice).toLocaleString()} <span className="text-[10px] text-slate-400 font-normal font-sans">({product.unit || 'عدد'})</span></div>
+                                {h.isSecondaryUnit && h.originalUnitPrice && (
+                                  <div className="text-[11px] font-normal text-emerald-700 font-sans">
+                                    {Number(h.originalUnitPrice).toLocaleString()} ({h.selectedUnit || product.secondaryUnit})
+                                  </div>
+                                )}
+                             </td>
+                             <td className="px-4 py-3 font-black text-indigo-700">{(Number(h.totalPrice || (Number(h.unitPrice) * Number(h.quantity)))).toLocaleString()}</td>
                            </tr>
                          ))}
                        </tbody>
@@ -705,9 +754,21 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
                                 <span className="text-rose-600" dir="ltr">
                                    {formatNum(h.quantity)}
                                 </span>
+                                {h.isSecondaryUnit && h.originalQuantity && (
+                                  <div className="text-[11px] text-indigo-600 font-sans font-normal">
+                                    معادل {formatNum(h.originalQuantity)} {h.selectedUnit || product.secondaryUnit}
+                                  </div>
+                                )}
                              </td>
-                             <td className="px-4 py-3 font-black text-indigo-700">{Number(h.unitPrice).toLocaleString()}</td>
-                             <td className="px-4 py-3 font-black text-indigo-700">{(Number(h.unitPrice) * Number(h.quantity)).toLocaleString()}</td>
+                             <td className="px-4 py-3 font-black text-indigo-700">
+                                <div>{Number(h.unitPrice).toLocaleString()} <span className="text-[10px] text-slate-400 font-normal font-sans">({product.unit || 'عدد'})</span></div>
+                                {h.isSecondaryUnit && h.originalUnitPrice && (
+                                  <div className="text-[11px] font-normal text-emerald-700 font-sans">
+                                    {Number(h.originalUnitPrice).toLocaleString()} ({h.selectedUnit || product.secondaryUnit})
+                                  </div>
+                                )}
+                             </td>
+                             <td className="px-4 py-3 font-black text-indigo-700">{(Number(h.totalPrice || (Number(h.unitPrice) * Number(h.quantity)))).toLocaleString()}</td>
                            </tr>
                          ))}
                        </tbody>

@@ -19,6 +19,7 @@ import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
 import * as schema from '../db/schema';
+import { convertPriceToBaseUnit, convertQuantityToBaseUnit, getUnitRatioDirection } from '../utils/unitConversion';
 
 const router = Router();
 router.post('/api/db/recalculate-stocks', async (req, res) => {
@@ -124,8 +125,12 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
           const product = products.find((p: any) => p.id?.toString() === prodId.toString());
           if (!product || product.type === 'service') return;
 
-          let q = Number(i.quantity) || 0;
-          if (i.isSecondaryUnit && product.unitRatio) q = q * Number(product.unitRatio);
+          const dir = product.unitRatioDirection || getUnitRatioDirection(product);
+          const isSec = Boolean(i.isSecondaryUnit);
+          const ratio = Number(i.unitRatio || product.unitRatio || 1);
+          const q = i.baseQuantity !== undefined && i.baseQuantity !== null && !isNaN(Number(i.baseQuantity))
+            ? Number(i.baseQuantity)
+            : convertQuantityToBaseUnit(Number(i.quantity) || 0, isSec, ratio, dir);
 
           const defaultWhId = (product.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
           const whId = (i.warehouseId || inv.warehouseId || defaultWhId).toString();
@@ -133,8 +138,12 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
 
           if (!stocksMap[key]) stocksMap[key] = { productId: prodId, warehouseId: whId, physicalStock: 0, reservedStock: 0, availableStock: 0 };
 
-          const uPrice = Number(i.unitPrice || i.price || product.purchasePrice || 0);
-          const tPrice = q * uPrice;
+          const rawPrice = Number(i.unitPrice || i.price || product.purchasePrice || 0);
+          const uPrice = i.baseUnitPrice !== undefined && i.baseUnitPrice !== null && !isNaN(Number(i.baseUnitPrice))
+            ? Number(i.baseUnitPrice)
+            : convertPriceToBaseUnit(rawPrice, isSec, ratio, dir);
+
+          const tPrice = Number(i.totalPrice) > 0 ? Number(i.totalPrice) : q * uPrice;
           const docNum = inv.invoiceNumber || inv.documentNumber || inv.number || '';
           const docDate = inv.date || (inv.createdAt ? new Date(inv.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
           const docTs = inv.createdAt ? new Date(inv.createdAt).getTime() : (inv.timestamp || Date.now());
@@ -149,6 +158,10 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
                date: docDate,
                type: 'in',
                quantity: q,
+               originalQuantity: Number(i.quantity) || 0,
+               originalUnitPrice: rawPrice,
+               isSecondaryUnit: isSec,
+               selectedUnit: i.selectedUnit || (isSec ? product.secondaryUnit : product.unit),
                unitPrice: uPrice,
                totalPrice: tPrice,
                documentType: docType,
@@ -171,6 +184,10 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
                date: docDate,
                type: 'out',
                quantity: q,
+               originalQuantity: Number(i.quantity) || 0,
+               originalUnitPrice: rawPrice,
+               isSecondaryUnit: isSec,
+               selectedUnit: i.selectedUnit || (isSec ? product.secondaryUnit : product.unit),
                unitPrice: uPrice,
                totalPrice: tPrice,
                documentType: docType,
