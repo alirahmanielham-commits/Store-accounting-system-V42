@@ -42,6 +42,7 @@ import {
   formatUnitConversionFormula
 } from "../../utils/unitConversion";
 import { toPersianDigits, addCommas } from "../../utils/format";
+import { calculateAllWarehouseStocks } from "../../utils/stockLogic";
 import AdvancedProductSearchSelect from "../kardex/AdvancedProductSearchSelect";
 import InitialStockModal from "../kardex/InitialStockModal";
 
@@ -480,6 +481,16 @@ export default function KardexReport() {
     };
   }, [allRawTransactions, selectedProduct, selectedWarehouseId, startDate, endDate, selectedDocType, tableSearch]);
 
+  const currentStockSummary = useMemo(() => {
+    if (!selectedProduct) return null;
+    const { productSummaryMap } = calculateAllWarehouseStocks({
+      products: [selectedProduct],
+      warehouses,
+      allDocs: invoices,
+    });
+    return productSummaryMap[selectedProduct.id?.toString()] || null;
+  }, [selectedProduct, warehouses, invoices]);
+
   // Export to CSV
   const handleExportCSV = () => {
     if (!selectedProduct || ledgerRows.length === 0) return;
@@ -872,7 +883,7 @@ export default function KardexReport() {
 
       {/* KPI Metrics Summary Cards */}
       {selectedProduct && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-5 gap-3.5">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3.5">
           {/* Opening Stock */}
           <div className="bg-white border border-slate-200 p-4 rounded-3xl shadow-2xs">
             <span className="text-[11px] font-bold text-slate-500 block mb-1">
@@ -911,11 +922,11 @@ export default function KardexReport() {
             </div>
           </div>
 
-          {/* Real-time Closing Stock (authoritative running balance) */}
+          {/* Real-time Closing Stock (Physical) */}
           <div className="bg-indigo-50/80 border border-indigo-200 p-4 rounded-3xl shadow-2xs">
             <span className="text-[11px] font-bold text-indigo-900 block mb-1 flex items-center gap-1">
               <CheckCircle2 className="w-3.5 h-3.5 text-indigo-600" />
-              موجودی لحظه‌ای (پایان دوره)
+              موجودی فیزیکی
             </span>
             <div className="flex items-baseline gap-1.5">
               <span className={`text-2xl font-black accounting-num ${periodClosingBalance < 0 ? 'text-rose-600' : 'text-indigo-950'}`}>
@@ -934,15 +945,37 @@ export default function KardexReport() {
             )}
           </div>
 
-          {/* Valuation */}
-          <div className="bg-slate-50 border border-slate-200 p-4 rounded-3xl shadow-2xs col-span-2 sm:col-span-4 lg:col-span-1">
-            <span className="text-[11px] font-bold text-slate-600 block mb-1 flex items-center gap-1">
-              <Coins className="w-3.5 h-3.5 text-amber-500" />
-              ارزش ریالی مانده انبار
+          {/* Reserved Stock */}
+          <div className="bg-amber-50/70 border border-amber-200 p-4 rounded-3xl shadow-2xs">
+            <span className="text-[11px] font-bold text-amber-900 block mb-1 flex items-center gap-1">
+              <Layers className="w-3.5 h-3.5 text-amber-600" />
+              رزرو شده (فاکتورها)
             </span>
-            <div className="flex items-baseline gap-1 text-slate-900">
-              <span className="text-lg font-black accounting-num">{formatCurFa(totalValuation)}</span>
-              <span className="text-[11px] text-slate-500 font-bold mr-1">تومان</span>
+            <div className="flex items-baseline gap-1.5 text-amber-800">
+              <span className="text-2xl font-black accounting-num">
+                {formatNumFa(currentStockSummary ? (selectedWarehouseId !== 'all' ? (currentStockSummary.warehouses[selectedWarehouseId]?.reserved || 0) : currentStockSummary.totalReserved) : 0)}
+              </span>
+              <span className="text-[11px] font-bold">{selectedProduct.unit || 'عدد'}</span>
+            </div>
+            <div className="text-[10px] text-amber-700 font-medium mt-1">
+              فاکتور بدون حواله خروج
+            </div>
+          </div>
+
+          {/* Available Stock */}
+          <div className="bg-emerald-50/90 border border-emerald-300 p-4 rounded-3xl shadow-2xs">
+            <span className="text-[11px] font-bold text-emerald-900 block mb-1 flex items-center gap-1">
+              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+              موجودی آزاد (قابل فروش)
+            </span>
+            <div className="flex items-baseline gap-1.5">
+              <span className={`text-2xl font-black accounting-num ${(currentStockSummary ? (selectedWarehouseId !== 'all' ? (currentStockSummary.warehouses[selectedWarehouseId]?.available || 0) : currentStockSummary.totalAvailable) : periodClosingBalance) < 0 ? 'text-rose-600' : 'text-emerald-800'}`}>
+                {formatNumFa(currentStockSummary ? (selectedWarehouseId !== 'all' ? (currentStockSummary.warehouses[selectedWarehouseId]?.available || 0) : currentStockSummary.totalAvailable) : periodClosingBalance)}
+              </span>
+              <span className="text-[11px] text-emerald-700 font-bold">{selectedProduct.unit || 'عدد'}</span>
+            </div>
+            <div className="text-[10px] text-emerald-700 font-medium mt-1">
+              فیزیکی − رزرو شده
             </div>
           </div>
         </div>

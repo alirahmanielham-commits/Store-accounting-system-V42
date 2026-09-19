@@ -25,6 +25,7 @@ import React, { useState, useEffect, useMemo, useRef } from "react";
 import { globalDateFormatter } from "../utils/dateFormatter";
 import { renderSmsTemplate } from "../utils/smsTemplateRenderer";
 import { startAppProcessing, updateAppProcessing, stopAppProcessing } from "../utils/processingHelper";
+import { calculateAllWarehouseStocks } from "../utils/stockLogic";
 import { useLocation, useNavigate } from "react-router-dom";
 import ProductsTab from "../components/products/ProductsTab";
 import PersonOpeningBalances from "../components/persons/PersonOpeningBalances";
@@ -6409,211 +6410,13 @@ const handleInvoicePreviewTrigger = () => {
   };
 
   const productStockMap = useMemo(() => {
-    const map: Record<string, any> = {};
-
-    products.forEach((p) => {
-      const pid = p.id.toString();
-      const baseStock = Number(p.stock) || 0;
-      const defaultWhId = p.warehouseId?.toString() || "unknown";
-      map[pid] = {
-        totalPhysical: 0,
-        totalReserved: 0,
-        totalAvailable: 0,
-        warehouses: {},
-        defaultWhId,
-        unitRatio: p.unitRatio
-      };
+    const { productSummaryMap } = calculateAllWarehouseStocks({
+      products: products || [],
+      warehouses: warehouses || [],
+      allDocs: invoices || [],
     });
-
-    if (!inventoryTransactions || inventoryTransactions.length === 0) {
-      products.forEach((p) => {
-        const pid = p.id.toString();
-        const baseStock = Number(p.stock) || 0;
-        const defaultWhId = map[pid].defaultWhId;
-
-        map[pid].totalPhysical = baseStock;
-        map[pid].totalAvailable = baseStock;
-        if (baseStock !== 0) {
-          map[pid].warehouses[defaultWhId] = {
-            physical: baseStock,
-            reserved: 0,
-            available: baseStock,
-          };
-        }
-      });
-      invoices.forEach((inv) => {
-        if (
-          !inv.items ||
-          inv.isDraft ||
-          inv.status === "draft" ||
-          inv.type === "proforma" ||
-          inv.status === "voided" ||
-          inv.isDeleted
-        )
-          return;
-        inv.items.forEach((i: any) => {
-          const pid = i.productId?.toString();
-          if (!pid || !map[pid]) return;
-
-          const prodDir = map[pid]?.unitRatioDirection || getUnitRatioDirection(map[pid]);
-          let q = convertQuantityToBaseUnit(
-            i.quantity,
-            Boolean(i.isSecondaryUnit),
-            Number(map[pid].unitRatio),
-            prodDir
-          );
-
-          const whId = (
-            i.warehouseId ||
-            inv.warehouseId ||
-            map[pid].defaultWhId
-          ).toString();
-          if (!map[pid].warehouses[whId]) {
-            map[pid].warehouses[whId] = { physical: 0, reserved: 0, available: 0 };
-          }
-
-          if (inv.type === "warehouse_receipt") {
-            map[pid].totalPhysical += q;
-            map[pid].warehouses[whId].physical += q;
-          } else if (inv.type === "warehouse_remittance") {
-            map[pid].totalPhysical -= q;
-            map[pid].warehouses[whId].physical -= q;
-          }
-        });
-      });
-    } else {
-      const productsInKardex = new Set<string>();
-      inventoryTransactions.forEach((t) => {
-        const pid = t.productId?.toString();
-        if (!pid || !map[pid]) return;
-        productsInKardex.add(pid);
-        const whId = (t.warehouseId || map[pid].defaultWhId).toString();
-        const qty =
-          t.type === "in" ? Number(t.quantity) || 0 : -(Number(t.quantity) || 0);
-
-        map[pid].totalPhysical += qty;
-
-        if (!map[pid].warehouses[whId]) {
-          map[pid].warehouses[whId] = { physical: 0, reserved: 0, available: 0 };
-        }
-        map[pid].warehouses[whId].physical += qty;
-      });
-
-      // For any product not yet recorded in the kardex ledger, retain its initial stock definition
-      products.forEach((p) => {
-        const pid = p.id.toString();
-        if (!productsInKardex.has(pid)) {
-          const baseStock = Number(p.stock) || 0;
-          const defaultWhId = map[pid].defaultWhId;
-          map[pid].totalPhysical = baseStock;
-          if (baseStock !== 0) {
-            if (!map[pid].warehouses[defaultWhId]) {
-              map[pid].warehouses[defaultWhId] = { physical: 0, reserved: 0, available: 0 };
-            }
-            map[pid].warehouses[defaultWhId].physical = baseStock;
-          }
-        }
-      });
-    }
-
-    const saleQtys: Record<string, Record<string, number>> = {};
-    const remittedSaleQtys: Record<string, Record<string, number>> = {};
-    const saleReturnQtys: Record<string, Record<string, number>> = {};
-
-    invoices.forEach((inv) => {
-      if (
-        !inv.items ||
-        inv.isDraft ||
-        inv.status === "draft" ||
-        inv.type === "proforma" ||
-        inv.status === "voided" ||
-        inv.isDeleted
-      )
-        return;
-      inv.items.forEach((i: any) => {
-        const pid = i.productId?.toString();
-        if (!pid || !map[pid]) return;
-
-        let q = Number(i.quantity) || 0;
-        if (i.isSecondaryUnit && map[pid].unitRatio) {
-          q = q * map[pid].unitRatio;
-        }
-
-        const whId = (
-          i.warehouseId ||
-          inv.warehouseId ||
-          map[pid].defaultWhId
-        ).toString();
-
-        if (!saleQtys[pid]) saleQtys[pid] = {};
-        if (!remittedSaleQtys[pid]) remittedSaleQtys[pid] = {};
-        if (!saleReturnQtys[pid]) saleReturnQtys[pid] = {};
-
-        if (inv.type === "warehouse_remittance") {
-          if (inv.sourceInvoiceId) {
-            const sourceInv = invoices.find(
-              (sinv) => sinv.id.toString() === inv.sourceInvoiceId?.toString(),
-            );
-            if (sourceInv && sourceInv.type === "sale") {
-              remittedSaleQtys[pid][whId] =
-                (remittedSaleQtys[pid][whId] || 0) + q;
-            }
-          } else {
-            remittedSaleQtys[pid][whId] =
-              (remittedSaleQtys[pid][whId] || 0) + q;
-          }
-        } else if (inv.type === "sale") {
-          saleQtys[pid][whId] = (saleQtys[pid][whId] || 0) + q;
-        } else if (inv.type === "sale_return") {
-          saleReturnQtys[pid][whId] = (saleReturnQtys[pid][whId] || 0) + q;
-        }
-      });
-    });
-
-    Object.keys(map).forEach((pid) => {
-      const pSaleQtys = saleQtys[pid] || {};
-      const pRemittedSaleQtys = remittedSaleQtys[pid] || {};
-      const pSaleReturnQtys = saleReturnQtys[pid] || {};
-
-      const totalSaleRaw = Object.values(pSaleQtys).reduce(
-        (a: any, b: any) => a + b,
-        0,
-      ) as number;
-      const totalSaleReturn = Object.values(pSaleReturnQtys).reduce(
-        (a: any, b: any) => a + b,
-        0,
-      ) as number;
-      const totalSale = Math.max(0, totalSaleRaw - totalSaleReturn);
-      const totalRemittedForSale = Object.values(pRemittedSaleQtys).reduce(
-        (a: any, b: any) => a + b,
-        0,
-      ) as number;
-      const globalUnremitted = Math.max(0, totalSale - totalRemittedForSale);
-
-      const defaultWhId = map[pid].defaultWhId;
-
-      if (globalUnremitted > 0) {
-        if (!map[pid].warehouses[defaultWhId])
-          map[pid].warehouses[defaultWhId] = {
-            physical: 0,
-            reserved: 0,
-            available: 0,
-          };
-        map[pid].warehouses[defaultWhId].reserved += globalUnremitted;
-        map[pid].totalReserved += globalUnremitted;
-      }
-
-      Object.keys(map[pid].warehouses).forEach((whId) => {
-        map[pid].warehouses[whId].available =
-          map[pid].warehouses[whId].physical -
-          map[pid].warehouses[whId].reserved;
-      });
-      map[pid].totalAvailable =
-        map[pid].totalPhysical - map[pid].totalReserved;
-    });
-
-    return map;
-  }, [products, invoices, inventoryTransactions]);
+    return productSummaryMap;
+  }, [products, warehouses, invoices]);
 
   const getProductStockInfo = (productId: string | number) => {
     const info = productStockMap[productId.toString()];
@@ -7395,6 +7198,8 @@ const renderTabContent = () => {
     saveInvoiceData,
     handleExecuteTransferAndSubmit,
     formatProductStockDetails,
+    getProductStockInfo,
+    productStockMap,
     calculatePersonBalance,
     formatCurrency,
     toPersianDigits,

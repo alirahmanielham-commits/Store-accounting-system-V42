@@ -450,6 +450,7 @@ export type StocktakingItem = {
   countRound1?: number | null;
   countRound2?: number | null;
   countRound3?: number | null;
+  finalApprovedRound?: 1 | 2 | 3;
   note?: string;
 };
 

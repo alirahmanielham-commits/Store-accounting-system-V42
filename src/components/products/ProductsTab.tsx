@@ -533,8 +533,8 @@ export default function ProductsTab(props: any) {
                                     <th className="py-4 px-6 text-right">
                                       کد / بارکد
                                     </th>
-                                    <th className="py-4 px-6 text-center">
-                                      موجودی
+                                    <th className="py-4 px-6 text-center" title="موجودی آزاد = موجودی فیزیکی - موجودی رزروشده">
+                                      موجودی آزاد
                                     </th>
                                     <th className="py-4 px-6 text-right">
                                       قیمت فروش
@@ -651,28 +651,36 @@ export default function ProductsTab(props: any) {
                                           <span className="text-gray-400">
                                             -
                                           </span>
-                                        ) : (
-                                          <div className="flex flex-col items-center gap-1">
-                                            <span className="font-sans font-bold text-gray-700 text-base">
-                                              {calculateProductCurrentStock(
-                                                p.id,
-                                              )}
-                                            </span>
-                                            {p.unit && (
-                                              <span className="text-[10px] text-gray-500">
-                                                {p.unit}
+                                        ) : (() => {
+                                          const stockInfo = props.getProductStockInfo ? props.getProductStockInfo(p.id) : null;
+                                          const availableStock = stockInfo ? stockInfo.totalAvailable : calculateProductCurrentStock(p.id);
+                                          const reservedStock = stockInfo ? stockInfo.totalReserved : 0;
+                                          const physicalStock = stockInfo ? stockInfo.totalPhysical : availableStock;
+                                          const isLow = availableStock <= (p.minStock || 0) && (p.minStock || 0) > 0;
+
+                                          return (
+                                            <div className="flex flex-col items-center gap-0.5">
+                                              <span className={`font-sans font-bold text-base ${availableStock > 0 ? "text-emerald-700" : availableStock < 0 ? "text-rose-600" : "text-gray-700"}`}>
+                                                {formatNumber(availableStock)}
                                               </span>
-                                            )}
-                                            {calculateProductCurrentStock(
-                                              p.id,
-                                            ) <= (p.minStock || 0) &&
-                                              (p.minStock || 0) > 0 && (
-                                                <span className="text-[10px] bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded font-bold border border-rose-100 mt-1">
+                                              {p.unit && (
+                                                <span className="text-[10px] text-gray-500">
+                                                  {p.unit}
+                                                </span>
+                                              )}
+                                              {reservedStock > 0 && (
+                                                <span className="text-[10px] bg-amber-50 text-amber-700 px-1.5 py-0.5 rounded font-bold border border-amber-200/60 mt-0.5" title={`موجودی فیزیکی: ${formatNumber(physicalStock)} | رزرو شده: ${formatNumber(reservedStock)}`}>
+                                                  رزرو: {formatNumber(reservedStock)}
+                                                </span>
+                                              )}
+                                              {isLow && (
+                                                <span className="text-[10px] bg-rose-50 text-rose-600 px-1.5 py-0.5 rounded font-bold border border-rose-100 mt-0.5">
                                                   نیاز به شارژ
                                                 </span>
                                               )}
-                                          </div>
-                                        )}
+                                            </div>
+                                          );
+                                        })()}
                                       </td>
                                       <td className="py-4 px-6 font-sans font-black text-indigo-600 text-base">
                                         {formatNumber(p.price)}

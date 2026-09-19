@@ -771,10 +771,10 @@ export default function SaleInvoiceCreate(props: any) {
                                   <span>خطای کسری موجودی در انبار «{stockErr.warehouseName}»</span>
                                 </div>
                                 <p className="text-[11px] text-rose-700 font-bold leading-relaxed">
-                                  موجودی این کالا در انبار <span className="text-rose-950 font-black px-1.5 py-0.5 bg-white rounded border border-rose-300">{formatNumber(stockErr.availableStock)} {stockErr.unitName}</span> است، اما شما <span className="text-rose-950 font-black px-1.5 py-0.5 bg-white rounded border border-rose-300">{formatNumber(stockErr.requestedQty)} {stockErr.unitName}</span> وارد کرده‌اید.
+                                  موجودی آزاد این کالا در انبار <span className="text-rose-950 font-black px-1.5 py-0.5 bg-white rounded border border-rose-300">{formatNumber(stockErr.availableStock)} {stockErr.unitName}</span> است، اما شما <span className="text-rose-950 font-black px-1.5 py-0.5 bg-white rounded border border-rose-300">{formatNumber(stockErr.requestedQty)} {stockErr.unitName}</span> وارد کرده‌اید.
                                 </p>
                                 <div className="text-[11px] text-rose-900 font-black flex items-center gap-1">
-                                  <span>کسری موجودی:</span>
+                                  <span>کسری از موجودی آزاد:</span>
                                   <span className="text-rose-700 bg-white px-1.5 py-0.5 rounded-md border border-rose-300 font-black">
                                     {formatNumber(stockErr.deficit)} {stockErr.unitName}
                                   </span>
@@ -840,7 +840,7 @@ export default function SaleInvoiceCreate(props: any) {
                             </div>
                             {stockErr && (
                               <div className="flex items-center justify-center gap-1 text-[10px] text-rose-800 font-black bg-white/95 py-0.5 px-1.5 rounded-lg border border-rose-300 shadow-2xs">
-                                <span>موجودی:</span>
+                                <span>موجودی آزاد:</span>
                                 <span>{formatNumber(stockErr.availableStock)}</span>
                               </div>
                             )}

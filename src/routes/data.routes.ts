@@ -19,6 +19,7 @@ import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
 import * as schema from '../db/schema';
+import { calculateAllWarehouseStocks, validateStockAvailability } from '../utils/stockLogic';
 
 const router = Router();
 
@@ -33,13 +34,81 @@ const acquireServerInvoiceLock = (): Promise<() => void> => {
   return currentLock.then(() => release);
 };
 
-const INVOICE_TABLE_KEYS = ['invoices', 'sales_invoices', 'purchase_invoices', 'sale_returns', 'purchase_returns'];
+const INVOICE_TABLE_KEYS = [
+  'invoices',
+  'sales_invoices',
+  'purchase_invoices',
+  'warehouse_receipts',
+  'warehouse_remittances',
+  'sale_returns',
+  'purchase_returns',
+  'wastes'
+];
 const TABLE_DOC_TYPES: Record<string, string> = {
   sales_invoices: 'sale',
   purchase_invoices: 'purchase',
   sale_returns: 'sale_return',
   purchase_returns: 'purchase_return',
+  warehouse_receipts: 'warehouse_receipt',
+  warehouse_remittances: 'warehouse_remittance',
+  wastes: 'waste',
   invoices: 'sale',
+};
+
+const fetchAllSystemDocsForServer = async (): Promise<any[]> => {
+  const allDocsRaw: any[] = [];
+  for (const tKey of INVOICE_TABLE_KEYS) {
+    const d = await getDbData(tKey);
+    if (Array.isArray(d)) {
+      d.forEach((item: any) => {
+        if (item && item.id) allDocsRaw.push({ ...item, _originTable: tKey });
+      });
+    }
+  }
+  const docsMap = new Map();
+  allDocsRaw.forEach(doc => {
+    if (!docsMap.has(String(doc.id))) docsMap.set(String(doc.id), doc);
+  });
+  return Array.from(docsMap.values());
+};
+
+const triggerServerStockSync = async () => {
+  try {
+    const products = (await getDbData('products')) || [];
+    const warehouses = (await getDbData('warehouses')) || [];
+    const allDocs = await fetchAllSystemDocsForServer();
+    const { stocksList, historyList } = calculateAllWarehouseStocks({
+      products,
+      warehouses,
+      allDocs,
+    });
+    await setDbData('warehouse_stocks', stocksList);
+    await setDbData('InventoryTransactions', historyList);
+    await setDbData('kardex', historyList);
+    await setDbData('inventory_transactions', historyList);
+  } catch (e) {
+    console.error('Error during server stock sync:', e);
+  }
+};
+
+const validateSalesInvoiceStock = async (doc: any, releaseLock?: (() => void) | null) => {
+  const docType = doc.type || (doc._originTable && TABLE_DOC_TYPES[doc._originTable]) || 'sale';
+  if (docType === 'sale' && !doc.isDraft && doc.status !== 'draft' && doc.status !== 'voided' && !doc.isDeleted) {
+    const products = (await getDbData('products')) || [];
+    const warehouses = (await getDbData('warehouses')) || [];
+    const allDocs = await fetchAllSystemDocsForServer();
+    const validation = validateStockAvailability({
+      docToValidate: doc,
+      products,
+      warehouses,
+      allDocs,
+    });
+    if (!validation.valid) {
+      if (releaseLock) releaseLock();
+      return validation;
+    }
+  }
+  return { valid: true };
 };
 const DEFAULT_DOC_PREFIXES: Record<string, string> = {
   sale: "INV-",
@@ -235,6 +304,26 @@ router.post('/api/data/:key/append', async (req, res) => {
       }
 
       if (!newItem.id) newItem.id = Math.random().toString(36).substring(2, 15);
+
+      // Concurrency Stock Availability Check for Sales Invoices:
+      // Prevents race conditions where available stock is oversold (Available = Physical - Reserved)
+      const docType = newItem.type || TABLE_DOC_TYPES[key] || 'sale';
+      if (docType === 'sale' && !newItem.isDraft && newItem.status !== 'draft' && newItem.status !== 'voided' && !newItem.isDeleted) {
+        const products = (await getDbData('products')) || [];
+        const warehouses = (await getDbData('warehouses')) || [];
+        const allDocs = await fetchAllSystemDocsForServer();
+        const validation = validateStockAvailability({
+          docToValidate: newItem,
+          products,
+          warehouses,
+          allDocs,
+        });
+
+        if (!validation.valid) {
+          if (releaseServerLock) releaseServerLock();
+          return res.status(400).json({ error: validation.error, details: validation.details });
+        }
+      }
       
       if (isPgActive() && getActivePgPool()) {
          if (!KNOWN_TABLES.includes(key)) return res.status(400).json({ error: 'Unknown table' });
@@ -305,6 +394,10 @@ router.post('/api/data/:key/append', async (req, res) => {
         }
       })();
 
+      if (INVOICE_TABLE_KEYS.includes(key)) {
+        triggerServerStockSync().catch(err => console.error('Error during post-append stock sync:', err));
+      }
+
       res.json({ success: true, data: newItem });
     } catch(err: any) {
       console.error('Error in append:', err);
@@ -319,7 +412,11 @@ router.post('/api/data/:key/append', async (req, res) => {
 router.put('/api/data/:key/:id', async (req, res) => {
     const { key, id } = req.params;
     const updatedItem = req.body;
+    let releaseServerLock: (() => void) | null = null;
     try {
+      if (INVOICE_TABLE_KEYS.includes(key)) {
+        releaseServerLock = await acquireServerInvoiceLock();
+      }
       let mergedItem = { ...updatedItem, id };
       if (isPgActive() && getActivePgPool()) {
          if (!KNOWN_TABLES.includes(key)) return res.status(400).json({ error: 'Unknown table' });
@@ -333,6 +430,11 @@ router.put('/api/data/:key/:id', async (req, res) => {
          const oldItem = data[index];
          const newItem = { ...oldItem, ...updatedItem, id }; // ensure id is preserved
          mergedItem = newItem;
+
+         const stockCheck = await validateSalesInvoiceStock({ ...mergedItem, _originTable: key }, releaseServerLock);
+         if (!stockCheck.valid) {
+           return res.status(400).json({ error: stockCheck.error, details: stockCheck.details });
+         }
          
          // State Machine Validation for Checks
          if (key === 'issued_checks' || key === 'received_checks') {
@@ -406,6 +508,11 @@ router.put('/api/data/:key/:id', async (req, res) => {
              const oldItem = data[index];
              const newItem = { ...oldItem, ...updatedItem };
              mergedItem = newItem;
+
+             const stockCheck = await validateSalesInvoiceStock({ ...mergedItem, _originTable: key }, releaseServerLock);
+             if (!stockCheck.valid) {
+               return res.status(400).json({ error: stockCheck.error, details: stockCheck.details });
+             }
              
              // State Machine Validation for Checks
              if (key === 'issued_checks' || key === 'received_checks') {
@@ -472,12 +579,18 @@ router.put('/api/data/:key/:id', async (req, res) => {
         }
       })();
 
+      if (INVOICE_TABLE_KEYS.includes(key)) {
+        triggerServerStockSync().catch(err => console.error('Error during post-put stock sync:', err));
+      }
+
       res.json({ success: true, data: mergedItem });
     } catch(err: any) {
       console.error('Error in put:', err);
       tableSchemas.delete(req.params.key);
       tableSchemas.delete('system_logs');
       res.status(500).json({ error: err.message });
+    } finally {
+      if (releaseServerLock) releaseServerLock();
     }
   });
 
@@ -567,6 +680,9 @@ router.post('/api/data/:key', async (req, res) => {
 
     try {
       await setDbData(key, data);
+      if (INVOICE_TABLE_KEYS.includes(key)) {
+        triggerServerStockSync().catch(err => console.error('Error during post-bulk stock sync:', err));
+      }
       res.json({ success: true });
     } catch (err) {
       res.status(500).json({ error: err.message });

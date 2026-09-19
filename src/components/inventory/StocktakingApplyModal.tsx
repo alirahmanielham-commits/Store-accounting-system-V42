@@ -204,27 +204,84 @@ export default function StocktakingApplyModal({
               </div>
 
               {/* Action notice */}
-              <div className="p-4 bg-amber-50/80 border border-amber-200 rounded-xl text-amber-900 text-xs leading-relaxed space-y-2">
+              <div className="p-4 bg-amber-50/90 border border-amber-200 rounded-xl text-amber-950 text-xs leading-relaxed space-y-2">
                 <div className="flex items-center gap-2 font-bold text-amber-950">
                   <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
-                  <span>اسناد زیر به طور خودکار صادر و اعمال خواهند شد:</span>
+                  <span>اسناد تعدیل انبار با عنوان «ثبت انبار گردانی» صادر خواهند شد:</span>
                 </div>
-                <ul className="list-disc list-inside pr-1 space-y-1 text-amber-800">
+                <ul className="list-disc list-inside pr-1 space-y-1.5 text-amber-900">
+                  <li>
+                    <strong>انطباق قطعی مانده نهایی:</strong> تعداد ثبت شده در انبارگردانی، دقیقاً به عنوان مانده نهایی موجودی کالا در انبار ثبت خواهد شد. اسناد ورود (رسید) و خروج (حواله) متناسب صادر می‌شوند تا مانده نهایی سیستم با تعداد وارد شده یکی باشد.
+                  </li>
                   {surplusItems.length > 0 && (
                     <li>
-                      <strong>رسید ورود انبار (Warehouse Receipt)</strong> برای {toPersian(surplusItems.length)} قلم کالای دارای مازاد به ارزش کل {toPersian(totalSurplusVal.toLocaleString())} تومان.
+                      <strong>رسید ورود انبار با عنوان «ثبت انبار گردانی»:</strong> برای {toPersian(surplusItems.length)} قلم کالای دارای اضافه موجودی به ارزش کل {toPersian(totalSurplusVal.toLocaleString())} تومان.
                     </li>
                   )}
                   {deficitItems.length > 0 && (
                     <li>
-                      <strong>حواله خروج انبار (Warehouse Remittance)</strong> برای {toPersian(deficitItems.length)} قلم کالای دارای کسری به ارزش کل {toPersian(totalDeficitVal.toLocaleString())} تومان.
+                      <strong>حواله خروج انبار با عنوان «ثبت انبار گردانی»:</strong> برای {toPersian(deficitItems.length)} قلم کالای دارای کسری به ارزش کل {toPersian(totalDeficitVal.toLocaleString())} تومان.
                     </li>
                   )}
-                  <li>
-                    موجودی کلیه کالاها در کاردکس و کاردکس انبار به مقادیر واقعی شمارش شده به‌روز خواهد شد.
-                  </li>
                 </ul>
               </div>
+
+              {/* Items Discrepancy Multi-Round Breakdown Table */}
+              {(surplusItems.length > 0 || deficitItems.length > 0) && (
+                <div className="border border-slate-200 rounded-xl overflow-hidden">
+                  <div className="p-3 bg-slate-100 border-b border-slate-200 font-bold text-xs text-slate-700 flex items-center justify-between">
+                    <span>بررسی نوبت‌های شمارش و تعداد نهایی کالاهای دارای اختلاف</span>
+                    <span className="text-[11px] text-slate-500 font-mono">
+                      {toPersian(surplusItems.length + deficitItems.length)} کالا دارای مغایرت
+                    </span>
+                  </div>
+                  <div className="max-h-48 overflow-y-auto">
+                    <table className="w-full text-right text-xs">
+                      <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-200 sticky top-0">
+                        <tr>
+                          <th className="p-2">نام کالا</th>
+                          <th className="p-2 text-center">موجودی سیستم</th>
+                          <th className="p-2 text-center">شمارش ۱</th>
+                          <th className="p-2 text-center">شمارش ۲</th>
+                          <th className="p-2 text-center">شمارش ۳</th>
+                          <th className="p-2 text-center bg-emerald-50 text-emerald-950 font-extrabold">تعداد نهایی کالا</th>
+                          <th className="p-2 text-center">اختلاف نهایی</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100">
+                        {[...surplusItems, ...deficitItems].map((it) => {
+                          const diff = Number(it.difference || 0);
+                          return (
+                            <tr key={it.productId} className="hover:bg-slate-50/80">
+                              <td className="p-2 font-bold text-slate-800">{it.productName}</td>
+                              <td className="p-2 text-center font-mono text-slate-600">{toPersian(it.expectedStock)}</td>
+                              <td className="p-2 text-center font-mono text-sky-800">
+                                {it.countRound1 !== null && it.countRound1 !== undefined ? toPersian(it.countRound1) : '-'}
+                              </td>
+                              <td className="p-2 text-center font-mono text-amber-800">
+                                {it.countRound2 !== null && it.countRound2 !== undefined ? toPersian(it.countRound2) : '-'}
+                              </td>
+                              <td className="p-2 text-center font-mono text-violet-800">
+                                {it.countRound3 !== null && it.countRound3 !== undefined ? toPersian(it.countRound3) : '-'}
+                              </td>
+                              <td className="p-2 text-center font-mono font-extrabold text-emerald-950 bg-emerald-50/50">
+                                {toPersian(it.countedStock ?? 0)} {it.unit || 'عدد'}
+                              </td>
+                              <td className="p-2 text-center font-mono font-bold">
+                                {diff > 0 ? (
+                                  <span className="text-emerald-700">+{toPersian(diff)} (مازاد)</span>
+                                ) : (
+                                  <span className="text-rose-700">{toPersian(diff)} (کسری)</span>
+                                )}
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
 
               {/* Valuation details */}
               <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 space-y-2 text-sm">

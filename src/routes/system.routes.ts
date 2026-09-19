@@ -20,6 +20,7 @@ import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
 import * as schema from '../db/schema';
 import { convertPriceToBaseUnit, convertQuantityToBaseUnit, getUnitRatioDirection } from '../utils/unitConversion';
+import { calculateAllWarehouseStocks } from '../utils/stockLogic';
 
 const router = Router();
 router.post('/api/db/recalculate-stocks', async (req, res) => {
@@ -60,222 +61,27 @@ router.post('/api/db/recalculate-stocks', async (req, res) => {
       });
       const allDocs = Array.from(docsMap.values());
 
-      // Sort invoices by date / createdAt to process chronologically
-      const sortedInvoices = [...allDocs].sort((a: any, b: any) => {
-        const tA = a.createdAt ? new Date(a.createdAt).getTime() : (a.timestamp || 0);
-        const tB = b.createdAt ? new Date(b.createdAt).getTime() : (b.timestamp || 0);
-        return tA - tB;
-      });
-
-      const stocksMap: Record<string, any> = {};
-      const historyList: any[] = [];
-      const generateId = () => Math.random().toString(36).substring(2, 15);
-
-      // 1. Initial stocks from products definition
-      products.forEach((p: any) => {
-        if (p.type === 'service') return;
-        const baseStock = Number(p.stock) || 0;
-        const defaultWhId = (p.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
-        const key = `${p.id}_${defaultWhId}`;
-        
-        const targetWhId = (p.initialStockWarehouseId || p.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
-        const targetKey = `${p.id}_${targetWhId}`;
-        
-        if (!stocksMap[targetKey]) {
-          stocksMap[targetKey] = { productId: p.id, warehouseId: targetWhId, physicalStock: 0, reservedStock: 0, availableStock: 0 };
-        }
-        
-        if (baseStock > 0) {
-           const before = stocksMap[targetKey].physicalStock;
-           stocksMap[targetKey].physicalStock += baseStock;
-           const docNum = p.initialStockDocNumber || (p.code ? `OPN-${p.code}` : 'موجودی اولیه');
-           const docDate = p.initialStockDate || (p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-           const docDesc = p.initialStockDescription || 'سند موجودی اول دوره و افتتاحیه انبار';
-           const docTs = p.initialStockTimestamp || (p.createdAt ? new Date(p.createdAt).getTime() : 1);
-           
-           historyList.push({
-             id: generateId(),
-             productId: p.id,
-             warehouseId: targetWhId,
-             date: docDate,
-             type: 'in',
-             quantity: baseStock,
-             unitPrice: Number(p.purchasePrice || p.price || 0),
-             totalPrice: baseStock * Number(p.purchasePrice || p.price || 0),
-             documentType: 'initial_stock',
-             documentId: p.id,
-             documentNumber: docNum,
-             description: docDesc,
-             personId: '',
-             personName: 'سیستم (سند افتتاحیه انبار)',
-             balanceBefore: before,
-             balanceAfter: stocksMap[targetKey].physicalStock,
-             timestamp: docTs,
-           });
-        }
-      });
-
-      const saleQtysMap: Record<string, number> = {};
-      const remittedSaleQtysMap: Record<string, number> = {};
-
-      sortedInvoices.forEach((inv: any) => {
-        if (inv.isDraft || inv.status === 'draft' || inv.status === 'voided' || inv.isDeleted) return;
-        if (!inv.items || !Array.isArray(inv.items)) return;
-
-        // Resolve document type
-        const docType = inv.type || (inv._originTable === 'warehouse_receipts' ? 'warehouse_receipt' : inv._originTable === 'warehouse_remittances' ? 'warehouse_remittance' : 'sale');
-        const person = persons.find((per: any) => String(per.id) === String(inv.personId || inv.customerId));
-        const personName = person?.name || inv.customerName || inv.personName || '';
-
-        inv.items.forEach((i: any) => {
-          const prodId = i.productId;
-          if (!prodId) return;
-          const product = products.find((p: any) => p.id?.toString() === prodId.toString());
-          if (!product || product.type === 'service') return;
-
-          const isSec = Boolean(i.isSecondaryUnit) || (Boolean(product.secondaryUnit) && i.selectedUnit === product.secondaryUnit);
-          const ratio = Number(i.unitRatio || product.unitRatio || 1);
-          const dir = i.unitRatioDirection || product.unitRatioDirection || getUnitRatioDirection(product);
-          const rawQty = Number(i.quantity) || 0;
-          const rawPrice = Number(i.unitPrice || i.price || product.purchasePrice || 0);
-
-          const q = isSec && ratio > 0
-            ? convertQuantityToBaseUnit(rawQty, true, ratio, dir)
-            : (i.baseQuantity !== undefined && i.baseQuantity !== null && !isNaN(Number(i.baseQuantity)) && Number(i.baseQuantity) > 0
-                ? Number(i.baseQuantity)
-                : rawQty);
-
-          const defaultWhId = (product.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
-          const whId = (i.warehouseId || inv.warehouseId || defaultWhId).toString();
-          const key = `${prodId}_${whId}`;
-
-          if (!stocksMap[key]) stocksMap[key] = { productId: prodId, warehouseId: whId, physicalStock: 0, reservedStock: 0, availableStock: 0 };
-
-          const uPrice = isSec && ratio > 0
-            ? convertPriceToBaseUnit(rawPrice, true, ratio, dir)
-            : (i.baseUnitPrice !== undefined && i.baseUnitPrice !== null && !isNaN(Number(i.baseUnitPrice)) && Number(i.baseUnitPrice) > 0
-                ? Number(i.baseUnitPrice)
-                : rawPrice);
-
-          const tPrice = Number(i.totalPrice) > 0 ? Number(i.totalPrice) : q * uPrice;
-          const docNum = inv.invoiceNumber || inv.documentNumber || inv.number || '';
-          const docDate = inv.date || (inv.createdAt ? new Date(inv.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
-          const docTs = inv.createdAt ? new Date(inv.createdAt).getTime() : (inv.timestamp || Date.now());
-
-          if (docType === 'warehouse_receipt' || docType === 'sales_return') {
-            const before = stocksMap[key].physicalStock;
-            stocksMap[key].physicalStock += q;
-            historyList.push({
-               id: generateId(),
-               productId: prodId,
-               warehouseId: whId,
-               date: docDate,
-               type: 'in',
-               quantity: q,
-               originalQuantity: Number(i.quantity) || 0,
-               originalUnitPrice: rawPrice,
-               isSecondaryUnit: isSec,
-               selectedUnit: i.selectedUnit || (isSec ? product.secondaryUnit : product.unit),
-               unitPrice: uPrice,
-               totalPrice: tPrice,
-               documentType: docType,
-               documentId: inv.id,
-               documentNumber: docNum,
-               description: inv.description || (docType === 'warehouse_receipt' ? `رسید انبار ${docNum}` : `برگشت از فروش ${docNum}`),
-               personId: inv.personId || inv.customerId || '',
-               personName: personName,
-               balanceBefore: before,
-               balanceAfter: stocksMap[key].physicalStock,
-               timestamp: docTs,
-            });
-          } else if (docType === 'warehouse_remittance' || docType === 'purchase_return' || docType === 'waste') {
-            const before = stocksMap[key].physicalStock;
-            stocksMap[key].physicalStock -= q;
-            historyList.push({
-               id: generateId(),
-               productId: prodId,
-               warehouseId: whId,
-               date: docDate,
-               type: 'out',
-               quantity: q,
-               originalQuantity: Number(i.quantity) || 0,
-               originalUnitPrice: rawPrice,
-               isSecondaryUnit: isSec,
-               selectedUnit: i.selectedUnit || (isSec ? product.secondaryUnit : product.unit),
-               unitPrice: uPrice,
-               totalPrice: tPrice,
-               documentType: docType,
-               documentId: inv.id,
-               documentNumber: docNum,
-               description: inv.description || (docType === 'warehouse_remittance' ? `حواله انبار ${docNum}` : docType === 'waste' ? `ضایعات انبار ${docNum}` : `برگشت از خرید ${docNum}`),
-               personId: inv.personId || inv.customerId || '',
-               personName: personName,
-               balanceBefore: before,
-               balanceAfter: stocksMap[key].physicalStock,
-               timestamp: docTs,
-            });
-
-            if (inv.sourceInvoiceId) {
-              const sourceInv = allDocs.find((sinv: any) => sinv.id?.toString() === inv.sourceInvoiceId?.toString());
-              if (sourceInv && (sourceInv.type === 'sale' || sourceInv._originTable === 'sales_invoices')) {
-                remittedSaleQtysMap[key] = (remittedSaleQtysMap[key] || 0) + q;
-              }
-            } else {
-              remittedSaleQtysMap[key] = (remittedSaleQtysMap[key] || 0) + q;
-            }
-          } else if (docType === 'sale') {
-            saleQtysMap[key] = (saleQtysMap[key] || 0) + q;
-          }
-        });
-      });
-
-      const productGlobalSales: Record<string, number> = {};
-      const productGlobalRemitted: Record<string, number> = {};
-      
-      Object.keys(saleQtysMap).forEach(key => {
-        const prodId = key.split('_')[0];
-        productGlobalSales[prodId] = (productGlobalSales[prodId] || 0) + saleQtysMap[key];
-      });
-      Object.keys(remittedSaleQtysMap).forEach(key => {
-        const prodId = key.split('_')[0];
-        productGlobalRemitted[prodId] = (productGlobalRemitted[prodId] || 0) + remittedSaleQtysMap[key];
-      });
-      
-      Object.keys(productGlobalSales).forEach(prodId => {
-        const unremitted = Math.max(0, (productGlobalSales[prodId] || 0) - (productGlobalRemitted[prodId] || 0));
-        if (unremitted > 0) {
-          const product = products.find((p: any) => p.id.toString() === prodId.toString());
-          const defaultWhId = (product?.warehouseId || (warehouses[0]?.id) || 'unknown').toString();
-          const key = `${prodId}_${defaultWhId}`;
-          if (!stocksMap[key]) stocksMap[key] = { productId: prodId, warehouseId: defaultWhId, physicalStock: 0, reservedStock: 0, availableStock: 0 };
-          stocksMap[key].reservedStock += unremitted;
-        }
-      });
-
-      const finalStocksList: any[] = Object.keys(stocksMap).map(key => {
-        const item = stocksMap[key];
-        return {
-          id: key,
-          productId: item.productId,
-          warehouseId: item.warehouseId,
-          physicalStock: item.physicalStock,
-          reservedStock: item.reservedStock,
-          availableStock: item.physicalStock - item.reservedStock,
-          lastUpdated: Date.now()
-        };
+      // Calculate stocks with unified logic:
+      // Available Stock = Physical Stock - Reserved Stock
+      const { stocksList, historyList } = calculateAllWarehouseStocks({
+        products,
+        warehouses,
+        allDocs,
       });
 
       // Save Kardex ledger into all standard tables
       await setDbData('InventoryTransactions', historyList);
       await setDbData('kardex', historyList);
       await setDbData('inventory_transactions', historyList);
-      await setDbData('warehouse_stocks', finalStocksList);
+      await setDbData('warehouse_stocks', stocksList);
 
-      res.json({ success: true, data: finalStocksList, count: historyList.length });
+      return res.json({ success: true, data: stocksList, count: historyList.length });
     } catch (err: any) {
-      res.status(500).json({ error: err.message });
+      return res.status(500).json({ error: err.message });
     }
   });
+
+
 
 router.get('/api/kardex/:productId?', async (req, res) => {
   try {

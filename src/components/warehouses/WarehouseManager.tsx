@@ -318,11 +318,11 @@ export default function WarehouseManager(props: any) {
                                     <th className="py-4 px-6 font-semibold text-center bg-gray-100/30">
                                       موجودی فیزیکی
                                     </th>
-                                    <th className="py-4 px-6 font-semibold text-center bg-amber-50/20">
-                                      رزرو شده
+                                    <th className="py-4 px-6 font-semibold text-center bg-amber-50/20 text-amber-900" title="فاکتورهای فروش صادر شده بدون حواله خروج">
+                                      رزرو شده (فاکتورها)
                                     </th>
-                                    <th className="py-4 px-6 font-semibold text-center bg-emerald-50/20 text-emerald-900">
-                                      آماده فروش و تحویل
+                                    <th className="py-4 px-6 font-semibold text-center bg-emerald-50/20 text-emerald-900" title="موجودی آزاد = موجودی فیزیکی − موجودی رزروشده">
+                                      موجودی آزاد (قابل فروش)
                                     </th>
                                     <th className="py-4 px-6 font-semibold text-center w-28">
                                       واحد

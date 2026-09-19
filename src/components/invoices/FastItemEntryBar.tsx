@@ -419,7 +419,7 @@ export default function FastItemEntryBar({
                                 : "bg-rose-50 text-rose-700 border border-rose-200"
                             }`}
                           >
-                            موجودی: {toPersianDigits(formatNumber(availableStock))} {prod.unit || "عدد"}
+                            موجودی آزاد: {toPersianDigits(formatNumber(availableStock))} {prod.unit || "عدد"}
                           </span>
                         </div>
                       )}

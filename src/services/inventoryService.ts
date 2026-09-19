@@ -2,7 +2,7 @@ import { getInvoices, addInvoice, deleteInvoice } from './invoiceService';
 import { checkFinancialYear } from './settingsService';
 import { getProducts } from './productService';
 import { addAccountingDocument, deleteAccountingDocument, getLedgerAccounts, addLedgerAccount } from './accountingService';
-import { Stocktaking, StocktakingItem } from '../types';
+import { Stocktaking, StocktakingItem, Product } from '../types';
 
 import { 
   getLocalData, 
@@ -203,10 +203,50 @@ export const applyStocktakingSession = async (
   }
 
   const products = await getProducts();
+  const currentStocks = await getWarehouseStocks();
+
+  // For each counted item, calculate the exact difference required so that
+  // currentPhysicalStock + diff = targetCount (where targetCount is the entered countedStock)
+  type AdjustmentItem = {
+    item: StocktakingItem;
+    product: Product | undefined;
+    targetCount: number;
+    currentStock: number;
+    diff: number; // positive = surplus, negative = deficit
+    cost: number;
+  };
+
+  const adjustments: AdjustmentItem[] = [];
+
+  for (const it of countedItems) {
+    const p = products.find(prod => String(prod.id) === String(it.productId));
+    const cost = Number(it.unitPrice || p?.purchasePrice || p?.price || 0);
+    const targetCount = Number(it.countedStock);
+
+    // Find current physical stock in target warehouse
+    const stockEntry = currentStocks.find(
+      s => String(s.productId) === String(it.productId) && String(s.warehouseId) === String(session.warehouseId)
+    );
+    const currentPhysical = stockEntry !== undefined && stockEntry.physicalStock !== undefined
+      ? Number(stockEntry.physicalStock)
+      : (stockEntry !== undefined ? Number(stockEntry.availableStock || 0) : Number(it.expectedStock || 0));
+
+    // Desired difference to make final stock match targetCount exactly
+    const diff = targetCount - currentPhysical;
+
+    adjustments.push({
+      item: it,
+      product: p,
+      targetCount,
+      currentStock: currentPhysical,
+      diff,
+      cost,
+    });
+  }
 
   // Separate surpluses (positive diff) and deficits (negative diff)
-  const surplusItems = countedItems.filter(it => Number(it.difference) > 0);
-  const deficitItems = countedItems.filter(it => Number(it.difference) < 0);
+  const surplusAdjustments = adjustments.filter(a => a.diff > 0);
+  const deficitAdjustments = adjustments.filter(a => a.diff < 0);
 
   let createdReceipt: any = null;
   let createdRemittance: any = null;
@@ -215,13 +255,14 @@ export const applyStocktakingSession = async (
 
   const docDate = session.date || new Date().toLocaleDateString('fa-IR');
 
-  // 1. Create Warehouse Receipt for Surplus (اضافه انبارگردانی)
-  if (surplusItems.length > 0) {
+  // 1. Create Warehouse Receipt for Surplus (سند ورود با عنوان ثبت انبار گردانی)
+  if (surplusAdjustments.length > 0) {
     receiptNumber = await generateDocNumber('warehouse_receipt');
-    const receiptItems = surplusItems.map(it => {
-      const p = products.find(prod => String(prod.id) === String(it.productId));
-      const cost = Number(it.unitPrice || p?.purchasePrice || p?.price || 0);
-      const qty = Number(it.difference);
+    const receiptItems = surplusAdjustments.map(adj => {
+      const it = adj.item;
+      const p = adj.product;
+      const cost = adj.cost;
+      const qty = adj.diff; // Positive quantity to enter into warehouse
       return {
         id: generateId(),
         productId: it.productId,
@@ -248,7 +289,10 @@ export const applyStocktakingSession = async (
       sourceInvoiceId: session.id,
       invoiceNumber: receiptNumber,
       date: docDate,
-      invoiceDescription: `رسید انبار (مازاد انبارگردانی) - جلسه شماره ${session.id}`,
+      invoiceTitle: 'ثبت انبار گردانی',
+      title: 'ثبت انبار گردانی',
+      invoiceDescription: `ثبت انبار گردانی (رسید ورود مازاد) - جلسه شماره ${session.id}`,
+      description: `ثبت انبار گردانی (رسید ورود مازاد) - جلسه شماره ${session.id}`,
       items: receiptItems,
       totalAmount: totalSurplus,
       status: 'final',
@@ -262,13 +306,14 @@ export const applyStocktakingSession = async (
     }
   }
 
-  // 2. Create Warehouse Remittance for Deficit (کسری انبارگردانی)
-  if (deficitItems.length > 0) {
+  // 2. Create Warehouse Remittance for Deficit (سند خروج با عنوان ثبت انبار گردانی)
+  if (deficitAdjustments.length > 0) {
     remittanceNumber = await generateDocNumber('warehouse_remittance');
-    const remittanceItems = deficitItems.map(it => {
-      const p = products.find(prod => String(prod.id) === String(it.productId));
-      const cost = Number(it.unitPrice || p?.purchasePrice || p?.price || 0);
-      const qty = Math.abs(Number(it.difference));
+    const remittanceItems = deficitAdjustments.map(adj => {
+      const it = adj.item;
+      const p = adj.product;
+      const cost = adj.cost;
+      const qty = Math.abs(adj.diff); // Positive quantity to deduct from warehouse
       return {
         id: generateId(),
         productId: it.productId,
@@ -295,7 +340,10 @@ export const applyStocktakingSession = async (
       sourceInvoiceId: session.id,
       invoiceNumber: remittanceNumber,
       date: docDate,
-      invoiceDescription: `حواله انبار (کسری انبارگردانی) - جلسه شماره ${session.id}`,
+      invoiceTitle: 'ثبت انبار گردانی',
+      title: 'ثبت انبار گردانی',
+      invoiceDescription: `ثبت انبار گردانی (حواله خروج کسری) - جلسه شماره ${session.id}`,
+      description: `ثبت انبار گردانی (حواله خروج کسری) - جلسه شماره ${session.id}`,
       items: remittanceItems,
       totalAmount: totalDeficit,
       status: 'final',
@@ -312,14 +360,9 @@ export const applyStocktakingSession = async (
   // Calculate totals
   let totalDeficitVal = 0;
   let totalSurplusVal = 0;
-  session.items.forEach(it => {
-    const p = products.find(prod => String(prod.id) === String(it.productId));
-    const cost = Number(it.unitPrice || p?.purchasePrice || p?.price || 0);
-    const diff = Number(it.difference || 0);
-    if (it.countedStock !== null) {
-      if (diff < 0) totalDeficitVal += Math.abs(diff) * cost;
-      if (diff > 0) totalSurplusVal += diff * cost;
-    }
+  adjustments.forEach(adj => {
+    if (adj.diff < 0) totalDeficitVal += Math.abs(adj.diff) * adj.cost;
+    if (adj.diff > 0) totalSurplusVal += adj.diff * adj.cost;
   });
 
   // 3. Optional Accounting Document

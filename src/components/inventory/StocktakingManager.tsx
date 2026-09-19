@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { 
-  ClipboardList, Plus, Search, RefreshCw, Handshake, Trash2, X, ArrowLeft, 
+  ClipboardList, Plus, Search, RefreshCw, Handshake, Trash2, X, ArrowLeft, ArrowRight,
   CheckCircle2, AlertTriangle, Printer, Box, Filter, Eye, ChevronDown, Check, 
   Scan, ArrowDownRight, ArrowUpRight, RotateCcw, FileText, Smartphone, Calendar,
   Package, Sparkles, Layers, CheckSquare
@@ -53,7 +53,7 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
 
   // Filtering and Search State in Items Table
   const [searchTerm, setSearchTerm] = useState('');
-  const [activeFilter, setActiveFilter] = useState<'all' | 'discrepant' | 'deficit' | 'surplus' | 'matched' | 'uncounted'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'needs_verification' | 'discrepant' | 'deficit' | 'surplus' | 'matched' | 'uncounted'>('all');
   const [selectedCategoryId, setSelectedCategoryId] = useState<string>('all');
   const [sessionSearch, setSessionSearch] = useState('');
 
@@ -67,6 +67,7 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
   // Modals
   const [isProductModalOpen, setIsProductModalOpen] = useState(false);
   const [isApplyModalOpen, setIsApplyModalOpen] = useState(false);
+  const [showDiscrepancyWarningModal, setShowDiscrepancyWarningModal] = useState(false);
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printSession, setPrintSession] = useState<Stocktaking | null>(null);
   const [unitModalData, setUnitModalData] = useState<{ product: Product; item: StocktakingItem } | null>(null);
@@ -161,15 +162,29 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
       const stockEntry = stocks.find(
         s => String(s.productId) === String(p.id) && String(s.warehouseId) === String(warehouseId)
       );
-      const expected = stockEntry ? Number(stockEntry.availableStock || stockEntry.physicalStock || 0) : 0;
+      const expected = stockEntry ? Number(stockEntry.physicalStock !== undefined ? stockEntry.physicalStock : (stockEntry.availableStock || 0)) : 0;
       const existing = items.find(it => String(it.productId) === String(p.id));
+
+      const r1 = existing?.countRound1 !== undefined ? existing.countRound1 : (existing ? existing.countedStock : null);
+      const r2 = existing?.countRound2 ?? null;
+      const r3 = existing?.countRound3 ?? null;
+      const approvedRound = existing?.finalApprovedRound;
+
+      let finalCount = existing ? existing.countedStock : null;
+      if (finalCount === null && r1 !== null) {
+        finalCount = r3 ?? r2 ?? r1;
+      }
 
       return {
         productId: p.id,
         productName: p.name,
         expectedStock: expected,
-        countedStock: existing ? existing.countedStock : null,
-        difference: existing && existing.countedStock !== null ? existing.countedStock - expected : 0,
+        countRound1: r1,
+        countRound2: r2,
+        countRound3: r3,
+        finalApprovedRound: approvedRound,
+        countedStock: finalCount,
+        difference: finalCount !== null ? finalCount - expected : 0,
         unitPrice: Number(p.purchasePrice || p.price || 0),
         unit: p.unit || 'عدد',
         secondaryUnit: p.secondaryUnit,
@@ -182,6 +197,63 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
 
     setItems(newItems);
     if (showNotification) showNotification(`${toPersianDigits(newItems.length)} کالا در کاربرگ شمارش انبار قرار گرفتند.`, 'info');
+  };
+
+  // Dedicated handler for updating counts across rounds 1, 2, 3
+  const handleUpdateItemCount = (productId: string | number, round: 1 | 2 | 3, value: number | null) => {
+    setItems(prevItems => {
+      const copy = [...prevItems];
+      const targetIdx = copy.findIndex(x => String(x.productId) === String(productId));
+      if (targetIdx === -1) return prevItems;
+
+      const item = { ...copy[targetIdx] };
+      if (round === 1) item.countRound1 = value;
+      if (round === 2) item.countRound2 = value;
+      if (round === 3) item.countRound3 = value;
+
+      // Determine final approved count based on entered rounds or explicitly chosen round
+      let finalVal: number | null = null;
+      if (item.finalApprovedRound === 3 && item.countRound3 !== null && item.countRound3 !== undefined) {
+        finalVal = item.countRound3;
+      } else if (item.finalApprovedRound === 2 && item.countRound2 !== null && item.countRound2 !== undefined) {
+        finalVal = item.countRound2;
+      } else if (item.finalApprovedRound === 1 && item.countRound1 !== null && item.countRound1 !== undefined) {
+        finalVal = item.countRound1;
+      } else {
+        // Auto default priority: Round 3 -> Round 2 -> Round 1
+        if (item.countRound3 !== null && item.countRound3 !== undefined) {
+          finalVal = item.countRound3;
+        } else if (item.countRound2 !== null && item.countRound2 !== undefined) {
+          finalVal = item.countRound2;
+        } else if (item.countRound1 !== null && item.countRound1 !== undefined) {
+          finalVal = item.countRound1;
+        }
+      }
+
+      item.countedStock = finalVal;
+      item.difference = finalVal !== null ? finalVal - item.expectedStock : 0;
+
+      copy[targetIdx] = item;
+      return copy;
+    });
+  };
+
+  // Explicitly select which round count is approved as the final balance
+  const handleSelectApprovedRound = (productId: string | number, round: 1 | 2 | 3) => {
+    setItems(prevItems => {
+      const copy = [...prevItems];
+      const targetIdx = copy.findIndex(x => String(x.productId) === String(productId));
+      if (targetIdx === -1) return prevItems;
+
+      const item = { ...copy[targetIdx] };
+      item.finalApprovedRound = round;
+      const finalVal = round === 1 ? item.countRound1 : round === 2 ? item.countRound2 : item.countRound3;
+      item.countedStock = finalVal !== undefined ? finalVal : null;
+      item.difference = item.countedStock !== null ? item.countedStock - item.expectedStock : 0;
+
+      copy[targetIdx] = item;
+      return copy;
+    });
   };
 
   // Add a specific product or handle barcode scan
@@ -202,11 +274,14 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
       const targetItem = updated[existingIdx];
 
       if (isBarcodeScan) {
-        // Auto-increment on barcode scanner!
-        const currentCount = targetItem.countedStock === null ? 0 : Number(targetItem.countedStock);
+        // Auto-increment on barcode scanner (Round 1)
+        const currentCount = targetItem.countRound1 === null || targetItem.countRound1 === undefined ? 0 : Number(targetItem.countRound1);
         const nextCount = currentCount + 1;
-        targetItem.countedStock = nextCount;
-        targetItem.difference = nextCount - targetItem.expectedStock;
+        targetItem.countRound1 = nextCount;
+        
+        let finalVal = targetItem.countRound3 ?? targetItem.countRound2 ?? nextCount;
+        targetItem.countedStock = finalVal;
+        targetItem.difference = finalVal - targetItem.expectedStock;
         setBarcodeFeedback(`+۱ به شمارش «${product.name}» اضافه شد (مجموع: ${toPersianDigits(nextCount)})`);
         setTimeout(() => setBarcodeFeedback(null), 2500);
       }
@@ -232,13 +307,16 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
     const stockEntry = stocks.find(
       s => String(s.productId) === String(product.id) && String(s.warehouseId) === String(warehouseId)
     );
-    const expected = stockEntry ? Number(stockEntry.availableStock || stockEntry.physicalStock || 0) : 0;
+    const expected = stockEntry ? Number(stockEntry.physicalStock !== undefined ? stockEntry.physicalStock : (stockEntry.availableStock || 0)) : 0;
     const initialCount = isBarcodeScan ? 1 : null;
 
     const newItem: StocktakingItem = {
       productId: product.id,
       productName: product.name,
       expectedStock: expected,
+      countRound1: initialCount,
+      countRound2: null,
+      countRound3: null,
       countedStock: initialCount,
       difference: initialCount !== null ? initialCount - expected : 0,
       unitPrice: Number(product.purchasePrice || product.price || 0),
@@ -452,6 +530,12 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
       }
 
       // Status filter
+      if (activeFilter === 'needs_verification') {
+        const hasDiffR1 = it.countRound1 !== null && it.countRound1 !== undefined && Number(it.countRound1) !== Number(it.expectedStock);
+        const missingR2 = hasDiffR1 && (it.countRound2 === null || it.countRound2 === undefined);
+        const missingR3 = hasDiffR1 && it.countRound2 !== null && Number(it.countRound2) !== Number(it.countRound1) && (it.countRound3 === null || it.countRound3 === undefined);
+        return missingR2 || missingR3 || (hasDiffR1 && Number(it.difference) !== 0);
+      }
       if (activeFilter === 'discrepant') {
         return it.countedStock !== null && Number(it.difference) !== 0;
       }
@@ -500,6 +584,15 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
     const netVal = totalSurplusVal - totalDeficitVal;
     const progressPercent = totalItems > 0 ? Math.round((countedCount / totalItems) * 100) : 0;
 
+    // Items with discrepancies in round 1 requiring round 2 or round 3
+    const itemsNeedingVerification = items.filter(it => {
+      const hasR1 = it.countRound1 !== null && it.countRound1 !== undefined;
+      const diffR1 = hasR1 && Number(it.countRound1) !== Number(it.expectedStock);
+      const missingR2 = diffR1 && (it.countRound2 === null || it.countRound2 === undefined);
+      const missingR3 = diffR1 && it.countRound2 !== null && Number(it.countRound2) !== Number(it.countRound1) && (it.countRound3 === null || it.countRound3 === undefined);
+      return missingR2 || missingR3;
+    });
+
     return {
       totalItems,
       countedCount,
@@ -508,6 +601,7 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
       deficitCount: deficitItems.length,
       matchedCount: matchedItems.length,
       discrepantCount: surplusItems.length + deficitItems.length,
+      needsVerificationCount: itemsNeedingVerification.length,
       totalSurplusVal,
       totalDeficitVal,
       netVal,
@@ -1036,6 +1130,33 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
           {/* Items Table Container */}
           <div className="bg-white rounded-2xl shadow-xs border border-slate-200/80 overflow-hidden" ref={tableContainerRef}>
             
+            {/* Multi-Round Discrepancy Alert Banner */}
+            {stats.needsVerificationCount > 0 && (
+              <div className="mb-4 p-4 bg-amber-50/95 border border-amber-200 rounded-2xl flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 text-amber-900 shadow-xs">
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <span className="text-xs font-bold block text-amber-950">
+                      {toPersianDigits(stats.needsVerificationCount)} کالا دارای اختلاف موجودی بوده و نیازمند شمارش دوم و سوم هستند
+                    </span>
+                    <span className="text-[11px] text-amber-800 leading-relaxed">
+                      طبق الزامات انبارگردانی، کالاهایی که با موجودی دفتری اختلاف دارند (کسری یا مازاد)، باید با شمارش دوم و سوم توسط کاربر تایید نهایی شوند.
+                    </span>
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setActiveFilter('needs_verification')}
+                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors shrink-0 flex items-center gap-1.5"
+                >
+                  <span>ثبت شمارش‌های دوم و سوم</span>
+                  <ArrowRight className="w-3.5 h-3.5 rotate-180" />
+                </button>
+              </div>
+            )}
+
             {/* Filter Toolbar */}
             <div className="p-4 border-b border-slate-200 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4 bg-slate-50/70">
               {/* Filter Tabs */}
@@ -1047,6 +1168,21 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
                   }`}
                 >
                   همه ({toPersianDigits(items.length)})
+                </button>
+                <button
+                  onClick={() => setActiveFilter('needs_verification')}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 ${
+                    activeFilter === 'needs_verification'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'bg-white border border-amber-200 text-amber-800 hover:bg-amber-50'
+                  }`}
+                >
+                  <span>نیازمند تایید (شمارش ۲ و ۳)</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-mono font-bold ${
+                    activeFilter === 'needs_verification' ? 'bg-amber-800 text-white' : 'bg-amber-100 text-amber-800'
+                  }`}>
+                    {toPersianDigits(stats.needsVerificationCount)}
+                  </span>
                 </button>
                 <button
                   onClick={() => setActiveFilter('discrepant')}
@@ -1148,21 +1284,42 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
                 </p>
               </div>
             ) : (
-              <div className="overflow-x-auto max-h-[520px]">
+              <div className="overflow-x-auto max-h-[560px]">
                 <table className="w-full text-right text-xs">
-                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-600 font-bold sticky top-0 z-10">
+                  <thead className="bg-slate-100 border-b border-slate-200 text-slate-700 font-bold sticky top-0 z-10 select-none shadow-xs">
                     <tr>
-                      <th className="p-3 w-10 text-center">#</th>
-                      <th className="p-3 w-28">کد / بارکد</th>
-                      <th className="p-3">نام کالا</th>
-                      <th className="p-3 w-28 text-center">واحد اصلی</th>
-                      <th className="p-3 w-28 text-center">واحد فرعی</th>
-                      <th className="p-3 w-24 text-center">موجودی سیستم</th>
-                      <th className="p-3 w-40 text-center bg-indigo-50/50 text-indigo-900">تعداد شمارش شده</th>
-                      <th className="p-3 w-28 text-center">مغایرت</th>
-                      <th className="p-3 w-28 text-center">بهای واحد</th>
-                      <th className="p-3 w-32 text-center">ارزش ریالی مغایرت</th>
-                      {!isSessionApplied && <th className="p-3 w-12 text-center">حذف</th>}
+                      <th className="p-2.5 w-10 text-center">#</th>
+                      <th className="p-2.5 w-24">کد / بارکد</th>
+                      <th className="p-2.5 min-w-[150px]">نام کالا</th>
+                      <th className="p-2.5 w-16 text-center">واحد</th>
+                      <th className="p-2.5 w-24 text-center bg-slate-200/70 text-slate-800">
+                        <div>موجودی سیستم</div>
+                        <div className="text-[10px] font-normal text-slate-500">موجودی فعلی</div>
+                      </th>
+                      <th className="p-2.5 w-28 text-center bg-sky-50/80 text-sky-950 border-r border-sky-100">
+                        <div>شمارش ۱</div>
+                        <div className="text-[10px] font-normal text-sky-700">نوبت اول</div>
+                      </th>
+                      <th className="p-2.5 w-32 text-center bg-amber-50/90 text-amber-950 border-r border-amber-200">
+                        <div className="flex items-center justify-center gap-1">
+                          <span>شمارش ۲</span>
+                          <span className="text-[9px] bg-amber-200 text-amber-800 px-1 rounded">در مغایرت</span>
+                        </div>
+                        <div className="text-[10px] font-normal text-amber-700">تایید اختلاف</div>
+                      </th>
+                      <th className="p-2.5 w-28 text-center bg-violet-50/80 text-violet-950 border-r border-violet-200">
+                        <div>شمارش ۳</div>
+                        <div className="text-[10px] font-normal text-violet-700">نهایی / ناظر</div>
+                      </th>
+                      <th className="p-2.5 w-36 text-center bg-emerald-50 text-emerald-950 border-x-2 border-emerald-300">
+                        <div className="font-extrabold text-emerald-900">تعداد نهایی کالا</div>
+                        <div className="text-[10px] font-medium text-emerald-700">مانده نهایی انبار</div>
+                      </th>
+                      <th className="p-2.5 w-28 text-center">مغایرت نهایی</th>
+                      <th className="p-2.5 w-28 text-center">وضعیت تایید</th>
+                      <th className="p-2.5 w-24 text-center">بهای واحد</th>
+                      <th className="p-2.5 w-28 text-center">ارزش ریالی</th>
+                      {!isSessionApplied && <th className="p-2.5 w-10 text-center">حذف</th>}
                     </tr>
                   </thead>
                   <tbody className="divide-y divide-slate-100">
@@ -1174,107 +1331,246 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
                       const diff = Number(it.difference || 0);
                       const diffValue = diff * cost;
 
+                      // Discrepancy checks
+                      const r1 = it.countRound1 !== undefined ? it.countRound1 : (it.countedStock !== null ? it.countedStock : null);
+                      const hasR1 = r1 !== null && r1 !== undefined;
+                      const r1HasDiscrepancy = hasR1 && Number(r1) !== Number(it.expectedStock);
+                      const r2 = it.countRound2 ?? null;
+                      const hasR2 = r2 !== null && r2 !== undefined;
+                      const r3 = it.countRound3 ?? null;
+                      const hasR3 = r3 !== null && r3 !== undefined;
+
+                      // Status tag
+                      let statusBadge = null;
+                      if (!hasR1 && it.countedStock === null) {
+                        statusBadge = <span className="text-slate-400 bg-slate-100 px-2 py-0.5 rounded text-[10px]">شمارش‌نشده</span>;
+                      } else if (hasR1 && !r1HasDiscrepancy) {
+                        statusBadge = <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded text-[10px] font-bold">منطبق در نوبت ۱</span>;
+                      } else if (r1HasDiscrepancy && !hasR2) {
+                        statusBadge = (
+                          <span className="text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded text-[10px] font-bold animate-pulse">
+                            نیاز به شمارش ۲
+                          </span>
+                        );
+                      } else if (r1HasDiscrepancy && hasR2 && Number(r2) !== Number(r1) && !hasR3) {
+                        statusBadge = (
+                          <span className="text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded text-[10px] font-bold">
+                            نیاز به شمارش ۳
+                          </span>
+                        );
+                      } else {
+                        statusBadge = (
+                          <span className="text-teal-700 bg-teal-50 border border-teal-200 px-2 py-0.5 rounded text-[10px] font-bold">
+                            تایید شده نهایی
+                          </span>
+                        );
+                      }
+
                       return (
                         <tr
                           key={it.productId}
                           id={`item-row-${it.productId}`}
-                          className="hover:bg-slate-50/80 transition-colors"
+                          className={`transition-colors ${
+                            r1HasDiscrepancy && !hasR2 ? 'bg-amber-50/40 hover:bg-amber-50/70' : 'hover:bg-slate-50/80'
+                          }`}
                         >
-                          <td className="p-3 text-center text-slate-400 font-mono">
+                          <td className="p-2.5 text-center text-slate-400 font-mono text-xs">
                             {toPersianDigits(idx + 1)}
                           </td>
-                          <td className="p-3 font-mono text-slate-600">
+                          <td className="p-2.5 font-mono text-slate-600 text-xs">
                             <div>{p?.code || '-'}</div>
                             {p?.barcode && <div className="text-[10px] text-slate-400">{p.barcode}</div>}
                           </td>
-                          <td className="p-3 font-bold text-slate-800">
-                            {it.productName}
-                          </td>
-                          <td className="p-3 text-center text-slate-600">
-                            {it.unit || p?.unit || 'عدد'}
-                          </td>
-                          <td className="p-3 text-center">
-                            {hasSecUnit ? (
+                          <td className="p-2.5 font-bold text-slate-800 text-xs">
+                            <div>{it.productName}</div>
+                            {hasSecUnit && !isSessionApplied && p && (
                               <button
                                 type="button"
-                                onClick={() => {
-                                  if (isSessionApplied || !p) return;
-                                  setUnitModalData({ product: p, item: it });
-                                }}
-                                disabled={isSessionApplied}
-                                className="px-2 py-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-[10px] font-bold inline-flex items-center gap-1 border border-indigo-100"
+                                onClick={() => setUnitModalData({ product: p, item: it })}
+                                className="mt-1 px-1.5 py-0.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded text-[10px] inline-flex items-center gap-1 font-normal border border-indigo-100"
                               >
-                                <Box className="w-3 h-3" />
+                                <Box className="w-2.5 h-2.5" />
                                 <span>{p?.secondaryUnit} ({toPersianDigits(ratio)})</span>
                               </button>
-                            ) : (
-                              <span className="text-slate-300">-</span>
                             )}
                           </td>
-                          <td className="p-3 text-center font-mono font-bold text-slate-700 bg-slate-50/50">
+                          <td className="p-2.5 text-center text-slate-600 text-xs">
+                            {it.unit || p?.unit || 'عدد'}
+                          </td>
+
+                          {/* 1. Expected Stock */}
+                          <td className="p-2.5 text-center font-mono font-bold text-slate-800 bg-slate-100/60 text-sm">
                             {toPersianDigits(it.expectedStock)}
                           </td>
-                          <td className="p-2.5 bg-indigo-50/30">
-                            <div className="flex items-center gap-1">
+
+                          {/* 2. Round 1 Input */}
+                          <td className="p-2 bg-sky-50/30 border-r border-sky-100">
+                            <input
+                              type="number"
+                              min="0"
+                              step="any"
+                              value={r1 !== null && r1 !== undefined ? r1 : ''}
+                              disabled={isSessionApplied}
+                              onChange={(e) => {
+                                const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                                handleUpdateItemCount(it.productId, 1, val);
+                              }}
+                              placeholder="شمارش ۱"
+                              className={`w-full p-1.5 border text-center font-mono font-bold text-xs rounded-lg outline-none focus:ring-2 bg-white ${
+                                r1HasDiscrepancy
+                                  ? 'border-amber-400 text-amber-900 focus:ring-amber-500 ring-1 ring-amber-300'
+                                  : 'border-sky-200 text-sky-900 focus:ring-sky-500'
+                              }`}
+                            />
+                            {r1HasDiscrepancy && (
+                              <div className="text-[10px] text-amber-700 font-bold text-center mt-0.5">
+                                دارای مغایرت
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 3. Round 2 Input (Required for discrepancy) */}
+                          <td className={`p-2 border-r border-amber-200 ${
+                            r1HasDiscrepancy && !hasR2 ? 'bg-amber-100/40' : 'bg-amber-50/30'
+                          }`}>
+                            {r1HasDiscrepancy || hasR2 ? (
+                              <div>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="any"
+                                  value={r2 !== null && r2 !== undefined ? r2 : ''}
+                                  disabled={isSessionApplied}
+                                  onChange={(e) => {
+                                    const val = e.target.value === '' ? null : parseFloat(e.target.value);
+                                    handleUpdateItemCount(it.productId, 2, val);
+                                  }}
+                                  placeholder="شمارش ۲ (الزامی)"
+                                  className={`w-full p-1.5 border text-center font-mono font-bold text-xs rounded-lg outline-none focus:ring-2 bg-white ${
+                                    !hasR2
+                                      ? 'border-rose-400 text-rose-900 focus:ring-rose-500 ring-2 ring-rose-200 placeholder-rose-300'
+                                      : 'border-amber-300 text-amber-900 focus:ring-amber-500'
+                                  }`}
+                                />
+                                {!hasR2 && (
+                                  <div className="text-[9px] text-rose-600 font-bold text-center mt-0.5">
+                                    الزامی جهت تایید
+                                  </div>
+                                )}
+                              </div>
+                            ) : (
+                              <div className="text-center py-1 text-slate-400 text-[11px] font-medium">
+                                {hasR1 ? 'منطبق در دور ۱' : '-'}
+                              </div>
+                            )}
+                          </td>
+
+                          {/* 4. Round 3 Input (Supervisor / Tie-break) */}
+                          <td className="p-2 bg-violet-50/30 border-r border-violet-200">
+                            {r1HasDiscrepancy || hasR3 ? (
                               <input
                                 type="number"
                                 min="0"
                                 step="any"
-                                value={it.countedStock !== null ? it.countedStock : ''}
+                                value={r3 !== null && r3 !== undefined ? r3 : ''}
                                 disabled={isSessionApplied}
                                 onChange={(e) => {
                                   const val = e.target.value === '' ? null : parseFloat(e.target.value);
-                                  const newItems = [...items];
-                                  const targetIdx = newItems.findIndex(x => String(x.productId) === String(it.productId));
-                                  if (targetIdx > -1) {
-                                    newItems[targetIdx].countedStock = val;
-                                    newItems[targetIdx].difference = val !== null ? val - newItems[targetIdx].expectedStock : 0;
-                                    setItems(newItems);
-                                  }
+                                  handleUpdateItemCount(it.productId, 3, val);
                                 }}
-                                placeholder="شمارش نشده"
-                                className="w-full p-2 border border-indigo-200 text-center font-mono font-bold text-sm text-indigo-700 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none placeholder-indigo-200 bg-white"
+                                placeholder="شمارش ۳"
+                                className="w-full p-1.5 border border-violet-200 text-center font-mono font-bold text-xs text-violet-900 rounded-lg focus:ring-2 focus:ring-violet-500 outline-none bg-white placeholder-violet-200"
                               />
+                            ) : (
+                              <div className="text-center py-1 text-slate-300 text-[11px]">-</div>
+                            )}
+                          </td>
 
-                              {hasSecUnit && !isSessionApplied && p && (
-                                <button
-                                  type="button"
-                                  onClick={() => setUnitModalData({ product: p, item: it })}
-                                  title="ورود تعداد بر اساس کارتن و بسته"
-                                  className="p-1.5 text-indigo-600 hover:bg-indigo-100 rounded-lg shrink-0"
-                                >
-                                  <Box className="w-4 h-4" />
-                                </button>
+                          {/* 5. Approved Final Stock (Counted Stock) */}
+                          <td className="p-2 bg-emerald-50/60 border-x-2 border-emerald-300">
+                            <div className="flex flex-col items-center justify-center">
+                              <div className="text-center font-mono font-extrabold text-sm text-emerald-950 bg-white border border-emerald-300 rounded-lg py-1 px-2.5 shadow-2xs w-full">
+                                {it.countedStock !== null ? (
+                                  <span>{toPersianDigits(it.countedStock)} <span className="text-[10px] font-normal text-emerald-700">{it.unit || 'عدد'}</span></span>
+                                ) : (
+                                  <span className="text-slate-300 font-normal text-xs">شمارش‌نشده</span>
+                                )}
+                              </div>
+                              {/* Round selector badge if multiple rounds entered */}
+                              {(hasR2 || hasR3) && !isSessionApplied && (
+                                <div className="flex items-center gap-1 mt-1 text-[9px] text-emerald-800">
+                                  <span>مبنا:</span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectApprovedRound(it.productId, 1)}
+                                    title="انتخاب شمارش نوبت اول به عنوان تعداد نهایی"
+                                    className={`px-1 rounded ${it.finalApprovedRound === 1 || (!it.finalApprovedRound && it.countedStock === r1) ? 'bg-emerald-600 text-white font-bold' : 'bg-emerald-100 hover:bg-emerald-200'}`}
+                                  >
+                                    د۱
+                                  </button>
+                                  {hasR2 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectApprovedRound(it.productId, 2)}
+                                      title="انتخاب شمارش نوبت دوم به عنوان تعداد نهایی"
+                                      className={`px-1 rounded ${it.finalApprovedRound === 2 || (!it.finalApprovedRound && it.countedStock === r2) ? 'bg-emerald-600 text-white font-bold' : 'bg-emerald-100 hover:bg-emerald-200'}`}
+                                    >
+                                      د۲
+                                    </button>
+                                  )}
+                                  {hasR3 && (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSelectApprovedRound(it.productId, 3)}
+                                      title="انتخاب شمارش نوبت سوم به عنوان تعداد نهایی"
+                                      className={`px-1 rounded ${it.finalApprovedRound === 3 || (!it.finalApprovedRound && it.countedStock === r3) ? 'bg-emerald-600 text-white font-bold' : 'bg-emerald-100 hover:bg-emerald-200'}`}
+                                    >
+                                      د۳
+                                    </button>
+                                  )}
+                                </div>
                               )}
                             </div>
                           </td>
-                          <td className="p-3 text-center font-mono font-bold">
+
+                          {/* 6. Difference */}
+                          <td className="p-2.5 text-center font-mono font-bold text-xs">
                             {it.countedStock === null ? (
                               <span className="text-slate-300">-</span>
                             ) : diff === 0 ? (
-                              <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded-md text-[11px]">منطبق</span>
+                              <span className="text-blue-700 bg-blue-50 px-2 py-0.5 rounded-md text-[11px] font-bold">منطبق</span>
                             ) : diff > 0 ? (
-                              <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-md text-[11px]">
+                              <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md text-[11px] font-bold">
                                 +{toPersianDigits(diff)} (مازاد)
                               </span>
                             ) : (
-                              <span className="text-rose-700 bg-rose-50 px-2 py-0.5 rounded-md text-[11px]">
+                              <span className="text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md text-[11px] font-bold">
                                 {toPersianDigits(diff)} (کسری)
                               </span>
                             )}
                           </td>
-                          <td className="p-3 text-center font-mono text-slate-600 text-[11px]">
+
+                          {/* 7. Verification Status */}
+                          <td className="p-2.5 text-center">
+                            {statusBadge}
+                          </td>
+
+                          {/* 8. Unit Cost */}
+                          <td className="p-2.5 text-center font-mono text-slate-600 text-[11px]">
                             {toPersianDigits(cost.toLocaleString())}
                           </td>
-                          <td className={`p-3 text-center font-mono font-bold text-[11px] ${
+
+                          {/* 9. Value */}
+                          <td className={`p-2.5 text-center font-mono font-bold text-[11px] ${
                             diffValue > 0 ? 'text-emerald-700' : diffValue < 0 ? 'text-rose-700' : 'text-slate-400'
                           }`}>
                             {it.countedStock === null || diffValue === 0
                               ? '۰'
                               : `${diffValue > 0 ? '+' : ''}${toPersianDigits(diffValue.toLocaleString())} ت`}
                           </td>
+
                           {!isSessionApplied && (
-                            <td className="p-3 text-center">
+                            <td className="p-2.5 text-center">
                               <button
                                 onClick={() => handleRemoveItem(it.productId)}
                                 className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
@@ -1355,6 +1651,11 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
                         if (showNotification) showNotification('حداقل باید موجودی یک کالا را شمارش کنید', 'warning');
                         return;
                       }
+                      // Enforce 2nd and 3rd counts for discrepancy items
+                      if (stats.needsVerificationCount > 0) {
+                        setShowDiscrepancyWarningModal(true);
+                        return;
+                      }
                       setIsApplyModalOpen(true);
                     }}
                     className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
@@ -1382,6 +1683,83 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
       {/* =========================================================================
           MODALS
          ========================================================================= */}
+
+      {/* Discrepancy Verification Warning Modal */}
+      {showDiscrepancyWarningModal && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-2xl max-w-lg w-full border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="p-5 bg-amber-50 border-b border-amber-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-amber-500/20 text-amber-700 flex items-center justify-center shrink-0">
+                <AlertTriangle className="w-6 h-6 text-amber-600" />
+              </div>
+              <div>
+                <h3 className="text-base font-extrabold text-amber-950">نیاز به ثبت شمارش دوم و سوم</h3>
+                <p className="text-xs text-amber-800">کالاهای دارای اختلاف باید تایید چند مرحله‌ای شوند</p>
+              </div>
+            </div>
+
+            <div className="p-6 space-y-4">
+              <div className="text-xs text-slate-700 leading-relaxed space-y-2">
+                <p>
+                  تعداد <strong className="text-rose-600 font-bold">{toPersianDigits(stats.needsVerificationCount)}</strong> قلم کالا دارای اختلاف (کسری یا مازاد) هستند که هنوز شمارش دوم یا سوم برای آن‌ها ثبت نشده است.
+                </p>
+                <p className="text-slate-500 bg-slate-50 p-3 rounded-xl border border-slate-200/70">
+                  طبق الزامات استاندارد انبارگردانی، برای جلوگیری از اشتباهات انسانی در ثبت اسناد انبار، کالاهایی که با موجودی اولیه سیستم مغایرت دارند باید با شمارش مجدد (نوبت‌های دوم و سوم) توسط کاربر تایید گردند.
+                </p>
+              </div>
+
+              {/* Sample of items needing verification */}
+              <div className="max-h-40 overflow-y-auto border border-slate-200 rounded-xl divide-y divide-slate-100 text-xs">
+                {items
+                  .filter(it => {
+                    const hasR1 = it.countRound1 !== null && it.countRound1 !== undefined;
+                    const diffR1 = hasR1 && Number(it.countRound1) !== Number(it.expectedStock);
+                    const missingR2 = diffR1 && (it.countRound2 === null || it.countRound2 === undefined);
+                    const missingR3 = diffR1 && it.countRound2 !== null && Number(it.countRound2) !== Number(it.countRound1) && (it.countRound3 === null || it.countRound3 === undefined);
+                    return missingR2 || missingR3;
+                  })
+                  .map(it => (
+                    <div key={it.productId} className="p-2.5 flex items-center justify-between hover:bg-slate-50">
+                      <div>
+                        <span className="font-bold text-slate-800">{it.productName}</span>
+                        <div className="text-[10px] text-slate-400">
+                          موجودی سیستم: {toPersianDigits(it.expectedStock)} {it.unit || 'عدد'} | شمارش ۱: {toPersianDigits(it.countRound1)} {it.unit || 'عدد'}
+                        </div>
+                      </div>
+                      <span className="text-[10px] font-bold text-rose-600 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded">
+                        اختلاف: {Number(it.countRound1 || 0) > Number(it.expectedStock) ? '+' : ''}{toPersianDigits(Number(it.countRound1 || 0) - Number(it.expectedStock))}
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-200 flex flex-col sm:flex-row items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDiscrepancyWarningModal(false);
+                  setActiveFilter('needs_verification');
+                }}
+                className="w-full sm:w-auto px-5 py-2.5 bg-amber-600 hover:bg-amber-700 text-white text-xs font-bold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5"
+              >
+                <span>تکمیل و ثبت شمارش‌های دوم و سوم</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  setShowDiscrepancyWarningModal(false);
+                  setIsApplyModalOpen(true);
+                }}
+                className="w-full sm:w-auto px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+              >
+                <span>ادامه اعمال با مقادیر فعلی</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Apply Stocktaking Modal */}
       {isApplyModalOpen && (
