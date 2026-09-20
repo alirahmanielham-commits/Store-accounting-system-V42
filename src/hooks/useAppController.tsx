@@ -5301,9 +5301,16 @@ const getInvoiceNumber = (typeOverride?: string) => {
       };
     };
 
+    const isNegativeStockAllowed = Boolean(
+      storeSettings?.allowNegativeStock === true ||
+      storeSettings?.allowNegativeStock === "true" ||
+      storeSettings?.allowNegativeStock === 1
+    );
+
     const payload = customPayload
       ? {
           ...customPayload,
+          allowNegativeStock: isNegativeStockAllowed,
           items: (customPayload.items || []).map(mapItemWithBase),
           isDraft,
           status: isDraft ? "draft" : "final",
@@ -5324,6 +5331,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
           warehouseId: invoiceWarehouseId,
           type: invoiceType,
           currency: invoiceCurrency,
+          allowNegativeStock: isNegativeStockAllowed,
           date:
             convertToGregorian(date),
           dueDate: invoiceDueDate ? (convertToGregorian(invoiceDueDate)) : null,

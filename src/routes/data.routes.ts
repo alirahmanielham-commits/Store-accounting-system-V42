@@ -91,9 +91,66 @@ const triggerServerStockSync = async () => {
   }
 };
 
+const isNegativeStockAllowedOnServer = async (doc?: any): Promise<boolean> => {
+  try {
+    if (doc) {
+      if (
+        doc.allowNegativeStock === true ||
+        doc.allowNegativeStock === 'true' ||
+        doc.allowNegativeStock === 1
+      ) {
+        return true;
+      }
+    }
+
+    const companyProfile = await getDbData('company_profile');
+    if (
+      companyProfile?.allowNegativeStock === true ||
+      companyProfile?.allowNegativeStock === 'true' ||
+      companyProfile?.allowNegativeStock === 1
+    ) {
+      return true;
+    }
+
+    const storeSettings = await getDbData('store_settings');
+    if (
+      storeSettings?.allowNegativeStock === true ||
+      storeSettings?.allowNegativeStock === 'true' ||
+      storeSettings?.allowNegativeStock === 1
+    ) {
+      return true;
+    }
+
+    const settings = await getDbData('settings');
+    if (
+      settings?.allowNegativeStock === true ||
+      settings?.allowNegativeStock === 'true' ||
+      settings?.allowNegativeStock === 1
+    ) {
+      return true;
+    }
+
+    const storeSettingsCamel = await getDbData('storeSettings');
+    if (
+      storeSettingsCamel?.allowNegativeStock === true ||
+      storeSettingsCamel?.allowNegativeStock === 'true' ||
+      storeSettingsCamel?.allowNegativeStock === 1
+    ) {
+      return true;
+    }
+  } catch (e) {
+    console.error('Error checking negative stock setting on server:', e);
+  }
+  return false;
+};
+
 const validateSalesInvoiceStock = async (doc: any, releaseLock?: (() => void) | null) => {
   const docType = doc.type || (doc._originTable && TABLE_DOC_TYPES[doc._originTable]) || 'sale';
   if (docType === 'sale' && !doc.isDraft && doc.status !== 'draft' && doc.status !== 'voided' && !doc.isDeleted) {
+    const isNegativeAllowed = await isNegativeStockAllowedOnServer(doc);
+    if (isNegativeAllowed) {
+      return { valid: true };
+    }
     const products = (await getDbData('products')) || [];
     const warehouses = (await getDbData('warehouses')) || [];
     const allDocs = await fetchAllSystemDocsForServer();
@@ -102,6 +159,7 @@ const validateSalesInvoiceStock = async (doc: any, releaseLock?: (() => void) | 
       products,
       warehouses,
       allDocs,
+      allowNegativeStock: isNegativeAllowed,
     });
     if (!validation.valid) {
       if (releaseLock) releaseLock();
@@ -309,19 +367,23 @@ router.post('/api/data/:key/append', async (req, res) => {
       // Prevents race conditions where available stock is oversold (Available = Physical - Reserved)
       const docType = newItem.type || TABLE_DOC_TYPES[key] || 'sale';
       if (docType === 'sale' && !newItem.isDraft && newItem.status !== 'draft' && newItem.status !== 'voided' && !newItem.isDeleted) {
-        const products = (await getDbData('products')) || [];
-        const warehouses = (await getDbData('warehouses')) || [];
-        const allDocs = await fetchAllSystemDocsForServer();
-        const validation = validateStockAvailability({
-          docToValidate: newItem,
-          products,
-          warehouses,
-          allDocs,
-        });
+        const isNegativeAllowed = await isNegativeStockAllowedOnServer(newItem);
+        if (!isNegativeAllowed) {
+          const products = (await getDbData('products')) || [];
+          const warehouses = (await getDbData('warehouses')) || [];
+          const allDocs = await fetchAllSystemDocsForServer();
+          const validation = validateStockAvailability({
+            docToValidate: newItem,
+            products,
+            warehouses,
+            allDocs,
+            allowNegativeStock: false,
+          });
 
-        if (!validation.valid) {
-          if (releaseServerLock) releaseServerLock();
-          return res.status(400).json({ error: validation.error, details: validation.details });
+          if (!validation.valid) {
+            if (releaseServerLock) releaseServerLock();
+            return res.status(400).json({ error: validation.error, details: validation.details });
+          }
         }
       }
       

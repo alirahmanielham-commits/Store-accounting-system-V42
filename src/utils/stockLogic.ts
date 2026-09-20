@@ -424,13 +424,23 @@ export function validateStockAvailability({
   products,
   warehouses,
   allDocs,
+  allowNegativeStock = false,
 }: {
   docToValidate: any;
   products: any[];
   warehouses: any[];
   allDocs: any[];
+  allowNegativeStock?: boolean;
 }): StockValidationResult {
+  if (allowNegativeStock) return { valid: true };
   if (!docToValidate || docToValidate.isDeleted) return { valid: true };
+  if (
+    docToValidate.allowNegativeStock === true ||
+    docToValidate.allowNegativeStock === "true" ||
+    docToValidate.allowNegativeStock === 1
+  ) {
+    return { valid: true };
+  }
   if (docToValidate.status === 'draft' || docToValidate.isDraft || docToValidate.status === 'voided') {
     return { valid: true };
   }
