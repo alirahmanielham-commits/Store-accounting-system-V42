@@ -125,6 +125,12 @@ export default function SaleInvoiceCreate(props: any) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  const isNegativeStockAllowed = Boolean(
+    storeSettings?.allowNegativeStock === true ||
+    storeSettings?.allowNegativeStock === "true" ||
+    storeSettings?.allowNegativeStock === 1
+  );
+
   const productMap = useMemo(() => {
     const map: Record<string, any> = {};
     (products || []).forEach((p: any) => {
@@ -612,38 +618,73 @@ export default function SaleInvoiceCreate(props: any) {
 
               {/* Top Stock Shortage Alert Banner */}
               {Object.keys(rowStockErrors).length > 0 && (
-                <div className="m-5 mb-0 p-4 bg-rose-50 border-2 border-rose-300 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-rose-900 shadow-sm animate-in fade-in">
-                  <div className="flex items-start gap-3">
-                    <div className="p-2 bg-rose-200/80 rounded-xl text-rose-700 shrink-0 mt-0.5">
-                      <AlertTriangle className="w-5 h-5 text-rose-600" />
+                isNegativeStockAllowed ? (
+                  <div className="m-5 mb-0 p-4 bg-amber-50 border-2 border-amber-300 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-amber-950 shadow-sm animate-in fade-in">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-amber-200/80 rounded-xl text-amber-800 shrink-0 mt-0.5">
+                        <Info className="w-5 h-5 text-amber-700" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm text-amber-950 flex items-center gap-2">
+                          <span>مجوز فروش موجودی منفی انبار فعال است:</span>
+                          <span className="bg-amber-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                            {toPersianDigits(Object.keys(rowStockErrors).length)} ردیف دارای کسری
+                          </span>
+                        </h4>
+                        <p className="text-xs text-amber-900 font-bold mt-1 leading-relaxed">
+                          برای اقلام دارای کسری با <span className="bg-amber-200 text-amber-950 px-1.5 py-0.5 rounded font-black border border-amber-300">کادر زرد رنگ</span>، صدور فاکتور مجاز است و پس از ثبت، مانده موجودی این کالاها در کاردکس انبار به صورت منفی ذخیره خواهد شد.
+                        </p>
+                      </div>
                     </div>
-                    <div>
-                      <h4 className="font-black text-sm text-rose-900 flex items-center gap-2">
-                        <span>هشدار کسری موجودی انبار:</span>
-                        <span className="bg-rose-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">
-                          {toPersianDigits(Object.keys(rowStockErrors).length)} ردیف
-                        </span>
-                      </h4>
-                      <p className="text-xs text-rose-700 font-bold mt-1 leading-relaxed">
-                        تعداد وارد شده در ردیف‌های با <span className="bg-rose-200 text-rose-950 px-1.5 py-0.5 rounded font-black border border-rose-300">کادر قرمز رنگ</span> بیشتر از موجودی انبار انتخاب شده است. لطفاً تعداد اقلام را بررسی و اصلاح فرمایید.
-                      </p>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstKey = Object.keys(rowStockErrors)[0];
+                        if (firstKey) {
+                          const el = document.getElementById(`sale-invoice-item-row-${firstKey}`);
+                          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }
+                      }}
+                      className="self-end md:self-center px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white rounded-xl text-xs font-black transition-colors shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>مشاهده ردیف‌های کسری</span>
+                      <ArrowDown className="w-4 h-4" />
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const firstKey = Object.keys(rowStockErrors)[0];
-                      if (firstKey) {
-                        const el = document.getElementById(`sale-invoice-item-row-${firstKey}`);
-                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      }
-                    }}
-                    className="self-end md:self-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-colors shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
-                  >
-                    <span>مشاهده ردیف خطا</span>
-                    <ArrowDown className="w-4 h-4" />
-                  </button>
-                </div>
+                ) : (
+                  <div className="m-5 mb-0 p-4 bg-rose-50 border-2 border-rose-300 rounded-2xl flex flex-col md:flex-row md:items-center justify-between gap-3 text-rose-900 shadow-sm animate-in fade-in">
+                    <div className="flex items-start gap-3">
+                      <div className="p-2 bg-rose-200/80 rounded-xl text-rose-700 shrink-0 mt-0.5">
+                        <AlertTriangle className="w-5 h-5 text-rose-600" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm text-rose-900 flex items-center gap-2">
+                          <span>هشدار کسری موجودی انبار:</span>
+                          <span className="bg-rose-600 text-white text-xs px-2 py-0.5 rounded-full font-bold">
+                            {toPersianDigits(Object.keys(rowStockErrors).length)} ردیف
+                          </span>
+                        </h4>
+                        <p className="text-xs text-rose-700 font-bold mt-1 leading-relaxed">
+                          تعداد وارد شده در ردیف‌های با <span className="bg-rose-200 text-rose-950 px-1.5 py-0.5 rounded font-black border border-rose-300">کادر قرمز رنگ</span> بیشتر از موجودی انبار انتخاب شده است. لطفاً تعداد اقلام را بررسی و اصلاح فرمایید.
+                        </p>
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstKey = Object.keys(rowStockErrors)[0];
+                        if (firstKey) {
+                          const el = document.getElementById(`sale-invoice-item-row-${firstKey}`);
+                          el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        }
+                      }}
+                      className="self-end md:self-center px-4 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl text-xs font-black transition-colors shrink-0 shadow-xs cursor-pointer flex items-center gap-1.5"
+                    >
+                      <span>مشاهده ردیف خطا</span>
+                      <ArrowDown className="w-4 h-4" />
+                    </button>
+                  </div>
+                )
               )}
 
               <div className="overflow-x-auto">
@@ -693,20 +734,37 @@ export default function SaleInvoiceCreate(props: any) {
                     )}
                     {(items || []).map((item, index) => {
                       const stockErr = rowStockErrors[item.id];
+                      const isBlockingDeficit = Boolean(stockErr && !isNegativeStockAllowed);
+                      const isAllowedDeficit = Boolean(stockErr && isNegativeStockAllowed);
+                      const rowBorderBg = isBlockingDeficit
+                        ? "border-y-2 border-rose-500 bg-rose-50/80"
+                        : isAllowedDeficit
+                        ? "border-y-2 border-amber-400 bg-amber-50/70"
+                        : "";
+
                       return (
                       <tr
                         key={item.id}
                         id={`sale-invoice-item-row-${item.id}`}
                         className={`transition-all duration-300 ${
-                          stockErr
+                          isBlockingDeficit
                             ? "bg-rose-50/70 border-y-2 border-rose-500 shadow-sm ring-1 ring-rose-300"
+                            : isAllowedDeficit
+                            ? "bg-amber-50/60 border-y-2 border-amber-400 shadow-sm ring-1 ring-amber-200"
                             : "hover:bg-indigo-50/20 transition-colors"
                         }`}
                         data-row-type="sale-row"
-                        data-has-stock-error={stockErr ? "true" : "false"}
+                        data-has-stock-error={isBlockingDeficit ? "true" : "false"}
+                        data-has-negative-stock={isAllowedDeficit ? "true" : "false"}
                       >
-                        <td className={`p-5 text-center font-bold ${stockErr ? "border-y-2 border-r-2 border-rose-500 rounded-r-2xl bg-rose-50/90" : "text-slate-300"}`}>
-                          {stockErr ? (
+                        <td className={`p-5 text-center font-bold ${
+                          isBlockingDeficit
+                            ? "border-y-2 border-r-2 border-rose-500 rounded-r-2xl bg-rose-50/90"
+                            : isAllowedDeficit
+                            ? "border-y-2 border-r-2 border-amber-400 rounded-r-2xl bg-amber-50/90"
+                            : "text-slate-300"
+                        }`}>
+                          {isBlockingDeficit ? (
                             <div className="flex flex-col items-center justify-center gap-1">
                               <span
                                 className="w-7 h-7 rounded-xl bg-rose-600 text-white font-black text-xs flex items-center justify-center shadow-sm ring-2 ring-rose-300 animate-pulse"
@@ -718,11 +776,23 @@ export default function SaleInvoiceCreate(props: any) {
                                 <AlertTriangle className="w-3 h-3 text-rose-600" /> خطا
                               </span>
                             </div>
+                          ) : isAllowedDeficit ? (
+                            <div className="flex flex-col items-center justify-center gap-1">
+                              <span
+                                className="w-7 h-7 rounded-xl bg-amber-600 text-white font-black text-xs flex items-center justify-center shadow-sm ring-2 ring-amber-300"
+                                title="فروش با موجودی منفی مجاز"
+                              >
+                                {index + 1}
+                              </span>
+                              <span className="text-[10px] text-amber-700 font-extrabold flex items-center gap-0.5 whitespace-nowrap">
+                                <Info className="w-3 h-3 text-amber-600" /> موجودی منفی
+                              </span>
+                            </div>
                           ) : (
                             <span>{index + 1}</span>
                           )}
                         </td>
-                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
+                        <td className={`p-5 ${rowBorderBg}`}>
                           {item.productId ? (
                             <div className="font-black text-slate-800 flex flex-col gap-1">
                               <span>{item.productName}</span>
@@ -763,7 +833,7 @@ export default function SaleInvoiceCreate(props: any) {
                             />
                           )}
 
-                          {stockErr && (
+                          {isBlockingDeficit && stockErr && (
                             <div className="mt-2.5 p-3 bg-rose-100/95 border-2 border-rose-400/90 rounded-xl text-rose-900 text-xs font-black flex items-start gap-2 shadow-xs animate-in fade-in">
                               <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
                               <div className="space-y-1">
@@ -782,8 +852,28 @@ export default function SaleInvoiceCreate(props: any) {
                               </div>
                             </div>
                           )}
+
+                          {isAllowedDeficit && stockErr && (
+                            <div className="mt-2.5 p-3 bg-amber-100/90 border-2 border-amber-400 rounded-xl text-amber-950 text-xs font-black flex items-start gap-2 shadow-xs animate-in fade-in">
+                              <Info className="w-4 h-4 text-amber-700 shrink-0 mt-0.5" />
+                              <div className="space-y-1">
+                                <div className="text-amber-900 font-black flex items-center gap-1.5">
+                                  <span>فروش با موجودی منفی (مجاز) در انبار «{stockErr.warehouseName}»</span>
+                                </div>
+                                <p className="text-[11px] text-amber-900 font-bold leading-relaxed">
+                                  موجودی فعلی در انبار <span className="text-amber-950 font-black px-1.5 py-0.5 bg-white rounded border border-amber-300">{formatNumber(stockErr.availableStock)} {stockErr.unitName}</span> است، مقدار درخواستی: <span className="text-amber-950 font-black px-1.5 py-0.5 bg-white rounded border border-amber-300">{formatNumber(stockErr.requestedQty)} {stockErr.unitName}</span>.
+                                </p>
+                                <div className="text-[11px] text-amber-950 font-black flex items-center gap-1">
+                                  <span>کسری از موجودی:</span>
+                                  <span className="text-amber-800 bg-white px-1.5 py-0.5 rounded-md border border-amber-300 font-black">
+                                    {formatNumber(stockErr.deficit)} {stockErr.unitName} (پس از ثبت فاکتور، مانده در کاردکس منفی خواهد شد)
+                                  </span>
+                                </div>
+                              </div>
+                            </div>
+                          )}
                         </td>
-                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
+                        <td className={`p-5 ${rowBorderBg}`}>
                           <div className="flex flex-col gap-1.5 min-w-[125px]">
                             <div className="flex items-center gap-1">
                               <button
@@ -815,8 +905,10 @@ export default function SaleInvoiceCreate(props: any) {
                                     )
                                   }
                                   className={`w-full p-2 rounded-xl font-sans text-center font-black outline-none transition-all text-sm ${
-                                    stockErr
+                                    isBlockingDeficit
                                       ? "bg-white border-2 border-rose-500 text-rose-900 ring-2 ring-rose-400/70 shadow-xs focus:ring-rose-500"
+                                      : isAllowedDeficit
+                                      ? "bg-white border-2 border-amber-500 text-amber-950 ring-2 ring-amber-300/70 shadow-xs focus:ring-amber-500"
                                       : "bg-indigo-50/30 border border-indigo-100 focus:ring-2 focus:ring-indigo-500 text-slate-800"
                                   }`}
                                 />
@@ -838,15 +930,21 @@ export default function SaleInvoiceCreate(props: any) {
                                 <Plus className="w-3.5 h-3.5" />
                               </button>
                             </div>
-                            {stockErr && (
+                            {isBlockingDeficit && stockErr && (
                               <div className="flex items-center justify-center gap-1 text-[10px] text-rose-800 font-black bg-white/95 py-0.5 px-1.5 rounded-lg border border-rose-300 shadow-2xs">
                                 <span>موجودی آزاد:</span>
                                 <span>{formatNumber(stockErr.availableStock)}</span>
                               </div>
                             )}
+                            {isAllowedDeficit && stockErr && (
+                              <div className="flex items-center justify-center gap-1 text-[10px] text-amber-800 font-black bg-white/95 py-0.5 px-1.5 rounded-lg border border-amber-300 shadow-2xs">
+                                <span>موجودی فعلی:</span>
+                                <span>{formatNumber(stockErr.availableStock)}</span>
+                              </div>
+                            )}
                           </div>
                         </td>
-                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
+                        <td className={`p-5 ${rowBorderBg}`}>
                           {(() => {
                             const product = item.productId
                               ? productMap[item.productId?.toString()]
@@ -909,7 +1007,7 @@ export default function SaleInvoiceCreate(props: any) {
                             );
                           })()}
                         </td>
-                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
+                        <td className={`p-5 ${rowBorderBg}`}>
                           <CurrencyInput
                             currencyLabel={storeSettings?.currency}
                             value={item.unitPrice}
@@ -923,7 +1021,7 @@ export default function SaleInvoiceCreate(props: any) {
                             className="w-full p-2.5 bg-indigo-50/30 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-sans text-left font-black text-indigo-900 text-sm outline-none"
                           />
                         </td>
-                        <td className={`p-5 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}>
+                        <td className={`p-5 ${rowBorderBg}`}>
                           <input
                             type="number"
                             min="0"
@@ -942,12 +1040,18 @@ export default function SaleInvoiceCreate(props: any) {
                           />
                         </td>
                         <td
-                          className={`p-5 font-black text-left font-sans text-indigo-950 ${stockErr ? "border-y-2 border-rose-500 bg-rose-50/80" : ""}`}
+                          className={`p-5 font-black text-left font-sans text-indigo-950 ${rowBorderBg}`}
                           dir="ltr"
                         >
                           {formatCurrency(item.totalPrice)}
                         </td>
-                        <td className={`p-5 text-center ${stockErr ? "border-y-2 border-l-2 border-rose-500 rounded-l-2xl bg-rose-50/80" : ""}`}>
+                        <td className={`p-5 text-center ${
+                          isBlockingDeficit
+                            ? "border-y-2 border-l-2 border-rose-500 rounded-l-2xl bg-rose-50/80"
+                            : isAllowedDeficit
+                            ? "border-y-2 border-l-2 border-amber-400 rounded-l-2xl bg-amber-50/70"
+                            : ""
+                        }`}>
                           <div className="flex items-center justify-center gap-1">
                             {handleDuplicateItem && (
                               <button
@@ -1173,7 +1277,7 @@ export default function SaleInvoiceCreate(props: any) {
                   type="button"
                   disabled={submitting || (items || []).length === 0 || !customerId}
                   onClick={() => {
-                    if (storeSettings?.allowNegativeStock !== true && Object.keys(rowStockErrors).length > 0) {
+                    if (!isNegativeStockAllowed && Object.keys(rowStockErrors).length > 0) {
                       const firstErrKey = Object.keys(rowStockErrors)[0];
                       const firstErr = rowStockErrors[firstErrKey];
                       const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
@@ -1201,7 +1305,7 @@ export default function SaleInvoiceCreate(props: any) {
                 <button
                   type="button"
                   onClick={() => {
-                    if (storeSettings?.allowNegativeStock !== true && Object.keys(rowStockErrors).length > 0) {
+                    if (!isNegativeStockAllowed && Object.keys(rowStockErrors).length > 0) {
                       const firstErrKey = Object.keys(rowStockErrors)[0];
                       const firstErr = rowStockErrors[firstErrKey];
                       const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);

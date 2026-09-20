@@ -5023,7 +5023,12 @@ const getInvoiceNumber = (typeOverride?: string) => {
               }
 
               // 5. Inventory Check (Only if negative stock is not allowed)
-              if (storeSettings.allowNegativeStock !== true) {
+              const isNegativeStockAllowed = Boolean(
+                storeSettings?.allowNegativeStock === true ||
+                storeSettings?.allowNegativeStock === "true" ||
+                storeSettings?.allowNegativeStock === 1
+              );
+              if (!isNegativeStockAllowed) {
                 const whId = item.warehouseId || invoiceWarehouseId;
                 const stockInfo = getProductStockInfo(prod.id);
                 const currentStock = stockInfo.warehouses[whId] ? stockInfo.warehouses[whId].available : 0;
@@ -5417,7 +5422,13 @@ const getInvoiceNumber = (typeOverride?: string) => {
         }
       }
 
-      if (!storeSettings.allowNegativeStock && shortages.length > 0) {
+      const isNegativeStockAllowed = Boolean(
+        storeSettings?.allowNegativeStock === true ||
+        storeSettings?.allowNegativeStock === "true" ||
+        storeSettings?.allowNegativeStock === 1
+      );
+
+      if (!isNegativeStockAllowed && shortages.length > 0) {
         const shortageMsgs = shortages.map(
           (s) =>
             `• ${s.productName}: نیاز ${s.required} ${s.unit} (موجودی در انبار: ${s.availableInTarget})`
@@ -5434,8 +5445,13 @@ const getInvoiceNumber = (typeOverride?: string) => {
     }
 
     // 2. Standard validation for other conditions or warehouse remittances
+    const isNegativeStockAllowedForRemittance = Boolean(
+      storeSettings?.allowNegativeStock === true ||
+      storeSettings?.allowNegativeStock === "true" ||
+      storeSettings?.allowNegativeStock === 1
+    );
     if (
-      !storeSettings.allowNegativeStock &&
+      !isNegativeStockAllowedForRemittance &&
       payload.type === "warehouse_remittance"
     ) {
       const requiredQty: Record<string, number> = {};
@@ -6276,7 +6292,13 @@ const handleInvoicePreviewTrigger = () => {
       return;
     }
 
-    if (invoiceType === "sale" && storeSettings.allowNegativeStock !== true) {
+    const isNegativeStockAllowed = Boolean(
+      storeSettings?.allowNegativeStock === true ||
+      storeSettings?.allowNegativeStock === "true" ||
+      storeSettings?.allowNegativeStock === 1
+    );
+
+    if (invoiceType === "sale" && !isNegativeStockAllowed) {
       for (let idx = 0; idx < (items || []).length; idx++) {
         const item = items[idx];
         if (!item || !item.productId) continue;
