@@ -27,14 +27,19 @@ import {
   Cpu,
   ArrowDownLeft,
   ArrowUpRight,
-  Database
+  Database,
+  Wrench,
+  AlertTriangle,
+  Activity,
+  Layers
 } from "lucide-react";
 import {
   gsmUsbService,
   GsmDeviceStatus,
   GsmReceivedMessage,
   AtLogEntry,
-  GsmSentResult
+  GsmSentResult,
+  DiagnosticStepResult
 } from "../../services/messaging/GsmUsbService";
 import { toPersianDigits } from "../../utils/format";
 
@@ -50,11 +55,13 @@ export default function ZyXelGsmSettings({
   showNotification
 }: ZyXelGsmSettingsProps) {
   const [deviceStatus, setDeviceStatus] = useState<GsmDeviceStatus>(gsmUsbService.status);
-  const [activeSubTab, setActiveSubTab] = useState<"status" | "send" | "inbox" | "terminal">("status");
+  const [activeSubTab, setActiveSubTab] = useState<"status" | "diagnostics" | "send" | "inbox" | "terminal">("status");
   const [isConnecting, setIsConnecting] = useState(false);
   const [isQuerying, setIsQuerying] = useState(false);
   const [selectedBaud, setSelectedBaud] = useState<number>(gsmUsbService.status.baudRate || 115200);
   const [selectedProfile, setSelectedProfile] = useState<string>("zyxel_3g");
+  const [smsProtocol, setSmsProtocol] = useState<"auto" | "pdu" | "text">(gsmUsbService.status.preferredSmsMode || "auto");
+  const [activeStorage, setActiveStorage] = useState<"ALL" | "SM" | "ME">(gsmUsbService.status.activeStorage as any || "ALL");
 
   // Direct Send State
   const [recipientNumber, setRecipientNumber] = useState("");
@@ -66,11 +73,16 @@ export default function ZyXelGsmSettings({
   const [receivedMessages, setReceivedMessages] = useState<GsmReceivedMessage[]>(gsmUsbService.getReceivedMessages());
   const [isLoadingMessages, setIsLoadingMessages] = useState(false);
   const [selectedMessage, setSelectedMessage] = useState<GsmReceivedMessage | null>(null);
+  const [inboxFilter, setInboxFilter] = useState<"ALL" | "SM" | "ME">("ALL");
 
   // AT Console State
   const [atCommandInput, setAtCommandInput] = useState("");
   const [atLogs, setAtLogs] = useState<AtLogEntry[]>(gsmUsbService.getLogs());
   const [isExecutingCommand, setIsExecutingCommand] = useState(false);
+
+  // Diagnostics State
+  const [diagnosticResults, setDiagnosticResults] = useState<DiagnosticStepResult[]>([]);
+  const [isRunningDiagnostics, setIsRunningDiagnostics] = useState(false);
 
   // Sim message text test input
   const [simTestSender, setSimTestSender] = useState("09123456789");
@@ -80,6 +92,8 @@ export default function ZyXelGsmSettings({
   useEffect(() => {
     const unsubStatus = gsmUsbService.addStatusListener((newStatus) => {
       setDeviceStatus(newStatus);
+      if (newStatus.preferredSmsMode) setSmsProtocol(newStatus.preferredSmsMode);
+      if (newStatus.activeStorage) setActiveStorage(newStatus.activeStorage as any);
     });
 
     const unsubLogs = gsmUsbService.addLogListener(() => {
@@ -136,11 +150,26 @@ export default function ZyXelGsmSettings({
     setIsQuerying(true);
     try {
       await gsmUsbService.runInitialHardwareSetup();
-      notify("اطلاعات سخت‌افزاری، قدرت سیگنال و سیم‌کارت مودم ZyXEL بروزرسانی شد", "success");
+      notify("اطلاعات سخت‌افزاری، قدرت سیگنال، حافظه و سیم‌کارت مودم ZyXEL بروزرسانی شد", "success");
     } catch {
       notify("خطا در استعلام مودم", "error");
     } finally {
       setIsQuerying(false);
+    }
+  };
+
+  // Run full diagnostics
+  const handleRunDiagnostics = async () => {
+    setIsRunningDiagnostics(true);
+    try {
+      notify("شروع آزمون جامع سخت‌افزار مودم ZyXEL 3G...", "info");
+      const res = await gsmUsbService.runComprehensiveDiagnostics();
+      setDiagnosticResults(res);
+      notify("آزمون عیب‌یابی مودم تکمیل گردید", "success");
+    } catch (err: any) {
+      notify(`خطا در اجرای عیب‌یابی: ${err.message}`, "error");
+    } finally {
+      setIsRunningDiagnostics(false);
     }
   };
 
@@ -149,6 +178,18 @@ export default function ZyXelGsmSettings({
     setSelectedProfile(profileKey);
     gsmUsbService.setDeviceProfile(profileKey as any);
     notify(`پروفایل مودم به «${profileKey === "zyxel_3g" ? "مودم زایکسل ZyXEL 3G" : profileKey}» تغییر یافت`, "info");
+  };
+
+  // Protocol Change (Auto / PDU / Text)
+  const handleProtocolChange = (mode: "auto" | "pdu" | "text") => {
+    setSmsProtocol(mode);
+    gsmUsbService.setPreferredSmsMode(mode);
+  };
+
+  // Storage Change
+  const handleStorageChange = (storage: "ALL" | "SM" | "ME") => {
+    setActiveStorage(storage);
+    gsmUsbService.setActiveStorage(storage);
   };
 
   // Toggle Simulation
@@ -176,13 +217,13 @@ export default function ZyXelGsmSettings({
 
     setIsSending(true);
     try {
-      const res = await gsmUsbService.sendSms(recipientNumber, messageBody);
+      const res = await gsmUsbService.sendSms(recipientNumber, messageBody, smsProtocol);
       setLastSentResult(res);
 
       if (res.success) {
-        notify(`پیامک با موفقیت از طریق مودم ZyXEL 3G به ${recipientNumber} ارسال شد`, "success");
+        notify(`پیامک با موفقیت از طریق مودم ZyXEL 3G (${res.modeUsed?.toUpperCase()}) به ${recipientNumber} ارسال شد`, "success");
         
-        // Also persist to system sms_messages table so it appears in CRM and SMS manager
+        // Persist to sms_messages batch API
         try {
           const smsRecord = {
             id: res.messageId || `GSM-${Date.now().toString(36)}`,
@@ -227,23 +268,23 @@ export default function ZyXelGsmSettings({
   const handleFetchInbox = async () => {
     setIsLoadingMessages(true);
     try {
-      const msgs = await gsmUsbService.fetchReceivedMessages();
+      const msgs = await gsmUsbService.fetchReceivedMessages(activeStorage);
       setReceivedMessages(msgs);
-      notify(`تعداد ${toPersianDigits(msgs.length)} پیامک از سیم‌کارت مودم بازخوانی شد`, "success");
+      notify(`تعداد ${toPersianDigits(msgs.length)} پیامک از حافظه سیم‌کارت و مودم بازخوانی شد`, "success");
     } catch {
-      notify("خطا در بازخوانی پیامک‌های سیم‌کارت", "error");
+      notify("خطا در بازخوانی پیامک‌ها", "error");
     } finally {
       setIsLoadingMessages(false);
     }
   };
 
   // Delete received SMS
-  const handleDeleteReceived = async (index: number) => {
-    const ok = await gsmUsbService.deleteReceivedMessage(index);
+  const handleDeleteReceived = async (index: number, storage: "SM" | "ME" | "MT" = "SM") => {
+    const ok = await gsmUsbService.deleteReceivedMessage(index, storage);
     if (ok) {
       setReceivedMessages(gsmUsbService.getReceivedMessages());
       if (selectedMessage?.index === index) setSelectedMessage(null);
-      notify("پیامک از سیم‌کارت مودم حذف شد", "success");
+      notify("پیامک از حافظه حذف شد", "success");
     }
   };
 
@@ -280,6 +321,11 @@ export default function ZyXelGsmSettings({
 
   const signalMeta = getSignalMeta(deviceStatus.csqRaw);
 
+  const filteredMessages = receivedMessages.filter((msg) => {
+    if (inboxFilter === "ALL") return true;
+    return msg.storage === inboxFilter || (!msg.storage && inboxFilter === "SM");
+  });
+
   return (
     <div className="bg-white rounded-2xl border border-gray-200 shadow-sm overflow-hidden" dir="rtl">
       {/* Top Banner / Device Identity */}
@@ -294,18 +340,19 @@ export default function ZyXelGsmSettings({
                 <h3 className="text-lg font-black text-white flex items-center gap-2">
                   مودم سیم‌کارتی ZyXEL 3G (اتصال پورت USB)
                 </h3>
-                <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-indigo-500/20 text-indigo-200 border border-indigo-400/30">
-                  مدل ZyXEL MAX218M / 3G Dongle
-                </span>
                 {deviceStatus.isConnected ? (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-emerald-500/20 text-emerald-300 border border-emerald-400/30 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
-                    متصل به پورت USB
+                  <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold border flex items-center gap-1.5 ${
+                    deviceStatus.atResponsive === false
+                      ? "bg-amber-500/20 text-amber-300 border-amber-400/40"
+                      : "bg-emerald-500/20 text-emerald-300 border-emerald-400/30"
+                  }`}>
+                    <span className={`w-2 h-2 rounded-full ${deviceStatus.atResponsive === false ? "bg-amber-400 animate-ping" : "bg-emerald-400 animate-pulse"}`}></span>
+                    {deviceStatus.atResponsive === false ? "پورت متصل (نیاز به انتخاب پورت AT)" : "متصل و آماده ارسال/دریافت"}
                   </span>
                 ) : (
-                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-amber-500/20 text-amber-300 border border-amber-400/30 flex items-center gap-1.5">
-                    <span className="w-2 h-2 rounded-full bg-amber-400"></span>
-                    آماده اتصال
+                  <span className="px-2.5 py-0.5 rounded-full text-xs font-bold bg-slate-700/80 text-slate-300 border border-slate-600 flex items-center gap-1.5">
+                    <span className="w-2 h-2 rounded-full bg-slate-400"></span>
+                    بدون اتصال پورت
                   </span>
                 )}
                 {deviceStatus.isSimulated && (
@@ -315,7 +362,7 @@ export default function ZyXelGsmSettings({
                 )}
               </div>
               <p className="text-xs text-slate-300 mt-1">
-                اتصال مستقیم به دانگل زایکسل از طریق درگاه سریال USB و ارسال و دریافت بلادرنگ پیامک‌های سازمانی
+                اتصال مستقیم به دانگل زایکسل از طریق درگاه سریال USB و ارسال و دریافت بلادرنگ پیامک‌های سازمانی با استاندارد PDU
               </p>
             </div>
           </div>
@@ -323,6 +370,16 @@ export default function ZyXelGsmSettings({
           <div className="flex items-center gap-2 flex-wrap">
             {deviceStatus.isConnected ? (
               <>
+                <button
+                  onClick={() => {
+                    setActiveSubTab("diagnostics");
+                    handleRunDiagnostics();
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold flex items-center gap-1.5 shadow-md shadow-indigo-600/30 transition-colors cursor-pointer"
+                >
+                  <Wrench className="w-4 h-4" />
+                  عیب‌یابی خودکار مودم
+                </button>
                 <button
                   onClick={handleRefreshHardwareStatus}
                   disabled={isQuerying}
@@ -356,9 +413,9 @@ export default function ZyXelGsmSettings({
         {/* Quick Hardware Metrics bar */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mt-5 pt-5 border-t border-slate-800/80 text-xs">
           <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
-            <span className="text-slate-400 block mb-1">سازنده و مدل</span>
-            <span className="font-bold text-white truncate block">
-              {deviceStatus.manufacturer} - {deviceStatus.model}
+            <span className="text-slate-400 block mb-1">پورت و نرخ تبادل</span>
+            <span className="font-bold text-white truncate block font-mono" dir="ltr">
+              {deviceStatus.portName}
             </span>
           </div>
 
@@ -386,18 +443,34 @@ export default function ZyXelGsmSettings({
           </div>
 
           <div className="bg-slate-800/60 p-2.5 rounded-xl border border-slate-700/60">
-            <span className="text-slate-400 block mb-1">شناسه IMEI</span>
-            <span className="font-mono font-bold text-indigo-300 block truncate">
-              {deviceStatus.imei || "863920194827103"}
+            <span className="text-slate-400 block mb-1">حافظه پیامک</span>
+            <span className="font-bold text-indigo-300 block">
+              {toPersianDigits(deviceStatus.storageUsed)} از {toPersianDigits(deviceStatus.storageTotal || 30)} پیام
             </span>
           </div>
         </div>
       </div>
 
+      {/* WARNING BANNER: MULTIPLE COM PORTS ON 3G DONGLES */}
+      {deviceStatus.isConnected && deviceStatus.atResponsive === false && (
+        <div className="p-4 bg-amber-500/10 border-b border-amber-300/40 text-amber-950 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 animate-bounce" />
+          <div className="text-xs leading-relaxed">
+            <strong className="font-black text-amber-900 block mb-1 text-sm">
+              راهنمای رفع عدم دریافت یا ارسال پیامک (انتخاب پورت صحیح در مودم‌های چند پورتی ZyXEL):
+            </strong>
+            مودم‌های 3G زایکسل معمولاً ۲ یا ۳ پورت سریال مجازی (Virtual COM Port) در ویندوز دارند:
+            یک پورت برای اتصال اینترنت دیتا (PPP Data Interface) است و پورت دیگر برای <strong>ارسال و دریافت فرامین AT و پیامک (Application/Modem Interface)</strong>.
+            در حال حاضر پورت باز شده به فرامین AT پاسخ نمی‌دهد. لطفاً روی دکمه <strong>«قطع اتصال»</strong> بالا کلیک کرده و سپس مجدداً <strong>«اتصال به پورت USB مودم»</strong> را بزنید و <strong>پورت دیگر مودم</strong> را از لیست پنجره مرورگر انتخاب نمایید.
+          </div>
+        </div>
+      )}
+
       {/* Navigation Sub-Tabs */}
       <div className="flex border-b border-gray-200 bg-gray-50/70 px-6 gap-2 overflow-x-auto">
         {[
           { id: "status", label: "پیکربندی و وضعیت مودم", icon: Settings },
+          { id: "diagnostics", label: "عیب‌یابی جامع سخت‌افزار", icon: Wrench },
           { id: "send", label: "ارسال پیامک از مودم", icon: Send },
           { id: "inbox", label: `صندوق ورودی سیم‌کارت (${toPersianDigits(receivedMessages.length)})`, icon: Inbox },
           { id: "terminal", label: "ترمینال و دستورات AT", icon: Terminal },
@@ -407,7 +480,12 @@ export default function ZyXelGsmSettings({
           return (
             <button
               key={tab.id}
-              onClick={() => setActiveSubTab(tab.id as any)}
+              onClick={() => {
+                setActiveSubTab(tab.id as any);
+                if (tab.id === "diagnostics" && diagnosticResults.length === 0) {
+                  handleRunDiagnostics();
+                }
+              }}
               className={`py-3.5 px-4 font-bold text-xs sm:text-sm flex items-center gap-2 border-b-2 transition-all cursor-pointer whitespace-nowrap ${
                 isActive
                   ? "border-indigo-600 text-indigo-700 bg-white shadow-xs"
@@ -432,7 +510,7 @@ export default function ZyXelGsmSettings({
                 <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-xs">
                   <h4 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
                     <Usb className="w-4 h-4 text-indigo-600" />
-                    تنظیمات درگاه اتصال پورت سریال USB
+                    تنظیمات درگاه اتصال پورت سریال و پروتکل تبادل پیامک
                   </h4>
 
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
@@ -475,7 +553,43 @@ export default function ZyXelGsmSettings({
                         <option value={9600}>9600 bps</option>
                       </select>
                       <span className="text-[11px] text-gray-400 block mt-1">
-                        بیشتر مودم‌های 3G از استاندارد ۱۱۵۲۰۰ برای ارسال سریع پیامک استفاده می‌کنند.
+                        استاندارد ارتباطی مودم‌های 3G برای ارسال سریع پیامک ۱۱۵۲۰۰ بیت بر ثانیه است.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5">
+                        پروتکل ارسال پیامک (SMS Engine)
+                      </label>
+                      <select
+                        value={smsProtocol}
+                        onChange={(e) => handleProtocolChange(e.target.value as any)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="auto">هوشمند خودکار (PDU جهانی با فال‌بک متنی - پیشنهادی)</option>
+                        <option value="pdu">پروتکل جهانی PDU (پشتیبانی ۱۰۰٪ از کاراکترهای فارسی)</option>
+                        <option value="text">حالت متنی Text Mode (AT+CMGF=1)</option>
+                      </select>
+                      <span className="text-[11px] text-gray-400 block mt-1">
+                        پروتکل PDU بدون وابستگی به فریم‌ور مودم پیامک‌های فارسی یونیکد را سالم مخابره می‌کند.
+                      </span>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-gray-600 mb-1.5">
+                        حافظه فعال بازخوانی پیامک‌ها (Storage)
+                      </label>
+                      <select
+                        value={activeStorage}
+                        onChange={(e) => handleStorageChange(e.target.value as any)}
+                        className="w-full px-3.5 py-2.5 bg-gray-50 border border-gray-300 rounded-xl text-xs font-bold focus:ring-2 focus:ring-indigo-500"
+                      >
+                        <option value="ALL">هر دو حافظه (سیم‌کارت SM + حافظه مودم ME)</option>
+                        <option value="SM">فقط حافظه سیم‌کارت (SIM Storage - SM)</option>
+                        <option value="ME">فقط حافظه داخلی مودم (Modem Flash - ME)</option>
+                      </select>
+                      <span className="text-[11px] text-gray-400 block mt-1">
+                        با انتخاب «هر دو حافظه»، هیچ پیامکی در سیم‌کارت یا حافظه داخلی دستگاه از دست نمی‌رود.
                       </span>
                     </div>
                   </div>
@@ -501,13 +615,15 @@ export default function ZyXelGsmSettings({
                       </div>
                     </div>
 
-                    <button
-                      onClick={handleRefreshHardwareStatus}
-                      className="px-3.5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
-                    >
-                      <RefreshCw className="w-3.5 h-3.5" />
-                      تست دستورات AT
-                    </button>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleRefreshHardwareStatus}
+                        className="px-3.5 py-2 rounded-xl bg-gray-100 hover:bg-gray-200 text-gray-700 text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        تست و استعلام AT
+                      </button>
+                    </div>
                   </div>
                 </div>
 
@@ -515,20 +631,20 @@ export default function ZyXelGsmSettings({
                 <div className="border border-indigo-100 bg-indigo-50/40 rounded-2xl p-5">
                   <h4 className="font-bold text-indigo-900 text-sm mb-3 flex items-center gap-2">
                     <ShieldCheck className="w-4 h-4 text-indigo-600" />
-                    راهنمای اتصال مودم ZyXEL 3G در سیستم
+                    راهنمای اتصال بدون خطای مودم ZyXEL 3G در سیستم
                   </h4>
                   <ul className="text-xs text-indigo-950 space-y-2 leading-relaxed list-disc list-inside">
                     <li>
-                      مودم <strong className="font-bold">ZyXEL 3G</strong> را به یکی از درگاه‌های USB رایانه متصل کنید.
+                      مودم <strong className="font-bold">ZyXEL 3G</strong> را با کابل رابط مستقیم به پورت USB پشت کیس یا لپ‌تاپ متصل فرمایید.
                     </li>
                     <li>
-                      سیم‌کارت (همراه اول، ایرانسل یا رایتل) با شارژ ریالی یا بسته فعال را داخل مودم قرار دهید و مطمئن شوید پین‌کد آن غیرفعال باشد.
+                      سیم‌کارت (همراه اول، ایرانسل یا رایتل) را بررسی کنید که شارژ ریالی داشته باشد و پین‌کد آن از طریق گوشی غیرفعال شده باشد.
                     </li>
                     <li>
-                      با کلیک روی دکمه <strong className="font-bold">«اتصال به پورت USB مودم»</strong>، از پنجره مرورگر پورت سریال مربوط به مودم زایکسل را انتخاب نمایید.
+                      در مودم‌های ZyXEL 3G، ویندوز دو پورت COM شناسایی می‌کند؛ در صورتی که با انتخاب یکی از پورت‌ها پیامی ارسال نشد، با زدن «قطع اتصال» پورت دوم را انتخاب کنید.
                     </li>
                     <li>
-                      سیستم به صورت خودکار دستورات پیکربندی <code className="font-mono bg-indigo-100 px-1 py-0.5 rounded text-indigo-800">AT+CMGF=1</code> و <code className="font-mono bg-indigo-100 px-1 py-0.5 rounded text-indigo-800">AT+CSCS="GSM"</code> را ارسال نموده و وضعیت آنتن را پایش می‌کند.
+                      سیستم به طور خودکار سیگنال‌های کنترلی DTR/RTS را فعال کرده و برای پیامک‌های فارسی از استاندارد PDU با کدگذاری UCS-2 استفاده می‌نماید.
                     </li>
                   </ul>
                 </div>
@@ -539,7 +655,7 @@ export default function ZyXelGsmSettings({
                 <div className="border border-gray-200 rounded-2xl p-5 bg-white shadow-xs">
                   <h4 className="font-bold text-gray-800 text-sm mb-4 flex items-center gap-2">
                     <Radio className="w-4 h-4 text-indigo-600" />
-                    وضعیت سیگنال و سیم‌کارت
+                    وضعیت سیگنال، سیم‌کارت و شبکه
                   </h4>
 
                   <div className="space-y-3.5">
@@ -577,15 +693,24 @@ export default function ZyXelGsmSettings({
                     </div>
 
                     <div className="pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
-                      <span className="text-gray-500">حافظه پیامک سیم‌کارت</span>
-                      <span className="font-bold text-indigo-600 font-mono">
-                        {toPersianDigits(receivedMessages.length)} / ۳۰ پیام
+                      <span className="text-gray-500">مرکز خدمات پیامک (SMSC)</span>
+                      <span className="font-bold text-indigo-700 font-mono" dir="ltr">
+                        {deviceStatus.smscNumber || "+9891100500"}
                       </span>
                     </div>
 
                     <div className="pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
-                      <span className="text-gray-500">آخرین استعلام</span>
-                      <span className="text-gray-600 font-bold">{deviceStatus.lastChecked}</span>
+                      <span className="text-gray-500">حافظه ذخیره پیامک</span>
+                      <span className="font-bold text-indigo-600 font-mono">
+                        {toPersianDigits(deviceStatus.storageUsed)} از {toPersianDigits(deviceStatus.storageTotal || 30)} پیام
+                      </span>
+                    </div>
+
+                    <div className="pt-3 border-t border-gray-100 flex justify-between items-center text-xs">
+                      <span className="text-gray-500">پاسخگویی فرامین AT</span>
+                      <span className={`font-bold flex items-center gap-1 ${deviceStatus.atResponsive ? "text-emerald-600" : "text-amber-600"}`}>
+                        {deviceStatus.atResponsive ? "تایید شده (OK)" : "بدون پاسخ (تغییر پورت نیاز است)"}
+                      </span>
                     </div>
                   </div>
                 </div>
@@ -593,8 +718,8 @@ export default function ZyXelGsmSettings({
                 <div className="p-4 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-start gap-3">
                   <CheckCircle2 className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
                   <div className="text-xs text-emerald-800 leading-relaxed">
-                    <strong className="font-bold block mb-0.5">پشتیبانی از کدهای فارسی (UCS-2 Unicode)</strong>
-                    کلیه پیامک‌های ارسالی و دریافتی با کدگذاری استاندارد فارسی پردازش شده و مشکل علامت سوال یا به‌هم‌ریختگی حروف در گوشی مخاطب وجود ندارد.
+                    <strong className="font-bold block mb-0.5">پشتیبانی کامل از پیامک‌های فارسی یونیکد</strong>
+                    پیامک‌های فارسی بدون خرابی حروف و بدون تبدیل به علامت سوال (???) با پروتکل استاندارد جهانی PDU ارسال و دریافت می‌شوند.
                   </div>
                 </div>
               </div>
@@ -602,7 +727,111 @@ export default function ZyXelGsmSettings({
           </div>
         )}
 
-        {/* TAB 2: DIRECT SEND SMS VIA ZYXEL 3G MODEM */}
+        {/* TAB 2: HARDWARE DIAGNOSTICS */}
+        {activeSubTab === "diagnostics" && (
+          <div className="max-w-4xl mx-auto space-y-6">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-indigo-50/60 p-5 rounded-2xl border border-indigo-100">
+              <div>
+                <h4 className="font-black text-indigo-950 text-base flex items-center gap-2">
+                  <Activity className="w-5 h-5 text-indigo-600" />
+                  عیب‌یابی گام‌به‌گام سخت‌افزاری مودم ZyXEL 3G
+                </h4>
+                <p className="text-xs text-indigo-800 mt-1">
+                  آزمون صحت اتصال سریال، پاسخگویی AT، چیپ سیم‌کارت، آنتن‌دهی، تنظیمات SMSC و حافظه مودم
+                </p>
+              </div>
+
+              <button
+                onClick={handleRunDiagnostics}
+                disabled={isRunningDiagnostics}
+                className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-md shadow-indigo-600/30 transition-all cursor-pointer disabled:opacity-50"
+              >
+                <RefreshCw className={`w-4 h-4 ${isRunningDiagnostics ? "animate-spin" : ""}`} />
+                {isRunningDiagnostics ? "در حال اجرای عیب‌یابی..." : "شروع مجدد تست سخت‌افزار"}
+              </button>
+            </div>
+
+            {diagnosticResults.length === 0 ? (
+              <div className="text-center py-12 bg-gray-50 rounded-2xl border border-dashed border-gray-300">
+                <Wrench className="w-10 h-10 text-gray-400 mx-auto mb-2" />
+                <p className="text-sm font-bold text-gray-700">تست عیب‌یابی هنوز اجرا نشده است</p>
+                <button
+                  onClick={handleRunDiagnostics}
+                  className="mt-3 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold cursor-pointer"
+                >
+                  اجرای آزمون عیب‌یابی
+                </button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {diagnosticResults.map((diag) => (
+                  <div
+                    key={diag.step}
+                    className={`border rounded-2xl p-4.5 transition-all ${
+                      diag.status === "success"
+                        ? "bg-emerald-50/40 border-emerald-200"
+                        : diag.status === "warning"
+                        ? "bg-amber-50/40 border-amber-200"
+                        : "bg-rose-50/40 border-rose-200"
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3">
+                        <div className="mt-0.5 shrink-0">
+                          {diag.status === "success" && (
+                            <CheckCircle2 className="w-5 h-5 text-emerald-600" />
+                          )}
+                          {diag.status === "warning" && (
+                            <AlertTriangle className="w-5 h-5 text-amber-600" />
+                          )}
+                          {diag.status === "error" && (
+                            <XCircle className="w-5 h-5 text-rose-600" />
+                          )}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <span className="font-bold text-gray-900 text-sm">
+                              مرحله {toPersianDigits(diag.step)}: {diag.title}
+                            </span>
+                            <span className="font-mono text-[11px] px-2 py-0.5 bg-gray-100 border border-gray-200 rounded text-gray-600" dir="ltr">
+                              {diag.command}
+                            </span>
+                          </div>
+                          <p className="text-xs text-gray-700 mt-1 leading-relaxed">
+                            {diag.detail}
+                          </p>
+                          {diag.rawResponse && (
+                            <div className="mt-2 font-mono text-[11px] bg-slate-900 text-emerald-400 px-3 py-1.5 rounded-lg inline-block" dir="ltr">
+                              {diag.rawResponse}
+                            </div>
+                          )}
+                          {diag.recommendation && (
+                            <div className="mt-2 text-xs font-bold text-rose-700 bg-rose-100/60 p-2 rounded-lg flex items-center gap-1.5">
+                              <Info className="w-4 h-4 shrink-0" />
+                              راهکار حل مشکل: {diag.recommendation}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+
+                      <span className={`px-2.5 py-1 text-xs font-black rounded-lg border ${
+                        diag.status === "success"
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          : diag.status === "warning"
+                          ? "bg-amber-100 text-amber-800 border-amber-300"
+                          : "bg-rose-100 text-rose-800 border-rose-300"
+                      }`}>
+                        {diag.status === "success" ? "موفق" : diag.status === "warning" ? "هشدار" : "خطا"}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* TAB 3: DIRECT SEND SMS VIA ZYXEL 3G MODEM */}
         {activeSubTab === "send" && (
           <div className="max-w-3xl mx-auto space-y-6">
             <div className="border border-gray-200 rounded-2xl p-6 bg-white shadow-xs">
@@ -611,9 +840,11 @@ export default function ZyXelGsmSettings({
                   <Send className="w-4 h-4 text-indigo-600" />
                   ارسال پیامک از طریق سیم‌کارت مودم ZyXEL 3G
                 </h4>
-                <span className="text-xs text-gray-500 bg-gray-100 px-2.5 py-1 rounded-lg">
-                  هزینه: تعرفه استاندارد سیم‌کارت (بدون فیلتر بلک‌لیست)
-                </span>
+                <div className="flex items-center gap-2">
+                  <span className="text-xs font-bold text-indigo-700 bg-indigo-50 border border-indigo-200 px-2.5 py-1 rounded-lg">
+                    حالت: {smsProtocol === "auto" ? "هوشمند PDU / Text" : smsProtocol === "pdu" ? "PDU جهانی" : "متنی Text"}
+                  </span>
+                </div>
               </div>
 
               <form onSubmit={handleSendSms} className="space-y-4">
@@ -625,7 +856,7 @@ export default function ZyXelGsmSettings({
                     type="text"
                     value={recipientNumber}
                     onChange={(e) => setRecipientNumber(e.target.value)}
-                    placeholder="مثال: ۰۹۱۲۳۴۵۶۷۸۹"
+                    placeholder="مثال: ۰۹۱۲۳۴۵۶۷۸۹ یا ۹۸۹۱۲۳۴۵۶۷۸۹"
                     className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 font-mono text-left text-sm"
                     dir="ltr"
                     required
@@ -644,18 +875,18 @@ export default function ZyXelGsmSettings({
                     rows={4}
                     value={messageBody}
                     onChange={(e) => setMessageBody(e.target.value)}
-                    placeholder="متن پیامک خود را اینجا بنویسید (مثلاً تاییدیه فاکتور، پیامک اطلاع‌رسانی، پیام تست)..."
+                    placeholder="متن پیامک خود را اینجا بنویسید (مثلاً فاکتور فروش، کد پیگیری یا پیامک اطلاع‌رسانی)..."
                     className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 text-sm leading-relaxed"
                     required
                   ></textarea>
                 </div>
 
                 <div className="flex flex-wrap gap-2 pt-1">
-                  <span className="text-xs text-gray-500 self-center">متن‌های پیش‌فرض:</span>
+                  <span className="text-xs text-gray-500 self-center">متن‌های آماده:</span>
                   {[
                     "مشتری گرامی، فاکتور خرید شما با موفقیت صادر گردید. با سپاس از اعتماد شما.",
                     "همکار گرامی، پیش‌فاکتور درخواستی ثبت گردید و آماده پرداخت می‌باشد.",
-                    "تست ارتباط با مودم سخت‌افزاری ZyXEL 3G - سیستم حسابداری و فروش"
+                    "تست سلامت مودم سخت‌افزاری ZyXEL 3G - سیستم حسابداری و فروش"
                   ].map((preset, idx) => (
                     <button
                       key={idx}
@@ -671,7 +902,7 @@ export default function ZyXelGsmSettings({
                 <div className="pt-4 border-t border-gray-100 flex items-center justify-between">
                   <div className="text-xs text-gray-500 flex items-center gap-1.5">
                     <Info className="w-4 h-4 text-indigo-500" />
-                    پیام به طور مستقیم توسط دستور <code className="font-mono font-bold">AT+CMGS</code> به دکل مخابراتی ارسال می‌شود.
+                    پیامک با فرامین استاندارد دوفازی <code className="font-mono font-bold">AT+CMGS</code> به مودم زایکسل مخابره می‌شود.
                   </div>
 
                   <button
@@ -680,7 +911,7 @@ export default function ZyXelGsmSettings({
                     className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs flex items-center gap-2 shadow-md shadow-indigo-600/20 transition-all cursor-pointer disabled:opacity-50"
                   >
                     <Send className={`w-4 h-4 ${isSending ? "animate-spin" : ""}`} />
-                    {isSending ? "در حال مخابره پیامک..." : "ارسال پیامک از مودم ZyXEL"}
+                    {isSending ? "در حال ارسال پیامک..." : "ارسال پیامک از مودم ZyXEL"}
                   </button>
                 </div>
               </form>
@@ -706,12 +937,15 @@ export default function ZyXelGsmSettings({
                   <div>
                     <h5 className="font-bold text-sm">
                       {lastSentResult.success
-                        ? "پیامک با موفقیت از پورت مودم ارسال شد"
+                        ? "پیامک با موفقیت از مودم ارسال شد"
                         : "خطا در ارسال پیامک از طریق مودم"}
                     </h5>
                     <div className="text-xs mt-1 flex flex-wrap gap-4 text-gray-600">
                       {lastSentResult.messageId && (
                         <span>شناسه پیام: <strong className="font-mono">{lastSentResult.messageId}</strong></span>
+                      )}
+                      {lastSentResult.modeUsed && (
+                        <span>روش ارسال: <strong className="font-mono uppercase">{lastSentResult.modeUsed}</strong></span>
                       )}
                       {lastSentResult.recipient && (
                         <span>گیرنده: <strong className="font-mono">{lastSentResult.recipient}</strong></span>
@@ -720,7 +954,7 @@ export default function ZyXelGsmSettings({
                         <span>زمان: {lastSentResult.timestamp}</span>
                       )}
                       {lastSentResult.error && (
-                        <span className="text-rose-600 font-bold">{lastSentResult.error}</span>
+                        <span className="text-rose-600 font-bold block mt-1">{lastSentResult.error}</span>
                       )}
                     </div>
                   </div>
@@ -730,26 +964,41 @@ export default function ZyXelGsmSettings({
           </div>
         )}
 
-        {/* TAB 3: INBOX / RECEIVED SMS FROM SIM CARD */}
+        {/* TAB 4: INBOX / RECEIVED SMS FROM SIM & MODEM */}
         {activeSubTab === "inbox" && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-gray-50 p-4 rounded-2xl border border-gray-200">
               <div>
                 <h4 className="font-bold text-gray-800 text-sm flex items-center gap-2">
                   <Inbox className="w-4 h-4 text-indigo-600" />
-                  پیامک‌های دریافتی ذخیره‌شده در سیم‌کارت مودم ZyXEL
+                  صندوق ورودی پیامک‌ها در سیم‌کارت و حافظه مودم ZyXEL
                 </h4>
                 <p className="text-xs text-gray-500 mt-0.5">
-                  پیامک‌های واریز وجه، تایید سفارش و پاسخ‌های ارسالی مشتریان به شماره سیم‌کارت مودم
+                  پایش خودکار پیامک‌های ورودی، واریز وجه و استعلام‌های مشتریان
                 </p>
               </div>
 
               <div className="flex items-center gap-2 flex-wrap">
+                {/* Filter Storage */}
+                <div className="flex items-center bg-white border border-gray-300 rounded-xl p-0.5 text-xs font-bold">
+                  {(["ALL", "SM", "ME"] as const).map((filter) => (
+                    <button
+                      key={filter}
+                      onClick={() => setInboxFilter(filter)}
+                      className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                        inboxFilter === filter ? "bg-indigo-600 text-white" : "text-gray-600 hover:text-gray-900"
+                      }`}
+                    >
+                      {filter === "ALL" ? "همه" : filter === "SM" ? "سیم‌کارت" : "مودم"}
+                    </button>
+                  ))}
+                </div>
+
                 <button
                   onClick={() => setShowSimTestModal(true)}
                   className="px-3.5 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
-                  + شبیه‌سازی پیامک ورودی
+                  + شبیه‌سازی دریافت پیامک
                 </button>
                 <button
                   onClick={handleFetchInbox}
@@ -757,24 +1006,24 @@ export default function ZyXelGsmSettings({
                   className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
                 >
                   <RefreshCw className={`w-4 h-4 ${isLoadingMessages ? "animate-spin" : ""}`} />
-                  بازخوانی از سیم‌کارت (AT+CMGL)
+                  بازخوانی از حافظه (AT+CMGL)
                 </button>
               </div>
             </div>
 
-            {receivedMessages.length === 0 ? (
+            {filteredMessages.length === 0 ? (
               <div className="text-center py-16 bg-gray-50/50 rounded-2xl border border-dashed border-gray-300 p-8">
                 <Inbox className="w-12 h-12 text-gray-400 mx-auto mb-3 stroke-1" />
-                <h5 className="font-bold text-gray-700 text-sm">هیچ پیامکی در حافظه سیم‌کارت موجود نیست</h5>
+                <h5 className="font-bold text-gray-700 text-sm">هیچ پیامکی در حافظه مودم موجود نیست</h5>
                 <p className="text-xs text-gray-500 mt-1 max-w-sm mx-auto">
-                  پیامک‌های دریافتی جدید به صورت خودکار خوانده شده یا با کلیک بر روی بازخوانی نمایش داده می‌شوند.
+                  پیامک‌های دریافتی جدید به صورت خودکار خوانده شده یا با کلیک بر روی «بازخوانی از حافظه» نمایش داده می‌شوند.
                 </p>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {receivedMessages.map((msg) => (
+                {filteredMessages.map((msg) => (
                   <div
-                    key={msg.index}
+                    key={`${msg.storage || "SM"}-${msg.index}`}
                     className={`border rounded-2xl p-4 transition-all ${
                       msg.status === "unread"
                         ? "bg-indigo-50/40 border-indigo-200 shadow-xs"
@@ -783,13 +1032,18 @@ export default function ZyXelGsmSettings({
                   >
                     <div className="flex items-center justify-between gap-2 mb-2.5">
                       <div className="flex items-center gap-2">
-                        <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs">
+                        <span className="w-7 h-7 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center font-bold text-xs font-mono">
                           {toPersianDigits(msg.index)}
                         </span>
                         <div>
-                          <span className="font-bold text-gray-800 text-xs font-mono block">
-                            {msg.sender}
-                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <span className="font-bold text-gray-800 text-xs font-mono block">
+                              {msg.sender}
+                            </span>
+                            <span className="text-[10px] px-1.5 py-0.2 bg-gray-100 text-gray-600 rounded font-mono">
+                              {msg.storage === "ME" ? "مودم" : "سیم‌کارت"}
+                            </span>
+                          </div>
                           <span className="text-[10px] text-gray-400">{msg.timestamp}</span>
                         </div>
                       </div>
@@ -812,9 +1066,9 @@ export default function ZyXelGsmSettings({
                           <Send className="w-3.5 h-3.5" />
                         </button>
                         <button
-                          onClick={() => handleDeleteReceived(msg.index)}
+                          onClick={() => handleDeleteReceived(msg.index, msg.storage || "SM")}
                           className="p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
-                          title="حذف از سیم‌کارت"
+                          title="حذف پیامک"
                         >
                           <Trash2 className="w-3.5 h-3.5" />
                         </button>
@@ -831,7 +1085,7 @@ export default function ZyXelGsmSettings({
           </div>
         )}
 
-        {/* TAB 4: AT TERMINAL & DIAGNOSTICS */}
+        {/* TAB 5: AT TERMINAL */}
         {activeSubTab === "terminal" && (
           <div className="space-y-4">
             <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -859,15 +1113,16 @@ export default function ZyXelGsmSettings({
             <div className="flex flex-wrap gap-2 p-3 bg-gray-50 rounded-xl border border-gray-200">
               <span className="text-xs font-bold text-gray-600 self-center">فرمان‌های سریع ZyXEL:</span>
               {[
-                { label: "تست ارتباط (AT)", cmd: "AT" },
+                { label: "تست پینگ (AT)", cmd: "AT" },
                 { label: "قدرت آنتن (AT+CSQ)", cmd: "AT+CSQ" },
                 { label: "وضعیت سیم‌کارت (AT+CPIN?)", cmd: "AT+CPIN?" },
-                { label: "سازنده (AT+CGMI)", cmd: "AT+CGMI" },
                 { label: "مدل مودم (AT+CGMM)", cmd: "AT+CGMM" },
                 { label: "اپراتور شبکه (AT+COPS?)", cmd: "AT+COPS?" },
-                { label: "تنظیم حالت متن (AT+CMGF=1)", cmd: "AT+CMGF=1" },
+                { label: "شماره مرکز پیامک (AT+CSCA?)", cmd: "AT+CSCA?" },
                 { label: "حافظه سیم‌کارت (AT+CPMS)", cmd: 'AT+CPMS="SM","SM","SM"' },
-                { label: "لیست پیامک‌ها (AT+CMGL)", cmd: 'AT+CMGL="ALL"' }
+                { label: "حالت PDU استاندارد (AT+CMGF=0)", cmd: "AT+CMGF=0" },
+                { label: "لیست پیامک‌ها PDU (AT+CMGL=4)", cmd: "AT+CMGL=4" },
+                { label: "لیست پیامک‌ها متن (AT+CMGL)", cmd: 'AT+CMGL="ALL"' }
               ].map((item, idx) => (
                 <button
                   key={idx}
@@ -907,7 +1162,7 @@ export default function ZyXelGsmSettings({
             <div className="bg-slate-950 text-emerald-400 p-4 rounded-2xl font-mono text-xs h-72 overflow-y-auto custom-scrollbar border border-slate-800 shadow-inner" dir="ltr">
               {atLogs.length === 0 ? (
                 <div className="text-slate-500 text-center py-24">
-                  آماده دریافت فرمان‌های AT...
+                  آماده دریافت و ارسال فرامین AT به مودم ZyXEL 3G...
                 </div>
               ) : (
                 <div className="space-y-1.5">
