@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
 import { SmsTemplateEditor } from './SmsTemplateEditor';
+import ZyXelGsmSettings from '../messaging/ZyXelGsmSettings';
 
 export default function SettingsTab(props: any) {
   const {
@@ -39,6 +40,7 @@ export default function SettingsTab(props: any) {
 
   const [smsCategoryFilter, setSmsCategoryFilter] = useState<'all' | 'invoices' | 'treasury' | 'warehouse' | 'checks' | 'loans'>('all');
   const [smsSearchQuery, setSmsSearchQuery] = useState('');
+  const [notifySubTab, setNotifySubTab] = useState<'general' | 'zyxel_gsm'>('general');
 
   return (
                   <motion.div
@@ -1313,111 +1315,189 @@ export default function SettingsTab(props: any) {
                           )}
 
                           {settingsTab === "notification" && (
-                            <div className="space-y-8">
-                              <div>
-                                <h3 className="text-lg font-black text-gray-800 mb-6 flex items-center gap-2">
-                                  <Bell className="w-5 h-5 text-indigo-500" />
-                                  درگاه‌های ارتباطی
-                                </h3>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                  <div className="w-full text-right md:col-span-2">
-                                    <label className="block text-sm font-bold text-gray-700 mb-2">
-                                      سرویس اصلی پیام‌رسان
-                                    </label>
-                                    <div className="flex flex-wrap gap-4">
-                                      {[
-                                        { id: "none", label: "غیرفعال" },
-                                        {
-                                          id: "sms",
-                                          label: "سامانه پیامکی ابری (API)",
-                                        },
-                                        {
-                                          id: "whatsapp",
-                                          label: "واتساپ بیزینس",
-                                        },
-                                        { id: "gsm", label: "مودم GSM محلی" },
-                                      ].map((method) => (
-                                        <label
-                                          key={method.id}
-                                          className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${
-                                            settingsForm.notify_method ===
-                                            method.id
-                                              ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm"
-                                              : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
-                                          }`}
-                                        >
-                                          <input
-                                            type="radio"
-                                            name="notify_method"
-                                            className="hidden"
-                                            checked={
-                                              settingsForm.notify_method ===
-                                              method.id
-                                            }
-                                            onChange={() =>
-                                              setSettingsForm({
-                                                ...settingsForm,
-                                                notify_method: method.id,
-                                              })
-                                            }
-                                          />
-                                          <span className="font-bold text-sm">
-                                            {method.label}
-                                          </span>
+                            <div className="space-y-6">
+                              {/* Sub-tab Switcher for Notification Settings */}
+                              <div className="flex border border-gray-200 bg-white rounded-2xl p-1.5 shadow-xs">
+                                <button
+                                  type="button"
+                                  onClick={() => setNotifySubTab("general")}
+                                  className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                    notifySubTab === "general"
+                                      ? "bg-indigo-600 text-white shadow-sm"
+                                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  <Bell className="w-4 h-4" />
+                                  درگاه‌ها و الگوهای اطلاع‌رسانی
+                                </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNotifySubTab("zyxel_gsm")}
+                                  className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                    notifySubTab === "zyxel_gsm"
+                                      ? "bg-indigo-600 text-white shadow-sm"
+                                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  <Smartphone className="w-4 h-4" />
+                                  مودم سیم‌کارتی ZyXEL 3G (پورت USB)
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-indigo-500/30 text-indigo-100 border border-indigo-300/30">
+                                    ارسال و دریافت مستقیم
+                                  </span>
+                                </button>
+                              </div>
+
+                              {notifySubTab === "zyxel_gsm" ? (
+                                <ZyXelGsmSettings
+                                  storeSettings={storeSettings}
+                                  onUpdateSettings={(key, val) =>
+                                    setSettingsForm({ ...settingsForm, [key]: val })
+                                  }
+                                />
+                              ) : (
+                                <div className="space-y-8">
+                                  <div>
+                                    <h3 className="text-lg font-black text-gray-800 mb-6 flex items-center gap-2">
+                                      <Bell className="w-5 h-5 text-indigo-500" />
+                                      درگاه‌های ارتباطی
+                                    </h3>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                      <div className="w-full text-right md:col-span-2">
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                                          سرویس اصلی پیام‌رسان
                                         </label>
-                                      ))}
+                                        <div className="flex flex-wrap gap-4">
+                                          {[
+                                            { id: "none", label: "غیرفعال" },
+                                            {
+                                              id: "sms",
+                                              label: "سامانه پیامکی ابری (API)",
+                                            },
+                                            {
+                                              id: "whatsapp",
+                                              label: "واتساپ بیزینس",
+                                            },
+                                            {
+                                              id: "gsm",
+                                              label: "مودم سیم‌کارتی ZyXEL 3G (پورت USB)",
+                                            },
+                                          ].map((method) => (
+                                            <label
+                                              key={method.id}
+                                              className={`flex-1 flex items-center justify-center gap-2 p-4 rounded-xl border-2 cursor-pointer transition-all ${
+                                                settingsForm.notify_method ===
+                                                method.id
+                                                  ? "border-indigo-600 bg-indigo-50 text-indigo-700 shadow-sm"
+                                                  : "border-gray-200 bg-white text-gray-600 hover:border-gray-300 hover:bg-gray-50"
+                                              }`}
+                                            >
+                                              <input
+                                                type="radio"
+                                                name="notify_method"
+                                                className="hidden"
+                                                checked={
+                                                  settingsForm.notify_method ===
+                                                  method.id
+                                                }
+                                                onChange={() =>
+                                                  setSettingsForm({
+                                                    ...settingsForm,
+                                                    notify_method: method.id,
+                                                    notify_api_key:
+                                                      method.id === "gsm" &&
+                                                      !settingsForm.notify_api_key
+                                                        ? "USB-Serial (115200 bps) - ZyXEL 3G"
+                                                        : settingsForm.notify_api_key,
+                                                  })
+                                                }
+                                              />
+                                              <span className="font-bold text-sm">
+                                                {method.label}
+                                              </span>
+                                            </label>
+                                          ))}
+                                        </div>
+                                      </div>
+
+                                      {/* ZyXEL 3G USB Quick Banner if GSM selected */}
+                                      {settingsForm.notify_method === "gsm" && (
+                                        <div className="md:col-span-2 p-4 bg-gradient-to-r from-indigo-50 via-purple-50 to-indigo-50 border border-indigo-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                                          <div className="flex items-center gap-3">
+                                            <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-sm">
+                                              <Smartphone className="w-5 h-5" />
+                                            </div>
+                                            <div>
+                                              <h4 className="font-bold text-indigo-950 text-sm">
+                                                مودم ZyXEL 3G به عنوان درگاه اصلی پیامک انتخاب شده است
+                                              </h4>
+                                              <p className="text-xs text-indigo-800 mt-0.5">
+                                                اتصال مستقیم پورت USB، تست سیگنال، ارسال و صندوق ورودی پیامک‌ها در تب اختصاصی در دسترس است.
+                                              </p>
+                                            </div>
+                                          </div>
+                                          <button
+                                            type="button"
+                                            onClick={() => setNotifySubTab("zyxel_gsm")}
+                                            className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold transition-all shadow-sm cursor-pointer whitespace-nowrap"
+                                          >
+                                            پیکربندی و اتصال پورت مودم ZyXEL
+                                          </button>
+                                        </div>
+                                      )}
+
+                                      {settingsForm.notify_method &&
+                                        settingsForm.notify_method !== "none" && (
+                                          <>
+                                            <div className="w-full text-right md:col-span-2">
+                                              <label className="block text-sm font-bold text-gray-700 mb-2">
+                                                کلید API / تنظیمات درگاه / پورت سریال USB
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={
+                                                  settingsForm.notify_api_key || ""
+                                                }
+                                                onChange={(e) =>
+                                                  setSettingsForm({
+                                                    ...settingsForm,
+                                                    notify_api_key: e.target.value,
+                                                  })
+                                                }
+                                                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm font-mono text-left"
+                                                placeholder={
+                                                  settingsForm.notify_method === "gsm"
+                                                    ? "USB-Serial (115200 bps) - ZyXEL 3G"
+                                                    : "Token or Port"
+                                                }
+                                                dir="ltr"
+                                              />
+                                            </div>
+                                            <div className="w-full text-right md:col-span-2">
+                                              <label className="block text-sm font-bold text-gray-700 mb-2">
+                                                خط فرستنده / شماره سیم‌کارت مودم
+                                              </label>
+                                              <input
+                                                type="text"
+                                                value={
+                                                  settingsForm.notify_sender_number ||
+                                                  ""
+                                                }
+                                                onChange={(e) =>
+                                                  setSettingsForm({
+                                                    ...settingsForm,
+                                                    notify_sender_number:
+                                                      e.target.value,
+                                                  })
+                                                }
+                                                className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm font-mono text-left"
+                                                placeholder="0912..."
+                                                dir="ltr"
+                                              />
+                                            </div>
+                                          </>
+                                        )}
                                     </div>
                                   </div>
-
-                                  {settingsForm.notify_method &&
-                                    settingsForm.notify_method !== "none" && (
-                                      <>
-                                        <div className="w-full text-right md:col-span-2">
-                                          <label className="block text-sm font-bold text-gray-700 mb-2">
-                                            کلید API / تنظیمات درگاه / پورت COM
-                                          </label>
-                                          <input
-                                            type="text"
-                                            value={
-                                              settingsForm.notify_api_key || ""
-                                            }
-                                            onChange={(e) =>
-                                              setSettingsForm({
-                                                ...settingsForm,
-                                                notify_api_key: e.target.value,
-                                              })
-                                            }
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm font-mono text-left"
-                                            placeholder="Token or Port (e.g. COM3)"
-                                            dir="ltr"
-                                          />
-                                        </div>
-                                        <div className="w-full text-right md:col-span-2">
-                                          <label className="block text-sm font-bold text-gray-700 mb-2">
-                                            خط فرستنده / شماره دستگاه
-                                          </label>
-                                          <input
-                                            type="text"
-                                            value={
-                                              settingsForm.notify_sender_number ||
-                                              ""
-                                            }
-                                            onChange={(e) =>
-                                              setSettingsForm({
-                                                ...settingsForm,
-                                                notify_sender_number:
-                                                  e.target.value,
-                                              })
-                                            }
-                                            className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm font-mono text-left"
-                                            placeholder="+989..."
-                                            dir="ltr"
-                                          />
-                                        </div>
-                                      </>
-                                    )}
-                                </div>
-                              </div>
 
                               <div className="border-t border-gray-100 pt-8" id="sms-notification-triggers-section">
                                 <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-6">
@@ -2171,9 +2251,10 @@ export default function SettingsTab(props: any) {
                                   </div>
                                 )}
                               </div>
-
                             </div>
                           )}
+                        </div>
+                      )}
                         </div>
                       </div>
                     </div>

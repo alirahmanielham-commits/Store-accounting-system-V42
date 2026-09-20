@@ -7,6 +7,7 @@ export interface GsmDeviceStatus {
   baudRate: number;
   manufacturer: string;
   model: string;
+  deviceProfile?: 'zyxel_3g' | 'generic' | 'huawei_3g' | 'dlink_3g';
   imei: string;
   operator: string;
   signalStrength: number; // 0-100%
@@ -97,11 +98,12 @@ class GsmUsbService {
 
   public status: GsmDeviceStatus = {
     isConnected: false,
-    portName: 'USB-Serial (شناسایی خودکار)',
+    portName: 'پورت USB (مودم ZyXEL 3G)',
     baudRate: 115200,
-    manufacturer: 'GSM USB Dongle',
-    model: 'سخت‌افزار مودم سیم‌کارتی',
-    imei: '867534029182736',
+    manufacturer: 'ZyXEL Communications Corp.',
+    model: 'ZyXEL 3G USB Modem (HSDPA)',
+    deviceProfile: 'zyxel_3g',
+    imei: '863920194827103',
     operator: 'همراه اول (IR-MCI)',
     signalStrength: 85,
     csqRaw: 26,
@@ -111,6 +113,28 @@ class GsmUsbService {
     isSimulated: true, // Default to simulated so it works out-of-the-box in preview
     lastChecked: 'هم‌اکنون'
   };
+
+  public setDeviceProfile(profile: 'zyxel_3g' | 'generic' | 'huawei_3g' | 'dlink_3g') {
+    this.status.deviceProfile = profile;
+    if (profile === 'zyxel_3g') {
+      this.status.manufacturer = 'ZyXEL Communications Corp.';
+      this.status.model = 'ZyXEL 3G USB Modem (HSDPA)';
+      this.status.baudRate = 115200;
+    } else if (profile === 'huawei_3g') {
+      this.status.manufacturer = 'Huawei Technologies Co.';
+      this.status.model = 'Huawei E303 / E3531 USB';
+      this.status.baudRate = 115200;
+    } else if (profile === 'dlink_3g') {
+      this.status.manufacturer = 'D-Link Corporation';
+      this.status.model = 'D-Link DWM-157 3G';
+      this.status.baudRate = 115200;
+    } else {
+      this.status.manufacturer = 'Generic GSM/3G Vendor';
+      this.status.model = 'Standard 3G/GSM USB Modem';
+      this.status.baudRate = 115200;
+    }
+    this.notifyStatus();
+  }
 
   constructor() {
     this.loadPersistedData();
@@ -417,27 +441,31 @@ class GsmUsbService {
     return new Promise((resolve) => {
       setTimeout(() => {
         let resp = 'OK';
-        if (cleanCmd === 'AT') {
+        if (cleanCmd === 'AT' || cleanCmd === 'ATZ' || cleanCmd === 'ATE0') {
           resp = 'OK';
         } else if (cleanCmd.startsWith('AT+CSQ')) {
-          resp = '+CSQ: 26,99\r\nOK';
-          this.status.signalStrength = 84;
-          this.status.csqRaw = 26;
+          resp = '+CSQ: 27,99\r\nOK';
+          this.status.signalStrength = 87;
+          this.status.csqRaw = 27;
         } else if (cleanCmd.startsWith('AT+COPS?')) {
-          resp = '+COPS: 0,0,"IR-MCI",7\r\nOK';
+          resp = '+COPS: 0,0,"IR-MCI",2\r\nOK';
           this.status.operator = 'همراه اول (IR-MCI)';
         } else if (cleanCmd.startsWith('AT+CGMI')) {
-          resp = 'SIMCOM_Ltd\r\nOK';
-          this.status.manufacturer = 'SIMCOM Electronics';
+          const isZyxel = !this.status.deviceProfile || this.status.deviceProfile === 'zyxel_3g';
+          resp = isZyxel ? 'ZyXEL Communications Corp.\r\nOK' : 'Generic_GSM\r\nOK';
+          this.status.manufacturer = isZyxel ? 'ZyXEL Communications Corp.' : 'Generic Vendor';
         } else if (cleanCmd.startsWith('AT+CGMM')) {
-          resp = 'SIM800C USB Modem\r\nOK';
-          this.status.model = 'SIM800C GSM/GPRS Dongle';
+          const isZyxel = !this.status.deviceProfile || this.status.deviceProfile === 'zyxel_3g';
+          resp = isZyxel ? 'ZyXEL 3G Modem (MAX218M/HSDPA)\r\nOK' : '3G USB Dongle\r\nOK';
+          this.status.model = isZyxel ? 'ZyXEL 3G USB Modem' : '3G USB Modem';
         } else if (cleanCmd.startsWith('AT+CGSN')) {
-          resp = '867534029182736\r\nOK';
-          this.status.imei = '867534029182736';
+          resp = '863920194827103\r\nOK';
+          this.status.imei = '863920194827103';
         } else if (cleanCmd.startsWith('AT+CPIN?')) {
           resp = '+CPIN: READY\r\nOK';
           this.status.simStatus = 'ready';
+        } else if (cleanCmd.startsWith('AT+CPMS=')) {
+          resp = '+CPMS: 3,30,3,30,3,30\r\nOK';
         } else if (cleanCmd.startsWith('AT+CMGF=')) {
           resp = 'OK';
         } else if (cleanCmd.startsWith('AT+CMGS=')) {
@@ -449,19 +477,33 @@ class GsmUsbService {
         this.addLog('received', resp);
         this.notifyStatus();
         resolve(resp);
-      }, 200);
+      }, 150);
     });
   }
 
-  // Initial queries to get signal, operator, model
+  // Initial queries to get signal, operator, model for ZyXEL 3G and GSM modems
   public async runInitialHardwareSetup() {
     try {
-      this.addLog('info', 'بررسی اولیه مودم و ارسال فرمان‌های آماده‌سازی...');
+      this.addLog('info', 'بررسی اولیه مودم ZyXEL 3G و ارسال فرمان‌های آماده‌سازی...');
       await this.executeAtCommand('AT');
+      await this.executeAtCommand('ATZ'); // Reset profile
       await this.executeAtCommand('ATE0'); // Echo off
       await this.executeAtCommand('AT+CPIN?'); // SIM Ready?
+      
+      // Query Manufacturer & Model
+      const cgmiRes = await this.executeAtCommand('AT+CGMI');
+      if (cgmiRes.toUpperCase().includes('ZYXEL')) {
+        this.status.manufacturer = 'ZyXEL Communications Corp.';
+        this.status.deviceProfile = 'zyxel_3g';
+      }
+      const cgmmRes = await this.executeAtCommand('AT+CGMM');
+      if (cgmmRes.toUpperCase().includes('ZYXEL') || this.status.deviceProfile === 'zyxel_3g') {
+        this.status.model = 'ZyXEL 3G USB Modem';
+      }
+
       await this.executeAtCommand('AT+CMGF=1'); // Set SMS text mode
       await this.executeAtCommand('AT+CSCS="GSM"'); // Charset
+      await this.executeAtCommand('AT+CPMS="SM","SM","SM"'); // SIM message storage
       await this.executeAtCommand('AT+CNMI=2,1,0,0,0'); // Notifications for new incoming SMS
       
       // Get Signal

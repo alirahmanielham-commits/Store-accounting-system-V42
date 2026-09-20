@@ -33,7 +33,7 @@ export interface ChannelConfig {
 const defaultChannels: ChannelConfig[] = [
   {
     id: "ch-gsm-1",
-    name: "مودم سخت‌افزاری GSM (اتصال USB)",
+    name: "مودم سیم‌کارتی ZyXEL 3G (پورت USB)",
     type: "gsm",
     isEnabled: true, // Active and priority 1
     priority: 1,
@@ -45,6 +45,8 @@ const defaultChannels: ChannelConfig[] = [
     config: {
       port: "USB-Serial (Web Serial)",
       baudRate: "115200",
+      deviceProfile: "zyxel_3g",
+      deviceModel: "ZyXEL 3G USB Modem (HSDPA)",
       simOperator: "همراه اول (IR-MCI)",
       atTimeout: "5000",
       storage: "SM"
