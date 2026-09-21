@@ -6,6 +6,7 @@ import { getInvoices, getProductPriceHistory, getInventoryTransactions } from '.
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend } from 'recharts';
 import { addCommas, toPersianDigits, formatDateDisplay, formatAmount } from '../../utils/format';
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, convertPriceToBaseUnit, formatUnitConversionFormula } from '../../utils/unitConversion';
+import { compareKardexTransactions } from '../../utils/kardexSort';
 
 export default function ProductCardModal({ product, warehouses = [], currency = 'تومان', onClose, isModal = true, persons = [], storeSettings }: { product: Product, warehouses?: Warehouse[], currency?: string, onClose: () => void, isModal?: boolean, persons?: any[], storeSettings?: any }) {
   const [history, setHistory] = useState<any[]>([]);
@@ -156,7 +157,7 @@ export default function ProductCardModal({ product, warehouses = [], currency = 
          }
 
          // Calculate chronological running balance for Kardex
-         const chronological = [...prodHistory].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+         const chronological = [...prodHistory].sort(compareKardexTransactions);
          let runBal = 0;
          const finalKardex = chronological.map((row, idx) => {
            const inQ = Number(row.inQuantity || (row.type === 'warehouse_receipt' || row.type === 'initial_stock' || row.type === 'sales_return' ? row.quantity : 0));

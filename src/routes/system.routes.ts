@@ -21,6 +21,7 @@ import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications
 import * as schema from '../db/schema';
 import { convertPriceToBaseUnit, convertQuantityToBaseUnit, getUnitRatioDirection } from '../utils/unitConversion';
 import { calculateAllWarehouseStocks } from '../utils/stockLogic';
+import { compareKardexTransactions } from '../utils/kardexSort';
 
 const router = Router();
 router.post('/api/db/recalculate-stocks', async (req, res) => {
@@ -94,7 +95,7 @@ router.get('/api/kardex/:productId?', async (req, res) => {
     if (warehouseId && warehouseId !== 'all') {
       list = list.filter((item: any) => String(item.warehouseId) === String(warehouseId));
     }
-    list.sort((a: any, b: any) => (a.timestamp || 0) - (b.timestamp || 0));
+    list.sort(compareKardexTransactions);
     res.json({ success: true, data: list });
   } catch (err: any) {
     res.status(500).json({ error: err.message });

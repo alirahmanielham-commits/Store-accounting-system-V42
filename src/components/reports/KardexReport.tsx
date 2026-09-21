@@ -43,6 +43,7 @@ import {
 } from "../../utils/unitConversion";
 import { toPersianDigits, addCommas } from "../../utils/format";
 import { calculateAllWarehouseStocks } from "../../utils/stockLogic";
+import { compareKardexTransactions, parseDocDateToTimestamp } from "../../utils/kardexSort";
 import AdvancedProductSearchSelect from "../kardex/AdvancedProductSearchSelect";
 import InitialStockModal from "../kardex/InitialStockModal";
 
@@ -79,6 +80,7 @@ interface KardexTransaction {
   timestamp: number;
   date: string;
   time?: string;
+  createdAt?: string | number;
   warehouseId: string;
   warehouseName: string;
   documentType: string;
@@ -242,17 +244,26 @@ export default function KardexReport() {
           const origQty = h.originalQuantity !== undefined ? Number(h.originalQuantity) : qty;
           const origPrice = h.originalUnitPrice !== undefined ? Number(h.originalUnitPrice) : Number(h.unitPrice || 0);
 
+          const matchingInv = invoices.find(i => 
+            (h.documentId && String(i.id) === String(h.documentId)) ||
+            (docNum !== '---' && String(i.invoiceNumber || i.documentNumber) === String(docNum))
+          );
+          const hTime = h.time || matchingInv?.time || (h.createdAt ? new Date(h.createdAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }) : (matchingInv?.createdAt ? new Date(matchingInv.createdAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }) : ''));
+          const hCreatedAt = h.createdAt || matchingInv?.createdAt;
+          const computedTs = parseDocDateToTimestamp(h.date || matchingInv?.date || h.timestamp, hTime, hCreatedAt);
+
           transactionMap.set(key, {
             id: key,
-            timestamp: Number(h.timestamp) || Date.now(),
-            date: h.date || (h.timestamp ? new Date(h.timestamp).toLocaleDateString('fa-IR') : '---'),
-            time: h.time || '',
+            timestamp: computedTs,
+            date: h.date || (computedTs ? new Date(computedTs).toLocaleDateString('fa-IR') : '---'),
+            time: hTime,
+            createdAt: hCreatedAt,
             warehouseId: whId,
             warehouseName: whName,
             documentType: docType,
             documentNumber: docNum,
-            documentId: h.documentId,
-            personName: h.personName || persons.find(p => p.id?.toString() === h.personId?.toString())?.name || '---',
+            documentId: h.documentId || matchingInv?.id,
+            personName: h.personName || persons.find(p => p.id?.toString() === h.personId?.toString())?.name || matchingInv?.customerName || matchingInv?.personName || '---',
             description: h.description || (isInput ? 'ورود به انبار' : 'خروج از انبار'),
             type: isInput ? 'in' : 'out',
             quantity: qty,
@@ -313,25 +324,25 @@ export default function KardexReport() {
           const person = persons.find(p => p.id?.toString() === (inv.personId || inv.customerId || inv.supplierId)?.toString());
           const personName = person?.name || inv.personName || inv.customerName || inv.supplierName || '---';
 
+          const invTime = inv.time || (inv.createdAt ? new Date(inv.createdAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }) : '');
+          const computedTs = parseDocDateToTimestamp(inv.date || inv.invoiceDate, invTime, inv.createdAt);
           let parsedDate = inv.date || inv.invoiceDate;
-          let ts = Date.now();
           if (parsedDate) {
             const d = new Date(parsedDate);
             if (!isNaN(d.getTime())) {
-              ts = d.getTime();
               parsedDate = d.toLocaleDateString('fa-IR');
             }
-          } else if (inv.createdAt) {
-            ts = new Date(inv.createdAt).getTime();
-            parsedDate = new Date(inv.createdAt).toLocaleDateString('fa-IR');
+          } else if (computedTs) {
+            parsedDate = new Date(computedTs).toLocaleDateString('fa-IR');
           }
 
           const uniqueKey = `inv_${inv.id || docNum}_${item.id || itemIdx}`;
           transactionMap.set(uniqueKey, {
             id: uniqueKey,
-            timestamp: ts,
+            timestamp: computedTs,
             date: parsedDate || '---',
-            time: inv.time || '',
+            time: invTime,
+            createdAt: inv.createdAt,
             warehouseId: whId,
             warehouseName: whName,
             documentType: docType,
@@ -351,15 +362,8 @@ export default function KardexReport() {
         });
       });
 
-      // Convert map to array and sort chronologically
-      const sortedTransactions = Array.from(transactionMap.values()).sort((a, b) => {
-        if (a.timestamp !== b.timestamp) {
-          return a.timestamp - b.timestamp;
-        }
-        if (a.documentType === 'initial_stock') return -1;
-        if (b.documentType === 'initial_stock') return 1;
-        return a.id.localeCompare(b.id);
-      });
+      // Convert map to array and sort chronologically with strict receipt-before-remittance ordering
+      const sortedTransactions = Array.from(transactionMap.values()).sort(compareKardexTransactions);
 
       setAllRawTransactions(sortedTransactions);
     } catch (err) {

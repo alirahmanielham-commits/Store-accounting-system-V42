@@ -1,4 +1,5 @@
 import { convertQuantityToBaseUnit, getUnitRatioDirection } from './unitConversion';
+import { compareKardexTransactions, parseDocDateToTimestamp } from './kardexSort';
 
 export interface WarehouseStockItem {
   id: string; // `${productId}_${warehouseId}`
@@ -106,6 +107,9 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
         productId: pid,
         warehouseId: targetWhId,
         date: docDate,
+        time: '۰۰:۰۰',
+        timestamp: p.initialStockTimestamp || (p.createdAt ? new Date(p.createdAt).getTime() : 1),
+        createdAt: p.createdAt || '1970-01-01T00:00:00.000Z',
         type: 'in',
         quantity: baseStock,
         unitPrice: Number(p.purchasePrice || p.price || 0),
@@ -122,21 +126,6 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
     }
   });
 
-  // Filter valid documents (not deleted, not voided, not draft)
-  const validDocs = (allDocs || []).filter((d: any) => {
-    if (!d || d.isDeleted) return false;
-    if (d.status === 'draft' || d.isDraft) return false;
-    if (d.status === 'voided') return false;
-    return true;
-  });
-
-  // Sort chronologically for Kardex
-  const sortedDocs = [...validDocs].sort((a: any, b: any) => {
-    const tA = a.createdAt ? new Date(a.createdAt).getTime() : (a.timestamp || 0);
-    const tB = b.createdAt ? new Date(b.createdAt).getTime() : (b.timestamp || 0);
-    return tA - tB;
-  });
-
   // Helper to extract document type
   const getDocType = (doc: any): string => {
     if (doc.type) return doc.type;
@@ -149,6 +138,26 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
     if (doc._originTable === 'wastes') return 'waste';
     return 'sale';
   };
+
+  // Filter valid documents (not deleted, not voided, not draft)
+  const validDocs = (allDocs || []).filter((d: any) => {
+    if (!d || d.isDeleted) return false;
+    if (d.status === 'draft' || d.isDraft) return false;
+    if (d.status === 'voided') return false;
+    return true;
+  });
+
+  // Sort chronologically for Kardex with receipt-before-remittance priority
+  const sortedDocs = [...validDocs].sort((a: any, b: any) => {
+    const docTypeA = getDocType(a);
+    const docTypeB = getDocType(b);
+    const tsA = parseDocDateToTimestamp(a.date, a.time, a.createdAt) || (a.timestamp || 0);
+    const tsB = parseDocDateToTimestamp(b.date, b.time, b.createdAt) || (b.timestamp || 0);
+    return compareKardexTransactions(
+      { ...a, documentType: docTypeA, timestamp: tsA },
+      { ...b, documentType: docTypeB, timestamp: tsB }
+    );
+  });
 
   // 2. Track warehouse remittances linked to source invoices
   // Map of: sourceInvoiceKey -> { [productId_warehouseId]: totalRemittedQuantity }
@@ -229,6 +238,8 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
       if (q === 0) return;
 
       const rawPrice = Number(item.unitPrice || item.price || product.purchasePrice || 0);
+      const docTime = doc.time || (doc.createdAt ? new Date(doc.createdAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }) : '');
+      const docTs = parseDocDateToTimestamp(doc.date, docTime, doc.createdAt);
 
       if (docType === 'warehouse_receipt' || docType === 'sales_return') {
         // Inward physical movement
@@ -240,6 +251,9 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
           id: generateId(),
           productId: pid,
           warehouseId: whId,
+          timestamp: docTs,
+          time: docTime,
+          createdAt: doc.createdAt,
           date: doc.date || (doc.createdAt ? new Date(doc.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
           type: 'in',
           quantity: q,
@@ -264,6 +278,9 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
           id: generateId(),
           productId: pid,
           warehouseId: whId,
+          timestamp: docTs,
+          time: docTime,
+          createdAt: doc.createdAt,
           date: doc.date || (doc.createdAt ? new Date(doc.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
           type: 'out',
           quantity: q,
@@ -392,6 +409,9 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
   });
 
   const stocksList = Object.values(stocksMap);
+
+  // Guarantee strict chronological order for Kardex (Receipts before Remittances on same day)
+  historyList.sort(compareKardexTransactions);
 
   return {
     stocksMap,

@@ -22,6 +22,7 @@ import {
 } from './coreService';
 import { CompanySettings } from '../types';
 import { convertToGregorian } from '../utils/format';
+import { compareKardexTransactions } from '../utils/kardexSort';
 
 
 export const getWarehouses = async () => {
@@ -153,8 +154,8 @@ export const getInventoryTransactions = async (productId?: string | number, ware
 
 export const getProductKardex = async (productId: string | number, warehouseId?: string | number) => {
   const transactions = await getInventoryTransactions(productId, warehouseId);
-  // Sort ascending for ledger calculation
-  const chronological = [...transactions].sort((a, b) => (a.timestamp || 0) - (b.timestamp || 0));
+  // Sort ascending for ledger calculation (strict receipt before remittance priority)
+  const chronological = [...transactions].sort(compareKardexTransactions);
   
   let runningBalance = 0;
   const ledger = chronological.map((t, idx) => {
