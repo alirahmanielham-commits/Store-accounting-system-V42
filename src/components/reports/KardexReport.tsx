@@ -19,7 +19,15 @@ import {
   Info,
   FileCheck2,
   PlusCircle,
-  Sparkles
+  Sparkles,
+  Eye,
+  X,
+  Copy,
+  ExternalLink,
+  Check,
+  FileDown,
+  Receipt,
+  RotateCcw
 } from "lucide-react";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -41,11 +49,14 @@ import {
   getUnitRatioDirection,
   formatUnitConversionFormula
 } from "../../utils/unitConversion";
-import { toPersianDigits, addCommas } from "../../utils/format";
+import { toPersianDigits, addCommas, formatDateDisplay, numToPersianWords } from "../../utils/format";
+import { globalDateFormatter } from "../../utils/dateFormatter";
 import { calculateAllWarehouseStocks } from "../../utils/stockLogic";
 import { compareKardexTransactions, parseDocDateToTimestamp } from "../../utils/kardexSort";
 import AdvancedProductSearchSelect from "../kardex/AdvancedProductSearchSelect";
 import InitialStockModal from "../kardex/InitialStockModal";
+import WarehousePrintTemplate from "../print/WarehousePrintTemplate";
+import InvoicePrintTemplate from "../print/InvoicePrintTemplate";
 
 const DatePicker = CustomDatePicker;
 
@@ -120,7 +131,33 @@ export default function KardexReport() {
   // Initial Stock Document Modal
   const [isInitialStockModalOpen, setIsInitialStockModalOpen] = useState(false);
 
+  // Document Preview Modal State
+  const [previewDocData, setPreviewDocData] = useState<any | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewModalViewMode, setPreviewModalViewMode] = useState<'details' | 'print'>('details');
+
   const [allRawTransactions, setAllRawTransactions] = useState<KardexTransaction[]>([]);
+
+  // Format date respecting system calendar and date format settings
+  const formatKardexDate = (dateVal: any, timestamp?: number) => {
+    if (timestamp && !isNaN(timestamp) && timestamp > 1000000) {
+      try {
+        return globalDateFormatter.formatDateOnly(new Date(timestamp));
+      } catch {
+        // fallback
+      }
+    }
+    if (!dateVal || dateVal === '---') return '---';
+    try {
+      const d = new Date(dateVal);
+      if (!isNaN(d.getTime())) {
+        return globalDateFormatter.formatDateOnly(d);
+      }
+    } catch {
+      // fallback
+    }
+    return formatDateDisplay(dateVal);
+  };
 
   useEffect(() => {
     fetchInitialData();
@@ -144,6 +181,17 @@ export default function KardexReport() {
       setPersons(pers || []);
       setSettings(sett || {});
       setCategories(cats || []);
+
+      if (sett) {
+        globalDateFormatter.updateConfig({
+          dateFormat: sett.dateFormat,
+          dateSeparator: sett.dateSeparator,
+          dateYearFormat: sett.dateYearFormat,
+          showTime: sett.dateShowTime ?? false,
+          timeFormat: sett.dateTimeFormat,
+          calendarType: sett.calendarType || 'jalali',
+        });
+      }
 
       // Auto-select first product if none selected
       if (physicalProds.length > 0 && !selectedProductId) {
@@ -193,15 +241,15 @@ export default function KardexReport() {
       // A. Initial Stock from product definition (Registered Initial Stock Document)
       const initialStockQty = Number(product.stock) || 0;
       const initialDocNum = (product as any).initialStockDocNumber || (product.code ? `OPN-${product.code}` : 'سند افتتاحیه');
-      const initialDocDate = (product as any).initialStockJalaliDate ||
-        ((product as any).initialStockDate
-          ? new Date((product as any).initialStockDate).toLocaleDateString("fa-IR")
-          : ((product as any).createdAt ? new Date((product as any).createdAt).toLocaleDateString("fa-IR") : 'ابتدای دوره'));
+      const initTs = (product as any).initialStockTimestamp || ((product as any).createdAt ? new Date((product as any).createdAt).getTime() : 1);
+      const initialDocDate = formatKardexDate(
+        (product as any).initialStockJalaliDate || (product as any).initialStockDate || (product as any).createdAt,
+        initTs
+      );
       const initialDocDesc = (product as any).initialStockDescription || 'سند موجودی اول دوره و افتتاحیه انبار';
       const initialUnitPrice = Number((product as any).initialStockUnitPrice || product.purchasePrice || (product as any).buyPrice || product.price || 0);
 
       if (initialStockQty !== 0 || (product as any).initialStockRegistered) {
-        const initTs = (product as any).initialStockTimestamp || ((product as any).createdAt ? new Date((product as any).createdAt).getTime() : 1);
         const initKey = `init_${prodId}`;
         transactionMap.set(initKey, {
           id: initKey,
@@ -255,7 +303,7 @@ export default function KardexReport() {
           transactionMap.set(key, {
             id: key,
             timestamp: computedTs,
-            date: h.date || (computedTs ? new Date(computedTs).toLocaleDateString('fa-IR') : '---'),
+            date: formatKardexDate(h.date || matchingInv?.date || h.timestamp, computedTs),
             time: hTime,
             createdAt: hCreatedAt,
             warehouseId: whId,
@@ -326,21 +374,13 @@ export default function KardexReport() {
 
           const invTime = inv.time || (inv.createdAt ? new Date(inv.createdAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }) : '');
           const computedTs = parseDocDateToTimestamp(inv.date || inv.invoiceDate, invTime, inv.createdAt);
-          let parsedDate = inv.date || inv.invoiceDate;
-          if (parsedDate) {
-            const d = new Date(parsedDate);
-            if (!isNaN(d.getTime())) {
-              parsedDate = d.toLocaleDateString('fa-IR');
-            }
-          } else if (computedTs) {
-            parsedDate = new Date(computedTs).toLocaleDateString('fa-IR');
-          }
+          const formattedDate = formatKardexDate(inv.date || inv.invoiceDate, computedTs);
 
           const uniqueKey = `inv_${inv.id || docNum}_${item.id || itemIdx}`;
           transactionMap.set(uniqueKey, {
             id: uniqueKey,
             timestamp: computedTs,
-            date: parsedDate || '---',
+            date: formattedDate || '---',
             time: invTime,
             createdAt: inv.createdAt,
             warehouseId: whId,
@@ -371,6 +411,89 @@ export default function KardexReport() {
     } finally {
       setIsRefreshing(false);
     }
+  };
+
+  // Open Document Preview Modal on document number click
+  const handleOpenDocPreview = (row: KardexTransaction) => {
+    // 1. Try to find the exact matched document in invoices
+    const matchedInvoice = invoices.find(inv => 
+      (row.documentId && String(inv.id) === String(row.documentId)) ||
+      (row.documentNumber && row.documentNumber !== '---' && String(inv.invoiceNumber || inv.documentNumber) === String(row.documentNumber))
+    );
+
+    if (row.documentType === 'initial_stock') {
+      const doc = {
+        id: row.id,
+        type: 'initial_stock',
+        documentNumber: row.documentNumber,
+        invoiceNumber: row.documentNumber,
+        date: row.date,
+        time: row.time || '۰۰:۰۰',
+        warehouseId: row.warehouseId,
+        warehouseName: row.warehouseName,
+        personName: row.personName || 'سیستم (سند افتتاحیه انبار)',
+        description: row.description || 'سند موجودی اول دوره و افتتاحیه انبار',
+        items: [{
+          productId: selectedProduct?.id,
+          productName: selectedProduct?.name,
+          productCode: selectedProduct?.code,
+          barcode: selectedProduct?.barcode,
+          quantity: row.originalQuantity || row.quantity,
+          unit: row.selectedUnit || selectedProduct?.unit || 'عدد',
+          unitPrice: row.originalUnitPrice || row.unitPrice,
+          totalPrice: row.totalPrice || ((row.originalQuantity || row.quantity) * (row.originalUnitPrice || row.unitPrice)),
+          description: 'موجودی اول دوره ثبت شده'
+        }],
+        totalAmount: row.totalPrice || ((row.originalQuantity || row.quantity) * (row.originalUnitPrice || row.unitPrice)),
+        status: 'final'
+      };
+      setPreviewDocData(doc);
+      setPreviewModalViewMode('details');
+      setIsPreviewModalOpen(true);
+      return;
+    }
+
+    if (matchedInvoice) {
+      setPreviewDocData({
+        ...matchedInvoice,
+        documentNumber: matchedInvoice.documentNumber || matchedInvoice.invoiceNumber || row.documentNumber,
+        warehouseName: row.warehouseName || warehouses.find(w => String(w.id) === String(matchedInvoice.warehouseId))?.name || 'انبار اصلی',
+        personName: row.personName || persons.find(p => String(p.id) === String(matchedInvoice.customerId || matchedInvoice.supplierId || matchedInvoice.personId))?.name || matchedInvoice.customerName || matchedInvoice.supplierName || '---',
+      });
+      setPreviewModalViewMode('details');
+      setIsPreviewModalOpen(true);
+      return;
+    }
+
+    // Fallback document preview when not found in memory array
+    const fallbackDoc = {
+      id: row.id,
+      type: row.documentType,
+      documentNumber: row.documentNumber,
+      invoiceNumber: row.documentNumber,
+      date: row.date,
+      time: row.time || '',
+      warehouseId: row.warehouseId,
+      warehouseName: row.warehouseName,
+      personName: row.personName,
+      description: row.description,
+      items: [{
+        productId: selectedProduct?.id,
+        productName: selectedProduct?.name,
+        productCode: selectedProduct?.code,
+        barcode: selectedProduct?.barcode,
+        quantity: row.originalQuantity || row.quantity,
+        unit: row.selectedUnit || selectedProduct?.unit || 'عدد',
+        unitPrice: row.originalUnitPrice || row.unitPrice,
+        totalPrice: row.totalPrice || ((row.originalQuantity || row.quantity) * (row.originalUnitPrice || row.unitPrice)),
+        description: row.description
+      }],
+      totalAmount: row.totalPrice,
+      status: 'final'
+    };
+    setPreviewDocData(fallbackDoc);
+    setPreviewModalViewMode('details');
+    setIsPreviewModalOpen(true);
   };
 
   const selectedProduct = useMemo(() => {
@@ -741,11 +864,11 @@ export default function KardexReport() {
               از تاریخ
             </label>
             <DatePicker
-              calendar={persian}
-              locale={persian_fa}
+              calendar={settings?.calendarType === "gregorian" ? undefined : persian}
+              locale={settings?.calendarType === "gregorian" ? undefined : persian_fa}
               value={startDate}
               onChange={(d: any) => setStartDate(d?.toDate() || null)}
-              format="YYYY/MM/DD"
+              format={settings?.dateFormat === 'DD/MM/YYYY' ? 'DD/MM/YYYY' : 'YYYY/MM/DD'}
               inputClass="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none text-center font-bold"
               placeholder="ابتدای دوره"
             />
@@ -758,18 +881,18 @@ export default function KardexReport() {
               تا تاریخ
             </label>
             <DatePicker
-              calendar={persian}
-              locale={persian_fa}
+              calendar={settings?.calendarType === "gregorian" ? undefined : persian}
+              locale={settings?.calendarType === "gregorian" ? undefined : persian_fa}
               value={endDate}
               onChange={(d: any) => setEndDate(d?.toDate() || null)}
-              format="YYYY/MM/DD"
+              format={settings?.dateFormat === 'DD/MM/YYYY' ? 'DD/MM/YYYY' : 'YYYY/MM/DD'}
               inputClass="w-full bg-slate-50 border border-slate-200 text-slate-800 text-xs rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white p-2.5 outline-none text-center font-bold"
               placeholder="امروز (پایان دوره)"
             />
           </div>
         </div>
 
-        {/* Sub-bar with instant in-table search and reset */}
+        {/* Sub-bar with instant in-table search, quick presets and reset */}
         <div className="flex flex-col sm:flex-row items-center justify-between pt-3 border-t border-slate-100 gap-3">
           <div className="relative w-full sm:w-80">
             <Search className="w-3.5 h-3.5 absolute right-3 top-2.5 text-slate-400" />
@@ -782,7 +905,46 @@ export default function KardexReport() {
             />
           </div>
 
-          <div className="flex items-center gap-2">
+          {/* Quick Date Presets */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                setStartDate(now);
+                setEndDate(now);
+              }}
+              className="text-[11px] font-bold px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+            >
+              امروز
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                const past7 = new Date();
+                past7.setDate(now.getDate() - 7);
+                setStartDate(past7);
+                setEndDate(now);
+              }}
+              className="text-[11px] font-bold px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+            >
+              ۷ روز اخیر
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                const now = new Date();
+                const past30 = new Date();
+                past30.setDate(now.getDate() - 30);
+                setStartDate(past30);
+                setEndDate(now);
+              }}
+              className="text-[11px] font-bold px-2.5 py-1 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-lg transition-colors cursor-pointer"
+            >
+              ۳۰ روز اخیر
+            </button>
+
             {(startDate || endDate || selectedWarehouseId !== 'all' || selectedDocType !== 'all' || tableSearch) && (
               <button
                 onClick={() => {
@@ -792,8 +954,9 @@ export default function KardexReport() {
                   setSelectedDocType('all');
                   setTableSearch('');
                 }}
-                className="text-xs text-rose-600 hover:text-rose-700 font-bold px-3 py-1.5 bg-rose-50 rounded-xl transition-colors cursor-pointer"
+                className="text-xs text-rose-600 hover:text-rose-700 font-bold px-2.5 py-1 bg-rose-50 rounded-lg transition-colors cursor-pointer flex items-center gap-1"
               >
+                <RotateCcw className="w-3 h-3" />
                 پاک کردن فیلترها
               </button>
             )}
@@ -1092,7 +1255,19 @@ export default function KardexReport() {
                         {getDocumentTypeBadge(row.documentType, row.type)}
                       </td>
                       <td className="px-3 py-3 font-bold text-indigo-700 whitespace-nowrap text-xs accounting-num">
-                        {formatDigits(row.documentNumber || '-')}
+                        {row.documentNumber && row.documentNumber !== '-' && row.documentNumber !== '---' ? (
+                          <button
+                            type="button"
+                            onClick={() => handleOpenDocPreview(row)}
+                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-indigo-700 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-200 hover:border-indigo-600 transition-all font-black text-xs group cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+                            title="مشاهده پیش‌نمایش و برگه رسید/حواله انبار"
+                          >
+                            <Eye className="w-3.5 h-3.5 text-indigo-500 group-hover:text-white transition-colors" />
+                            <span>{formatDigits(row.documentNumber)}</span>
+                          </button>
+                        ) : (
+                          <span className="text-slate-400">-</span>
+                        )}
                       </td>
                       <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">
                         {row.warehouseName}
@@ -1217,6 +1392,299 @@ export default function KardexReport() {
             }
           }}
         />
+      )}
+
+      {/* Warehouse / Invoice Document Preview Modal */}
+      {isPreviewModalOpen && previewDocData && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in print:p-0 print:bg-transparent">
+          <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl border border-slate-200 w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden print:max-w-none print:max-h-none print:border-none print:shadow-none">
+            {/* Modal Header */}
+            <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-slate-50/70 print:hidden">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center border border-indigo-100">
+                  <Receipt className="w-5 h-5" />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h2 className="text-base font-black text-slate-800">
+                      {previewDocData.type === 'warehouse_receipt'
+                        ? 'پیش‌نمایش رسید ورود کالا به انبار'
+                        : previewDocData.type === 'warehouse_remittance'
+                        ? 'پیش‌نمایش حواله خروج کالا از انبار'
+                        : previewDocData.type === 'initial_stock'
+                        ? 'پیش‌نمایش سند افتتاحیه و موجودی اول دوره'
+                        : previewDocData.type === 'sales_return'
+                        ? 'پیش‌نمایش رسید برگشت از فروش'
+                        : previewDocData.type === 'purchase_return'
+                        ? 'پیش‌نمایش حواله برگشت از خرید'
+                        : 'پیش‌نمایش سند انبار'}
+                    </h2>
+                    <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-200">
+                      شماره سند: {formatDigits(previewDocData.documentNumber || previewDocData.invoiceNumber || '---')}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    بررسی جزئیات، اقلام کالا، انبار و چاپ برگه رسمی انبارداری
+                  </p>
+                </div>
+              </div>
+
+              {/* Action Buttons & Close */}
+              <div className="flex items-center gap-2">
+                {/* View Switch */}
+                <div className="bg-slate-200/80 p-0.5 rounded-xl flex items-center text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setPreviewModalViewMode('details')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      previewModalViewMode === 'details'
+                        ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                        : 'text-slate-600 hover:text-slate-800'
+                    }`}
+                  >
+                    خلاصه سند
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewModalViewMode('print')}
+                    className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                      previewModalViewMode === 'print'
+                        ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                        : 'text-slate-600 hover:text-slate-800'
+                    }`}
+                  >
+                    قالب رسمی چاپی
+                  </button>
+                </div>
+
+                {/* Print Button */}
+                <button
+                  type="button"
+                  onClick={() => window.print()}
+                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-xs transition-colors cursor-pointer"
+                  title="چاپ سند"
+                >
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>چاپ</span>
+                </button>
+
+                {/* Close Button */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPreviewModalOpen(false);
+                    setPreviewDocData(null);
+                  }}
+                  className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-slate-100 rounded-xl transition-colors cursor-pointer"
+                  title="بستن"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body */}
+            <div className="p-6 overflow-y-auto flex-1 bg-slate-50/40">
+              {previewModalViewMode === 'print' ? (
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 print:p-0 print:border-none print:shadow-none">
+                  <WarehousePrintTemplate
+                    data={previewDocData}
+                    storeSettings={settings}
+                    warehouses={warehouses}
+                    persons={persons}
+                    products={products}
+                  />
+                </div>
+              ) : (
+                <div className="space-y-6">
+                  {/* Key Info Cards */}
+                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="text-[11px] font-bold text-slate-500">تاریخ و زمان سند</div>
+                      <div className="text-xs sm:text-sm font-black text-slate-800 mt-1 accounting-num">
+                        {formatDigits(formatKardexDate(previewDocData.date, previewDocData.timestamp))}
+                      </div>
+                      {previewDocData.time && (
+                        <div className="text-[10px] text-slate-400 mt-0.5">
+                          ساعت: {formatDigits(previewDocData.time)}
+                        </div>
+                      )}
+                    </div>
+
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="text-[11px] font-bold text-slate-500">انبار مربوطه</div>
+                      <div className="text-xs sm:text-sm font-black text-slate-800 mt-1 truncate">
+                        {previewDocData.warehouseName || warehouses.find(w => String(w.id) === String(previewDocData.warehouseId))?.name || 'انبار اصلی'}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="text-[11px] font-bold text-slate-500">طرف حساب / مسئول</div>
+                      <div className="text-xs sm:text-sm font-black text-slate-800 mt-1 truncate">
+                        {previewDocData.personName || 'سیستم انبارداری'}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs">
+                      <div className="text-[11px] font-bold text-slate-500">نوع و وضعیت سند</div>
+                      <div className="mt-1">
+                        {getDocumentTypeBadge(previewDocData.type, previewDocData.type === 'warehouse_receipt' || previewDocData.type === 'sales_return' || previewDocData.type === 'initial_stock' ? 'in' : 'out')}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Items Table */}
+                  <div className="bg-white rounded-2xl border border-slate-200/80 overflow-hidden shadow-2xs">
+                    <div className="px-4 py-3 bg-slate-50/80 border-b border-slate-100 flex items-center justify-between">
+                      <h3 className="text-xs font-black text-slate-700 flex items-center gap-1.5">
+                        <Package className="w-4 h-4 text-indigo-600" />
+                        اقلام کالا در این سند ({formatDigits(previewDocData.items?.length || 1)} قلم)
+                      </h3>
+                    </div>
+
+                    <div className="overflow-x-auto">
+                      <table className="w-full text-right text-xs">
+                        <thead className="bg-slate-50 text-slate-600 font-bold border-b border-slate-100">
+                          <tr>
+                            <th className="p-3 text-center w-12">#</th>
+                            <th className="p-3">نام و مشخصات کالا</th>
+                            <th className="p-3 text-center">کد / بارکد</th>
+                            <th className="p-3 text-center">تعداد / مقدار</th>
+                            <th className="p-3 text-center">واحد سنجش</th>
+                            <th className="p-3 text-left">نرخ فی (تومان)</th>
+                            <th className="p-3 text-left">مبلغ کل (تومان)</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 text-slate-700">
+                          {(previewDocData.items && previewDocData.items.length > 0
+                            ? previewDocData.items
+                            : [{
+                                productName: selectedProduct?.name,
+                                productCode: selectedProduct?.code,
+                                barcode: selectedProduct?.barcode,
+                                quantity: previewDocData.quantity,
+                                unit: previewDocData.selectedUnit || selectedProduct?.unit,
+                                unitPrice: previewDocData.unitPrice,
+                                totalPrice: previewDocData.totalPrice
+                              }]
+                          ).map((itm: any, idx: number) => {
+                            const qty = Number(itm.quantity || 0);
+                            const uPrice = Number(itm.unitPrice || itm.price || 0);
+                            const tPrice = Number(itm.totalPrice || (qty * uPrice));
+
+                            return (
+                              <tr key={idx} className="hover:bg-slate-50/50">
+                                <td className="p-3 text-center font-bold text-slate-400 accounting-num">
+                                  {formatDigits(idx + 1)}
+                                </td>
+                                <td className="p-3 font-black text-slate-800">
+                                  {itm.productName || selectedProduct?.name || 'کالای انبار'}
+                                </td>
+                                <td className="p-3 text-center font-bold text-slate-500 accounting-num">
+                                  {formatDigits(itm.productCode || itm.barcode || '---')}
+                                </td>
+                                <td className="p-3 text-center font-black text-indigo-700 accounting-num">
+                                  {formatDigits(addCommas(qty))}
+                                </td>
+                                <td className="p-3 text-center font-medium text-slate-600">
+                                  {itm.unit || selectedProduct?.unit || 'عدد'}
+                                </td>
+                                <td className="p-3 text-left font-bold text-slate-700 accounting-num">
+                                  {formatDigits(addCommas(uPrice))}
+                                </td>
+                                <td className="p-3 text-left font-black text-slate-900 accounting-num">
+                                  {formatDigits(addCommas(tPrice))}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                        <tfoot className="bg-slate-50 font-black text-slate-800 border-t border-slate-200">
+                          <tr>
+                            <td colSpan={3} className="p-3 text-right">
+                              جمع کل ارزش سند:
+                            </td>
+                            <td className="p-3 text-center text-indigo-800 accounting-num">
+                              {formatDigits(addCommas(
+                                (previewDocData.items || []).reduce((acc: number, curr: any) => acc + (Number(curr.quantity) || 0), 0) || Number(previewDocData.quantity || 0)
+                              ))}
+                            </td>
+                            <td></td>
+                            <td></td>
+                            <td className="p-3 text-left text-indigo-900 accounting-num text-sm">
+                              {formatDigits(addCommas(
+                                Number(previewDocData.totalAmount || previewDocData.totalPrice || 0)
+                              ))} تومان
+                            </td>
+                          </tr>
+                        </tfoot>
+                      </table>
+                    </div>
+                  </div>
+
+                  {/* Persian Word Amount & Description */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80">
+                      <div className="text-[11px] font-bold text-slate-500 mb-1">مبلغ به حروف:</div>
+                      <div className="text-xs font-bold text-slate-700 leading-relaxed">
+                        {numToPersianWords(Number(previewDocData.totalAmount || previewDocData.totalPrice || 0))} تومان
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-4 rounded-2xl border border-slate-200/80">
+                      <div className="text-[11px] font-bold text-slate-500 mb-1">شرح و توضیحات سند:</div>
+                      <div className="text-xs text-slate-600 leading-relaxed">
+                        {previewDocData.description || previewDocData.notes || 'سند رسمی انبارداری ثبت شده در سیستم'}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Formal Signatures Section */}
+                  <div className="bg-white p-4 rounded-2xl border border-slate-200/80 grid grid-cols-3 gap-4 text-center text-xs">
+                    <div>
+                      <span className="font-bold text-slate-600">تحویل‌دهنده / صادرکننده:</span>
+                      <div className="border-b border-dotted border-slate-300 mt-10 w-3/4 mx-auto"></div>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-600">تحویل‌گیرنده / مسئول انبار:</span>
+                      <div className="border-b border-dotted border-slate-300 mt-10 w-3/4 mx-auto"></div>
+                    </div>
+                    <div>
+                      <span className="font-bold text-slate-600">تایید امور مالی / مدیریت:</span>
+                      <div className="border-b border-dotted border-slate-300 mt-10 w-3/4 mx-auto"></div>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="px-6 py-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between print:hidden">
+              <span className="text-xs text-slate-500">
+                وضعیت: <strong className="text-emerald-700">ثبت قطعی در کاردکس</strong>
+              </span>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPreviewModalViewMode(prev => prev === 'details' ? 'print' : 'details')}
+                  className="px-4 py-2 border border-slate-300 hover:bg-white text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  {previewModalViewMode === 'details' ? 'مشاهده در قالب چاپی انبار' : 'بازگشت به برگه خلاصه'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsPreviewModalOpen(false);
+                    setPreviewDocData(null);
+                  }}
+                  className="px-5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-bold transition-all cursor-pointer"
+                >
+                  بستن
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

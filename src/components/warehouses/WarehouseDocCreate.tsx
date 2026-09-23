@@ -795,6 +795,7 @@ export default function WarehouseDocCreate(props: any) {
           formatCurrency={formatCurrency}
           handleVoidInvoice={handleVoidInvoice}
           getProductStockInfo={getProductStockInfo}
+          storeSettings={storeSettings}
         />
       </motion.div>
     );

@@ -29,6 +29,8 @@ import {
   Eye,
   Trash2
 } from "lucide-react";
+import { toPersianDigits, addCommas, formatDateDisplay } from "../../utils/format";
+import { globalDateFormatter } from "../../utils/dateFormatter";
 
 export interface WarehouseInvoiceSelectorProps {
   invoices: any[];
@@ -44,6 +46,7 @@ export interface WarehouseInvoiceSelectorProps {
   formatCurrency: (val: number) => string;
   handleVoidInvoice?: (docId: string | number) => void;
   getProductStockInfo?: (productId: string | number) => any;
+  storeSettings?: any;
 }
 
 export default function WarehouseInvoiceSelector({
@@ -60,12 +63,31 @@ export default function WarehouseInvoiceSelector({
   formatCurrency,
   handleVoidInvoice,
   getProductStockInfo,
+  storeSettings,
 }: WarehouseInvoiceSelectorProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<"pending" | "unprocessed" | "partial" | "all">("pending");
   const [warehouseFilter, setWarehouseFilter] = useState<"all" | "current">("all");
   const [sortBy, setSortBy] = useState<"newest" | "oldest" | "highest_remaining" | "highest_amount">("newest");
   const [expandedInvoiceId, setExpandedInvoiceId] = useState<string | number | null>(null);
+
+  const formatDigits = (val: any) => {
+    if (val === undefined || val === null || val === '') return '';
+    return storeSettings?.persianDigits === false ? String(val) : toPersianDigits(val);
+  };
+
+  const formatSelectorDate = (dateVal: any) => {
+    if (!dateVal || dateVal === "بدون تاریخ") return "بدون تاریخ";
+    try {
+      const d = new Date(dateVal);
+      if (!isNaN(d.getTime())) {
+        return globalDateFormatter.formatDateOnly(d);
+      }
+    } catch {
+      // fallback
+    }
+    return formatDateDisplay(dateVal);
+  };
 
   // Determine expected invoice type based on operation
   const expectedType = useMemo(() => {
@@ -498,7 +520,7 @@ export default function WarehouseInvoiceSelector({
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              دارای مانده اقلام ({stats.pendingTotal})
+              دارای مانده اقلام ({formatDigits(stats.pendingTotal)})
             </button>
             <button
               type="button"
@@ -509,7 +531,7 @@ export default function WarehouseInvoiceSelector({
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              کاملاً بدون {isReceipt ? "رسید" : "حواله"} ({stats.unprocessed})
+              کاملاً بدون {isReceipt ? "رسید" : "حواله"} ({formatDigits(stats.unprocessed)})
             </button>
             <button
               type="button"
@@ -520,7 +542,7 @@ export default function WarehouseInvoiceSelector({
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              تحویل جزئی ({stats.partial})
+              تحویل جزئی ({formatDigits(stats.partial)})
             </button>
             <button
               type="button"
@@ -531,12 +553,12 @@ export default function WarehouseInvoiceSelector({
                   : "bg-slate-100 text-slate-600 hover:bg-slate-200"
               }`}
             >
-              همه فاکتورها ({stats.total})
+              همه فاکتورها ({formatDigits(stats.total)})
             </button>
           </div>
 
           <div className="text-slate-500 font-medium text-xs">
-            یافت شده: <span className="font-bold text-slate-800 font-mono">{filteredInvoices.length}</span> فاکتور
+            یافت شده: <span className="font-bold text-slate-800 font-mono">{formatDigits(filteredInvoices.length)}</span> فاکتور
           </div>
         </div>
       </div>
@@ -588,7 +610,7 @@ export default function WarehouseInvoiceSelector({
             let badgeText = isReceipt ? "بدون رسید انبار (ورود نیافته)" : "بدون حواله انبار (تحویل نشده)";
             if (inv.deliveryStatus === "partially_processed") {
               badgeBg = "bg-amber-50 text-amber-700 border-amber-200";
-              badgeText = `تحویل جزئی (${inv.percentDelivered}٪)`;
+              badgeText = `تحویل جزئی (${formatDigits(inv.percentDelivered)}٪)`;
             } else if (inv.deliveryStatus === "fully_processed") {
               badgeBg = "bg-emerald-50 text-emerald-700 border-emerald-200";
               badgeText = "تحویل کامل انبار (۱۰۰٪)";
@@ -615,7 +637,7 @@ export default function WarehouseInvoiceSelector({
                     <div className="flex items-center gap-3 flex-wrap">
                       <div className="flex items-center gap-2">
                         <span className="font-mono font-black text-lg text-slate-900 bg-slate-100 px-3 py-1 rounded-xl border border-slate-200">
-                          #{inv.invoiceNumber}
+                          #{formatDigits(inv.invoiceNumber)}
                         </span>
                         {inv.invoiceMode === "manual" && (
                           <span className="text-[10px] font-bold px-2 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200">
@@ -633,7 +655,7 @@ export default function WarehouseInvoiceSelector({
 
                       <div className="flex items-center gap-1.5 text-xs text-slate-500 font-bold">
                         <Calendar className="w-3.5 h-3.5 text-slate-400" />
-                        <span>{inv.date || "بدون تاریخ"}</span>
+                        <span>{formatSelectorDate(inv.date)}</span>
                       </div>
 
                       {inv.invWarehouseName && (
@@ -650,7 +672,7 @@ export default function WarehouseInvoiceSelector({
                         <span className="text-slate-900">{inv.customerName}</span>
                         {inv.customerPhone && (
                           <span className="text-xs text-slate-400 font-mono" dir="ltr">
-                            ({inv.customerPhone})
+                            ({formatDigits(inv.customerPhone)})
                           </span>
                         )}
                       </div>
@@ -675,7 +697,7 @@ export default function WarehouseInvoiceSelector({
                   <div className="lg:w-72 bg-slate-50 p-3.5 rounded-xl border border-slate-200/80 space-y-2">
                     <div className="flex items-center justify-between text-xs font-bold">
                       <span className="text-slate-600">پیشرفت انبارداری:</span>
-                      <span className="font-mono text-slate-900 font-black">{inv.percentDelivered}٪</span>
+                      <span className="font-mono text-slate-900 font-black">{formatDigits(inv.percentDelivered)}٪</span>
                     </div>
 
                     {/* Progress Bar */}
@@ -693,9 +715,9 @@ export default function WarehouseInvoiceSelector({
                     </div>
 
                     <div className="flex items-center justify-between text-[11px] text-slate-500">
-                      <span>تحویل شده: {inv.totalDeliveredQty} قلم</span>
+                      <span>تحویل شده: {formatDigits(inv.totalDeliveredQty)} قلم</span>
                       <span className="font-bold text-indigo-700">
-                        مانده: {inv.totalRemainingQty} قلم
+                        مانده: {formatDigits(inv.totalRemainingQty)} قلم
                       </span>
                     </div>
                   </div>
@@ -756,7 +778,7 @@ export default function WarehouseInvoiceSelector({
                           <div className="flex items-center justify-between text-xs font-bold text-amber-900">
                             <span className="flex items-center gap-1.5">
                               <FileText className="w-4 h-4 text-amber-600" />
-                              اسناد انبار ثبت شده قبلی برای این فاکتور ({inv.pastDocs.length} سند):
+                              اسناد انبار ثبت شده قبلی برای این فاکتور ({formatDigits(inv.pastDocs.length)} سند):
                             </span>
                             <span className="text-[11px] text-amber-700">
                               مجموع اقلام خارج/وارد شده در اسناد زیر منظور شده است
@@ -770,12 +792,12 @@ export default function WarehouseInvoiceSelector({
                               >
                                 <div className="space-y-0.5">
                                   <span className="font-bold text-slate-800">
-                                    {isReceipt ? "رسید انبار" : "حواله انبار"} #{doc.invoiceNumber}
+                                    {isReceipt ? "رسید انبار" : "حواله انبار"} #{formatDigits(doc.invoiceNumber)}
                                   </span>
                                   <div className="text-[11px] text-slate-400 flex items-center gap-2">
-                                    <span>تاریخ: {doc.date}</span>
+                                    <span>تاریخ: {formatSelectorDate(doc.date)}</span>
                                     <span>•</span>
-                                    <span>{(doc.items || []).length} ردیف کالا</span>
+                                    <span>{formatDigits((doc.items || []).length)} ردیف کالا</span>
                                   </div>
                                 </div>
                                 {handleVoidInvoice && (
@@ -798,7 +820,7 @@ export default function WarehouseInvoiceSelector({
                         <div className="flex items-center justify-between mb-2">
                           <h4 className="text-xs font-black text-slate-700 flex items-center gap-1.5">
                             <Package className="w-4 h-4 text-indigo-500" />
-                            ریز اقلام فاکتور و مانده قابل صدور ({inv.itemDetails.length} قلم):
+                            ریز اقلام فاکتور و مانده قابل صدور ({formatDigits(inv.itemDetails.length)} قلم):
                           </h4>
                           <span className="text-[11px] text-slate-500 font-bold">
                             انبار مقصد جهت موجودی لحظه‌ای:{" "}
@@ -831,20 +853,20 @@ export default function WarehouseInvoiceSelector({
                                   }`}
                                 >
                                   <td className="p-3 text-center font-mono text-slate-400 font-bold">
-                                    {it.index}
+                                    {formatDigits(it.index)}
                                   </td>
                                   <td className="p-3">
                                     <div className="font-extrabold text-slate-900">{it.productName}</div>
                                     <div className="text-[11px] text-slate-400 font-mono mt-0.5 flex gap-2">
-                                      {it.productCode && <span>کد: {it.productCode}</span>}
-                                      {it.productBarcode && <span>بارکد: {it.productBarcode}</span>}
+                                      {it.productCode && <span>کد: {formatDigits(it.productCode)}</span>}
+                                      {it.productBarcode && <span>بارکد: {formatDigits(it.productBarcode)}</span>}
                                     </div>
                                   </td>
                                   <td className="p-3 text-center font-bold font-mono text-slate-700">
-                                    {it.invoicedQty}
+                                    {formatDigits(addCommas(it.invoicedQty))}
                                   </td>
                                   <td className="p-3 text-center font-mono text-slate-500">
-                                    {it.deliveredQty}
+                                    {formatDigits(addCommas(it.deliveredQty))}
                                   </td>
                                   <td className="p-3 text-center">
                                     <span
@@ -854,7 +876,7 @@ export default function WarehouseInvoiceSelector({
                                           : "text-slate-400"
                                       }`}
                                     >
-                                      {it.remainingQty}
+                                      {formatDigits(addCommas(it.remainingQty))}
                                     </span>
                                   </td>
                                   <td className="p-3 text-center text-slate-600 font-bold">{it.unit}</td>
@@ -870,7 +892,7 @@ export default function WarehouseInvoiceSelector({
                                               : "bg-rose-50 text-rose-600"
                                           }`}
                                         >
-                                          {it.stockInWh}
+                                          {formatDigits(addCommas(it.stockInWh))}
                                         </span>
                                         {!isReceipt && it.isShortage && (
                                           <span
@@ -911,14 +933,14 @@ export default function WarehouseInvoiceSelector({
                           <button
                             type="button"
                             onClick={() => onSelectInvoice(inv)}
-                            className={`px-6 py-2 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all ${
+                            className={`px-6 py-2 rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer ${
                               isReceipt
                                 ? "bg-emerald-600 hover:bg-emerald-700 text-white"
                                 : "bg-indigo-600 hover:bg-indigo-700 text-white"
                             }`}
                           >
                             <CheckCircle className="w-4 h-4" />
-                            انتخاب این فاکتور و بارگذاری اقلام باقی‌مانده ({inv.totalRemainingQty} عدد)
+                            انتخاب این فاکتور و بارگذاری اقلام باقی‌مانده ({formatDigits(inv.totalRemainingQty)} عدد)
                           </button>
                         </div>
                       )}
