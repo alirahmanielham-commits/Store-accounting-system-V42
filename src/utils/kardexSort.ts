@@ -62,6 +62,112 @@ export function jalaliToGregorianDate(jy: number, jm: number, jd: number): Date 
 }
 
 /**
+ * Extracts normalized milliseconds from beginning of the day (0 to 86,399,999 ms)
+ * based on explicit time string (e.g. "14:30", "۰۹:۱۵", "14:30:15", "02:30 ب.ظ"),
+ * createdAt ISO/timestamp, or non-midnight timestamp.
+ */
+export function extractTimeOfDayMs(timeInput?: any, createdAt?: any, timestampInput?: any): number {
+  if (timeInput && typeof timeInput === 'string' && timeInput.trim()) {
+    let s = timeInput.trim()
+      .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
+      .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString())
+      .toLowerCase();
+
+    const isPM = s.includes('ب.ظ') || s.includes('عصر') || s.includes('pm') || s.includes('بعد از ظهر');
+    const isAM = s.includes('ق.ظ') || s.includes('صبح') || s.includes('am') || s.includes('قبل از ظهر');
+
+    // Extract numbers separated by colon
+    const cleanStr = s.replace(/[^\d:]/g, '');
+    const parts = cleanStr.split(':').map(p => parseInt(p, 10));
+
+    if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+      let hours = parts[0];
+      const minutes = parts[1];
+      const seconds = (!isNaN(parts[2])) ? parts[2] : 0;
+
+      if (isPM && hours < 12) hours += 12;
+      if (isAM && hours === 12) hours = 0;
+
+      if (hours >= 0 && hours < 24 && minutes >= 0 && minutes < 60) {
+        return (hours * 3600 + minutes * 60 + seconds) * 1000;
+      }
+    }
+  }
+
+  // Fallback to createdAt timestamp if available
+  if (createdAt) {
+    const cd = new Date(createdAt);
+    if (!isNaN(cd.getTime())) {
+      const ms = (cd.getHours() * 3600 + cd.getMinutes() * 60 + cd.getSeconds()) * 1000 + cd.getMilliseconds();
+      if (ms > 0) return ms;
+    }
+  }
+
+  // Fallback to timestampInput if it contains non-midnight time
+  if (typeof timestampInput === 'number' && !isNaN(timestampInput) && timestampInput > 10000000) {
+    const td = new Date(timestampInput);
+    if (!isNaN(td.getTime())) {
+      const ms = (td.getHours() * 3600 + td.getMinutes() * 60 + td.getSeconds()) * 1000 + td.getMilliseconds();
+      if (ms > 0) return ms;
+    }
+  }
+
+  return 0;
+}
+
+/**
+ * Extracts a normalized calendar day string 'YYYY-MM-DD' for date comparison.
+ */
+export function getCalendarDayKey(dateInput: any, createdAt?: any, timestampInput?: any): string {
+  let ts: number | null = null;
+
+  if (typeof dateInput === 'number' && !isNaN(dateInput) && dateInput > 10000000) {
+    ts = dateInput;
+  } else if (dateInput instanceof Date && !isNaN(dateInput.getTime())) {
+    ts = dateInput.getTime();
+  } else if (typeof dateInput === 'string' && dateInput.trim()) {
+    let s = dateInput.trim()
+      .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
+      .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
+
+    if (s.includes('T')) {
+      const d = new Date(s);
+      if (!isNaN(d.getTime())) ts = d.getTime();
+    } else {
+      const cleanSlash = s.replace(/-/g, '/');
+      const parts = cleanSlash.split(/[\s/:]+/);
+      const y = parseInt(parts[0], 10);
+      const m = parseInt(parts[1], 10);
+      const d = parseInt(parts[2], 10);
+
+      if (!isNaN(y) && y >= 1300 && y <= 1500 && !isNaN(m) && !isNaN(d)) {
+        // Normalize Jalali date key directly: YYYY-MM-DD
+        return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      } else if (!isNaN(y) && y > 1900 && !isNaN(m) && !isNaN(d)) {
+        return `${String(y).padStart(4, '0')}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+      } else {
+        const dObj = new Date(s.replace(/\//g, '-'));
+        if (!isNaN(dObj.getTime())) ts = dObj.getTime();
+      }
+    }
+  }
+
+  if (!ts && createdAt) {
+    const cd = new Date(createdAt);
+    if (!isNaN(cd.getTime())) ts = cd.getTime();
+  }
+
+  if (!ts && typeof timestampInput === 'number' && !isNaN(timestampInput)) {
+    ts = timestampInput;
+  }
+
+  if (!ts) ts = Date.now();
+
+  const d = new Date(ts);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+/**
  * Parses any date (Jalali string, Gregorian ISO, Date object, or timestamp)
  * and accurately incorporates time and createdAt to compute milliseconds timestamp.
  */
@@ -123,26 +229,12 @@ export function parseDocDateToTimestamp(dateInput: any, timeInput?: string, crea
     ts = Date.now();
   }
 
-  // Incorporate explicit time if present (e.g., "14:30" or "14:30:15")
-  if (timeInput && typeof timeInput === 'string' && timeInput.trim()) {
-    const cleanTime = timeInput.trim()
-      .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
-      .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
-    const tParts = cleanTime.split(':').map(p => parseInt(p, 10));
-    if (tParts.length >= 2 && !isNaN(tParts[0]) && !isNaN(tParts[1])) {
-      const d = new Date(ts);
-      d.setHours(tParts[0], tParts[1], !isNaN(tParts[2]) ? tParts[2] : 0, 0);
-      ts = d.getTime();
-      isDateMidnightOnly = false;
-    }
-  } else if (isDateMidnightOnly && createdAt) {
-    // If date was specified as a calendar date without time, borrow hours/minutes/seconds from createdAt
-    const cDate = new Date(createdAt);
-    if (!isNaN(cDate.getTime())) {
-      const d = new Date(ts);
-      d.setHours(cDate.getHours(), cDate.getMinutes(), cDate.getSeconds(), cDate.getMilliseconds());
-      ts = d.getTime();
-    }
+  // Incorporate explicit time if present
+  const timeOfDayMs = extractTimeOfDayMs(timeInput, createdAt);
+  if (timeOfDayMs > 0) {
+    const d = new Date(ts);
+    d.setHours(0, 0, 0, 0);
+    ts = d.getTime() + timeOfDayMs;
   }
 
   return ts;
@@ -185,39 +277,42 @@ export function getDocumentTypePriority(docType?: string, direction?: string): n
  * Guarantees that:
  * 1. Initial stock is always first.
  * 2. Earlier calendar dates precede later dates.
- * 3. On the same calendar day, Inward (رسید ورود) ALWAYS precedes Outward (حواله خروج).
- * 4. Ties within the same category are broken by exact time, createdAt, and document number.
+ * 3. On the same calendar day, sorted strictly by TIME (ساعت) so document sequence matches reality.
+ * 4. Ties with identical time are ordered: Inward (رسید ورود) precedes Outward (حواله خروج).
+ * 5. Further ties are broken by createdAt and document number.
  */
 export function compareKardexTransactions(a: any, b: any): number {
   if (!a && !b) return 0;
   if (!a) return 1;
   if (!b) return -1;
 
-  // 1. Initial Stock check (موجودی اول دوره)
+  // 1. Initial Stock check (موجودی اول دوره) - ALWAYS first
   const aIsInit = a.documentType === 'initial_stock' || a.documentType === 'opening_stock' || a.type === 'initial_stock';
   const bIsInit = b.documentType === 'initial_stock' || b.documentType === 'opening_stock' || b.type === 'initial_stock';
   if (aIsInit && !bIsInit) return -1;
   if (!aIsInit && bIsInit) return 1;
   if (aIsInit && bIsInit) return 0;
 
-  // 2. Compare Timestamps
-  const tsA = Number(a.timestamp) || parseDocDateToTimestamp(a.date, a.time, a.createdAt);
-  const tsB = Number(b.timestamp) || parseDocDateToTimestamp(b.date, b.time, b.createdAt);
-
-  // Check if they are on different calendar days
-  const dateA = new Date(tsA);
-  const dateB = new Date(tsB);
-
-  const calDayA = `${dateA.getFullYear()}-${String(dateA.getMonth() + 1).padStart(2, '0')}-${String(dateA.getDate()).padStart(2, '0')}`;
-  const calDayB = `${dateB.getFullYear()}-${String(dateB.getMonth() + 1).padStart(2, '0')}-${String(dateB.getDate()).padStart(2, '0')}`;
+  // 2. Compare Calendar Days
+  const calDayA = getCalendarDayKey(a.date, a.createdAt, a.timestamp);
+  const calDayB = getCalendarDayKey(b.date, b.createdAt, b.timestamp);
 
   if (calDayA !== calDayB) {
     return calDayA.localeCompare(calDayB);
   }
 
   // 3. Within the SAME calendar day:
-  // INWARD (ورود / رسید) MUST ALWAYS PRECEDE OUTWARD (خروج / حواله)!
-  // "کالا ابتدا وارد شده و سپس خارج شده"
+  // User Requirement: "در کاردکس کالا در صورتی که تاریخ مربوط به یک روز باشد بر اساس ساعت باید مرتب شود تا ترتیب اسناد دقیق باشد"
+  // Strictly sort by time of day (ساعت/دقیقه/ثانیه)!
+  const timeA = extractTimeOfDayMs(a.time, a.createdAt, a.timestamp);
+  const timeB = extractTimeOfDayMs(b.time, b.createdAt, b.timestamp);
+
+  if (timeA !== timeB) {
+    return timeA - timeB;
+  }
+
+  // 4. Same time (or both missing explicit time) on the same day:
+  // Inward (ورود / رسید) MUST PRECEDE Outward (خروج / حواله) to prevent artificial negative stock!
   const prioA = getDocumentTypePriority(a.documentType || a.type, a.type);
   const prioB = getDocumentTypePriority(b.documentType || b.type, b.type);
 
@@ -225,13 +320,7 @@ export function compareKardexTransactions(a: any, b: any): number {
     return prioA - prioB;
   }
 
-  // 4. Same direction/priority on the same day:
-  // Check exact time-of-day timestamps
-  if (tsA !== tsB) {
-    return tsA - tsB;
-  }
-
-  // Check createdAt if available
+  // 5. Check createdAt if available
   if (a.createdAt && b.createdAt) {
     const cA = new Date(a.createdAt).getTime();
     const cB = new Date(b.createdAt).getTime();
@@ -240,7 +329,7 @@ export function compareKardexTransactions(a: any, b: any): number {
     }
   }
 
-  // Check document numbers (e.g., #1 before #2)
+  // 6. Check document numbers (e.g., #1 before #2)
   const numA = parseInt(String(a.documentNumber || a.invoiceNumber || '').replace(/\D/g, ''), 10);
   const numB = parseInt(String(b.documentNumber || b.invoiceNumber || '').replace(/\D/g, ''), 10);
   if (!isNaN(numA) && !isNaN(numB) && numA !== numB) {

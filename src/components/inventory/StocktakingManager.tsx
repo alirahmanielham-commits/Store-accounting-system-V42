@@ -3,7 +3,7 @@ import {
   ClipboardList, Plus, Search, RefreshCw, Handshake, Trash2, X, ArrowLeft, ArrowRight,
   CheckCircle2, AlertTriangle, Printer, Box, Filter, Eye, ChevronDown, Check, 
   Scan, ArrowDownRight, ArrowUpRight, RotateCcw, FileText, Smartphone, Calendar,
-  Package, Sparkles, Layers, CheckSquare
+  Package, Sparkles, Layers, CheckSquare, History
 } from 'lucide-react';
 import { 
   getStocktakings, 
@@ -23,6 +23,8 @@ import CustomDatePicker from '../ui/CustomDatePicker';
 import StocktakingApplyModal from './StocktakingApplyModal';
 import StocktakingPrintModal from './StocktakingPrintModal';
 import StocktakingUnitModal from './StocktakingUnitModal';
+import StocktakingDetailModal from './StocktakingDetailModal';
+import PreviousStocktakingsModal from './PreviousStocktakingsModal';
 
 interface Props {
   showNotification?: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
@@ -71,11 +73,42 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [printSession, setPrintSession] = useState<Stocktaking | null>(null);
   const [unitModalData, setUnitModalData] = useState<{ product: Product; item: StocktakingItem } | null>(null);
+  const [isPreviousModalOpen, setIsPreviousModalOpen] = useState(false);
+  const [viewingDetailSession, setViewingDetailSession] = useState<Stocktaking | null>(null);
+  const [listWarehouseFilter, setListWarehouseFilter] = useState<string>('all');
+  const [listStatusFilter, setListStatusFilter] = useState<'all' | 'applied' | 'in_progress'>('all');
 
   const toPersianDigits = (str: string | number | null | undefined) =>
     str === null || str === undefined
       ? '-'
       : str.toString().replace(/\d/g, x => ['۰', '۱', '۲', '۳', '۴', '۵', '۶', '۷', '۸', '۹'][parseInt(x)]);
+
+  // Map of most recent counts from past stocktakings for items in current warehouse
+  const previousCountsMap = useMemo(() => {
+    const map: Record<string, { count: number; date: string; sessionId: string; status: string }> = {};
+    if (!warehouseId || !stocktakings) return map;
+
+    const pastSessions = stocktakings
+      .filter(s => String(s.warehouseId) === String(warehouseId) && String(s.id) !== String(currentId))
+      .sort((a, b) => (b.date || '').localeCompare(a.date || ''));
+
+    for (const sess of pastSessions) {
+      if (!sess.items) continue;
+      for (const it of sess.items) {
+        const pId = String(it.productId);
+        if (!map[pId] && it.countedStock !== null && it.countedStock !== undefined) {
+          map[pId] = {
+            count: Number(it.countedStock),
+            date: sess.appliedDate || sess.date || '',
+            sessionId: String(sess.id),
+            status: sess.status || 'in_progress',
+          };
+        }
+      }
+    }
+
+    return map;
+  }, [warehouseId, stocktakings, currentId]);
 
   useEffect(() => {
     fetchData();
@@ -474,6 +507,78 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
     }
   };
 
+  // Auto-save session to guarantee a permanent ID in database before applying
+  const ensureSessionSaved = async (): Promise<Stocktaking> => {
+    let totalDeficit = 0;
+    let totalSurplus = 0;
+    const calculatedItems = items.map(it => {
+      const p = products.find(prod => String(prod.id) === String(it.productId));
+      const cost = Number(it.unitPrice || p?.purchasePrice || p?.price || 0);
+      const diff = Number(it.difference || 0);
+      const cValue = diff * cost;
+      if (it.countedStock !== null) {
+        if (cValue < 0) totalDeficit += Math.abs(cValue);
+        if (cValue > 0) totalSurplus += cValue;
+      }
+      return {
+        ...it,
+        unitPrice: cost,
+        costValue: cValue
+      };
+    });
+
+    const payload: Partial<Stocktaking> = {
+      date,
+      warehouseId,
+      status: (currentSession?.status === 'applied' ? 'applied' : 'in_progress') as any,
+      items: calculatedItems,
+      description,
+      verifierName,
+      counterName,
+      createdBy: currentUser,
+      totalDeficitValue: totalDeficit,
+      totalSurplusValue: totalSurplus,
+    };
+
+    if (viewState === 'create' || !currentId || currentId === 'پیش‌نویس') {
+      const added = await addStocktaking(payload as any);
+      setStocktakings(prev => [added, ...prev.filter(s => String(s.id) !== String(added.id))]);
+      setCurrentId(added.id);
+      return added;
+    } else {
+      const updated = await updateStocktaking(currentId, { ...payload, id: currentId });
+      setStocktakings(prev => prev.map(s => String(s.id) === String(currentId) ? updated : s));
+      return updated;
+    }
+  };
+
+  const handleOpenApplyModal = async () => {
+    if (!warehouseId) {
+      if (showNotification) showNotification('لطفاً ابتدا انبار را انتخاب کنید', 'error');
+      return;
+    }
+    if (stats.countedCount === 0) {
+      if (showNotification) showNotification('حداقل باید موجودی یک کالا را شمارش کنید', 'warning');
+      return;
+    }
+    // Enforce 2nd and 3rd counts for discrepancy items
+    if (stats.needsVerificationCount > 0) {
+      setShowDiscrepancyWarningModal(true);
+      return;
+    }
+
+    try {
+      setIsSaving(true);
+      const saved = await ensureSessionSaved();
+      setCurrentId(saved.id);
+      setIsApplyModalOpen(true);
+    } catch {
+      if (showNotification) showNotification('خطا در ثبت جلسه انبارگردانی قبل از اعمال', 'error');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   // Rollback applied session
   const handleRollbackSession = async (sessionId: string | number) => {
     const confirmRollback = window.confirm(
@@ -619,17 +724,33 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
     return { total, inProgress, applied, totalDeficitAll, totalSurplusAll };
   }, [stocktakings]);
 
-  // Session search filtered
+  // Session search and criteria filtered
   const filteredStocktakings = useMemo(() => {
-    if (!sessionSearch.trim()) return stocktakings;
-    const term = sessionSearch.toLowerCase();
-    return stocktakings.filter(s =>
-      String(s.id).includes(term) ||
-      s.date?.includes(term) ||
-      whMap[String(s.warehouseId)]?.toLowerCase().includes(term) ||
-      s.description?.toLowerCase().includes(term)
-    );
-  }, [stocktakings, sessionSearch, whMap]);
+    return stocktakings.filter(s => {
+      if (listWarehouseFilter !== 'all' && String(s.warehouseId) !== listWarehouseFilter) {
+        return false;
+      }
+      if (listStatusFilter === 'applied' && s.status !== 'applied') {
+        return false;
+      }
+      if (listStatusFilter === 'in_progress' && s.status === 'applied') {
+        return false;
+      }
+      if (sessionSearch.trim()) {
+        const term = sessionSearch.toLowerCase();
+        const matchesId = String(s.id).toLowerCase().includes(term);
+        const matchesDate = s.date?.toLowerCase().includes(term);
+        const matchesWh = whMap[String(s.warehouseId)]?.toLowerCase().includes(term);
+        const matchesDesc = s.description?.toLowerCase().includes(term);
+        const matchesCounter = s.counterName?.toLowerCase().includes(term);
+        const matchesVerifier = s.verifierName?.toLowerCase().includes(term);
+        if (!matchesId && !matchesDate && !matchesWh && !matchesDesc && !matchesCounter && !matchesVerifier) {
+          return false;
+        }
+      }
+      return true;
+    });
+  }, [stocktakings, sessionSearch, whMap, listWarehouseFilter, listStatusFilter]);
 
   if (isLoading) {
     return (
@@ -670,8 +791,18 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
           ) : (
             <div className="flex items-center gap-2">
               <button
+                type="button"
+                onClick={() => setIsPreviousModalOpen(true)}
+                className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                title="مشاهده و مقایسه انبارگردانی‌های دوره‌های گذشته"
+              >
+                <History className="w-4 h-4" />
+                <span>انبارگردانی‌های قبلی</span>
+              </button>
+
+              <button
                 onClick={() => setViewState('list')}
-                className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                className="px-4 py-2 border border-slate-200 text-slate-600 hover:bg-slate-50 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <ArrowLeft className="w-4 h-4" /> بازگشت به لیست
               </button>
@@ -694,7 +825,7 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
                   setPrintSession(targetSession);
                   setIsPrintModalOpen(true);
                 }}
-                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors"
+                className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
               >
                 <Printer className="w-4 h-4" /> چاپ کاربرگ / صورت‌جلسه
               </button>
@@ -753,21 +884,84 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
             </div>
           </div>
 
-          {/* Search bar */}
-          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between gap-4">
-            <div className="relative flex-1 max-w-md">
-              <Search className="w-4 h-4 absolute right-3.5 top-3 text-slate-400" />
-              <input
-                type="text"
-                value={sessionSearch}
-                onChange={(e) => setSessionSearch(e.target.value)}
-                placeholder="جستجو در جلسات انبارگردانی (کد، تاریخ، انبار)..."
-                className="w-full pr-10 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
-              />
+          {/* Filters & Search Toolbar */}
+          <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex flex-col md:flex-row items-center justify-between gap-3">
+            <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+              {/* Warehouse selector */}
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs font-bold text-slate-500 whitespace-nowrap">انبار:</span>
+                <select
+                  value={listWarehouseFilter}
+                  onChange={(e) => setListWarehouseFilter(e.target.value)}
+                  className="px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-indigo-500 font-bold text-slate-700"
+                >
+                  <option value="all">همه انبارها</option>
+                  {warehouses.map(w => (
+                    <option key={w.id} value={String(w.id)}>{w.name}</option>
+                  ))}
+                </select>
+              </div>
+
+              {/* Status tabs */}
+              <div className="flex items-center bg-slate-100 p-0.5 rounded-xl text-xs font-bold">
+                <button
+                  type="button"
+                  onClick={() => setListStatusFilter('all')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                    listStatusFilter === 'all'
+                      ? 'bg-white text-slate-800 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  همه ({toPersianDigits(listStats.total)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListStatusFilter('applied')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                    listStatusFilter === 'applied'
+                      ? 'bg-emerald-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  اعمال شده ({toPersianDigits(listStats.applied)})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setListStatusFilter('in_progress')}
+                  className={`px-3 py-1.5 rounded-lg transition-colors cursor-pointer ${
+                    listStatusFilter === 'in_progress'
+                      ? 'bg-amber-600 text-white shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  در حال شمارش ({toPersianDigits(listStats.inProgress)})
+                </button>
+              </div>
             </div>
-            <span className="text-xs text-slate-400 font-bold">
-              {toPersianDigits(filteredStocktakings.length)} جلسه ثبت شده
-            </span>
+
+            <div className="flex items-center gap-2 w-full md:w-auto">
+              <div className="relative flex-1 md:w-72">
+                <Search className="w-4 h-4 absolute right-3 top-2.5 text-slate-400" />
+                <input
+                  type="text"
+                  value={sessionSearch}
+                  onChange={(e) => setSessionSearch(e.target.value)}
+                  placeholder="جستجو بر اساس کد، تاریخ، انبار، ناظر..."
+                  className="w-full pr-9 pl-4 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none focus:bg-white focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setIsPreviousModalOpen(true)}
+                className="px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer"
+                title="مشاهده آرشیو انبارگردانی‌ها"
+              >
+                <History className="w-4 h-4" />
+                <span>سوابق دوره‌ها</span>
+              </button>
+            </div>
           </div>
 
           {/* Table of Sessions */}
@@ -882,19 +1076,31 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
                           <td className="p-3.5">
                             <div className="flex items-center justify-center gap-1">
                               <button
-                                onClick={() => handleViewOrEdit(st)}
-                                className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors"
-                                title={st.status === 'applied' ? 'مشاهده جزئیات' : 'ویرایش و ادامه شمارش'}
+                                type="button"
+                                onClick={() => setViewingDetailSession(st)}
+                                className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer"
+                                title="مشاهده جزئیات کامل و گزارش جلسه"
                               >
                                 <Eye className="w-4 h-4" />
                               </button>
+
+                              {st.status !== 'applied' && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleViewOrEdit(st)}
+                                  className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded-lg transition-colors cursor-pointer"
+                                  title="ویرایش و ادامه شمارش اقلام"
+                                >
+                                  <Box className="w-4 h-4" />
+                                </button>
+                              )}
 
                               <button
                                 onClick={() => {
                                   setPrintSession(st);
                                   setIsPrintModalOpen(true);
                                 }}
-                                className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors"
+                                className="p-1.5 text-slate-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
                                 title="چاپ صورت‌جلسه / کاربرگ"
                               >
                                 <Printer className="w-4 h-4" />
@@ -1383,6 +1589,16 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
                           </td>
                           <td className="p-2.5 font-bold text-slate-800 text-xs">
                             <div>{it.productName}</div>
+                            {previousCountsMap[String(it.productId)] && (
+                              <div className="mt-1 text-[10px] text-slate-500 flex items-center gap-1 font-normal bg-indigo-50/60 px-1.5 py-0.5 rounded-md border border-indigo-100/70 w-fit">
+                                <History className="w-2.5 h-2.5 text-indigo-600 shrink-0" />
+                                <span>شمارش قبلی:</span>
+                                <span className="font-bold font-mono text-indigo-700">
+                                  {toPersianDigits(previousCountsMap[String(it.productId)].count)}
+                                </span>
+                                <span className="text-slate-400">({toPersianDigits(previousCountsMap[String(it.productId)].date)})</span>
+                              </div>
+                            )}
                             {hasSecUnit && !isSessionApplied && p && (
                               <button
                                 type="button"
@@ -1642,25 +1858,11 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
 
                 {!isSessionApplied ? (
                   <button
-                    onClick={() => {
-                      if (!warehouseId) {
-                        if (showNotification) showNotification('لطفاً ابتدا انبار را انتخاب کنید', 'error');
-                        return;
-                      }
-                      if (stats.countedCount === 0) {
-                        if (showNotification) showNotification('حداقل باید موجودی یک کالا را شمارش کنید', 'warning');
-                        return;
-                      }
-                      // Enforce 2nd and 3rd counts for discrepancy items
-                      if (stats.needsVerificationCount > 0) {
-                        setShowDiscrepancyWarningModal(true);
-                        return;
-                      }
-                      setIsApplyModalOpen(true);
-                    }}
-                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all"
+                    onClick={handleOpenApplyModal}
+                    disabled={isSaving}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm transition-all cursor-pointer disabled:opacity-50"
                   >
-                    <Handshake className="w-4 h-4" />
+                    {isSaving ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Handshake className="w-4 h-4" />}
                     <span>بررسی و اعمال نهایی انبارگردانی</span>
                   </button>
                 ) : (
@@ -1748,11 +1950,20 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   setShowDiscrepancyWarningModal(false);
-                  setIsApplyModalOpen(true);
+                  try {
+                    setIsSaving(true);
+                    const saved = await ensureSessionSaved();
+                    setCurrentId(saved.id);
+                    setIsApplyModalOpen(true);
+                  } catch {
+                    if (showNotification) showNotification('خطا در ثبت جلسه انبارگردانی قبل از اعمال', 'error');
+                  } finally {
+                    setIsSaving(false);
+                  }
                 }}
-                className="w-full sm:w-auto px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-colors"
+                className="w-full sm:w-auto px-4 py-2.5 bg-white border border-slate-300 hover:bg-slate-100 text-slate-700 text-xs font-bold rounded-xl transition-colors cursor-pointer"
               >
                 <span>ادامه اعمال با مقادیر فعلی</span>
               </button>
@@ -1780,6 +1991,12 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
           warehouse={warehouses.find(w => String(w.id) === String(warehouseId))}
           currentUser={currentUser}
           onSuccess={async (appliedSession) => {
+            if (appliedSession) {
+              setStocktakings(prev => {
+                const filtered = prev.filter(s => String(s.id) !== String(appliedSession.id));
+                return [appliedSession, ...filtered];
+              });
+            }
             await fetchData();
             setViewState('list');
             if (showNotification) showNotification('انبارگردانی با موفقیت اعمال و اسناد رسید/حواله صادر گردید.', 'success');
@@ -1814,6 +2031,46 @@ export default function StocktakingManager({ showNotification, currentUser = 'م
           products={products}
           warehouse={warehouses.find(w => String(w.id) === String(printSession.warehouseId))}
           companySettings={companySettings}
+        />
+      )}
+
+      {/* Detail Modal for Past Sessions */}
+      {viewingDetailSession && (
+        <StocktakingDetailModal
+          isOpen={Boolean(viewingDetailSession)}
+          onClose={() => setViewingDetailSession(null)}
+          session={viewingDetailSession}
+          products={products}
+          warehouses={warehouses}
+          companySettings={companySettings}
+          onOpenPrint={(sess) => {
+            setPrintSession(sess);
+            setIsPrintModalOpen(true);
+          }}
+          onEditSession={(sess) => {
+            setViewingDetailSession(null);
+            handleViewOrEdit(sess);
+          }}
+        />
+      )}
+
+      {/* Previous Stocktakings Modal */}
+      {isPreviousModalOpen && (
+        <PreviousStocktakingsModal
+          isOpen={isPreviousModalOpen}
+          onClose={() => setIsPreviousModalOpen(false)}
+          stocktakings={stocktakings}
+          currentWarehouseId={warehouseId}
+          products={products}
+          warehouses={warehouses}
+          companySettings={companySettings}
+          onOpenPrint={(sess) => {
+            setPrintSession(sess);
+            setIsPrintModalOpen(true);
+          }}
+          onSelectSessionToView={(sess) => {
+            setViewingDetailSession(sess);
+          }}
         />
       )}
 

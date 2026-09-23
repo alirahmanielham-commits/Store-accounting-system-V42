@@ -84,17 +84,19 @@ export const addStocktaking = async (st: any) => {
   if (st.date) activeYear = await checkFinancialYear(st.date);
   const stocktakings = await getStocktakings();
   
-  let newId;
-  let isUnique = false;
-  while (!isUnique) {
-    newId = Math.floor(10000 + Math.random() * 90000).toString();
-    if (!stocktakings.find(s => String(s.id) === newId)) {
-      isUnique = true;
+  let newId = st.id && st.id !== 'پیش‌نویس' && !stocktakings.find(s => String(s.id) === String(st.id)) ? String(st.id) : '';
+  if (!newId) {
+    let isUnique = false;
+    while (!isUnique) {
+      newId = Math.floor(10000 + Math.random() * 90000).toString();
+      if (!stocktakings.find(s => String(s.id) === newId)) {
+        isUnique = true;
+      }
     }
   }
 
   const added = { ...st, id: newId, fiscalYearId: activeYear ? activeYear.id : undefined };
-  stocktakings.push(added);
+  stocktakings.unshift(added);
   await saveStocktakings(stocktakings);
   return added;
 };
@@ -103,14 +105,22 @@ export const updateStocktaking = async (id: string | number, updatedSt: any) => 
   let activeYear = null;
   if (updatedSt.date) activeYear = await checkFinancialYear(updatedSt.date);
   const stocktakings = await getStocktakings();
-  const idx = stocktakings.findIndex(s => s.id?.toString() === id?.toString());
+  const targetIdStr = id ? String(id) : '';
+  const idx = stocktakings.findIndex(s => s.id?.toString() === targetIdStr);
+
   if (idx > -1) {
     if (activeYear) updatedSt.fiscalYearId = activeYear.id;
-    stocktakings[idx] = updatedSt;
+    stocktakings[idx] = { ...stocktakings[idx], ...updatedSt, id: stocktakings[idx].id };
     await saveStocktakings(stocktakings);
-    return updatedSt;
+    return stocktakings[idx];
+  } else {
+    // If record did not exist yet, auto-persist it so it is NEVER lost!
+    const validId = (targetIdStr && targetIdStr !== 'پیش‌نویس') ? targetIdStr : Math.floor(10000 + Math.random() * 90000).toString();
+    const finalSt = { ...updatedSt, id: validId, fiscalYearId: activeYear ? activeYear.id : undefined };
+    stocktakings.unshift(finalSt);
+    await saveStocktakings(stocktakings);
+    return finalSt;
   }
-  return null;
 };
 
 export const deleteStocktaking = async (id: string | number) => {
@@ -203,6 +213,27 @@ export const applyStocktakingSession = async (
     throw new Error('حداقل باید موجودی یک کالا شمارش شده باشد');
   }
 
+  // --- Ensure the session is registered in the stocktakings database before applying ---
+  const allStocktakings = await getStocktakings();
+  let existingSession = (session.id && session.id !== 'پیش‌نویس')
+    ? allStocktakings.find(s => String(s.id) === String(session.id))
+    : null;
+
+  let activeSession: Stocktaking;
+  if (existingSession) {
+    activeSession = { ...existingSession, ...session };
+  } else {
+    // Auto-register session in database if it wasn't saved yet so it gets a permanent ID and is never lost
+    const saved = await addStocktaking({
+      ...session,
+      status: 'in_progress',
+      createdBy: session.createdBy || currentUser,
+    });
+    activeSession = saved;
+  }
+
+  const sessionId = activeSession.id;
+
   const products = await getProducts();
   const currentStocks = await getWarehouseStocks();
 
@@ -287,13 +318,13 @@ export const applyStocktakingSession = async (
       type: 'warehouse_receipt',
       warehouseId: session.warehouseId,
       operationType: 'stocktaking_surplus',
-      sourceInvoiceId: session.id,
+      sourceInvoiceId: sessionId,
       invoiceNumber: receiptNumber,
       date: docDate,
       invoiceTitle: 'ثبت انبار گردانی',
       title: 'ثبت انبار گردانی',
-      invoiceDescription: `ثبت انبار گردانی (رسید ورود مازاد) - جلسه شماره ${session.id}`,
-      description: `ثبت انبار گردانی (رسید ورود مازاد) - جلسه شماره ${session.id}`,
+      invoiceDescription: `ثبت انبار گردانی (رسید ورود مازاد) - جلسه شماره ${sessionId}`,
+      description: `ثبت انبار گردانی (رسید ورود مازاد) - جلسه شماره ${sessionId}`,
       items: receiptItems,
       totalAmount: totalSurplus,
       status: 'final',
@@ -338,13 +369,13 @@ export const applyStocktakingSession = async (
       type: 'warehouse_remittance',
       warehouseId: session.warehouseId,
       operationType: 'stocktaking_deficit',
-      sourceInvoiceId: session.id,
+      sourceInvoiceId: sessionId,
       invoiceNumber: remittanceNumber,
       date: docDate,
       invoiceTitle: 'ثبت انبار گردانی',
       title: 'ثبت انبار گردانی',
-      invoiceDescription: `ثبت انبار گردانی (حواله خروج کسری) - جلسه شماره ${session.id}`,
-      description: `ثبت انبار گردانی (حواله خروج کسری) - جلسه شماره ${session.id}`,
+      invoiceDescription: `ثبت انبار گردانی (حواله خروج کسری) - جلسه شماره ${sessionId}`,
+      description: `ثبت انبار گردانی (حواله خروج کسری) - جلسه شماره ${sessionId}`,
       items: remittanceItems,
       totalAmount: totalDeficit,
       status: 'final',
@@ -393,14 +424,14 @@ export const applyStocktakingSession = async (
         journalItems.push({
           id: generateId(),
           ledgerAccountId: diffAccount.id,
-          description: `کسری انبارگردانی جلسه ${session.id}`,
+          description: `کسری انبارگردانی جلسه ${sessionId}`,
           debit: totalDeficitVal,
           credit: 0,
         });
         journalItems.push({
           id: generateId(),
           ledgerAccountId: invAccount.id,
-          description: `بستانکار شدن موجودی کالا بابت کسری انبارگردانی جلسه ${session.id}`,
+          description: `بستانکار شدن موجودی کالا بابت کسری انبارگردانی جلسه ${sessionId}`,
           debit: 0,
           credit: totalDeficitVal,
         });
@@ -410,14 +441,14 @@ export const applyStocktakingSession = async (
         journalItems.push({
           id: generateId(),
           ledgerAccountId: invAccount.id,
-          description: `بدهکار شدن موجودی کالا بابت اضافه انبارگردانی جلسه ${session.id}`,
+          description: `بدهکار شدن موجودی کالا بابت اضافه انبارگردانی جلسه ${sessionId}`,
           debit: totalSurplusVal,
           credit: 0,
         });
         journalItems.push({
           id: generateId(),
           ledgerAccountId: diffAccount.id,
-          description: `اضافه انبارگردانی جلسه ${session.id}`,
+          description: `اضافه انبارگردانی جلسه ${sessionId}`,
           debit: 0,
           credit: totalSurplusVal,
         });
@@ -428,10 +459,10 @@ export const applyStocktakingSession = async (
         const accountingDoc = await addAccountingDocument({
           documentNumber: docNumber,
           date: docDate,
-          description: `سند حسابداری تعدیل انبارگردانی جلسه شماره ${session.id}`,
+          description: `سند حسابداری تعدیل انبارگردانی جلسه شماره ${sessionId}`,
           status: 'approved',
           sourceType: 'stocktaking',
-          sourceId: session.id,
+          sourceId: sessionId,
           items: journalItems,
           createdBy: currentUser,
         });
@@ -451,7 +482,7 @@ export const applyStocktakingSession = async (
 
   // 5. Update session in database
   const updatedSession: Stocktaking = {
-    ...session,
+    ...activeSession,
     status: 'applied',
     appliedDate: new Date().toLocaleDateString('fa-IR'),
     receiptId: createdReceipt?.id,
@@ -464,10 +495,10 @@ export const applyStocktakingSession = async (
     totalSurplusValue: totalSurplusVal,
   };
 
-  await updateStocktaking(session.id, updatedSession);
+  const finalSaved = await updateStocktaking(sessionId, updatedSession);
 
   return {
-    session: updatedSession,
+    session: finalSaved || updatedSession,
     receipt: createdReceipt,
     remittance: createdRemittance,
     accountingDocId,
