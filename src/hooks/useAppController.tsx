@@ -43,6 +43,7 @@ import CalculatorModal from "../components/modals/CalculatorModal";
 import SaleReturnInvoiceCreate from '../components/invoices/SaleReturnInvoiceCreate';
 import PurchaseInvoiceCreate from '../components/invoices/PurchaseInvoiceCreate';
 import PurchaseReturnInvoiceCreate from '../components/invoices/PurchaseReturnInvoiceCreate';
+import SalesReport from '../components/reports/SalesReport';
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../utils/unitConversion";
 import Barcode from "react-barcode";
 import {
@@ -6839,6 +6840,18 @@ const renderTabContent = () => {
       case "create_sale":
         return (
           <SaleInvoiceCreate invoiceDueDate={invoiceDueDate} setInvoiceDueDate={setInvoiceDueDate} setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Plus={Plus} Trash2={Trash2} CheckCircle={CheckCircle} History={History} Save={Save} ShoppingCart={ShoppingCart} RefreshCw={RefreshCw} FileText={FileText} Info={Info} Tag={Tag} invoiceType={invoiceType} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} calculateProductCurrentStock={calculateProductCurrentStock} formatProductStockDetails={formatProductStockDetails} activeTab={activeTab} calculateSubtotal={calculateSubtotal} getProductStockInfo={getProductStockInfo} invoices={invoices} customAlert={customAlert} />
+        );
+
+      case "sales_report":
+        return (
+          <SalesReport
+            showNotification={showNotification}
+            toPersianDigits={toPersianDigits}
+            formatCurrency={formatCurrency}
+            formatDateDisplay={formatDateDisplay}
+            setViewingInvoice={setViewingInvoice}
+            setActiveTab={setActiveTab}
+          />
         );
 
       case "list_sale":

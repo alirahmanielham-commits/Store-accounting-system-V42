@@ -335,6 +335,7 @@ const CRMDashboard = React.lazy(() => import('./components/crm/CRMDashboard'));
 const SystemDiagnostics = React.lazy(() => import('./components/admin/SystemDiagnostics'));
 const SystemInfo = React.lazy(() => import('./components/admin/SystemInfo'));
 const StocktakingManager = React.lazy(() => import('./components/inventory/StocktakingManager'));
+const SalesReport = React.lazy(() => import('./components/reports/SalesReport'));
 const AnalyticalDashboard = React.lazy(() => import('./components/reports/AnalyticalDashboard'));
 const FinancialDashboard = React.lazy(() => import('./components/reports/FinancialDashboard'));
 const AccountLedgerReport = React.lazy(() => import('./components/accounting/AccountLedgerReport'));
@@ -1095,6 +1096,7 @@ export default function App() {
                         toPersianDigits={toPersianDigits} />} />
 <Route path="/kardex" element={<KardexReport />} />
 <Route path="/crm_dashboard" element={<CRMDashboard persons={persons} showNotification={showNotification} confirmAction={confirmAction} />} />
+<Route path="/sales_report" element={<SalesReport showNotification={showNotification} toPersianDigits={toPersianDigits} formatCurrency={formatCurrency} formatDateDisplay={formatDateDisplay} setViewingInvoice={setViewingInvoice} setActiveTab={setActiveTab} />} />
 <Route path="/analytical_dashboard" element={<AnalyticalDashboard showNotification={showNotification} />} />
 <Route path="/send_message" element={<SendMessageView showNotification={showNotification} persons={persons} personGroups={personGroups} />} />
 <Route path="/messaging_channels" element={<MessagingChannelsView showNotification={showNotification} />} />

@@ -924,18 +924,33 @@ export const syncCheckAccountingDocument = async (checkType: 'issued' | 'receive
 
     let bankName = 'نامشخص';
     let bankLedgerId = defaultLedger;
-    let bankAccountId = check.bankAccountId || check.accountId;
+    let bankAccountId = check.bankAccountId || check.accountId || check.depositAccountId;
     if (checkType === 'issued' && check.checkbookId) {
       const checkbooks = await getLocalData<any[]>('checkbooks', []);
       const cb = checkbooks.find(c => String(c.id) === String(check.checkbookId));
       if (cb && cb.accountId) {
         bankAccountId = cb.accountId;
-        const accs = await getLocalData<any[]>('accounts', []);
-        const acc = accs.find(a => String(a.id) === String(cb.accountId));
-        if (acc) {
-           bankName = acc.bankName;
+      }
+    }
+
+    if (bankAccountId) {
+      const accs = await getLocalData<any[]>('accounts', []);
+      const acc = accs.find(a => String(a.id) === String(bankAccountId));
+      if (acc) {
+        bankName = acc.bankName || acc.title || acc.name || 'بانک';
+        if (acc.accountingCode) {
+          const ledgerAcc = ledgerAccounts.find(l => l.code === acc.accountingCode);
+          if (ledgerAcc) bankLedgerId = ledgerAcc.id;
+          else {
+            bankLedgerId = await getAccountForCode(acc.accountingCode, `حساب بانکی ${bankName}`, '11', 'debit');
+          }
         }
       }
+    }
+
+    if (!bankLedgerId || bankLedgerId === defaultLedger) {
+      const bankSubsidiary = await getAccountForCode('1102', 'موجودی نزد بانک‌ها', '11', 'debit');
+      if (bankSubsidiary) bankLedgerId = bankSubsidiary;
     }
 
     const checkBank = check.bankName || check.checkBankName || bankName || 'نامشخص';

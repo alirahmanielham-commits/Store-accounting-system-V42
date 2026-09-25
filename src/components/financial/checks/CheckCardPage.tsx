@@ -13,7 +13,7 @@ import {
 } from "../../../services/dataService";
 import { getUsers } from "../../../services/userService";
 import { formatDateDisplay } from "../../../utils/format";
-import { syncCheckAccountingDocument } from "../../../services/accountingService";
+import { syncCheckAccountingDocument, getAccountingDocuments } from "../../../services/accountingService";
 import Num2persian from "num2persian";
 
 export default function CheckCardPage({
@@ -41,6 +41,7 @@ export default function CheckCardPage({
   const [checkbooks, setCheckbooks] = useState<any[]>([]);
   const [accounts, setAccounts] = useState<any[]>([]);
   const [users, setUsers] = useState<any[]>([]);
+  const [accountingDocs, setAccountingDocs] = useState<any[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'info' | 'history' | 'actions'>('info');
@@ -50,6 +51,15 @@ export default function CheckCardPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+
+  const [statusModalData, setStatusModalData] = useState<{
+    isOpen: boolean;
+    targetState: string;
+    bankAccountId: string;
+    assignedPersonId: string;
+    description: string;
+    date: string;
+  } | null>(null);
 
   const [confirmModalData, setConfirmModalData] = useState<{isOpen: boolean, title: string, message: string, onConfirm: () => void} | null>(null);
 
@@ -122,7 +132,9 @@ export default function CheckCardPage({
     'returned': 'bg-slate-200 text-slate-800 border-slate-300',
   };
 
-  const financialEffectStates = ['cashed', 'in_clearing', 'bounced', 'assigned'];
+  const financialEffectStates = [
+    'cashed', 'in_clearing', 'deposited', 'bounced', 'assigned', 'bounced_assigned', 'returned'
+  ];
 
   useEffect(() => {
     loadData();
@@ -136,13 +148,14 @@ export default function CheckCardPage({
       const found = data.find((c: any) => String(c.id) === String(currentCheckId));
       setCheck(found);
       
-      const [ps, hst, trs, cbs, accs, usrs] = await Promise.all([
+      const [ps, hst, trs, cbs, accs, usrs, acDocs] = await Promise.all([
         getPersons(),
         getCheckHistoryLogs(currentCheckId, checkType, found),
         getTransactions(),
         getCheckbooks(),
         getAccounts(),
-        getUsers()
+        getUsers(),
+        getAccountingDocuments().catch(() => [])
       ]);
       setPersons(ps || []);
       setHistory((hst || []).sort((a:any, b:any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()));
@@ -150,6 +163,7 @@ export default function CheckCardPage({
       setCheckbooks(cbs || []);
       setAccounts(accs || []);
       setUsers(usrs || []);
+      setAccountingDocs(Array.isArray(acDocs) ? acDocs.filter((d: any) => !d.isDeleted) : []);
     } catch (error) {
       console.error(error);
       showNotification('خطا در دریافت اطلاعات چک', 'error');
@@ -210,87 +224,160 @@ export default function CheckCardPage({
     setSaving(false);
   };
 
-  const handleStateChange = async (newState: string) => {
+  const openStatusModal = (targetState: string) => {
     if (!check) return;
-    if (!confirm(`آیا از تغییر وضعیت این چک به "${stateLabels[newState]}" اطمینان دارید؟`)) return;
-    
+    const defaultBank = check.bankAccountId || check.depositAccountId || (accounts && accounts[0]?.id) || '';
+    const defaultPerson = check.assignedToId || (persons && persons[0]?.id) || '';
+    let defaultDesc = '';
+    if (targetState === 'deposited') {
+      defaultDesc = `واگذاری چک دریافتی شماره ${check.checkNumber} به بانک جهت وصول`;
+    } else if (targetState === 'cashed') {
+      defaultDesc = checkType === 'issued'
+        ? `وصول چک صادره شماره ${check.checkNumber} و کسر از حساب بانک`
+        : `وصول و واریز وجه چک دریافتی شماره ${check.checkNumber} به حساب بانک`;
+    } else if (targetState === 'assigned') {
+      defaultDesc = `خرج و واگذاری چک دریافتی شماره ${check.checkNumber}`;
+    } else if (targetState === 'bounced') {
+      defaultDesc = `برگشت چک شماره ${check.checkNumber} به علت عدم موجودی / نقص مدارک`;
+    } else if (targetState === 'bounced_assigned') {
+      defaultDesc = `برگشت چک خرج شده شماره ${check.checkNumber}`;
+    } else if (targetState === 'returned') {
+      defaultDesc = `عودت لاشه چک شماره ${check.checkNumber} به صاحب چک`;
+    } else {
+      defaultDesc = `تغییر وضعیت چک شماره ${check.checkNumber} به ${stateLabels[targetState] || targetState}`;
+    }
+
+    setStatusModalData({
+      isOpen: true,
+      targetState,
+      bankAccountId: defaultBank,
+      assignedPersonId: defaultPerson,
+      description: defaultDesc,
+      date: new Date().toISOString().split('T')[0]
+    });
+  };
+
+  const handleExecuteStatusChange = async () => {
+    if (!check || !statusModalData) return;
+    const { targetState, bankAccountId, assignedPersonId, description, date } = statusModalData;
+
+    if (targetState === 'deposited' && !bankAccountId) {
+      showNotification('لطفاً حساب بانکی مقصد جهت خواباندن چک را انتخاب کنید', 'error');
+      return;
+    }
+    if (targetState === 'cashed' && checkType === 'received' && !bankAccountId) {
+      showNotification('لطفاً حساب بانکی واریزی جهت وصول وجه چک را انتخاب کنید', 'error');
+      return;
+    }
+    if (targetState === 'assigned' && !assignedPersonId) {
+      showNotification('لطفاً شخص تحویل‌گیرنده چک را انتخاب کنید', 'error');
+      return;
+    }
+
     setSaving(true);
     try {
       const oldState = check.status;
-      
       let newTx: any = null;
-      if (newState === 'cashed' && oldState !== 'cashed') {
-        const bankAccId = check.bankAccountId || check.accountId || accounts[0]?.id;
-        if (bankAccId) {
+
+      if (targetState === 'cashed' && oldState !== 'cashed') {
+        const chosenBankId = bankAccountId || check.bankAccountId || check.accountId || accounts[0]?.id;
+        if (chosenBankId) {
           try {
             newTx = await addTransaction({
               type: checkType === 'issued' ? 'pay' : 'receive',
               resourceType: 'bank',
-              resourceId: bankAccId,
+              resourceId: chosenBankId,
               amount: check.amount,
               isCheckCashing: true,
-              personId: check.payeeId || check.payerId,
+              personId: checkType === 'issued' ? check.payeeId : check.payerId,
               checkId: check.id,
-              date: new Date().toISOString(),
+              date: date || new Date().toISOString(),
               method: 'check',
               receiptNumber: check.receiptNumber || check.checkNumber,
               checkNumber: check.checkNumber,
-              description: checkType === 'issued'
+              description: description || (checkType === 'issued'
                 ? `تسویه و پاس شدن برگه چک صادره شماره ${check.checkNumber}`
-                : `وصول و نقد شدن چک دریافتی شماره ${check.checkNumber}`
+                : `وصول و نقد شدن چک دریافتی شماره ${check.checkNumber}`)
             });
           } catch (txErr) {
             console.error('Error creating transaction for cashed check:', txErr);
           }
         }
-      } else if (oldState === 'cashed' && newState !== 'cashed') {
+      } else if (oldState === 'cashed' && targetState !== 'cashed') {
         try {
-          await rollbackCashedTransaction(check.checkNumber, checkType === 'issued' ? check.payeeId : check.payerId, checkType === 'issued' ? 'issued' : 'receive');
+          await rollbackCashedTransaction(
+            check.checkNumber,
+            checkType === 'issued' ? check.payeeId : check.payerId,
+            checkType === 'issued' ? 'issued' : 'receive'
+          );
         } catch (rbErr) {
           console.warn('Error rolling back cashed transaction:', rbErr);
         }
       }
 
-      let updatedCheck = { 
-        ...check, 
-        status: newState,
-        transactionId: newTx ? newTx.id : (newState !== 'cashed' && oldState === 'cashed' ? null : check.transactionId),
+      let updatedCheck = {
+        ...check,
+        status: targetState,
+        bankAccountId: bankAccountId || check.bankAccountId,
+        depositAccountId: bankAccountId || check.depositAccountId,
+        assignedToId: assignedPersonId || check.assignedToId,
+        clearanceDate: targetState === 'cashed' ? (date || new Date().toISOString()) : check.clearanceDate,
+        transactionId: newTx ? newTx.id : (targetState !== 'cashed' && oldState === 'cashed' ? null : check.transactionId),
         receiptNumber: newTx?.receiptNumber || check.receiptNumber || check.checkNumber
       };
-      
+
       if (checkType === 'issued') {
         await updateIssuedCheck(check.id, updatedCheck);
       } else {
         await updateReceivedCheck(check.id, updatedCheck);
       }
-      
+
       try {
         await addCheckHistoryLog({
           checkId: check.id,
           checkType: checkType,
           oldStatus: oldState,
-          newStatus: newState,
+          newStatus: targetState,
           userId: currentUser,
           transactionId: updatedCheck.transactionId,
           receiptNumber: updatedCheck.receiptNumber,
-          description: `تغییر وضعیت به ${stateLabels[newState] || newState}`
+          description: description || `تغییر وضعیت به ${stateLabels[targetState] || targetState}`
         });
       } catch (logErr) {
         console.warn('History log warning:', logErr);
       }
-      
-      if (financialEffectStates.includes(newState)) {
-        await syncCheckAccountingDocument(checkType, updatedCheck);
-        showNotification('سند حسابداری مربوط به این وضعیت به صورت خودکار صادر/بروزرسانی شد', 'success');
+
+      if (financialEffectStates.includes(targetState)) {
+        await syncCheckAccountingDocument(checkType, updatedCheck, check);
+        showNotification('وضعیت چک و سند حسابداری مربوطه با موفقیت ثبت گردید', 'success');
+      } else {
+        showNotification('وضعیت چک با موفقیت تغییر یافت', 'success');
       }
-      
-      showNotification('وضعیت چک با موفقیت تغییر یافت', 'success');
-      loadData();
+
+      setStatusModalData(null);
+      await loadData();
     } catch (e: any) {
       console.error(e);
-      showNotification(e.message || 'خطا در ثبت وضعیت', 'error');
+      showNotification(e.message || 'خطا در ثبت وضعیت چک', 'error');
     }
     setSaving(false);
+  };
+
+  const handleForceSyncAccounting = async () => {
+    if (!check) return;
+    setSaving(true);
+    try {
+      await syncCheckAccountingDocument(checkType, check);
+      showNotification('سند حسابداری با موفقیت بررسی و همگام‌سازی شد', 'success');
+      await loadData();
+    } catch (e: any) {
+      showNotification('خطا در همگام‌سازی سند حسابداری', 'error');
+    }
+    setSaving(false);
+  };
+
+  const handleStateChange = async (newState: string) => {
+    openStatusModal(newState);
   };
 
   if (loading) {
@@ -423,16 +510,41 @@ export default function CheckCardPage({
     return null;
   };
 
+  const linkedDocs = useMemo(() => {
+    if (!check) return [];
+    return (accountingDocs || []).filter((d: any) => {
+      if (d.isDeleted) return false;
+      const sId = String(d.sourceId || '');
+      const cId = String(check.id);
+      return (
+        sId === cId ||
+        sId.startsWith(`${cId}_`) ||
+        (d.sourceType === `check_${checkType}_init` && sId === cId) ||
+        (d.sourceType === `check_${checkType}_status` && sId.startsWith(`${cId}_`))
+      );
+    });
+  }, [accountingDocs, check, checkType]);
+
   const lastStatusChangeLog = history.find(l => l.oldStatus && l.newStatus === check.status);
   const previousStatus = lastStatusChangeLog ? lastStatusChangeLog.oldStatus : getStaticPreviousStatus(currentStatus, checkType);
   const handleRevert = async () => {
     if (!previousStatus) return;
-    if (!confirm('آیا از بازگرداندن چک به وضعیت قبلی اطمینان دارید؟ در صورت وجود سند حسابداری، باید آن را به صورت دستی اصلاح یا لغو کنید.')) return;
+    if (!confirm(`آیا از بازگرداندن چک به وضعیت قبلی (${stateLabels[previousStatus] || previousStatus}) اطمینان دارید؟`)) return;
     
     setSaving(true);
     try {
       const oldState = check.status;
       let updatedCheck = { ...check, status: previousStatus };
+      if (oldState === 'cashed') {
+        try {
+          await rollbackCashedTransaction(
+            check.checkNumber,
+            checkType === 'issued' ? check.payeeId : check.payerId,
+            checkType === 'issued' ? 'issued' : 'receive'
+          );
+          updatedCheck.transactionId = null;
+        } catch (_) {}
+      }
       
       if (checkType === 'issued') {
         await updateIssuedCheck(check.id, updatedCheck);
@@ -447,10 +559,10 @@ export default function CheckCardPage({
         newStatus: previousStatus,
         description: 'بازگردانی به وضعیت قبل',
         userId: currentUser,
-        
       });
-      
-      showNotification('وضعیت چک با موفقیت به حالت قبل بازگردانده شد', 'success');
+
+      await syncCheckAccountingDocument(checkType, updatedCheck, check);
+      showNotification('وضعیت چک و سند حسابداری مربوطه با موفقیت به حالت قبل بازگردانده شد', 'success');
       loadData();
     } catch (e: any) {
       console.error(e);
@@ -649,6 +761,85 @@ export default function CheckCardPage({
                 )}
               </div>
 
+              {/* Linked Accounting Documents Card */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+                <div className="bg-slate-100/50 p-4 border-b border-slate-200 flex items-center justify-between">
+                  <h3 className="font-bold text-slate-800 flex items-center gap-2">
+                    <FileText className="w-5 h-5 text-indigo-500"/> اسناد حسابداری مرتبط با این پرونده
+                  </h3>
+                  <button
+                    type="button"
+                    onClick={handleForceSyncAccounting}
+                    disabled={saving}
+                    className="text-xs bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-3 py-1.5 rounded-lg font-bold border border-indigo-200 flex items-center gap-1.5 transition-colors"
+                  >
+                    <RefreshCw className="w-3.5 h-3.5" /> بروزرسانی و صدور مجدد سند
+                  </button>
+                </div>
+                <div className="p-6">
+                  {linkedDocs.length > 0 ? (
+                    <div className="space-y-3">
+                      {linkedDocs.map((doc: any, dIdx: number) => {
+                        const totalDebit = (doc.items || []).reduce((acc: number, it: any) => acc + (Number(it.debit) || 0), 0);
+                        const isInit = doc.sourceType?.includes('_init');
+                        return (
+                          <div key={doc.id || dIdx} className="bg-slate-50 hover:bg-slate-100/80 p-4 rounded-xl border border-slate-200 flex flex-col md:flex-row md:items-center justify-between gap-4 transition-colors">
+                            <div className="flex items-start gap-3">
+                              <div className={`p-2.5 rounded-xl ${isInit ? 'bg-sky-100 text-sky-700' : 'bg-emerald-100 text-emerald-700'} shrink-0 mt-0.5`}>
+                                <FileText className="w-5 h-5" />
+                              </div>
+                              <div>
+                                <div className="flex items-center gap-2 mb-1">
+                                  <span className="font-black text-slate-800 text-sm">
+                                    سند حسابداری {doc.docNumber ? `#${doc.docNumber}` : doc.id}
+                                  </span>
+                                  <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${isInit ? 'bg-sky-100 text-sky-800' : 'bg-emerald-100 text-emerald-800'}`}>
+                                    {isInit ? 'ثبت اولیه چک' : 'سند تغییر وضعیت'}
+                                  </span>
+                                </div>
+                                <p className="text-xs text-slate-600 line-clamp-2 leading-relaxed">
+                                  {doc.description || 'ثبت سند حسابداری خودکار چک'}
+                                </p>
+                                <div className="flex items-center gap-4 mt-2 text-xs text-slate-500">
+                                  <span>تاریخ: <strong className="text-slate-700 font-sans">{formatDateDisplay(doc.date, storeSettings?.calendarType)}</strong></span>
+                                  <span>مبلغ سند: <strong className="text-slate-800 font-mono font-bold">{Number(totalDebit).toLocaleString('fa-IR')}</strong> {storeSettings?.currency || 'تومان'}</span>
+                                  <span className="text-emerald-600 font-bold bg-emerald-50 px-2 py-0.5 rounded">تراز شده ✓</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {onViewAccountingDoc && (
+                              <button
+                                type="button"
+                                onClick={() => onViewAccountingDoc(doc)}
+                                className="px-4 py-2 bg-white hover:bg-indigo-50 text-indigo-700 border border-slate-200 hover:border-indigo-300 rounded-xl text-xs font-bold flex items-center justify-center gap-1.5 shadow-2xs transition-colors shrink-0"
+                              >
+                                <ExternalLink className="w-4 h-4 text-indigo-500" />
+                                مشاهده سند کامل
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  ) : (
+                    <div className="text-center py-6 bg-slate-50/50 rounded-xl border border-dashed border-slate-200">
+                      <FileText className="w-8 h-8 text-slate-300 mx-auto mb-2" />
+                      <p className="text-slate-500 text-sm font-medium">سند حسابداری برای وضعیت فعلی چک در حال حاضر ثبت نشده است.</p>
+                      <button
+                        type="button"
+                        onClick={handleForceSyncAccounting}
+                        disabled={saving}
+                        className="mt-3 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold inline-flex items-center gap-1.5 transition-colors shadow-sm"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" />
+                        صدور خودکار سند حسابداری هم‌اکنون
+                      </button>
+                    </div>
+                  )}
+                </div>
+              </div>
+
             </div>
           )}
 
@@ -825,6 +1016,167 @@ export default function CheckCardPage({
 
         </div>
       </div>
+
+      {/* STATUS CHANGE MODAL */}
+      <AnimatePresence>
+      {statusModalData?.isOpen && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">
+          <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, scale: 0.95 }} className="bg-white rounded-3xl shadow-2xl border border-slate-200 p-6 md:p-8 max-w-lg w-full max-h-[90vh] overflow-y-auto" dir="rtl">
+            <div className="flex items-center justify-between pb-4 border-b border-slate-100 mb-6">
+              <div className="flex items-center gap-3">
+                <div className={`p-2.5 rounded-2xl ${stateColors[statusModalData.targetState]}`}>
+                  <RefreshCw className="w-6 h-6" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-800">
+                    تغییر وضعیت به "{stateLabels[statusModalData.targetState] || statusModalData.targetState}"
+                  </h3>
+                  <span className="text-xs text-slate-500">
+                    پرونده چک شماره {check.checkNumber} - مبلغ {Number(check.amount).toLocaleString('fa-IR')} {storeSettings?.currency || 'تومان'}
+                  </span>
+                </div>
+              </div>
+              <button onClick={() => setStatusModalData(null)} className="p-2 text-slate-400 hover:text-slate-600 rounded-xl hover:bg-slate-100 transition-colors">
+                <XCircle className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-4">
+              {/* If deposited: choose bank account */}
+              {statusModalData.targetState === 'deposited' && (
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                    حساب بانکی مقصد جهت خواباندن چک (در جریان وصول) *
+                  </label>
+                  <select
+                    value={statusModalData.bankAccountId}
+                    onChange={(e) => setStatusModalData({ ...statusModalData, bankAccountId: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  >
+                    <option value="">-- انتخاب حساب بانکی --</option>
+                    {(accounts || []).map((acc: any) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.bankName} - شماره حساب: {acc.accountNumber} ({acc.accountHolder || 'اصلی'})
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* If cashed: choose bank account for receiving money */}
+              {statusModalData.targetState === 'cashed' && checkType === 'received' && (
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                    حساب بانکی واریزی جهت وصول وجه چک *
+                  </label>
+                  <select
+                    value={statusModalData.bankAccountId}
+                    onChange={(e) => setStatusModalData({ ...statusModalData, bankAccountId: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  >
+                    <option value="">-- انتخاب حساب بانکی واریزی --</option>
+                    {(accounts || []).map((acc: any) => (
+                      <option key={acc.id} value={acc.id}>
+                        {acc.bankName} - شماره حساب: {acc.accountNumber}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* If assigned: choose person */}
+              {statusModalData.targetState === 'assigned' && (
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                    شخص تحویل‌گیرنده چک (خرج شده به) *
+                  </label>
+                  <select
+                    value={statusModalData.assignedPersonId}
+                    onChange={(e) => setStatusModalData({ ...statusModalData, assignedPersonId: e.target.value })}
+                    className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                    required
+                  >
+                    <option value="">-- انتخاب شخص / بستانکار --</option>
+                    {(persons || []).map((p: any) => (
+                      <option key={p.id} value={p.id}>
+                        {p.name || `${p.firstName || ''} ${p.lastName || ''}`} {p.phone ? `(${p.phone})` : ''}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {/* Date */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                  تاریخ اقدام
+                </label>
+                <input
+                  type="date"
+                  value={statusModalData.date}
+                  onChange={(e) => setStatusModalData({ ...statusModalData, date: e.target.value })}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-bold text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                />
+              </div>
+
+              {/* Description */}
+              <div>
+                <label className="block text-sm font-bold text-slate-700 mb-1.5">
+                  توضیحات و شرح تغییر وضعیت
+                </label>
+                <textarea
+                  value={statusModalData.description}
+                  onChange={(e) => setStatusModalData({ ...statusModalData, description: e.target.value })}
+                  rows={2}
+                  className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl font-medium text-sm text-slate-800 outline-none focus:ring-2 focus:ring-indigo-500"
+                  placeholder="شرح وضعیت را وارد کنید..."
+                />
+              </div>
+
+              {/* Notice regarding accounting doc */}
+              {financialEffectStates.includes(statusModalData.targetState) && (
+                <div className="p-3.5 bg-emerald-50 border border-emerald-200 rounded-2xl flex items-center gap-2.5 text-xs text-emerald-800 font-bold">
+                  <CheckCircle className="w-5 h-5 text-emerald-600 shrink-0" />
+                  <span>
+                    سند دوبل حسابداری مربوط به این وضعیت به صورت خودکار صادر و ثبت خواهد شد.
+                  </span>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6 pt-4 border-t border-slate-100">
+              <button
+                type="button"
+                onClick={() => setStatusModalData(null)}
+                className="px-5 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors text-sm"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteStatusChange}
+                disabled={saving}
+                className="px-6 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold transition-colors flex items-center gap-2 shadow-sm text-sm"
+              >
+                {saving ? (
+                  <>
+                    <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
+                    در حال ثبت و صدور سند...
+                  </>
+                ) : (
+                  <>
+                    <Check className="w-4 h-4" />
+                    تأیید و صدور سند حسابداری
+                  </>
+                )}
+              </button>
+            </div>
+          </motion.div>
+        </div>
+      )}
+      </AnimatePresence>
 
       {isEditModalOpen && (
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4 print:hidden">

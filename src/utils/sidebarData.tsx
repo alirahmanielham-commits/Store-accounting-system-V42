@@ -50,6 +50,7 @@ export const allSidebarGroups: SidebarGroup[] = [
       { id: "create_sale_return", label: "برگشت از فروش", roles: ["admin", "cashier", "accountant"] },
       { id: "list_sale", label: "لیست فاکتورهای فروش", roles: ["admin", "cashier", "accountant", "viewer"] },
       { id: "list_sale_return", label: "لیست برگشتی‌های فروش", roles: ["admin", "cashier", "accountant", "viewer"] },
+      { id: "sales_report", label: "گزارش فروش و سود/زیان", roles: ["admin", "cashier", "accountant", "viewer"] },
       { id: "analytical_dashboard", label: "داشبورد تحلیلی فروش", roles: ["admin", "accountant", "viewer"] },
     ],
   },
@@ -210,6 +211,7 @@ export const allSidebarGroups: SidebarGroup[] = [
     label: "مرکز گزارشات جامع",
     icon: <BarChart3 className="w-5 h-5" />,
     items: [
+      { id: "sales_report", label: "گزارش فروش و سود/زیان", roles: ["admin", "accountant", "cashier", "viewer"] },
       { id: "analytical_dashboard", label: "داشبورد تحلیلی جامع", roles: ["admin", "accountant", "viewer"] },
       { id: "financial_report", label: "داشبورد مالی", roles: ["admin", "accountant", "viewer"] },
       { id: "crm_dashboard", label: "داشبورد CRM", roles: ["admin", "viewer"] },
@@ -331,7 +333,7 @@ export function getFilteredSidebarGroups(
         return {
           ...g,
           items: g.items.filter((item) => {
-            if (systemModule === "commerce") return ["analytical_dashboard", "inventory_report", "product_last_prices"].includes(item.id);
+            if (systemModule === "commerce") return ["sales_report", "analytical_dashboard", "inventory_report", "product_last_prices"].includes(item.id);
             if (systemModule === "inventory") return ["inventory_report", "kardex"].includes(item.id);
             if (systemModule === "accounting") return ["financial_report", "analytical_dashboard", "person_ledger", "debts_credits", "accounting_verification"].includes(item.id);
             if (systemModule === "admin") return ["analytical_dashboard", "financial_report"].includes(item.id);

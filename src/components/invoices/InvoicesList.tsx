@@ -2,7 +2,7 @@ import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUn
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
-const { Tag, Wallet, Ban, ChevronDown, Search, Plus, Filter, FileText, Download, CheckCircle, Edit2, Trash2, Printer, Check, X, ArrowUpRight, ArrowDownRight, ArrowRight, CornerDownLeft, Package, User, Clock, CheckCircle2, ChevronLeft, ChevronRight, Share2, Eye, Truck, MoreVertical, DollarSign, RefreshCw, XCircle, Warehouse } = lucide as any;
+const { Tag, Wallet, Ban, ChevronDown, Search, Plus, Filter, FileText, Download, CheckCircle, Edit2, Trash2, Printer, Check, X, ArrowUpRight, ArrowDownRight, ArrowRight, CornerDownLeft, Package, User, Clock, CheckCircle2, ChevronLeft, ChevronRight, Share2, Eye, Truck, MoreVertical, DollarSign, RefreshCw, XCircle, Warehouse, TrendingUp } = lucide as any;
 
 export default function InvoicesList(props: any) {
   const {
@@ -360,9 +360,20 @@ export default function InvoicesList(props: any) {
                      )}
                   </div>
                 </div>
-                <div className="relative w-full md:w-96">
-                  <Search className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2" />
-                  <input
+                <div className="flex items-center gap-2 w-full md:w-auto">
+                  {(activeTab === "list_sale" || activeTab === "list_sale_return") && (
+                    <button
+                      onClick={() => setActiveTab("sales_report")}
+                      className="px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200 rounded-xl text-xs font-black transition-all flex items-center gap-1.5 shadow-2xs cursor-pointer whitespace-nowrap"
+                      title="مشاهده گزارش کامل و تحلیلی سود و زیان هر فاکتور، روزانه و ماهانه"
+                    >
+                      <TrendingUp className="w-4 h-4 text-emerald-600" />
+                      <span>گزارش سود و زیان</span>
+                    </button>
+                  )}
+                  <div className="relative w-full md:w-96">
+                    <Search className="w-5 h-5 text-gray-400 absolute right-3 top-1/2 transform -translate-y-1/2" />
+                    <input
                     type="text"
                     placeholder="جستجوی حرفه‌ای (شماره، شخص)..."
                     value={invoiceSearchQuery}
@@ -371,6 +382,7 @@ export default function InvoicesList(props: any) {
                   />
                 </div>
               </div>
+            </div>
 
               <div className="w-full flex-wrap flex items-center justify-between gap-4 px-2 py-3 bg-slate-50/50 rounded-xl border border-slate-100/50 mt-2">
                 {(activeTab === "list_sale" ||
