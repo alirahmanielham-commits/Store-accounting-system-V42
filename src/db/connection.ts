@@ -45,21 +45,30 @@ export async function loadPgPoolForStore(storeId: string) {
             } catch(e) { console.error('ERROR in loadPgPoolForStore default:', e); }
             
             if (process.env.SQL_HOST && process.env.SQL_USER) {
-                const pool = new Pool({
-                    host: process.env.SQL_HOST,
-                    user: process.env.SQL_USER,
-                    password: process.env.SQL_PASSWORD,
-                    database: process.env.SQL_DB_NAME,
-                });
-                await pool.query('SELECT 1');
-                activePgPools['default'] = pool;
-                usePgMap['default'] = true;
-                return;
-            } else if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
-                const pool = await connectPgDb(process.env.DATABASE_URL);
-                activePgPools['default'] = pool;
-                usePgMap['default'] = true;
-                return;
+                try {
+                    const pool = new Pool({
+                        host: process.env.SQL_HOST,
+                        user: process.env.SQL_USER,
+                        password: process.env.SQL_PASSWORD,
+                        database: process.env.SQL_DB_NAME,
+                        connectionTimeoutMillis: 2000,
+                    });
+                    await pool.query('SELECT 1');
+                    activePgPools['default'] = pool;
+                    usePgMap['default'] = true;
+                    return;
+                } catch(err) {
+                    console.warn('Postgres connection via SQL_HOST failed, using local database storage:', (err as any)?.message);
+                }
+            } else if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres') && !process.env.DATABASE_URL.includes('user:pass@localhost')) {
+                try {
+                    const pool = await connectPgDb(process.env.DATABASE_URL);
+                    activePgPools['default'] = pool;
+                    usePgMap['default'] = true;
+                    return;
+                } catch(err) {
+                    console.warn('Postgres connection via DATABASE_URL failed, using local database storage:', (err as any)?.message);
+                }
             }
             
             activePgPools['default'] = null;

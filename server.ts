@@ -39,8 +39,16 @@ if (process.env.SENTRY_DSN && String(process.env.SENTRY_DSN).startsWith('http'))
 }
 
 async function startServer() {
-  startCronJobs();
-  await initDB();
+  try {
+    startCronJobs();
+  } catch (e) {
+    console.warn("Cron jobs start warning:", e);
+  }
+  try {
+    await initDB();
+  } catch (e) {
+    console.warn("initDB warning (using local database):", e);
+  }
   const app = express();
   const PORT = 3000;
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
