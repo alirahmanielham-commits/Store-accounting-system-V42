@@ -12,6 +12,19 @@
     <div id="root"></div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
+      // Remove TanStack Query Devtools elements if any appear
+      const cleanupQueryDevtools = () => {
+        try {
+          const targets = document.querySelectorAll(
+            '.tsqd-parent-container, .tsqd-open-btn, #tanstack-query-devtools, [data-tanstack-query-devtools], aside[aria-label*="TanStack"], button[aria-label*="TanStack Query"], button[aria-label*="React Query"], button[title*="TanStack Query"], button[title*="React Query"]'
+          );
+          targets.forEach((el) => el.remove());
+        } catch (_) {}
+      };
+      cleanupQueryDevtools();
+      const devtoolsObserver = new MutationObserver(cleanupQueryDevtools);
+      devtoolsObserver.observe(document.documentElement, { childList: true, subtree: true });
+
       if ('serviceWorker' in navigator) {
         navigator.serviceWorker.getRegistrations().then(function(registrations) {
           for(let registration of registrations) {

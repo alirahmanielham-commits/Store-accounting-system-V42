@@ -1,6 +1,35 @@
 
 @import "tailwindcss";
 
+/* Hide TanStack React Query DevTools and floating icons completely */
+.tsqd-parent-container,
+.tsqd-open-btn,
+[data-tanstack-query-devtools],
+.ReactQueryDevtools,
+.react-query-devtools,
+#tanstack-query-devtools,
+aside[aria-label*="TanStack"],
+aside[aria-label*="React Query"],
+button[aria-label*="TanStack Query"],
+button[aria-label*="React Query"],
+button[title*="TanStack Query"],
+button[title*="React Query"],
+[class*="tsqd-"],
+[id*="tsqd-"],
+[class*="ReactQueryDevtools"],
+[class*="react-query-devtools"] {
+  display: none !important;
+  visibility: hidden !important;
+  opacity: 0 !important;
+  pointer-events: none !important;
+  width: 0 !important;
+  height: 0 !important;
+  position: fixed !important;
+  left: -99999px !important;
+  top: -99999px !important;
+  z-index: -99999 !important;
+}
+
 .theme-hacker {
   --font-sans: "JetBrains Mono", "Courier New", "IRANYekanXFaNum", "Vazirmatn", monospace;
   --font-mono: "JetBrains Mono", "Courier New", "IRANYekanXFaNum", "Vazirmatn", monospace;

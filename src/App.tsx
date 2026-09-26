@@ -94,6 +94,7 @@ import {
   Ban,
   Pencil,
   Check,
+  Smartphone,
 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { playAudioFeedback } from "./utils/audio";
@@ -267,6 +268,8 @@ const SettingsTab = React.lazy(() => import('./components/admin/SettingsTab'));
 const WelcomePage = React.lazy(() => import('./components/WelcomePage'));
 const SyncManager = React.lazy(() => import('./components/admin/SyncManager'));
 const MobileRestrictedMenu = React.lazy(() => import('./components/MobileRestrictedMenu'));
+const MobileRestrictedAccess = React.lazy(() => import('./components/mobile/MobileRestrictedAccess'));
+import { MOBILE_ALLOWED_TABS } from './components/MobileRestrictedMenu';
 const MinimalMobilePersonModal = React.lazy(() => import('./components/modals/MinimalMobilePersonModal'));
 
 const WarehouseManager = React.lazy(() => import('./components/warehouses/WarehouseManager'));
@@ -379,6 +382,17 @@ export default function App() {
   const navigate = useNavigate();
   const syncQueueLength = useSyncQueueLength();
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
+  const [isMobileScreen, setIsMobileScreen] = useState(
+    typeof window !== "undefined" ? window.innerWidth < 768 : false
+  );
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobileScreen(window.innerWidth < 768);
+    };
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
 
         const [invoicePrintFormat, setInvoicePrintFormat] = useState<'a4' | 'a5' | 'pos80'>('a4');
@@ -1477,7 +1491,10 @@ if (requiresInitSetup && user) {
   }
 
   if (activeTab === "welcome_page") {
-    return <WelcomePage onLoginClick={() => setActiveTab("financial_report")} />
+    if (isMobileScreen) {
+      return <WelcomePage onLoginClick={() => setActiveTab("create_sale")} />;
+    }
+    return <WelcomePage onLoginClick={() => setActiveTab("financial_report")} />;
   }
 
   return (
@@ -2024,7 +2041,7 @@ if (requiresInitSetup && user) {
                   }}
                 />
               )}
-              <div className="block">
+              <div className="hidden md:block">
                 <SidebarNavigation
                   mode="sidebar"
                 user={user}
@@ -2061,13 +2078,11 @@ if (requiresInitSetup && user) {
                     dir="rtl"
                   >
                     <div className="flex items-center gap-2 md:gap-3">
-                      <button
-                        onClick={() => setIsSidebarOpen(true)}
-                        className="flex md:hidden p-2 text-slate-600 hover:bg-slate-100 hover:text-slate-900 rounded-xl transition-colors cursor-pointer shadow-3xs border border-slate-100 bg-white"
-                        title="منوی اصلی"
-                      >
-                        <Menu className="w-5 h-5" />
-                      </button>
+                      {/* Mobile Edition Badge (Desktop menus hidden on mobile) */}
+                      <div className="flex md:hidden items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 border border-indigo-200/60 text-indigo-700 text-xs font-black shadow-3xs shrink-0">
+                        <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>نسخه همراه</span>
+                      </div>
                       <div className="font-extrabold text-slate-900 flex items-center gap-2">
                         {storeSettings.logoUrl ? (
                           <img
@@ -2117,8 +2132,8 @@ if (requiresInitSetup && user) {
 
                     <div className="flex items-center gap-2 md:gap-3">
                       
-                      {/* Professional Fast Module Switcher Button & Dropdown */}
-                      <div className="relative" ref={moduleMenuRef}>
+                      {/* Professional Fast Module Switcher Button & Dropdown (Desktop Only) */}
+                      <div className="relative hidden md:block" ref={moduleMenuRef}>
                         {(() => {
                           const MODULE_CONFIGS = [
                             {
@@ -2612,7 +2627,7 @@ if (requiresInitSetup && user) {
                     </div>
                   </div>
 
-                  <div className="block relative z-[60]">
+                  <div className="hidden md:block relative z-[60]">
                   <SidebarNavigation
                     mode="horizontal"
                     user={user}
@@ -2647,7 +2662,7 @@ if (requiresInitSetup && user) {
                   }
                   if (!matchedGroup || !matchedItem) return null;
                   return (
-                    <div className="flex items-center justify-between px-6 py-2.5 bg-white/80 backdrop-blur-xs border-b border-slate-200/60 text-xs no-print select-none shadow-3xs">
+                    <div className="hidden md:flex items-center justify-between px-6 py-2.5 bg-white/80 backdrop-blur-xs border-b border-slate-200/60 text-xs no-print select-none shadow-3xs">
                       <div className="flex items-center gap-2">
                         <span className="flex items-center gap-1.5 text-slate-500 font-bold">
                           <span className="p-1 rounded-md bg-slate-100 text-slate-600">{matchedGroup.icon}</span>
@@ -2672,12 +2687,16 @@ if (requiresInitSetup && user) {
                     </div>
                   );
                 })()}
-                <main className="flex-1 overflow-y-auto min-h-0 p-4 pb-24 md:p-8 bg-slate-50/50 print:overflow-visible print:bg-white print:p-0">
+                <main className="flex-1 overflow-y-auto min-h-0 p-3 pb-32 md:p-8 bg-slate-50/50 print:overflow-visible print:bg-white print:p-0">
                   <div
                     className={`mx-auto transition-all duration-300 print:max-w-none print:w-full print:px-0 ${isFullWidth ? "max-w-full xl:px-14" : "max-w-6xl"}`}
                   >
                     <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
-                    {appRoutes}
+                    {isMobileScreen && !MOBILE_ALLOWED_TABS.has(activeTab) ? (
+                      <MobileRestrictedAccess currentTab={activeTab} setActiveTab={setActiveTab} />
+                    ) : (
+                      appRoutes
+                    )}
                     </Suspense>
                   </div>
                 </main>

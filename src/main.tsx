@@ -6,7 +6,6 @@ import 'vazirmatn/Vazirmatn-font-face.css';
 import '@fontsource/jetbrains-mono';
 import './index.css';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
-import { ReactQueryDevtools } from '@tanstack/react-query-devtools';
 import { AuthProvider } from './context/AuthContext';
 import { BrowserRouter } from 'react-router-dom';
 import InitialSetupWizard from './components/InitialSetupWizard';
@@ -104,7 +103,6 @@ const Root = () => {
               <App />
             </AuthProvider>
           </BrowserRouter>
-          {process.env.NODE_ENV === 'development' && <ReactQueryDevtools initialIsOpen={false} position="bottom" />}
         </QueryClientProvider>
 
       )}
