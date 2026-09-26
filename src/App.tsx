@@ -384,6 +384,7 @@ export default function App() {
         const [invoicePrintFormat, setInvoicePrintFormat] = useState<'a4' | 'a5' | 'pos80'>('a4');
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
   const [isModuleMenuOpen, setIsModuleMenuOpen] = useState(false);
+  const [moduleSearchQuery, setModuleSearchQuery] = useState("");
   const headerMenuRef = useRef<HTMLDivElement>(null);
   const moduleMenuRef = useRef<HTMLDivElement>(null);
 
@@ -2116,99 +2117,346 @@ if (requiresInitSetup && user) {
 
                     <div className="flex items-center gap-2 md:gap-3">
                       
-                      {/* Fast Module Switcher Button & Dropdown */}
+                      {/* Professional Fast Module Switcher Button & Dropdown */}
                       <div className="relative" ref={moduleMenuRef}>
-                        <button
-                          onClick={() => setIsModuleMenuOpen(!isModuleMenuOpen)}
-                          className="flex items-center gap-1.5 md:gap-2 px-2.5 py-1.5 md:px-3.5 md:py-2 rounded-xl bg-gradient-to-r from-indigo-50 to-purple-50 hover:from-indigo-100 hover:to-purple-100 border border-indigo-200/90 text-indigo-700 shadow-2xs hover:shadow-xs active:scale-95 transition-all cursor-pointer group"
-                          title="تغییر سریع بخش کاری و داشبوردها"
-                        >
-                          <div className="w-6 h-6 rounded-lg bg-indigo-600 text-white flex items-center justify-center shadow-xs group-hover:scale-105 transition-transform shrink-0">
-                            <LayoutGrid className="w-3.5 h-3.5" />
-                          </div>
-                          <div className="flex items-center gap-1.5 text-xs font-black">
-                            <span className="hidden lg:inline text-slate-700">بخش کاری:</span>
-                            <span className="text-indigo-700 font-extrabold bg-white/90 px-2 py-0.5 rounded-md border border-indigo-100 shadow-2xs">
-                              {getModuleName(systemModule)}
-                            </span>
-                          </div>
-                          <ChevronDown className={`w-3.5 h-3.5 text-indigo-500 transition-transform duration-300 ${isModuleMenuOpen ? "rotate-180" : ""}`} />
-                        </button>
+                        {(() => {
+                          const MODULE_CONFIGS = [
+                            {
+                              id: "all",
+                              name: "سامانه جامع و کامل",
+                              shortName: "همه بخش‌ها",
+                              tag: "دسترسی نامحدود",
+                              desc: "دسترسی آزاد به تمام منوها، فرم‌ها، گزارش‌ها و ابزارهای سیستم بدون محدودیت",
+                              features: ["تمام منوها", "کلیه گزارش‌ها", "مدیریت جامع"],
+                              icon: <LayoutGrid className="w-5 h-5" />,
+                              gradient: "from-indigo-600 to-violet-600",
+                              themeBorder: "hover:border-indigo-400 group-hover:ring-indigo-400/20",
+                              activeCardBg: "bg-gradient-to-br from-indigo-50/90 to-purple-50/60 border-indigo-400 ring-2 ring-indigo-500/20",
+                            },
+                            {
+                              id: "commerce",
+                              name: "بازرگانی و فروش",
+                              shortName: "فروش و خرید",
+                              tag: "عملیات تجاری",
+                              desc: "صدور و بایگانی فاکتورهای فروش و خرید، مرجوعی‌ها، نرخ‌نامه و گزارش سود و زیان",
+                              features: ["فاکتور فروش", "فاکتور خرید", "سود و زیان"],
+                              icon: <ShoppingCart className="w-5 h-5" />,
+                              gradient: "from-emerald-600 to-teal-600",
+                              themeBorder: "hover:border-emerald-400 group-hover:ring-emerald-400/20",
+                              activeCardBg: "bg-gradient-to-br from-emerald-50/90 to-teal-50/60 border-emerald-400 ring-2 ring-emerald-500/20",
+                            },
+                            {
+                              id: "accounting",
+                              name: "حسابداری و خزانه‌داری",
+                              shortName: "مالی و چک",
+                              tag: "مدیریت مالی",
+                              desc: "اسناد دوبل، دریافت و پرداخت وجه، کارتابل چک‌های دریافتی/پرداختی، بانک و صندوق",
+                              features: ["اسناد دوبل", "دریافت/پرداخت", "مدیریت چک‌ها"],
+                              icon: <Calculator className="w-5 h-5" />,
+                              gradient: "from-amber-600 to-orange-600",
+                              themeBorder: "hover:border-amber-400 group-hover:ring-amber-400/20",
+                              activeCardBg: "bg-gradient-to-br from-amber-50/90 to-orange-50/60 border-amber-400 ring-2 ring-amber-500/20",
+                            },
+                            {
+                              id: "inventory",
+                              name: "انبارداری و کالاها",
+                              shortName: "انبار و موجودی",
+                              tag: "لجستیک و کالا",
+                              desc: "کنترل موجودی انبارها، صدور رسید و حواله، کاردکس ریالی، انبارگردانی و بارکد",
+                              features: ["رسید/حواله انبار", "کاردکس کالا", "انبارگردانی"],
+                              icon: <Box className="w-5 h-5" />,
+                              gradient: "from-blue-600 to-cyan-600",
+                              themeBorder: "hover:border-blue-400 group-hover:ring-blue-400/20",
+                              activeCardBg: "bg-gradient-to-br from-blue-50/90 to-cyan-50/60 border-blue-400 ring-2 ring-blue-500/20",
+                            },
+                            {
+                              id: "crm",
+                              name: "ارتباط با مشتریان (CRM)",
+                              shortName: "CRM و اشخاص",
+                              tag: "مشتریان و مطالبات",
+                              desc: "بانک جامع طرف‌حساب‌ها، صورت‌حساب معین اشخاص، پیگیری مطالبات و ارسال پیامک",
+                              features: ["بانک اشخاص", "معین اشخاص", "ویترین مطالبات"],
+                              icon: <Users className="w-5 h-5" />,
+                              gradient: "from-purple-600 to-fuchsia-600",
+                              themeBorder: "hover:border-purple-400 group-hover:ring-purple-400/20",
+                              activeCardBg: "bg-gradient-to-br from-purple-50/90 to-fuchsia-50/60 border-purple-400 ring-2 ring-purple-500/20",
+                            },
+                            {
+                              id: "hr",
+                              name: "منابع انسانی و پرسنل",
+                              shortName: "حقوق و دستمزد",
+                              tag: "کارگزینی و حقوق",
+                              desc: "پرونده پرسنلی، قراردادهای کاری و اجاره، ثبت تردد روزانه، کارکرد و صدور فیش حقوقی",
+                              features: ["فیش حقوقی", "تردد روزانه", "قراردادها"],
+                              icon: <Clock className="w-5 h-5" />,
+                              gradient: "from-rose-600 to-pink-600",
+                              themeBorder: "hover:border-rose-400 group-hover:ring-rose-400/20",
+                              activeCardBg: "bg-gradient-to-br from-rose-50/90 to-pink-50/60 border-rose-400 ring-2 ring-rose-500/20",
+                            },
+                            {
+                              id: "reports_module",
+                              name: "گزارشات و هوش تجاری",
+                              shortName: "هوش تجاری",
+                              tag: "گزارشات تحلیلی",
+                              desc: "داشبورد تحلیلی عملکرد دوره‌ها، ترازنامه مالی، تراز آزمایشی، گردش انبار و سودآوری",
+                              features: ["داشبورد تحلیلی", "ترازنامه مالی", "تراز آزمایشی"],
+                              icon: <BarChart3 className="w-5 h-5" />,
+                              gradient: "from-teal-600 to-emerald-600",
+                              themeBorder: "hover:border-teal-400 group-hover:ring-teal-400/20",
+                              activeCardBg: "bg-gradient-to-br from-teal-50/90 to-emerald-50/60 border-teal-400 ring-2 ring-teal-500/20",
+                            },
+                            {
+                              id: "admin",
+                              name: "تنظیمات و امنیت سیستم",
+                              shortName: "مدیریت سیستم",
+                              tag: "سیستمی و امنیت",
+                              desc: "تنظیمات فروشگاه و فاکتور، مدیریت کاربران و دسترسی‌ها، لاگ‌ها و پشتیبان‌گیری",
+                              features: ["کاربران و دسترسی", "پشتیبان‌گیری", "پایش سلامت"],
+                              icon: <Settings className="w-5 h-5" />,
+                              gradient: "from-slate-700 to-slate-900",
+                              themeBorder: "hover:border-slate-400 group-hover:ring-slate-400/20",
+                              activeCardBg: "bg-gradient-to-br from-slate-100 to-slate-200/70 border-slate-400 ring-2 ring-slate-400/20",
+                            },
+                          ];
 
-                        <AnimatePresence>
-                          {isModuleMenuOpen && (
-                            <motion.div
-                              initial={{ opacity: 0, y: 10, scale: 0.95 }}
-                              animate={{ opacity: 1, y: 0, scale: 1 }}
-                              exit={{ opacity: 0, y: 10, scale: 0.95 }}
-                              transition={{ duration: 0.15 }}
-                              className="absolute left-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-2xl border border-slate-100 overflow-hidden z-[110] p-2"
-                            >
-                              <div className="px-3 py-2 text-[11px] font-black text-slate-400 border-b border-slate-100 mb-1 flex items-center justify-between">
-                                <span>انتخاب و تغییر سریع بخش کاری</span>
-                                <span className="text-[10px] bg-indigo-50 text-indigo-600 px-1.5 py-0.5 rounded font-bold">داشبوردها</span>
-                              </div>
+                          const activeModule = MODULE_CONFIGS.find((m) => m.id === systemModule) || MODULE_CONFIGS[0];
 
-                              <div className="space-y-1 max-h-80 overflow-y-auto p-1">
-                                {[
-                                  { id: 'all', name: 'همه بخش‌ها (سامانه کامل)', desc: 'دسترسی همزمان به تمامی امکانات', icon: <LayoutGrid className="w-4 h-4 text-indigo-600" /> },
-                                  { id: 'commerce', name: 'تجاری و بازرگانی', desc: 'فروش، خرید و پیش‌فاکتورها', icon: <ShoppingCart className="w-4 h-4 text-emerald-600" /> },
-                                  { id: 'inventory', name: 'انبارداری و کالاها', desc: 'موجودی انبار، گردش و کاردکس', icon: <Box className="w-4 h-4 text-blue-600" /> },
-                                  { id: 'accounting', name: 'حسابداری و خزانه‌داری', desc: 'اسناد، دریافت/پرداخت و چک', icon: <Calculator className="w-4 h-4 text-amber-600" /> },
-                                  { id: 'crm', name: 'ارتباط با مشتریان (CRM)', desc: 'مدیریت اشخاص، پرونده و پیگیری‌ها', icon: <Users className="w-4 h-4 text-purple-600" /> },
-                                  { id: 'hr', name: 'منابع انسانی و حقوق', desc: 'کارکرد، پرسنل و لیست حقوق', icon: <Clock className="w-4 h-4 text-rose-600" /> },
-                                  { id: 'reports_module', name: 'گزارشات و تحلیل‌ها', desc: 'ترازنامه‌ها، سود و زیان و نمودارها', icon: <BarChart3 className="w-4 h-4 text-cyan-600" /> },
-                                  { id: 'admin', name: 'تنظیمات و مدیریت', desc: 'تنظیمات سیستم، کاربران و پشتیبان', icon: <Settings className="w-4 h-4 text-slate-600" /> },
-                                ].map((item) => {
-                                  const isActive = systemModule === item.id;
-                                  
-return (
-                                    <button
-                                      key={item.id}
-                                      onClick={() => {
-                                        setSystemModule(item.id as any);
-                                        setIsModuleMenuOpen(false);
-                                      }}
-                                      className={`w-full text-right p-2.5 rounded-xl transition-all cursor-pointer flex items-center justify-between ${
-                                        isActive
-                                          ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                                          : "hover:bg-slate-50 text-slate-700"
-                                      }`}
-                                    >
-                                      <div className="flex items-center gap-2.5 min-w-0">
-                                        <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${isActive ? "bg-white/20 text-white" : "bg-slate-100"}`}>
-                                          {item.icon}
+                          const filteredModules = MODULE_CONFIGS.filter((m) => {
+                            if (!moduleSearchQuery.trim()) return true;
+                            const q = moduleSearchQuery.trim().toLowerCase();
+                            return (
+                              m.name.toLowerCase().includes(q) ||
+                              m.shortName.toLowerCase().includes(q) ||
+                              m.tag.toLowerCase().includes(q) ||
+                              m.desc.toLowerCase().includes(q) ||
+                              m.features.some((f) => f.toLowerCase().includes(q))
+                            );
+                          });
+
+                          return (
+                            <>
+                              {/* Trigger Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsModuleMenuOpen(!isModuleMenuOpen);
+                                  setModuleSearchQuery("");
+                                }}
+                                className={`group relative flex items-center gap-2.5 px-3 py-1.5 md:px-3.5 md:py-2 rounded-2xl transition-all duration-200 cursor-pointer border shadow-2xs hover:shadow-md active:scale-98 select-none ${
+                                  isModuleMenuOpen
+                                    ? "bg-white border-indigo-300 ring-2 ring-indigo-500/20 shadow-md"
+                                    : "bg-white/95 hover:bg-white border-slate-200/90 hover:border-indigo-200"
+                                }`}
+                                title="تغییر محیط کاری تخصصی (Workspaces)"
+                              >
+                                {/* Dynamic Icon with themed gradient & glow */}
+                                <div
+                                  className={`w-8 h-8 rounded-xl bg-gradient-to-br ${activeModule.gradient} text-white flex items-center justify-center shadow-xs shadow-indigo-600/20 group-hover:scale-105 transition-transform shrink-0`}
+                                >
+                                  {React.cloneElement(activeModule.icon as React.ReactElement<any>, {
+                                    className: "w-4 h-4 text-white",
+                                  })}
+                                </div>
+
+                                {/* Text Information */}
+                                <div className="flex flex-col text-right min-w-0">
+                                  <div className="flex items-center gap-1.5 text-[10px] font-extrabold text-slate-400">
+                                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                                    <span>بخش کاری:</span>
+                                  </div>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="text-xs font-black text-slate-800 truncate">
+                                      {activeModule.name}
+                                    </span>
+                                    <span className="hidden xl:inline text-[9px] px-1.5 py-0.5 rounded-md font-bold bg-slate-100 text-slate-600 border border-slate-200/60">
+                                      {activeModule.tag}
+                                    </span>
+                                  </div>
+                                </div>
+
+                                {/* Chevron Indicator */}
+                                <div className="mr-0.5 text-slate-400 group-hover:text-slate-600 transition-colors">
+                                  <ChevronDown
+                                    className={`w-3.5 h-3.5 transition-transform duration-300 ${
+                                      isModuleMenuOpen ? "rotate-180 text-indigo-600" : ""
+                                    }`}
+                                  />
+                                </div>
+                              </button>
+
+                              {/* Dropdown Popover */}
+                              <AnimatePresence>
+                                {isModuleMenuOpen && (
+                                  <motion.div
+                                    initial={{ opacity: 0, y: 12, scale: 0.96 }}
+                                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                                    exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                                    transition={{ duration: 0.16, ease: "easeOut" }}
+                                    className="absolute left-0 top-full mt-2.5 w-[92vw] sm:w-[580px] md:w-[640px] bg-white/98 backdrop-blur-2xl rounded-3xl shadow-2xl border border-slate-200/90 overflow-hidden z-[120] flex flex-col font-sans text-right"
+                                    dir="rtl"
+                                  >
+                                    {/* Popover Header */}
+                                    <div className="px-5 py-3.5 bg-gradient-to-r from-slate-50 via-indigo-50/40 to-purple-50/20 border-b border-slate-100 flex items-center justify-between">
+                                      <div className="flex items-center gap-3">
+                                        <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                                          <LayoutGrid className="w-5 h-5" />
                                         </div>
-                                        <div className="flex flex-col text-right truncate">
-                                          <span className={`text-xs font-black truncate ${isActive ? "text-white" : "text-slate-800"}`}>
-                                            {item.name}
-                                          </span>
-                                          <span className={`text-[10px] truncate ${isActive ? "text-indigo-100" : "text-slate-400"}`}>
-                                            {item.desc}
-                                          </span>
+                                        <div>
+                                          <h3 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                                            <span>انتخاب محیط کاری تخصصی</span>
+                                            <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-indigo-100 text-indigo-700">
+                                              {MODULE_CONFIGS.length} بخش
+                                            </span>
+                                          </h3>
+                                          <p className="text-[11px] text-slate-500 font-medium mt-0.5">
+                                            فرم‌ها و منوها متناسب با حوزه فعالیت شما فیلتر می‌شوند
+                                          </p>
                                         </div>
                                       </div>
-                                      {isActive && <Check className="w-4 h-4 text-white shrink-0 mr-1" />}
-                                    </button>
-                                  );
-                                })}
-                              </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setIsModuleMenuOpen(false)}
+                                        className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/60 rounded-xl transition-colors cursor-pointer"
+                                      >
+                                        <X className="w-4 h-4" />
+                                      </button>
+                                    </div>
 
-                              <div className="mt-1 pt-2 border-t border-slate-100">
-                                <button
-                                  onClick={() => {
-                                    setSystemModule("selector");
-                                    setIsModuleMenuOpen(false);
-                                  }}
-                                  className="w-full text-center p-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-800 text-xs font-black transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                                >
-                                  <LayoutDashboard className="w-4 h-4 text-indigo-600" />
-                                  داشبورد اصلی انتخاب بخش‌ها
-                                </button>
-                              </div>
-                            </motion.div>
-                          )}
-                        </AnimatePresence>
+                                    {/* Popover Search Bar */}
+                                    <div className="px-4 py-2.5 border-b border-slate-100 bg-slate-50/50">
+                                      <div className="relative">
+                                        <input
+                                          type="text"
+                                          value={moduleSearchQuery}
+                                          onChange={(e) => setModuleSearchQuery(e.target.value)}
+                                          placeholder="جستجوی بخش کاری (فروش، خرید، انبار، حسابداری، CRM...)"
+                                          className="w-full pr-9 pl-7 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 text-slate-800 placeholder-slate-400 shadow-3xs"
+                                        />
+                                        <Search className="w-3.5 h-3.5 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400" />
+                                        {moduleSearchQuery && (
+                                          <button
+                                            type="button"
+                                            onClick={() => setModuleSearchQuery("")}
+                                            className="absolute left-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5"
+                                          >
+                                            <X className="w-3 h-3" />
+                                          </button>
+                                        )}
+                                      </div>
+                                    </div>
+
+                                    {/* Grid of Modules */}
+                                    <div className="p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-[390px] overflow-y-auto custom-scrollbar">
+                                      {filteredModules.map((item) => {
+                                        const isActive = systemModule === item.id;
+                                        return (
+                                          <button
+                                            key={item.id}
+                                            type="button"
+                                            onClick={() => {
+                                              setSystemModule(item.id as any);
+                                              setIsModuleMenuOpen(false);
+                                            }}
+                                            className={`text-right p-3 rounded-2xl border transition-all duration-200 flex flex-col justify-between cursor-pointer group relative ${
+                                              isActive
+                                                ? item.activeCardBg
+                                                : `bg-white hover:bg-slate-50/90 border-slate-200/80 ${item.themeBorder} hover:shadow-xs hover:-translate-y-0.5`
+                                            }`}
+                                          >
+                                            <div>
+                                              <div className="flex items-center justify-between gap-2 mb-2">
+                                                <div className="flex items-center gap-2.5 min-w-0">
+                                                  <div
+                                                    className={`w-9 h-9 rounded-xl bg-gradient-to-br ${item.gradient} text-white flex items-center justify-center shrink-0 shadow-xs group-hover:scale-105 transition-transform`}
+                                                  >
+                                                    {React.cloneElement(item.icon as React.ReactElement<any>, {
+                                                      className: "w-4 h-4 text-white",
+                                                    })}
+                                                  </div>
+                                                  <div className="min-w-0">
+                                                    <h4 className="text-xs font-black text-slate-800 truncate">
+                                                      {item.name}
+                                                    </h4>
+                                                    <span className="text-[10px] font-bold text-slate-400">
+                                                      {item.tag}
+                                                    </span>
+                                                  </div>
+                                                </div>
+                                                {isActive ? (
+                                                  <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-indigo-600 text-white flex items-center gap-1 shadow-xs shrink-0">
+                                                    <Check className="w-3 h-3" />
+                                                    فعال
+                                                  </span>
+                                                ) : (
+                                                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-500 opacity-0 group-hover:opacity-100 transition-opacity shrink-0">
+                                                    انتخاب
+                                                  </span>
+                                                )}
+                                              </div>
+
+                                              <p className="text-[11px] text-slate-500 font-medium leading-relaxed mb-2.5 line-clamp-2">
+                                                {item.desc}
+                                              </p>
+                                            </div>
+
+                                            {/* Feature Chips */}
+                                            <div className="flex items-center gap-1 flex-wrap pt-2 border-t border-slate-100">
+                                              {item.features.map((feat, idx) => (
+                                                <span
+                                                  key={idx}
+                                                  className="text-[9px] font-bold px-1.5 py-0.5 rounded-md bg-slate-100/90 text-slate-600 border border-slate-200/50"
+                                                >
+                                                  {feat}
+                                                </span>
+                                              ))}
+                                            </div>
+                                          </button>
+                                        );
+                                      })}
+
+                                      {filteredModules.length === 0 && (
+                                        <div className="col-span-1 sm:col-span-2 text-center py-8 text-slate-400 text-xs font-bold flex flex-col items-center gap-2">
+                                          <Search className="w-6 h-6 opacity-30" />
+                                          <span>هیچ بخشی با «{moduleSearchQuery}» پیدا نشد</span>
+                                        </div>
+                                      )}
+                                    </div>
+
+                                    {/* Popover Footer */}
+                                    <div className="p-3 bg-slate-50 border-t border-slate-100 flex items-center justify-between gap-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          setSystemModule("selector");
+                                          setIsModuleMenuOpen(false);
+                                        }}
+                                        className="flex-1 py-2 px-3 rounded-xl bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-black transition-all flex items-center justify-center gap-1.5 shadow-3xs cursor-pointer hover:text-indigo-600"
+                                      >
+                                        <LayoutDashboard className="w-3.5 h-3.5 text-indigo-600" />
+                                        <span>داشبورد گرافیکی انتخاب بخش‌ها</span>
+                                      </button>
+
+                                      {systemModule !== "all" && (
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            setSystemModule("all");
+                                            setIsModuleMenuOpen(false);
+                                          }}
+                                          className="py-2 px-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 text-indigo-700 text-xs font-black transition-all flex items-center gap-1 cursor-pointer border border-indigo-100 shrink-0"
+                                          title="بازگشت به نمایش تمام منوها"
+                                        >
+                                          <RefreshCw className="w-3.5 h-3.5" />
+                                          <span>نمایش کامل</span>
+                                        </button>
+                                      )}
+                                    </div>
+                                  </motion.div>
+                                )}
+                              </AnimatePresence>
+                            </>
+                          );
+                        })()}
                       </div>
 
                       
