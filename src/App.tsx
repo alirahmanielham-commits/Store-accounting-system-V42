@@ -364,6 +364,8 @@ const ProductCategoriesView = React.lazy(() => import('./components/products/Pro
 const OrderList = React.lazy(() => import('./components/inventory/OrderList'));
 const OnlinePipePricing = React.lazy(() => import('./components/products/OnlinePipePricing'));
 const NewpipePricing = React.lazy(() => import('./components/products/NewpipePricing'));
+const RentContractsManager = React.lazy(() => import('./components/payroll/RentContractsManager'));
+import { allSidebarGroups } from './utils/sidebarData';
 
 
 
@@ -373,6 +375,8 @@ const NewpipePricing = React.lazy(() => import('./components/products/NewpipePri
 import AdminLTELayout from "./layouts/AdminLTE/AdminLTELayout";
 
 export default function App() {
+  const location = useLocation();
+  const navigate = useNavigate();
   const syncQueueLength = useSyncQueueLength();
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
 
@@ -1216,6 +1220,25 @@ export default function App() {
 <Route path="/daily_attendance" element={<DailyAttendanceManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
 <Route path="/monthly_attendance" element={<MonthlyAttendance personsData={persons} showNotification={showNotification} />} />
 <Route path="/payslips" element={<PayslipsManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} />} />
+<Route path="/accounting_verification" element={<AccountingVerification showNotification={showNotification} />} />
+<Route path="/accounting_opening_balances" element={<OpeningBalances showNotification={showNotification} onBack={() => setActiveTab("chart_of_accounts")} />} />
+<Route path="/product_last_prices" element={<ProductLastPricesView products={products} invoices={invoices} formatCurrency={formatCurrency} toPersianDigits={toPersianDigits} formatDateDisplay={formatDateDisplay} />} />
+<Route path="/rent_contracts" element={<RentContractsManager personsData={persons} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
+<Route path="/create_sale" element={<AnimatePresence mode="wait"><motion.div key="create_sale" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/create_purchase" element={<AnimatePresence mode="wait"><motion.div key="create_purchase" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/create_receive_receipt" element={<AnimatePresence mode="wait"><motion.div key="create_receive_receipt" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/create_pay_receipt" element={<AnimatePresence mode="wait"><motion.div key="create_pay_receipt" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/create_warehouse_doc" element={<AnimatePresence mode="wait"><motion.div key="create_warehouse_doc" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/create_sale_return" element={<AnimatePresence mode="wait"><motion.div key="create_sale_return" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/create_purchase_return" element={<AnimatePresence mode="wait"><motion.div key="create_purchase_return" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/list_sale" element={<AnimatePresence mode="wait"><motion.div key="list_sale" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/list_purchase" element={<AnimatePresence mode="wait"><motion.div key="list_purchase" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/list_receive_receipt" element={<AnimatePresence mode="wait"><motion.div key="list_receive_receipt" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/list_pay_receipt" element={<AnimatePresence mode="wait"><motion.div key="list_pay_receipt" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/list_warehouse_docs" element={<AnimatePresence mode="wait"><motion.div key="list_warehouse_docs" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/list_sale_return" element={<AnimatePresence mode="wait"><motion.div key="list_sale_return" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/list_purchase_return" element={<AnimatePresence mode="wait"><motion.div key="list_purchase_return" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/product_categories" element={<AnimatePresence mode="wait"><motion.div key="product_categories" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
 <Route path="/" element={<Navigate to="/welcome_page" replace />} />
   <Route path="*" element={<AnimatePresence mode="wait"><motion.div key={location.pathname} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
 </Routes>
@@ -2362,6 +2385,45 @@ return (
                   />
     </div>
                 </div>
+                {/* Standard Navigation Breadcrumb & Context Header */}
+                {(() => {
+                  let matchedGroup = null;
+                  let matchedItem = null;
+                  for (const g of allSidebarGroups) {
+                    const itm = g.items.find(i => i.id === activeTab);
+                    if (itm) {
+                      matchedGroup = g;
+                      matchedItem = itm;
+                      break;
+                    }
+                  }
+                  if (!matchedGroup || !matchedItem) return null;
+                  return (
+                    <div className="flex items-center justify-between px-6 py-2.5 bg-white/80 backdrop-blur-xs border-b border-slate-200/60 text-xs no-print select-none shadow-3xs">
+                      <div className="flex items-center gap-2">
+                        <span className="flex items-center gap-1.5 text-slate-500 font-bold">
+                          <span className="p-1 rounded-md bg-slate-100 text-slate-600">{matchedGroup.icon}</span>
+                          <span>{matchedGroup.label}</span>
+                        </span>
+                        <span className="text-slate-300">/</span>
+                        <span className="flex items-center gap-1.5 text-slate-900 font-extrabold">
+                          <span className="p-1 rounded-md bg-indigo-50 text-indigo-600">{matchedItem.icon}</span>
+                          <span>{matchedItem.label}</span>
+                        </span>
+                        {matchedItem.badge && (
+                          <span className="text-[10px] px-2 py-0.5 rounded-full font-black bg-indigo-50 text-indigo-700 border border-indigo-200/50">
+                            {matchedItem.badge}
+                          </span>
+                        )}
+                      </div>
+                      {matchedItem.description && (
+                        <div className="hidden lg:block text-[11px] text-slate-400 font-medium">
+                          {matchedItem.description}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })()}
                 <main className="flex-1 overflow-y-auto min-h-0 p-4 pb-24 md:p-8 bg-slate-50/50 print:overflow-visible print:bg-white print:p-0">
                   <div
                     className={`mx-auto transition-all duration-300 print:max-w-none print:w-full print:px-0 ${isFullWidth ? "max-w-full xl:px-14" : "max-w-6xl"}`}
