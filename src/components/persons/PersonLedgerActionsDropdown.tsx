@@ -58,10 +58,17 @@ function PersonLedgerActionsDropdown({
       }
       const person = (persons || []).find((p: any) => p?.id?.toString() === ledgerPersonId?.toString());
       const opt = {
-        margin: size === 'A5' ? 4 : 7,
+        margin: (size === 'A5' ? [4, 4, 4, 4] : [6, 6, 6, 6]) as [number, number, number, number],
         filename: `کارت_حساب_${person?.name || "شخص"}_${size}.pdf`,
         image: { type: "jpeg" as const, quality: 0.98 },
-        html2canvas: { scale: 2, useCORS: true, logging: false },
+        html2canvas: { 
+          scale: 2, 
+          useCORS: true, 
+          logging: false,
+          scrollX: 0,
+          scrollY: 0,
+          windowWidth: size === 'A5' ? 560 : 794
+        },
         jsPDF: { unit: "mm" as const, format: size.toLowerCase() as any, orientation: "portrait" as const },
       };
       html2pdf().set(opt).from(element).save();

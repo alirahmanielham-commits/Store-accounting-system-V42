@@ -45,7 +45,17 @@ export default function WarehousePrintTemplate({
   ) || ((warehouses || []).length === 1 ? warehouses[0] : null);
 
   return (
-    <div className="w-full text-sm text-slate-800 font-sans p-4 print:p-0">
+    <div className="warehouse-print-sheet w-full text-sm text-slate-800 font-sans p-4 print:p-0 mx-auto print:mx-auto">
+      <style>{`
+        @media print {
+          @page { size: A4 portrait; margin: 8mm; }
+          html, body { width: 100% !important; margin: 0 auto !important; background: white !important; }
+          .warehouse-print-sheet { width: 100% !important; max-width: 194mm !important; margin: 0 auto !important; }
+          thead { display: table-header-group; }
+          tfoot { display: table-footer-group; }
+          tr { page-break-inside: avoid; }
+        }
+      `}</style>
       {/* Header Grid */}
       <div className="grid grid-cols-3 gap-4 border-2 border-slate-800 p-4 rounded-xl mb-4 relative print:border-slate-500">
         <div className="flex flex-col gap-2 justify-center">

@@ -240,17 +240,27 @@ export default function StandardInvoiceTemplate({
     : "bg-slate-100/70 text-slate-800 font-black border-b-2 border-slate-300";
 
   return (
-    <div className={`bg-white text-slate-800 font-sans ${isA5 ? 'text-[9.5px]' : 'text-xs sm:text-sm'}`} dir="rtl">
+    <div className={`standard-invoice-sheet bg-white text-slate-800 font-sans mx-auto ${isA5 ? 'text-[9.5px]' : 'text-xs sm:text-sm'}`} dir="rtl">
       <style>{`
         @media print {
           @page {
             size: ${isA5 ? 'A5' : 'A4'} portrait;
-            margin: ${isA5 ? '4mm' : '6mm'};
+            margin: ${isA5 ? '5mm' : '7mm'};
           }
-          body {
+          html, body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             background-color: white !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+          }
+          .standard-invoice-sheet {
+            width: 100% !important;
+            max-width: ${isA5 ? '138mm' : '196mm'} !important;
+            margin: 0 auto !important;
+            box-sizing: border-box !important;
           }
           .print-avoid-break {
             page-break-inside: avoid;

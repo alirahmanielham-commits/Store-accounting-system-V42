@@ -260,55 +260,103 @@ body {
 }
 
 @media print {
-  body * {
-    visibility: hidden;
+  @page {
+    size: auto;
+    margin: 8mm;
   }
-  .print-section, .print-section * {
-    visibility: visible !important;
+
+  *, *::before, *::after {
+    box-sizing: border-box !important;
   }
-  .print-section {
-    position: absolute !important;
-    left: 0 !important;
-    top: 0 !important;
-    
-    
-    width: 100% !important;
-    max-width: 100% !important;
-    border: none !important;
-    box-shadow: none !important;
-    padding: 0 !important;
-    margin: 0 !important;
-    background: white !important;
-    height: auto !important;
-    min-height: auto !important;
-    overflow: visible !important;
-    display: block !important;
-  }
-  body, html, #root, main, .print-parent-override {
+
+  html, body {
     background: white !important;
     background-color: white !important;
-    color: black !important;
+    color: #0f172a !important;
     padding: 0 !important;
-    margin: 0 !important;
+    margin: 0 auto !important;
     overflow: visible !important;
     height: auto !important;
-    min-height: auto !important;
-    visibility: visible !important;
+    min-height: 0 !important;
+    width: 100% !important;
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
   }
-  .no-print, .no-print *, .print\:hidden, .print\:hidden * {
+
+  #root,
+  .main-app-layout-wrapper,
+  main,
+  .print-parent-override {
+    background: white !important;
+    background-color: white !important;
+    overflow: visible !important;
+    height: auto !important;
+    min-height: 0 !important;
+    max-height: none !important;
+    display: block !important;
+    position: static !important;
+    padding: 0 !important;
+    margin: 0 auto !important;
+    width: 100% !important;
+  }
+
+  .no-print,
+  .no-print *,
+  .print\:hidden,
+  .print\:hidden *,
+  [data-no-print="true"] {
     display: none !important;
     visibility: hidden !important;
   }
-  
-  /* Reset some basic elements for print */
+
   .print-section {
-    direction: rtl;
+    position: static !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    margin: 0 auto !important;
+    padding: 0 !important;
+    background: white !important;
+    height: auto !important;
+    min-height: 0 !important;
+    overflow: visible !important;
+    display: block !important;
+    direction: rtl !important;
+    text-align: right !important;
+    box-shadow: none !important;
+    border: none !important;
   }
-  
-  /* Force page size margins */
-  @page {
-    size: auto;
-    margin: 5mm;
+
+  .print-centered-container,
+  .receipt-print-container,
+  #person-ledger-printable-content,
+  #person-ledger-printable-area,
+  .invoice-print-container,
+  .payslip-print-container {
+    margin-left: auto !important;
+    margin-right: auto !important;
+    box-shadow: none !important;
+    box-sizing: border-box !important;
+  }
+
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-collapse: collapse !important;
+    margin-left: auto !important;
+    margin-right: auto !important;
+  }
+
+  tr, .print-avoid-break {
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  thead {
+    display: table-header-group !important;
+  }
+
+  tfoot {
+    display: table-footer-group !important;
   }
 }
 

@@ -731,14 +731,14 @@ export default function ReceiptPrintModal({
       )}
 
       {/* Main Preview Container */}
-      <div className="flex-1 overflow-auto p-3 sm:p-6 bg-slate-200/90 print:bg-white print:p-0 flex justify-center items-start">
+      <div className="flex-1 overflow-auto p-3 sm:p-6 bg-slate-200/90 print:bg-white print:p-0 flex justify-center items-start print:items-center print:block print:w-full">
         <div
           style={{
             transform: `scale(${printSettings.scale / 100})`,
             transformOrigin: 'top center',
             transition: 'transform 0.15s ease'
           }}
-          className="print:transform-none bg-white shadow-2xl print:shadow-none rounded-2xl print:rounded-none overflow-hidden max-w-full"
+          className="print:transform-none bg-white shadow-2xl print:shadow-none rounded-2xl print:rounded-none overflow-hidden max-w-full mx-auto print:mx-auto print:w-full print:max-w-none"
         >
           <ReceiptPrintTemplate
             data={data}

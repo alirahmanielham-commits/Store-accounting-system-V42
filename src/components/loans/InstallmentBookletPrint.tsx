@@ -54,7 +54,15 @@ export default function InstallmentBookletPrint({ loan, installments, person, on
         </div>
 
         <div className="flex-1 overflow-y-auto p-6 bg-slate-50 print:overflow-visible print:bg-white print:p-0">
-          <div ref={componentRef} dir="rtl" style={{ direction: 'rtl' }} className="bg-white p-8 rounded-xl print:p-8 print:bg-white text-slate-900">
+          <style>{`
+            @media print {
+              @page { size: A4 portrait; margin: 8mm; }
+              html, body { width: 100% !important; margin: 0 auto !important; background: white !important; }
+              table { width: 100% !important; }
+              tr { page-break-inside: avoid; }
+            }
+          `}</style>
+          <div ref={componentRef} dir="rtl" style={{ direction: 'rtl' }} className="bg-white p-8 rounded-xl print:p-4 print:bg-white text-slate-900 mx-auto max-w-full print:max-w-[194mm]">
             {/* Booklet Header */}
             <div className="text-center mb-8 pb-6 border-b-2 border-slate-200">
               <h1 className="text-2xl font-black text-slate-800 mb-2">دفترچه اقساط وام</h1>

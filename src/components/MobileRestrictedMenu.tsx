@@ -262,9 +262,9 @@ export default function MobileRestrictedMenu({
   }, [selectedCategoryId, activeCategory]);
 
   return (
-    <div className="md:hidden select-none" dir="rtl">
-      {/* Quick Sub-Actions Bar (Shown right above the bottom nav for the active category) */}
-      <div className="fixed bottom-16 inset-x-0 z-[79] px-2 py-1.5 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-xs flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+    <div className="block md:hidden select-none w-full" dir="rtl">
+      {/* Quick Sub-Actions Bar (Fixed height to eliminate CLS) */}
+      <div className="fixed bottom-16 inset-x-0 h-10 z-[79] px-2 py-1 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-xs flex items-center gap-1.5 overflow-x-auto no-scrollbar">
         <div className="text-[10px] font-black text-slate-400 shrink-0 pl-1 flex items-center gap-1">
           <span>{activeCategory.shortTitle}:</span>
         </div>
@@ -302,8 +302,8 @@ export default function MobileRestrictedMenu({
         </button>
       </div>
 
-      {/* Main Mobile Bottom Navigation Bar (5 Essential Options) */}
-      <div className="fixed bottom-0 inset-x-0 z-[80] bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe">
+      {/* Main Mobile Bottom Navigation Bar (Fixed 64px / h-16 height) */}
+      <div className="fixed bottom-0 inset-x-0 h-16 z-[80] bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe">
         <div className="flex justify-around items-center h-16 px-1">
           {MOBILE_CATEGORIES.map((cat) => {
             const isCategoryActive = activeCategory.id === cat.id;

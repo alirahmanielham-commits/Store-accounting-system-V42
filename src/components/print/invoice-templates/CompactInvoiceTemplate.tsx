@@ -22,7 +22,16 @@ export default function CompactInvoiceTemplate({
   const totalDiscount = sumTotal - (data.totalAmount || 0);
 
   return (
-    <div className="p-4 bg-white text-gray-900 font-sans text-sm border-2 border-dashed border-gray-400 m-4 rounded-xl" dir="rtl">
+    <div className="p-4 bg-white text-gray-900 font-sans text-sm border-2 border-dashed border-gray-400 m-4 print:m-0 mx-auto print:mx-auto max-w-full print:w-full rounded-xl print:rounded-none" dir="rtl">
+      <style>{`
+        @media print {
+          @page { size: auto; margin: 6mm; }
+          html, body { background: white !important; margin: 0 auto !important; width: 100% !important; }
+          thead { display: table-header-group; }
+          tfoot { display: table-footer-group; }
+          tr { page-break-inside: avoid; }
+        }
+      `}</style>
       <div className="flex justify-between items-center border-b border-gray-300 pb-2 mb-2">
          <div>
             <div className="font-bold text-lg">{storeSettings.storeName}</div>

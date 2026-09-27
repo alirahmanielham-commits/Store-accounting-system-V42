@@ -150,10 +150,17 @@ export default function PersonLedger(props: any) {
     if (!element) return;
     const person = (persons || []).find((p: any) => p?.id?.toString() === ledgerPersonId?.toString());
     const opt = {
-      margin: size === 'A5' ? 4 : 7,
+      margin: (size === 'A5' ? [4, 4, 4, 4] : [6, 6, 6, 6]) as [number, number, number, number],
       filename: `کارت_حساب_${person?.name || "طرف_حساب"}_${size}.pdf`,
       image: { type: "jpeg" as const, quality: 0.98 },
-      html2canvas: { scale: 2, useCORS: true, logging: false },
+      html2canvas: { 
+        scale: 2, 
+        useCORS: true, 
+        logging: false,
+        scrollX: 0,
+        scrollY: 0,
+        windowWidth: size === 'A5' ? 560 : 794
+      },
       jsPDF: { unit: "mm" as const, format: size.toLowerCase() as any, orientation: "portrait" as const },
     };
     html2pdf().set(opt).from(element).save();
@@ -602,12 +609,13 @@ export default function PersonLedger(props: any) {
                                 @media print {
                                   @page {
                                     size: ${printPaperSize === 'A5' ? 'A5 portrait' : 'A4 portrait'};
-                                    margin: ${printPaperSize === 'A5' ? '4mm' : '7mm'};
+                                    margin: ${printPaperSize === 'A5' ? '5mm' : '8mm'};
                                   }
                                   html, body {
-                                    width: ${printPaperSize === 'A5' ? '148mm' : '210mm'} !important;
+                                    width: 100% !important;
+                                    max-width: 100% !important;
                                     background: #ffffff !important;
-                                    margin: 0 !important;
+                                    margin: 0 auto !important;
                                     padding: 0 !important;
                                     -webkit-print-color-adjust: exact !important;
                                     print-color-adjust: exact !important;
@@ -616,9 +624,11 @@ export default function PersonLedger(props: any) {
                                     position: static !important;
                                     background: #ffffff !important;
                                     padding: 0 !important;
-                                    margin: 0 !important;
+                                    margin: 0 auto !important;
                                     overflow: visible !important;
-                                    display: block !important;
+                                    display: flex !important;
+                                    justify-content: center !important;
+                                    align-items: flex-start !important;
                                     width: 100% !important;
                                     height: auto !important;
                                   }
@@ -627,22 +637,28 @@ export default function PersonLedger(props: any) {
                                     margin: 0 auto !important;
                                     width: 100% !important;
                                     max-width: 100% !important;
-                                    display: block !important;
+                                    display: flex !important;
+                                    justify-content: center !important;
+                                    align-items: flex-start !important;
                                     background: #ffffff !important;
                                     box-shadow: none !important;
                                   }
                                   #person-ledger-printable-content {
                                     width: 100% !important;
-                                    max-width: 100% !important;
+                                    max-width: ${printPaperSize === 'A5' ? '138mm' : '194mm'} !important;
                                     margin: 0 auto !important;
                                     padding: 0 !important;
                                     border: none !important;
                                     box-shadow: none !important;
                                     border-radius: 0 !important;
+                                    box-sizing: border-box !important;
                                   }
                                   .print-avoid-break {
                                     page-break-inside: avoid !important;
                                     break-inside: avoid !important;
+                                  }
+                                  thead {
+                                    display: table-header-group !important;
                                   }
                                 }
                               `}} />
@@ -731,10 +747,10 @@ export default function PersonLedger(props: any) {
                               >
                                 <div
                                   id="person-ledger-printable-content"
-                                  className={`bg-white text-slate-900 shadow-2xl print:shadow-none border border-slate-300 print:border-none transition-all rounded-xl print:rounded-none ${
+                                  className={`bg-white text-slate-900 shadow-2xl print:shadow-none border border-slate-300 print:border-none transition-all rounded-xl print:rounded-none mx-auto box-border ${
                                     printPaperSize === 'A5'
-                                      ? "w-[148mm] min-h-[210mm] p-3.5 text-[9.5px]"
-                                      : "w-[210mm] min-h-[297mm] p-6 text-[11px]"
+                                      ? "w-[140mm] min-h-[200mm] p-3 text-[9px]"
+                                      : "w-[196mm] min-h-[280mm] p-5 text-[10.5px]"
                                   } print:w-full print:max-w-none print:p-0 print:m-0`}
                                 >
                                   {/* Header Info Block */}
@@ -820,13 +836,13 @@ export default function PersonLedger(props: any) {
                                   <div className="overflow-visible w-full">
                                     <table className="w-full text-right border-collapse table-fixed border border-slate-700 print:border-slate-800">
                                       <colgroup>
-                                        <col style={{ width: printPaperSize === 'A5' ? "4.5%" : "3.5%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "11.5%" : "10%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "26%" : "29.5%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "18.5%" : "18%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "18.5%" : "18%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "4.5%" : "4%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "12.5%" : "11%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "26%" : "28%" }} />
                                         <col style={{ width: printPaperSize === 'A5' ? "18%" : "18%" }} />
-                                        <col style={{ width: printPaperSize === 'A5' ? "3%" : "3%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "18%" : "18%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "17%" : "17%" }} />
+                                        <col style={{ width: printPaperSize === 'A5' ? "4%" : "4%" }} />
                                       </colgroup>
                                       <thead>
                                         <tr className="bg-slate-800 text-white print:bg-slate-200 print:text-slate-900 font-bold border-b border-slate-700">

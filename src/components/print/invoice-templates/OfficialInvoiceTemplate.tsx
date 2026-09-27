@@ -96,7 +96,41 @@ export default function OfficialInvoiceTemplate({
   const currencyLabel = storeSettings.currency || "تومان";
 
   return (
-    <div className="p-4 bg-white min-h-[297mm] text-black font-sans text-xs border border-black m-2 print:m-0" dir="rtl">
+    <div className="official-invoice-sheet p-4 bg-white min-h-[297mm] text-black font-sans text-xs border border-black mx-auto print:mx-auto print:w-full print:p-3" dir="rtl">
+      <style>{`
+        @media print {
+          @page {
+            size: A4 portrait;
+            margin: 7mm;
+          }
+          html, body {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+            background-color: white !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+          }
+          .official-invoice-sheet {
+            width: 100% !important;
+            max-width: 194mm !important;
+            margin: 0 auto !important;
+            border: 1px solid #000000 !important;
+            box-sizing: border-box !important;
+          }
+          .print-avoid-break {
+            page-break-inside: avoid;
+            break-inside: avoid;
+          }
+          thead {
+            display: table-header-group;
+          }
+          tfoot {
+            display: table-footer-group;
+          }
+        }
+      `}</style>
       {/* Header */}
       <div className="flex justify-between items-center border-b border-black pb-2 mb-2">
         <div className="flex-1 text-right text-[11px] space-y-0.5">

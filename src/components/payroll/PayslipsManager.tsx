@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
+import html2pdf from 'html2pdf.js';
 import { Calculator, Printer, CheckCircle, Search, FileText, X, Download, FileSpreadsheet, Building2, MapPin, Calendar, Clock, DollarSign, Wallet, TrendingUp, TrendingDown, User, Check, AlertCircle, RotateCcw, Trash2 } from 'lucide-react';
 import { getOrderTemplates, getPayslips, addPayslip, updatePayslip, deletePayslip, getMonthlyAttendances, getEmployeeContracts, getPayslipItems, getSalaryComponents, addPayslipItem, deletePayslipItemsByPayslipId, getEmployeeOrders } from '../../services/hrService';
 import { getAccountingDocuments, addAccountingDocument, deleteAccountingDocument, getLedgerAccounts, addLedgerAccount, generateId } from '../../services/dataService';
@@ -94,6 +96,20 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
   const getPersonName = (id) => {
     const p = (personsData || []).find(x => x.id === id);
     return p ? p.name : 'نامشخص';
+  };
+
+  const handleDownloadPayslipPdf = () => {
+    const element = document.getElementById("payslip-printable-sheet");
+    if (!element) return;
+    const personName = getPersonName(printSlip?.personId) || 'پرسنل';
+    const opt = {
+      margin: [6, 6, 6, 6] as [number, number, number, number],
+      filename: `فیش_حقوقی_${personName}_${printSlip?.periodMonth}_${printSlip?.periodYear}.pdf`,
+      image: { type: "jpeg" as const, quality: 0.98 },
+      html2canvas: { scale: 2, useCORS: true, logging: false, scrollX: 0, scrollY: 0, windowWidth: 794 },
+      jsPDF: { unit: "mm" as const, format: "a4" as const, orientation: "portrait" as const },
+    };
+    html2pdf().set(opt).from(element).save();
   };
 
   const ensureSalaryAccounts = async () => {
@@ -826,130 +842,238 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       )}
 
       
-      {/* PRINT MODAL (unchanged behavior, keeps clean printing layout) */}
-      {printSlip && (
-        <div className="fixed inset-0 z-[100] bg-slate-900/50 flex items-center justify-center p-4 print:relative print:inset-auto print:bg-transparent print:p-0">
-          <div className="bg-white w-full max-w-3xl rounded-2xl shadow-xl overflow-hidden flex flex-col max-h-[90vh] print:max-w-none print:shadow-none print:rounded-none print:border-0 print:h-auto print:max-h-none print:block">
-            <div className="p-4 border-b border-slate-100 flex justify-between items-center bg-slate-50 print:hidden">
-              <h3 className="font-bold text-slate-800">پیش‌نمایش چاپ فیش حقوقی</h3>
-              <div className="flex items-center gap-2">
-                <button onClick={() => window.print()} className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold flex items-center gap-2 hover:bg-indigo-700">
-                  <Printer className="w-4 h-4" /> چاپ
-                </button>
-                <button onClick={() => setPrintSlip(null)} className="p-2 text-slate-400 hover:text-slate-600 bg-white rounded-lg border border-slate-200">
-                  <X className="w-5 h-5" />
-                </button>
+      {/* PRINT MODAL (Centered, A4 compliant, PDF export enabled) */}
+      {printSlip && createPortal(
+        <div
+          id="payslip-print-overlay"
+          className="fixed inset-0 z-[99999] bg-slate-900/80 backdrop-blur-xs flex flex-col items-center overflow-y-auto print:overflow-visible print:bg-white print:p-0 print:m-0 print:block print-section font-sans"
+          dir="rtl"
+        >
+          {/* Dynamic Print Styles for A4 Portrait */}
+          <style dangerouslySetInnerHTML={{ __html: `
+            @media print {
+              @page {
+                size: A4 portrait;
+                margin: 8mm;
+              }
+              html, body {
+                width: 100% !important;
+                max-width: 100% !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                background: #ffffff !important;
+                -webkit-print-color-adjust: exact !important;
+                print-color-adjust: exact !important;
+              }
+              #payslip-print-overlay {
+                position: static !important;
+                background: #ffffff !important;
+                padding: 0 !important;
+                margin: 0 auto !important;
+                overflow: visible !important;
+                display: flex !important;
+                justify-content: center !important;
+                align-items: flex-start !important;
+                width: 100% !important;
+                height: auto !important;
+              }
+              #payslip-printable-sheet {
+                width: 100% !important;
+                max-width: 194mm !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
+                border: none !important;
+                box-shadow: none !important;
+                border-radius: 0 !important;
+                box-sizing: border-box !important;
+              }
+              .print-avoid-break {
+                page-break-inside: avoid !important;
+                break-inside: avoid !important;
+              }
+              table {
+                width: 100% !important;
+                border-collapse: collapse !important;
+              }
+            }
+          `}} />
+
+          {/* Top Control Bar (Screen Only) */}
+          <div className="w-full max-w-4xl bg-white border-b border-slate-200 px-6 py-3 sticky top-0 z-50 shadow-md flex flex-wrap items-center justify-between gap-4 print:hidden my-0">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-xs">
+                <FileText className="w-5 h-5" />
+              </div>
+              <div>
+                <h3 className="font-extrabold text-slate-800 text-sm">
+                  پیش‌نمایش چاپ فیش حقوقی: {getPersonName(printSlip.personId)}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  دوره: {toPersianDigits(printSlip.periodMonth)} / {toPersianDigits(printSlip.periodYear)}
+                </p>
               </div>
             </div>
 
-            <div className="p-8 overflow-y-auto print:overflow-visible print:p-0">
-              <div className="border-2 border-slate-800 p-6 rounded-xl print:border-none print:p-0">
-                <div className="flex justify-between items-center mb-8 border-b-2 border-slate-800 pb-4">
-                  <div className="flex-1">
-                    <h2 className="text-xl font-bold text-slate-800">فیش حقوقی پرسنل</h2>
-                    <p className="text-sm text-slate-600 mt-2 font-bold">{storeSettings?.storeName || 'شرکت نمونه'}</p>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => window.print()}
+                className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-200 cursor-pointer"
+              >
+                <Printer className="w-4 h-4" />
+                <span>چاپ فیش</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadPayslipPdf}
+                className="flex items-center gap-1.5 bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-sky-200 cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>دانلود PDF</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setPrintSlip(null)}
+                className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all cursor-pointer mr-1"
+                title="بستن"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Printable Sheet Container */}
+          <div className="p-4 md:p-8 flex justify-center w-full print:p-0 print:m-0">
+            <div
+              id="payslip-printable-sheet"
+              className="bg-white text-slate-900 shadow-2xl print:shadow-none border border-slate-300 print:border-none rounded-xl print:rounded-none mx-auto box-border w-[196mm] min-h-[280mm] p-6 text-xs print:w-full print:max-w-none print:p-0 print:m-0"
+            >
+              <div className="border-2 border-slate-800 p-5 rounded-xl print:border-slate-800">
+                <div className="flex justify-between items-center mb-6 border-b-2 border-slate-800 pb-3">
+                  <div className="flex-1 text-right">
+                    <h2 className="text-xl font-black text-slate-900">فیش حقوق و دستمزد پرسنل</h2>
+                    <p className="text-sm text-slate-600 mt-1 font-bold">{storeSettings?.storeName || 'سیستم مدیریت پرسنل'}</p>
                   </div>
                   <div className="flex-1 text-center">
-                    <div className="w-16 h-16 bg-slate-100 rounded-full mx-auto border-2 border-slate-300 flex items-center justify-center mb-2">
-                      <FileText className="w-8 h-8 text-slate-400" />
+                    <div className="w-14 h-14 bg-slate-100 rounded-full mx-auto border-2 border-slate-300 flex items-center justify-center">
+                      <FileText className="w-7 h-7 text-slate-600" />
                     </div>
                   </div>
-                  <div className="flex-1 text-left">
-                    <p className="text-sm font-bold text-slate-700 mb-2">تاریخ صدور: {toPersianDigits(new Date().toLocaleDateString('fa-IR'))}</p>
-                    <p className="text-sm font-bold text-slate-700">دوره: {toPersianDigits(printSlip.periodMonth)} / {toPersianDigits(printSlip.periodYear)}</p>
+                  <div className="flex-1 text-left text-xs font-bold text-slate-700 space-y-1">
+                    <p>تاریخ صدور: <span className="font-mono">{toPersianDigits(new Date().toLocaleDateString('fa-IR'))}</span></p>
+                    <p>دوره مالی: <span className="font-mono">{toPersianDigits(printSlip.periodMonth)} / {toPersianDigits(printSlip.periodYear)}</span></p>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-4 mb-8">
+                <div className="grid grid-cols-2 gap-4 mb-6 text-xs">
                   <div className="flex items-center gap-2 border-b border-dashed border-slate-300 pb-2">
-                    <span className="text-slate-500 text-sm">نام و نام خانوادگی:</span>
-                    <span className="font-bold text-slate-800">{getPersonName(printSlip.personId)}</span>
+                    <span className="text-slate-500 font-bold">نام و نام خانوادگی:</span>
+                    <span className="font-extrabold text-slate-900">{getPersonName(printSlip.personId)}</span>
                   </div>
                   <div className="flex items-center gap-2 border-b border-dashed border-slate-300 pb-2">
-                    <span className="text-slate-500 text-sm">شماره پرسنلی:</span>
-                    <span className="font-bold text-slate-800">{toPersianDigits(getPersonnelCode(printSlip.personId))}</span>
+                    <span className="text-slate-500 font-bold">شماره پرسنلی:</span>
+                    <span className="font-mono font-bold text-slate-800">{toPersianDigits(getPersonnelCode(printSlip.personId))}</span>
                   </div>
-
                 </div>
                 
                 {(() => {
                   const printAtt = allAttendances.find(a => a.id === printSlip.attendanceId);
                   return printAtt ? (
-                    <div className="grid grid-cols-4 gap-4 mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm">
-                      <div className="flex flex-col">
-                        <span className="text-slate-500 mb-1">روز کارکرد</span>
-                        <span className="font-bold text-slate-800">{toPersianDigits(printAtt.workDays.toString())} روز</span>
+                    <div className="grid grid-cols-4 gap-3 mb-6 bg-slate-50 p-3 rounded-xl border border-slate-200 text-xs">
+                      <div className="flex flex-col text-right">
+                        <span className="text-slate-500 font-bold mb-0.5">روز کارکرد موثر:</span>
+                        <span className="font-bold text-slate-900 font-mono">{toPersianDigits(printAtt.workDays?.toString() || '0')} روز</span>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-slate-500 mb-1">ساعات اضافه کار</span>
-                        <span className="font-bold text-slate-800">{toPersianDigits(printAtt.overtimeHours.toString())} ساعت</span>
+                      <div className="flex flex-col text-right">
+                        <span className="text-slate-500 font-bold mb-0.5">ساعات اضافه کار:</span>
+                        <span className="font-bold text-slate-900 font-mono">{toPersianDigits(printAtt.overtimeHours?.toString() || '0')} ساعت</span>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-slate-500 mb-1">ساعات کسر کار</span>
-                        <span className="font-bold text-slate-800">{toPersianDigits((printAtt.shortageHours || 0).toString())} ساعت</span>
+                      <div className="flex flex-col text-right">
+                        <span className="text-slate-500 font-bold mb-0.5">ساعات کسر کار:</span>
+                        <span className="font-bold text-slate-900 font-mono">{toPersianDigits((printAtt.shortageHours || 0).toString())} ساعت</span>
                       </div>
-                      <div className="flex flex-col">
-                        <span className="text-slate-500 mb-1">مرخصی / غیبت</span>
-                        <span className="font-bold text-slate-800">{toPersianDigits((printAtt.paidLeaveDays || 0) + (printAtt.sickLeaveDays || 0) + (printAtt.unpaidLeaveDays || 0) + (printAtt.absentDays || 0))} روز</span>
+                      <div className="flex flex-col text-right">
+                        <span className="text-slate-500 font-bold mb-0.5">مرخصی / غیبت:</span>
+                        <span className="font-bold text-slate-900 font-mono">{toPersianDigits(((printAtt.paidLeaveDays || 0) + (printAtt.sickLeaveDays || 0) + (printAtt.unpaidLeaveDays || 0) + (printAtt.absentDays || 0)).toString())} روز</span>
                       </div>
                     </div>
                   ) : null;
                 })()}
 
-                <div className="grid grid-cols-2 gap-6 mb-8">
-                  <div>
-                    <h3 className="font-bold text-slate-800 mb-3 bg-slate-100 px-3 py-2 rounded">مزایا و حقوق</h3>
-                    <table className="w-full text-sm">
-                      <tbody>
+                <div className="grid grid-cols-2 gap-4 mb-6">
+                  <div className="border border-slate-300 rounded-lg overflow-hidden">
+                    <h3 className="font-black text-slate-900 bg-slate-100 px-3 py-2 border-b border-slate-300 text-xs text-right">
+                      مزایا و دریافتی‌ها
+                    </h3>
+                    <table className="w-full text-xs text-right">
+                      <tbody className="divide-y divide-slate-200">
                         {printSlipItems.filter(i => i.type === 'earning').map(item => (
-                          <tr key={item.id} className="border-b border-slate-100">
-                            <td className="py-2 text-slate-600">{item.title}</td>
-                            <td className="py-2 text-left font-bold">{toPersianDigits(formatNumber(item.amount))}</td>
+                          <tr key={item.id} className="hover:bg-slate-50">
+                            <td className="py-2 px-3 text-slate-700 font-medium">{item.title}</td>
+                            <td className="py-2 px-3 text-left font-mono font-bold text-slate-900">{toPersianDigits(formatNumber(item.amount))}</td>
                           </tr>
                         ))}
+                        {printSlipItems.filter(i => i.type === 'earning').length === 0 && (
+                          <tr><td colSpan={2} className="py-4 text-center text-slate-400">موردی ثبت نشده</td></tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
-                  <div>
-                    <h3 className="font-bold text-slate-800 mb-3 bg-slate-100 px-3 py-2 rounded">کسورات</h3>
-                    <table className="w-full text-sm">
-                      <tbody>
+
+                  <div className="border border-slate-300 rounded-lg overflow-hidden">
+                    <h3 className="font-black text-slate-900 bg-slate-100 px-3 py-2 border-b border-slate-300 text-xs text-right">
+                      کسورات قانونی و انضباطی
+                    </h3>
+                    <table className="w-full text-xs text-right">
+                      <tbody className="divide-y divide-slate-200">
                         {printSlipItems.filter(i => i.type === 'deduction').map(item => (
-                          <tr key={item.id} className="border-b border-slate-100">
-                            <td className="py-2 text-slate-600">{item.title}</td>
-                            <td className="py-2 text-left font-bold">{toPersianDigits(formatNumber(item.amount))}</td>
+                          <tr key={item.id} className="hover:bg-slate-50">
+                            <td className="py-2 px-3 text-slate-700 font-medium">{item.title}</td>
+                            <td className="py-2 px-3 text-left font-mono font-bold text-slate-900">{toPersianDigits(formatNumber(item.amount))}</td>
                           </tr>
                         ))}
+                        {printSlipItems.filter(i => i.type === 'deduction').length === 0 && (
+                          <tr><td colSpan={2} className="py-4 text-center text-slate-400">موردی ثبت نشده</td></tr>
+                        )}
                       </tbody>
                     </table>
                   </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6 mb-8 bg-slate-50 p-4 rounded-xl border border-slate-200">
-                  <div className="space-y-3">
-                    <div className="flex justify-between">
-                      <span className="text-slate-600 font-bold">جمع مزایا:</span>
-                      <span className="font-bold text-emerald-600">{toPersianDigits(formatNumber(printSlip.totalEarnings))} ریال</span>
+                <div className="grid grid-cols-2 gap-4 mb-6 bg-slate-50 p-4 rounded-xl border border-slate-300">
+                  <div className="space-y-2 text-xs">
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-600 font-bold">مجموع کل مزایا:</span>
+                      <span className="font-mono font-black text-emerald-700 text-sm" dir="ltr">{toPersianDigits(formatNumber(printSlip.totalEarnings))} ریال</span>
                     </div>
-                    <div className="flex justify-between">
-                      <span className="text-slate-600 font-bold">جمع کسورات:</span>
-                      <span className="font-bold text-rose-600">{toPersianDigits(formatNumber(printSlip.totalDeductions))} ریال</span>
+                    <div className="flex justify-between items-center">
+                      <span className="text-slate-600 font-bold">مجموع کل کسورات:</span>
+                      <span className="font-mono font-black text-rose-700 text-sm" dir="ltr">{toPersianDigits(formatNumber(printSlip.totalDeductions))} ریال</span>
                     </div>
                   </div>
-                  <div className="flex flex-col justify-center border-r border-slate-200 pr-6">
-                    <span className="text-slate-500 font-bold mb-1">خالص پرداختی:</span>
-                    <span className="text-2xl font-bold text-indigo-700">{toPersianDigits(formatNumber(printSlip.netPayable))} ریال</span>
+                  <div className="flex flex-col justify-center border-r border-slate-300 pr-6 text-right">
+                    <span className="text-slate-500 font-bold text-xs mb-1">مبلغ خالص قابل پرداخت:</span>
+                    <span className="text-xl font-black text-indigo-700 font-mono" dir="ltr">
+                      {toPersianDigits(formatNumber(printSlip.netPayable))} ریال
+                    </span>
                   </div>
                 </div>
 
-                <div className="flex justify-between mt-12 pt-8 border-t-2 border-slate-800 px-8">
-                  <div className="text-center text-slate-500 text-sm font-bold">امضا تایید کننده / مدیریت</div>
-                  <div className="text-center text-slate-500 text-sm font-bold">امضا کارمند / دریافت کننده</div>
+                <div className="flex justify-between mt-8 pt-6 border-t-2 border-slate-800 px-6 print-avoid-break">
+                  <div className="text-center text-slate-600 text-xs font-bold">
+                    <div className="mb-8">امضا و تایید امور مالی و کارگزینی</div>
+                    <div className="border-b border-dashed border-slate-400 w-36 mx-auto"></div>
+                  </div>
+                  <div className="text-center text-slate-600 text-xs font-bold">
+                    <div className="mb-8">امضا و اثر انگشت دریافت کننده فیش</div>
+                    <div className="border-b border-dashed border-slate-400 w-36 mx-auto"></div>
+                  </div>
                 </div>
               </div>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
       {/* NEW METRONIC INSPIRED LAYOUT */}

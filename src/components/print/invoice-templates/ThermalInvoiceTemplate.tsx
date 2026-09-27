@@ -23,7 +23,14 @@ export default function ThermalInvoiceTemplate({
   const totalDiscount = sumTotal - (data.totalAmount || 0);
 
   return (
-    <div className="p-2 bg-white text-black font-sans text-[11px] leading-tight w-full max-w-[80mm] mx-auto print:w-[80mm] print:m-0" dir="rtl">
+    <div className="p-2 bg-white text-black font-sans text-[11px] leading-tight w-full max-w-[80mm] mx-auto print:w-[78mm] print:m-0" dir="rtl">
+      <style>{`
+        @media print {
+          @page { size: 80mm auto; margin: 2mm; }
+          html, body { width: 100% !important; margin: 0 auto !important; background: white !important; }
+          table { width: 100% !important; }
+        }
+      `}</style>
       <div className="text-center font-bold text-sm mb-1">{storeSettings.storeName || "فروشگاه"}</div>
       {storeSettings.phone && <div className="text-center mb-1">تلفن: {toPersianDigits(storeSettings.phone)}</div>}
       <div className="text-center border-b border-dashed border-black pb-2 mb-2">

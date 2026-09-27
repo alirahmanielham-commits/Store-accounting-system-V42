@@ -441,8 +441,8 @@ export default function PreviewModals(props: any) {
               </select>
             </div>
 
-            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 print:p-0 print:overflow-visible">
-              <div className={`bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:w-full print:max-w-none relative overflow-hidden ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}>
+            <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 print:p-0 print:overflow-visible print:bg-white flex justify-center items-start print:block">
+              <div className={`bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:mx-auto print:w-full print:max-w-none relative overflow-hidden box-border ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}>
                 {/* Visual Watermarks for Draft and Voided */}
                 {isVoided && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-30 overflow-hidden print:flex">

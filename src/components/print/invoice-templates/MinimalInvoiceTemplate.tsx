@@ -228,23 +228,33 @@ export default function MinimalInvoiceTemplate({
 
   return (
     <div
-      className={`bg-white text-slate-800 font-sans mx-auto transition-all ${
+      className={`minimal-invoice-sheet bg-white text-slate-800 font-sans mx-auto transition-all ${
         isA5
           ? 'max-w-[148mm] min-h-[210mm] p-3 text-[9.5px]'
           : 'max-w-[210mm] min-h-[297mm] p-8 text-xs'
-      }`}
+      } print:w-full print:max-w-none print:p-0 print:m-0`}
       dir="rtl"
     >
       <style>{`
         @media print {
           @page {
             size: ${isA5 ? 'A5' : 'A4'} portrait;
-            margin: ${isA5 ? '4mm' : '6mm'};
+            margin: ${isA5 ? '5mm' : '7mm'};
           }
-          body {
+          html, body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             background-color: white !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
+          }
+          .minimal-invoice-sheet {
+            width: 100% !important;
+            max-width: ${isA5 ? '138mm' : '196mm'} !important;
+            margin: 0 auto !important;
+            box-sizing: border-box !important;
           }
           .print-avoid-break {
             page-break-inside: avoid;

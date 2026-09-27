@@ -431,9 +431,9 @@ export default function App() {
   };
   
   const INVOICE_PRINT_FORMATS = {
-    a4: { name: 'کاغذ A4', css: `@page { size: A4 portrait; margin: 5mm; } .print-section { width: 210mm !important; }` },
-    a5: { name: 'کاغذ A5', css: `@page { size: A5 portrait; margin: 5mm; } .print-section { width: 148mm !important; font-size: 0.85em; }` },
-    pos80: { name: 'فیش پرینتر (80mm)', css: `@page { size: 80mm auto; margin: 1mm; } .print-section { width: 78mm !important; padding: 2mm !important; font-size: 0.75em; } .print-section table { font-size: 0.85em; }` }
+    a4: { name: 'کاغذ A4', css: `@page { size: A4 portrait; margin: 8mm; } .print-section { width: 100% !important; max-width: 194mm !important; margin: 0 auto !important; }` },
+    a5: { name: 'کاغذ A5', css: `@page { size: A5 portrait; margin: 6mm; } .print-section { width: 100% !important; max-width: 136mm !important; margin: 0 auto !important; font-size: 0.85em; }` },
+    pos80: { name: 'فیش پرینتر (80mm)', css: `@page { size: 80mm auto; margin: 2mm; } .print-section { width: 78mm !important; margin: 0 auto !important; padding: 2mm !important; font-size: 0.75em; } .print-section table { font-size: 0.85em; }` }
   };
 
   const appState = useAppController();
@@ -2079,7 +2079,7 @@ if (requiresInitSetup && user) {
                   >
                     <div className="flex items-center gap-2 md:gap-3">
                       {/* Mobile Edition Badge (Desktop menus hidden on mobile) */}
-                      <div className="flex md:hidden items-center gap-1.5 px-2.5 py-1 rounded-xl bg-indigo-50 border border-indigo-200/60 text-indigo-700 text-xs font-black shadow-3xs shrink-0">
+                      <div className="flex md:hidden items-center gap-1.5 h-8 px-2.5 rounded-xl bg-indigo-50 border border-indigo-200/60 text-indigo-700 text-xs font-black shadow-3xs shrink-0">
                         <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
                         <span>نسخه همراه</span>
                       </div>
@@ -2687,7 +2687,7 @@ if (requiresInitSetup && user) {
                     </div>
                   );
                 })()}
-                <main className="flex-1 overflow-y-auto min-h-0 p-3 pb-32 md:p-8 bg-slate-50/50 print:overflow-visible print:bg-white print:p-0">
+                <main className="flex-1 overflow-y-auto min-h-0 p-3 pb-32 md:p-8 md:pb-8 bg-slate-50/50 print:overflow-visible print:bg-white print:p-0">
                   <div
                     className={`mx-auto transition-all duration-300 print:max-w-none print:w-full print:px-0 ${isFullWidth ? "max-w-full xl:px-14" : "max-w-6xl"}`}
                   >
@@ -2944,36 +2944,6 @@ if (requiresInitSetup && user) {
               confirmAction={confirmAction}
             />
           )}
-
-          {/* Mobile Floating Quick Action Footer Bar */}
-          <div className="md:hidden fixed bottom-3 left-3 right-3 z-[80] bg-white/95 backdrop-blur-md border border-slate-200/90 shadow-2xl rounded-2xl p-2 flex items-center justify-between gap-2 no-print">
-            <button
-              onClick={() => setIsModuleMenuOpen(!isModuleMenuOpen)}
-              className="flex-1 flex items-center justify-center gap-2 py-2.5 px-3 bg-gradient-to-r from-indigo-600 to-purple-600 text-white rounded-xl text-xs font-black shadow-md shadow-indigo-600/20 active:scale-95 transition-all cursor-pointer"
-            >
-              <LayoutGrid className="w-4 h-4" />
-              <span>تغییر بخش کاری:</span>
-              <span className="bg-white/20 text-white px-2 py-0.5 rounded-md text-[10px] font-extrabold">
-                {getModuleName(systemModule)}
-              </span>
-            </button>
-
-            <button
-              onClick={() => setIsCalculatorOpen(true)}
-              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
-              title="ماشین حساب"
-            >
-              <Calculator className="w-4 h-4" />
-            </button>
-            
-            <button
-              onClick={() => appState.confirmAction('آیا از خروج از کسب و کار فعلی و رفتن به صفحه مدیریت کسب و کارها اطمینان دارید؟', () => { appState.setIsStoreSelectionOpen(true); })}
-              className="p-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
-              title="تغییر فروشگاه"
-            >
-              <Database className="w-4 h-4" />
-            </button>
-          </div>
 
           <CalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
         <SyncStatusModal isOpen={isSyncModalOpen} onClose={() => setIsSyncModalOpen(false)} />

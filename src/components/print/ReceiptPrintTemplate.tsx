@@ -550,18 +550,23 @@ export default function ReceiptPrintTemplate({
       <style dangerouslySetInnerHTML={{ __html: `
         @media print {
           ${getPageStyle()}
-          body {
+          html, body {
             -webkit-print-color-adjust: exact !important;
             print-color-adjust: exact !important;
             background: white !important;
+            width: 100% !important;
+            max-width: 100% !important;
+            margin: 0 auto !important;
+            padding: 0 !important;
           }
           .receipt-print-container {
-            margin: 0 !important;
+            margin: 0 auto !important;
             padding: 0 !important;
             width: 100% !important;
-            max-width: none !important;
+            max-width: ${paperSize === 'a5_landscape' ? '198mm' : paperSize === 'a5_portrait' ? '136mm' : '194mm'} !important;
             box-shadow: none !important;
             border: none !important;
+            box-sizing: border-box !important;
           }
           .cut-line {
             display: flex !important;
