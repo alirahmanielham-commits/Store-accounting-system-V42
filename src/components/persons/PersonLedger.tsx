@@ -6,6 +6,7 @@ import * as lucide from 'lucide-react';
 import { MessageSquare } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
+import { safePrint } from '../../utils/printHelper';
 
 export default function PersonLedger(props: any) {
   const {
@@ -711,7 +712,7 @@ export default function PersonLedger(props: any) {
                                   {/* Print Button */}
                                   <button
                                     type="button"
-                                    onClick={() => window.print()}
+                                    onClick={() => safePrint("#person-ledger-printable-content")}
                                     className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-200 cursor-pointer"
                                   >
                                     <Printer className="w-4 h-4" />

@@ -113,12 +113,10 @@ export default function StocktakingPrintModal({
         </div>
 
         {/* Printable Content Area */}
-        <div className="p-8 overflow-y-auto flex-1 bg-white print:p-0 print:overflow-visible text-slate-800">
+        <div className="p-8 overflow-y-auto flex-1 bg-white print:p-0 print:overflow-visible text-slate-800 print-section">
           <style>{`
             @media print {
-              body * { visibility: hidden; }
-              .printable-area, .printable-area * { visibility: visible; }
-              .printable-area { position: absolute; left: 0; top: 0; width: 100%; margin: 0; padding: 20px; font-size: 11pt; }
+              .printable-area { width: 100%; margin: 0; padding: 20px; font-size: 11pt; }
             }
           `}</style>
 

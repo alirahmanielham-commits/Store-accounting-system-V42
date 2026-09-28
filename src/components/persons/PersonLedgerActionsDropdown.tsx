@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import { MoreVertical, DownloadCloud, Activity, Settings, Printer, Edit2, ShoppingCart, RefreshCw, Send, X, Package, Shield, Share2, ChevronDown, FileText, ArrowDownToLine, ArrowUpFromLine, Download } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2pdf from "html2pdf.js";
+import { safePrint } from '../../utils/printHelper';
 
 export default 
 function PersonLedgerActionsDropdown({
@@ -41,9 +42,7 @@ function PersonLedgerActionsDropdown({
     setIsOpen(false);
     if (setPrintPaperSize) setPrintPaperSize(size);
     setPrintingPersonLedger(true);
-    setTimeout(() => {
-      window.print();
-    }, 400);
+    safePrint("#person-ledger-printable-content", { timeoutMs: 3000 });
   };
 
   const handleDownloadPdf = (size: 'A4' | 'A5') => {

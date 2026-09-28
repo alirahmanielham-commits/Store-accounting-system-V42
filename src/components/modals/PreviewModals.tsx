@@ -6,6 +6,7 @@ import ReceiptPrintTemplate from "../print/ReceiptPrintTemplate";
 import ReceiptPrintModal from "../print/ReceiptPrintModal";
 import ReceiptConfirmationModal from "../financial/ReceiptConfirmationModal";
 import { InvoicePrintSettings, InvoiceColumnSettings } from "../print/invoice-templates/InvoicePrintTypes";
+import { safePrint } from "../../utils/printHelper";
 
 export default function PreviewModals(props: any) {
   const {
@@ -490,7 +491,7 @@ export default function PreviewModals(props: any) {
                 >
                   انصراف و ویرایش
                 </button>
-                <button onClick={() => window.print()} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm">
+                <button onClick={() => safePrint(".print-section")} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
                    چاپ پیش‌نمایش
                  </button>
@@ -510,7 +511,7 @@ export default function PreviewModals(props: any) {
             )}
             {viewingInvoice && (
                <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3 print:hidden shrink-0">
-                 <button onClick={() => window.print()} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm">
+                 <button onClick={() => safePrint(".print-section")} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
                    <Printer className="w-5 h-5" />
                    چاپ
                  </button>

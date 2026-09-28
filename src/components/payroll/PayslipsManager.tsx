@@ -5,6 +5,7 @@ import { Calculator, Printer, CheckCircle, Search, FileText, X, Download, FileSp
 import { getOrderTemplates, getPayslips, addPayslip, updatePayslip, deletePayslip, getMonthlyAttendances, getEmployeeContracts, getPayslipItems, getSalaryComponents, addPayslipItem, deletePayslipItemsByPayslipId, getEmployeeOrders } from '../../services/hrService';
 import { getAccountingDocuments, addAccountingDocument, deleteAccountingDocument, getLedgerAccounts, addLedgerAccount, generateId } from '../../services/dataService';
 import { toPersianDigits, formatNumber } from '../../utils/format';
+import { safePrint } from '../../utils/printHelper';
 
 export default function PayslipsManager({ personsData, storeSettings, showNotification }) {
   const [year, setYear] = useState(1403);
@@ -917,7 +918,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
             <div className="flex items-center gap-2">
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => safePrint("#payslip-printable-sheet")}
                 className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-200 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />

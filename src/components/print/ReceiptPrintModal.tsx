@@ -22,6 +22,7 @@ import {
   Edit2
 } from 'lucide-react';
 import ReceiptPrintTemplate from './ReceiptPrintTemplate';
+import { safePrint } from '../../utils/printHelper';
 import {
   ReceiptPrintSettings,
   ReceiptPaperSize,
@@ -94,7 +95,7 @@ export default function ReceiptPrintModal({
   if (!isOpen || !data) return null;
 
   const handlePrint = () => {
-    window.print();
+    safePrint('.receipt-print-container');
   };
 
   const updateField = (key: keyof typeof printSettings.fields, value: any) => {

@@ -60,6 +60,8 @@ import CustomDatePicker from '../ui/CustomDatePicker';
 import { convertToGregorian, formatDateDisplay, toPersianDigits } from '../../utils/format';
 import { convertQuantityToBaseUnit, getUnitRatioDirection } from '../../utils/unitConversion';
 
+import { safePrint } from '../../utils/printHelper';
+
 interface SalesReportProps {
   showNotification?: (type: 'success' | 'error' | 'info', message: string) => void;
   toPersianDigits?: (str: string | number | undefined | null) => string;
@@ -901,7 +903,7 @@ export default function SalesReport(props: SalesReportProps) {
 
   // Print report
   const handlePrint = () => {
-    window.print();
+    safePrint('.print-section');
   };
 
   if (isLoading) {

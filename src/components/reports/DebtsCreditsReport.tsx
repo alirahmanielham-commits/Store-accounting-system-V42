@@ -8,6 +8,7 @@ import { getPersons, getInvoices, getTransactions, getIssuedChecks, getReceivedC
 import { Person, PersonGroup } from '../../types';
 import { getDefaultExchangeRate, formatDateDisplay } from '../../utils/format';
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
+import { safePrint } from '../../utils/printHelper';
 
 const formatNumber = (num: number) => new Intl.NumberFormat('fa-IR').format(num);
 
@@ -463,7 +464,7 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotificatio
               {/* Print Button */}
               <button
                 type="button"
-                onClick={() => window.print()}
+                onClick={() => safePrint("#debts-credits-print-sheet")}
                 className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs font-bold transition-all shadow-sm shadow-indigo-200 cursor-pointer"
               >
                 <Printer className="w-4 h-4" />

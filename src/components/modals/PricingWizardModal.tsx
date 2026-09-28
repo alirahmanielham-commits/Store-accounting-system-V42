@@ -91,20 +91,17 @@ export default function PricingWizardModal(props: any) {
 
   return (
     <>
-      <style>{`
-        @media print {
-          body * { visibility: hidden; }
-          .print-barcode-section, .print-barcode-section * { visibility: visible; }
-          .main-app-layout-wrapper { display: none !important; }
-          .print-barcode-section { position: relative !important; width: 100%; margin: 0; padding: 0; }
-          ${selectedFormat.css}
-        }
-      `}</style>
       {pricingWizardInvoice && (
         <div 
           key="pricingWizardInvoice-modal"
-          className="fixed inset-0 z-[999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 print:p-0 print:bg-white print:block print:overflow-visible overflow-y-auto print-barcode-section"
+          className="fixed inset-0 z-[999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 print:p-0 print:bg-white print:block print:overflow-visible overflow-y-auto print-barcode-section print-section"
         >
+          <style>{`
+            @media print {
+              .print-barcode-section { position: relative !important; width: 100%; margin: 0; padding: 0; }
+              ${selectedFormat.css}
+            }
+          `}</style>
           {/* Interactive UI */}
           <motion.div
             initial={{ opacity: 0, scale: 0.96, y: 15 }}

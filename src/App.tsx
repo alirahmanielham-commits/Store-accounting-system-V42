@@ -1108,11 +1108,19 @@ export default function App() {
                         Check={Check}
                         X={X} />} />
 <Route path="/inventory_report" element={<InventoryReport showNotification={showNotification} categories={productCategories} />} />
-<Route path="/order_list" element={<OrderList formatCurrency={formatCurrency} 
+<Route path="/order_list" element={<OrderList 
+                        formatCurrency={formatCurrency} 
                         products={products}
                         categories={productCategories}
-                        
-                        toPersianDigits={toPersianDigits} />} />
+                        toPersianDigits={toPersianDigits}
+                        storeSettings={storeSettings}
+                        showNotification={showNotification}
+                        fetchProducts={fetchProducts}
+                        setIsProductModalOpen={setIsProductModalOpen}
+                        setIsFastProductModalOpen={setIsFastProductModalOpen}
+                        setActiveTab={setActiveTab}
+                        warehouses={warehouses}
+                      />} />
 <Route path="/kardex" element={<KardexReport />} />
 <Route path="/crm_dashboard" element={<CRMDashboard persons={persons} showNotification={showNotification} confirmAction={confirmAction} />} />
 <Route path="/sales_report" element={<SalesReport showNotification={showNotification} toPersianDigits={toPersianDigits} formatCurrency={formatCurrency} formatDateDisplay={formatDateDisplay} setViewingInvoice={setViewingInvoice} setActiveTab={setActiveTab} />} />
