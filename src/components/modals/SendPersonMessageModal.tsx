@@ -33,7 +33,6 @@ import {
 } from "lucide-react";
 import { addDatabaseLog } from "../../services/coreService";
 import { addCommas, toPersianDigits, formatDateDisplay } from "../../utils/format";
-import { messagingManager } from "../../services/messaging/MessagingManager";
 import { generateCiteableMessageId, deleteSmsMessage } from "../../services/crmService";
 
 export interface SendPersonMessageModalProps {
@@ -417,29 +416,13 @@ export default function SendPersonMessageModal({
       }
 
       // 2. Add log entry
-      await addDatabaseLog("ثبت پیامک شخص در جدول", "sms_messages", msgData.id, null, msgData);
+      await addDatabaseLog("ثبت پیامک شخص در صف", "sms_messages", msgData.id, null, msgData);
 
-      // 3. Attempt direct transmission via configured providers
-      try {
-        const provRes = await fetch("/api/data/sms_providers");
-        const providers = await provRes.json();
-        if (Array.isArray(providers) && providers.length > 0) {
-          await messagingManager.loadProviders(providers);
-          await messagingManager.sendMessage({
-            to: cleanNumber,
-            text: message,
-            type: "sms"
-          });
-        }
-      } catch (e) {
-        console.warn("SMS provider note:", e);
-      }
-
-      notify(`پیام به ${recipientName} (${toPersianDigits(cleanNumber)}) در صف ارسال ثبت شد`, "success");
+      notify(`پیامک به ${recipientName} (${toPersianDigits(cleanNumber)}) با موفقیت در صف ارسال سیستم قرار گرفت`, "success");
       onClose();
     } catch (err) {
-      console.error("Error sending message:", err);
-      notify("خطا در ثبت و ارسال پیام", "error");
+      console.error("Error queueing message:", err);
+      notify("خطا در ثبت پیام در صف ارسال", "error");
     } finally {
       setIsSending(false);
     }
@@ -1244,7 +1227,7 @@ export default function SendPersonMessageModal({
                 className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white text-xs font-black rounded-xl transition-all flex items-center gap-2 shadow-md shadow-indigo-200 cursor-pointer disabled:cursor-not-allowed"
               >
                 <Send className="w-4 h-4" />
-                {isSending ? "در حال ارسال..." : "ثبت و ارسال با پیامک"}
+                {isSending ? "در حال ثبت در صف..." : "ثبت در صف ارسال پیامک"}
               </button>
             </div>
           </div>

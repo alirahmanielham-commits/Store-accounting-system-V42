@@ -41,7 +41,11 @@ import {
   MessageCircle,
   Share2,
   CheckSquare,
-  Zap
+  Zap,
+  Wifi,
+  WifiOff,
+  Terminal,
+  Settings2
 } from "lucide-react";
 import {
   LineChart,
@@ -60,6 +64,7 @@ import {
 } from "recharts";
 import { toPersianDigits, addCommas } from "../../utils/format";
 import { generateCiteableMessageId, deleteSmsMessage, deleteMultipleSmsMessages } from "../../services/crmService";
+import { gsmUsbService, GsmDeviceStatus } from "../../services/messaging/GsmUsbService";
 
 export interface SmsChannelOption {
   id: string;
@@ -76,6 +81,18 @@ export interface SmsChannelOption {
 
 export const DEFAULT_CHANNELS: SmsChannelOption[] = [
   {
+    id: "gsm_modem",
+    name: "مودم سخت‌افزاری GSM (سیم‌کارت متصل به سیستم)",
+    type: "gsm",
+    typeLabel: "مودم GSM / سیم‌کارت سخت‌افزاری",
+    senderLine: "سیم‌کارت متصل به سیستم",
+    provider: "GSM Serial/USB",
+    status: "active",
+    costPerPart: 0,
+    description: "ارسال مستقیم و آنی از طریق سیم‌کارت سخت‌افزاری متصل به پورت USB سیستم (بدون بلک‌لیست)",
+    iconType: "sim",
+  },
+  {
     id: "kavenegar",
     name: "پنل پیامک کاوه نگار (پیش‌فرض)",
     type: "sms_panel",
@@ -86,18 +103,6 @@ export const DEFAULT_CHANNELS: SmsChannelOption[] = [
     costPerPart: 380,
     description: "ارسال آنی از خط اختصاصی و خطوط خدماتی با تایید تحویل مخابراتی",
     iconType: "cloud",
-  },
-  {
-    id: "gsm_modem",
-    name: "مودم سخت‌افزاری GSM (سیم‌کارت دفتر)",
-    type: "gsm",
-    typeLabel: "مودم GSM / سیم‌کارت",
-    senderLine: "09123456789",
-    provider: "GSM Serial/USB",
-    status: "active",
-    costPerPart: 150,
-    description: "ارسال مستقیم از طریق سیم‌کارت سخت‌افزاری متصل به سیستم بدون بلک‌لیست",
-    iconType: "sim",
   },
   {
     id: "faraz_sms",
@@ -280,10 +285,35 @@ export default function SmsMessagesManager({
   // Channel Selection & Sending State
   const [isChannelSendModalOpen, setIsChannelSendModalOpen] = useState<boolean>(false);
   const [messagesToSend, setMessagesToSend] = useState<SmsMessageRecord[]>([]);
-  const [selectedChannelId, setSelectedChannelId] = useState<string>("kavenegar");
+  const [selectedChannelId, setSelectedChannelId] = useState<string>("gsm_modem");
   const [channels, setChannels] = useState<SmsChannelOption[]>(DEFAULT_CHANNELS);
   const [senderLineOverride, setSenderLineOverride] = useState<string>("");
   const [isSendingViaChannel, setIsSendingViaChannel] = useState<boolean>(false);
+
+  // GSM Modem Direct Hardware State & Live Transmission
+  const [gsmStatus, setGsmStatus] = useState<GsmDeviceStatus>(gsmUsbService.status);
+  const [isGsmConnectModalOpen, setIsGsmConnectModalOpen] = useState<boolean>(false);
+  const [pendingGsmTargets, setPendingGsmTargets] = useState<SmsMessageRecord[]>([]);
+  const [isConnectingGsm, setIsConnectingGsm] = useState<boolean>(false);
+  const [gsmSendProgress, setGsmSendProgress] = useState<{
+    isOpen: boolean;
+    current: number;
+    total: number;
+    recipient: string;
+    successCount: number;
+    failCount: number;
+    logs: string[];
+    isFinished: boolean;
+  }>({
+    isOpen: false,
+    current: 0,
+    total: 0,
+    recipient: "",
+    successCount: 0,
+    failCount: 0,
+    logs: [],
+    isFinished: false,
+  });
 
   // Quick Send State
   const [newRecipientNumber, setNewRecipientNumber] = useState<string>("");
@@ -365,6 +395,13 @@ export default function SmsMessagesManager({
       }
     };
     loadChannels();
+  }, []);
+
+  // Listen to GSM Modem hardware status & attempt auto-connection if permitted
+  useEffect(() => {
+    const unsub = gsmUsbService.addStatusListener((st) => setGsmStatus({ ...st }));
+    gsmUsbService.autoConnectAuthorizedPort().catch(() => {});
+    return () => unsub();
   }, []);
 
   // Listen to live events
@@ -849,6 +886,264 @@ export default function SmsMessagesManager({
     }
   };
 
+  // Connect to physical GSM modem via Web Serial
+  const handleConnectGsm = async () => {
+    setIsConnectingGsm(true);
+    try {
+      const res = await gsmUsbService.connectUsbPort(Number(gsmStatus.baudRate) || 115200);
+      if (res.success) {
+        if (showNotification) showNotification(res.message || "مودم GSM متصل شد", "success");
+        setIsGsmConnectModalOpen(false);
+        if (pendingGsmTargets.length > 0) {
+          const targets = [...pendingGsmTargets];
+          setPendingGsmTargets([]);
+          handleExecuteSendViaGsm(targets);
+        }
+      } else {
+        if (showNotification) showNotification(res.message || "اتصال به مودم ناموفق بود", "error");
+      }
+    } catch (err: any) {
+      if (showNotification) showNotification("خطا در اتصال به پورت: " + (err.message || err), "error");
+    } finally {
+      setIsConnectingGsm(false);
+    }
+  };
+
+  // Enable simulated hardware GSM mode
+  const handleEnableSimulatedGsm = () => {
+    gsmUsbService.setSimulationMode(true);
+    if (showNotification) showNotification("شبیه‌ساز سخت‌افزار GSM فعال شد (آماده ارسال آزمایشی)", "info");
+    setIsGsmConnectModalOpen(false);
+    if (pendingGsmTargets.length > 0) {
+      const targets = [...pendingGsmTargets];
+      setPendingGsmTargets([]);
+      handleExecuteSendViaGsm(targets);
+    }
+  };
+
+  // Send messages using real GSM Modem hardware with live progress and real DB persistence
+  const handleExecuteSendViaGsm = async (targets: SmsMessageRecord[]) => {
+    if (!targets || targets.length === 0) {
+      if (showNotification) showNotification("هیچ پیامکی برای ارسال با مودم GSM انتخاب نشده است", "warning");
+      return;
+    }
+
+    // Verify modem connection
+    if (!gsmUsbService.status.isConnected) {
+      const autoConnected = await gsmUsbService.autoConnectAuthorizedPort();
+      if (!autoConnected && !gsmUsbService.status.isConnected) {
+        setPendingGsmTargets(targets);
+        setIsGsmConnectModalOpen(true);
+        return;
+      }
+    }
+
+    setIsChannelSendModalOpen(false);
+    setMessagesToSend([]);
+
+    // Open progress modal
+    setGsmSendProgress({
+      isOpen: true,
+      current: 0,
+      total: targets.length,
+      recipient: targets[0]?.recipientNumber || "",
+      successCount: 0,
+      failCount: 0,
+      logs: [`آغاز ارسال ${toPersianDigits(targets.length)} پیامک از طریق مودم سخت‌افزاری GSM...`],
+      isFinished: false,
+    });
+
+    let successCount = 0;
+    let failCount = 0;
+    const updatedRecords: SmsMessageRecord[] = [];
+
+    for (let i = 0; i < targets.length; i++) {
+      const msg = targets[i];
+      const partNum = i + 1;
+
+      setGsmSendProgress((prev) => ({
+        ...prev,
+        current: partNum,
+        recipient: msg.recipientNumber,
+        logs: [
+          ...prev.logs.slice(-6),
+          `[${toPersianDigits(partNum)}/${toPersianDigits(targets.length)}] در حال ارسال پیامک به شماره ${toPersianDigits(msg.recipientNumber)}...`,
+        ],
+      }));
+
+      try {
+        const sendRes = await gsmUsbService.sendSms(msg.recipientNumber, msg.messageBody);
+        const nowIso = new Date().toISOString();
+
+        if (sendRes.success) {
+          successCount++;
+          const sentMsg: SmsMessageRecord = {
+            ...msg,
+            status: "sent",
+            providerId: "gsm_modem",
+            providerMessageId: sendRes.messageId || ("GSM-" + Date.now().toString(36).toUpperCase()),
+            sentAt: nowIso,
+            deliveredAt: nowIso,
+            updatedAt: nowIso,
+            partsCount: sendRes.partsCount || msg.partsCount || 1,
+            cost: 0,
+            currency: "ریال",
+            errorCode: null,
+            errorMessage: null,
+            providerResponse: {
+              channelId: "gsm_modem",
+              channelName: "مودم سخت‌افزاری GSM",
+              parts: sendRes.partsCount || 1,
+              mode: sendRes.modeUsed || "pdu",
+              timestamp: Date.now(),
+            },
+          };
+          updatedRecords.push(sentMsg);
+
+          // Persist update and delivery log to database
+          await fetch("/api/data/batch", {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + (localStorage.getItem("access_token") || ""),
+              "x-store-id": localStorage.getItem("activeStoreId") || "default",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              operations: [
+                {
+                  key: "sms_messages",
+                  type: "update",
+                  id: msg.id,
+                  data: sentMsg,
+                },
+                {
+                  key: "sms_delivery_logs",
+                  type: "append",
+                  data: {
+                    id: "LOG-" + Date.now() + "-" + Math.random().toString(36).substring(2, 6),
+                    messageId: msg.id,
+                    channelId: "gsm_modem",
+                    channelName: "مودم سخت‌افزاری GSM",
+                    recipientNumber: msg.recipientNumber,
+                    recipientName: msg.recipientName || "مشتری",
+                    senderLine: gsmUsbService.status.portName || "GSM Serial",
+                    status: "delivered",
+                    timestamp: nowIso,
+                  },
+                },
+              ],
+            }),
+          }).catch((err) => console.warn("Failed persisting GSM message log:", err));
+
+          setGsmSendProgress((prev) => ({
+            ...prev,
+            successCount,
+            logs: [
+              ...prev.logs.slice(-6),
+              `✓ پیامک به ${toPersianDigits(msg.recipientNumber)} با موفقیت تحویل مودم شد (شناسه: ${sentMsg.providerMessageId})`,
+            ],
+          }));
+        } else {
+          failCount++;
+          const failedMsg: SmsMessageRecord = {
+            ...msg,
+            status: "failed",
+            providerId: "gsm_modem",
+            errorCode: "GSM_ERROR",
+            errorMessage: sendRes.error || "خطا در ارسال از طریق مودم GSM",
+            updatedAt: nowIso,
+          };
+          updatedRecords.push(failedMsg);
+
+          await fetch("/api/data/batch", {
+            method: "POST",
+            headers: {
+              Authorization: "Bearer " + (localStorage.getItem("access_token") || ""),
+              "x-store-id": localStorage.getItem("activeStoreId") || "default",
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              operations: [
+                {
+                  key: "sms_messages",
+                  type: "update",
+                  id: msg.id,
+                  data: failedMsg,
+                },
+              ],
+            }),
+          }).catch((err) => console.warn("Failed persisting failed GSM message:", err));
+
+          setGsmSendProgress((prev) => ({
+            ...prev,
+            failCount,
+            logs: [
+              ...prev.logs.slice(-6),
+              `✗ خطا در ارسال به ${toPersianDigits(msg.recipientNumber)}: ${sendRes.error || "پاسخ نامشخص مودم"}`,
+            ],
+          }));
+        }
+      } catch (err: any) {
+        failCount++;
+        setGsmSendProgress((prev) => ({
+          ...prev,
+          failCount,
+          logs: [
+            ...prev.logs.slice(-6),
+            `✗ خطای ارتباط با دستگاه مودم: ${err.message || err}`,
+          ],
+        }));
+      }
+
+      // Small pause between multiple SMS messages to allow modem buffer clear
+      if (i < targets.length - 1) {
+        await new Promise((r) => setTimeout(r, 600));
+      }
+    }
+
+    // Refresh UI local messages
+    setMessages((prev) =>
+      prev.map((m) => {
+        const updated = updatedRecords.find((u) => u.id === m.id);
+        return updated || m;
+      })
+    );
+
+    if (selectedMessage) {
+      const updated = updatedRecords.find((u) => u.id === selectedMessage.id);
+      if (updated) setSelectedMessage(updated);
+    }
+
+    setSelectedIds(new Set());
+    setGsmSendProgress((prev) => ({
+      ...prev,
+      isFinished: true,
+      logs: [
+        ...prev.logs.slice(-6),
+        `پایان فرایند: ${toPersianDigits(successCount)} پیام موفق، ${toPersianDigits(failCount)} پیام ناموفق`,
+      ],
+    }));
+
+    if (typeof window !== "undefined") {
+      window.dispatchEvent(new CustomEvent("sms_messages_updated", { detail: { batch: updatedRecords } }));
+      window.dispatchEvent(new CustomEvent("app_data_changed", { detail: { key: "sms_messages" } }));
+    }
+
+    if (failCount === 0) {
+      if (showNotification)
+        showNotification(
+          `تمامی ${toPersianDigits(successCount)} پیامک با موفقیت از طریق مودم GSM ارسال گردید.`,
+          "success"
+        );
+    } else {
+      if (showNotification)
+        showNotification(
+          `ارسال پایان یافت: ${toPersianDigits(successCount)} پیام موفق، ${toPersianDigits(failCount)} پیام ناموفق`,
+          failCount === targets.length ? "error" : "warning"
+        );
+    }
+  };
+
   // Open Send via Channel Modal
   const handleOpenSendViaChannelModal = (targets: SmsMessageRecord[]) => {
     if (!targets || targets.length === 0) {
@@ -857,7 +1152,7 @@ export default function SmsMessagesManager({
     }
     setMessagesToSend(targets);
     const activeChan = channels.find((c) => c.status === "active") || channels[0];
-    setSelectedChannelId(activeChan?.id || "kavenegar");
+    setSelectedChannelId(activeChan?.id || "gsm_modem");
     setSenderLineOverride(activeChan?.senderLine || "");
     setIsChannelSendModalOpen(true);
   };
@@ -866,6 +1161,13 @@ export default function SmsMessagesManager({
   const handleExecuteSendViaChannel = async () => {
     if (messagesToSend.length === 0) return;
     const channel = channels.find((c) => c.id === selectedChannelId) || channels[0];
+
+    // If GSM modem is selected, execute real GSM hardware sending
+    if (channel.id === "gsm_modem" || channel.type === "gsm") {
+      await handleExecuteSendViaGsm(messagesToSend);
+      return;
+    }
+
     const finalSenderLine = senderLineOverride.trim() || channel.senderLine;
 
     setIsSendingViaChannel(true);
@@ -1087,19 +1389,39 @@ export default function SmsMessagesManager({
         </div>
 
         <div className="flex flex-wrap items-center gap-2.5">
-          {/* Send Queued / Pending Messages with Channel */}
+          {/* Send Queued / Pending Messages with GSM or Channel */}
           {stats.pending > 0 && (
-            <button
-              onClick={() => {
-                const queuedList = messages.filter((m) => m.status === "queued" || m.status === "pending");
-                handleOpenSendViaChannelModal(queuedList);
-              }}
-              className="px-4 py-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs md:text-sm font-bold flex items-center gap-2 transition-all shadow-md shadow-emerald-200 animate-pulse"
-              title="ارسال کلیه پیامک‌های در صف یا معلق با انتخاب کانال و خط ارسال"
-            >
-              <Send className="w-4 h-4" />
-              <span>ارسال پیام‌های در صف ({toPersianDigits(stats.pending)})</span>
-            </button>
+            <div className="flex items-center gap-1.5 bg-emerald-50/90 p-1 rounded-2xl border border-emerald-200/90 shadow-xs">
+              <button
+                onClick={() => {
+                  const queuedList = messages.filter((m) => m.status === "queued" || m.status === "pending");
+                  handleExecuteSendViaGsm(queuedList);
+                }}
+                className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white rounded-xl text-xs md:text-sm font-black flex items-center gap-2 transition-all shadow-sm cursor-pointer"
+                title="ارسال مستقیم کلیه پیامک‌های در صف از طریق مودم سخت‌افزاری GSM"
+              >
+                <Radio className="w-4 h-4 text-emerald-100" />
+                <span>ارسال با مودم GSM ({toPersianDigits(stats.pending)})</span>
+                <span
+                  className={`w-2 h-2 rounded-full ${
+                    gsmStatus.isConnected ? "bg-emerald-300" : "bg-amber-300 animate-ping"
+                  }`}
+                  title={gsmStatus.isConnected ? "مودم متصل است" : "نیاز به اتصال مودم"}
+                />
+              </button>
+
+              <button
+                onClick={() => {
+                  const queuedList = messages.filter((m) => m.status === "queued" || m.status === "pending");
+                  handleOpenSendViaChannelModal(queuedList);
+                }}
+                className="px-2.5 py-1.5 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-emerald-200 transition-colors cursor-pointer"
+                title="انتخاب درگاه یا کانال ارسال"
+              >
+                <Send className="w-3.5 h-3.5 text-emerald-600" />
+                <span className="hidden sm:inline">کانال‌های دیگر</span>
+              </button>
+            </div>
           )}
 
           <button
@@ -1587,12 +1909,26 @@ export default function SmsMessagesManager({
                       const selectedMsgs = Array.from(selectedIds)
                         .map((id) => messages.find((m) => m.id === id))
                         .filter(Boolean) as SmsMessageRecord[];
+                      handleExecuteSendViaGsm(selectedMsgs);
+                    }}
+                    className="px-3.5 py-1.5 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white text-xs font-black rounded-xl shadow-md transition-all flex items-center gap-1.5 cursor-pointer"
+                    title="ارسال پیامک‌های انتخاب شده با مودم سخت‌افزاری GSM"
+                  >
+                    <Radio className="w-3.5 h-3.5 text-emerald-100" />
+                    <span>ارسال با مودم GSM ({toPersianDigits(selectedIds.size)})</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      const selectedMsgs = Array.from(selectedIds)
+                        .map((id) => messages.find((m) => m.id === id))
+                        .filter(Boolean) as SmsMessageRecord[];
                       handleOpenSendViaChannelModal(selectedMsgs);
                     }}
                     className="px-3.5 py-1.5 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 text-white text-xs font-bold rounded-xl shadow-md transition-all flex items-center gap-1.5"
                   >
                     <Send className="w-3.5 h-3.5" />
-                    <span>ارسال با انتخاب کانال ({toPersianDigits(selectedIds.size)})</span>
+                    <span>ارسال با کانال ({toPersianDigits(selectedIds.size)})</span>
                   </button>
 
                   <button
@@ -1800,6 +2136,21 @@ export default function SmsMessagesManager({
                           {/* Actions */}
                           <td className="px-4 py-3 text-left pl-6" onClick={(e) => e.stopPropagation()}>
                             <div className="flex items-center justify-end gap-1.5">
+                              {/* Quick Send with GSM for queued/pending messages */}
+                              {(msg.status === "queued" || msg.status === "pending") && (
+                                <button
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleExecuteSendViaGsm([msg]);
+                                  }}
+                                  className="px-2 py-1 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-700 hover:text-teal-800 rounded-lg text-xs font-bold transition-all flex items-center gap-1 shadow-2xs cursor-pointer"
+                                  title="ارسال سریع این پیامک از طریق مودم GSM"
+                                >
+                                  <Radio className="w-3 h-3 text-teal-600" />
+                                  <span className="hidden sm:inline">ارسال با GSM</span>
+                                </button>
+                              )}
+
                               {/* Send with Channel button */}
                               <button
                                 onClick={(e) => {
@@ -1810,7 +2161,7 @@ export default function SmsMessagesManager({
                                 title="انتخاب کانال و ارسال این پیامک"
                               >
                                 <Send className="w-3 h-3 text-emerald-600" />
-                                <span className="hidden sm:inline">ارسال با کانال</span>
+                                <span className="hidden sm:inline">کانال...</span>
                               </button>
 
                               {msg.status === "failed" && (
@@ -2150,12 +2501,22 @@ export default function SmsMessagesManager({
 
               {/* Drawer Footer Actions */}
               <div className="p-4 border-t border-slate-200 bg-white flex flex-wrap items-center gap-2.5">
+                {(selectedMessage.status === "queued" || selectedMessage.status === "pending" || selectedMessage.status === "failed") && (
+                  <button
+                    onClick={() => handleExecuteSendViaGsm([selectedMessage])}
+                    className="flex-1 min-w-[150px] bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-teal-100 flex items-center justify-center gap-2 text-xs md:text-sm cursor-pointer"
+                  >
+                    <Radio className="w-4 h-4" />
+                    <span>ارسال با مودم GSM</span>
+                  </button>
+                )}
+
                 <button
                   onClick={() => handleOpenSendViaChannelModal([selectedMessage])}
-                  className="flex-1 min-w-[180px] bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-bold py-2.5 rounded-xl transition-all shadow-md shadow-emerald-100 flex items-center justify-center gap-2 text-xs md:text-sm"
+                  className="flex-1 min-w-[150px] bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-bold py-2.5 rounded-xl transition-colors flex items-center justify-center gap-2 text-xs md:text-sm cursor-pointer"
                 >
-                  <Send className="w-4 h-4" />
-                  <span>انتخاب کانال و ارسال</span>
+                  <Send className="w-4 h-4 text-emerald-600" />
+                  <span>انتخاب کانال...</span>
                 </button>
 
                 {selectedMessage.status === "failed" && (
@@ -2482,6 +2843,60 @@ export default function SmsMessagesManager({
                   </div>
                 </div>
 
+                {/* GSM Modem Hardware Details & Connection helper if selected */}
+                {(selectedChannelId === "gsm_modem" || channels.find((c) => c.id === selectedChannelId)?.type === "gsm") && (
+                  <div className={`p-4 rounded-2xl border ${gsmStatus.isConnected ? "bg-emerald-50/80 border-emerald-200" : "bg-amber-50/80 border-amber-200"} space-y-3`}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Radio className={`w-4 h-4 ${gsmStatus.isConnected ? "text-emerald-600" : "text-amber-600"}`} />
+                        <span className="text-xs font-black text-slate-800">
+                          وضعیت سخت‌افزار مودم GSM:
+                        </span>
+                        <span className={`text-[11px] font-bold px-2 py-0.5 rounded-full ${gsmStatus.isConnected ? "bg-emerald-100 text-emerald-800" : "bg-amber-100 text-amber-800"}`}>
+                          {gsmStatus.isConnected ? (gsmStatus.isSimulated ? "شبیه‌ساز فعال است" : "مودم متصل است") : "قطع / بدون اتصال پورت"}
+                        </span>
+                      </div>
+                      {gsmStatus.isConnected && (
+                        <span className="text-[11px] text-slate-500 font-mono">
+                          سیگنال: {toPersianDigits(gsmStatus.signalStrength)}%
+                        </span>
+                      )}
+                    </div>
+
+                    {gsmStatus.isConnected ? (
+                      <div className="text-[11px] text-slate-600 grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1 border-t border-emerald-100">
+                        <div>پورت: <strong className="font-mono text-slate-800" dir="ltr">{gsmStatus.portName}</strong></div>
+                        <div>اپراتور: <strong className="text-slate-800">{gsmStatus.operator || "تشخیص داده شد"}</strong></div>
+                        <div>نرخ انتقال: <strong className="font-mono text-slate-800">{gsmStatus.baudRate} bps</strong></div>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-amber-100">
+                        <p className="text-xs text-amber-800">
+                          برای ارسال با سیم‌کارت، پورت سریال مودم USB باید انتخاب و متصل شود:
+                        </p>
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={handleConnectGsm}
+                            disabled={isConnectingGsm}
+                            className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
+                          >
+                            <Radio className="w-3.5 h-3.5" />
+                            <span>{isConnectingGsm ? "در حال اتصال..." : "انتخاب پورت و اتصال USB"}</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={handleEnableSimulatedGsm}
+                            className="px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all border border-slate-200 cursor-pointer"
+                          >
+                            فعال‌سازی شبیه‌ساز (تست)
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* 3. Sender Line Override */}
                 <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200">
                   <div className="flex items-center justify-between gap-3">
@@ -2789,6 +3204,197 @@ export default function SmsMessagesManager({
                     )}
                   </button>
                 </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+      {/* 7. GSM Modem Connection Dialog Modal */}
+      <AnimatePresence>
+        {isGsmConnectModalOpen && (
+          <div
+            className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs overflow-y-auto"
+            onClick={() => setIsGsmConnectModalOpen(false)}
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-md w-full overflow-hidden text-right relative"
+              dir="rtl"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="h-2 bg-gradient-to-r from-teal-500 to-emerald-600" />
+              <div className="p-6 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600 shrink-0 shadow-xs">
+                      <Radio className="w-6 h-6" />
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-800">
+                        اتصال به مودم سخت‌افزاری GSM
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        جهت ارسال مستقیم پیامک‌ها با سیم‌کارت سخت‌افزاری
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    onClick={() => setIsGsmConnectModalOpen(false)}
+                    className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-3.5 bg-teal-50/80 border border-teal-200 rounded-2xl text-xs text-teal-900 leading-relaxed">
+                  دستگاه مودم GSM در مرورگر متصل نیست. برای ارسال پیامک‌ها لطفاً پورت USB مودم متصل به سیستم را انتخاب فرمایید، یا در صورت تمایل از شبیه‌ساز سخت‌افزار استفاده کنید.
+                </div>
+
+                <div className="space-y-2.5 pt-1">
+                  <button
+                    type="button"
+                    disabled={isConnectingGsm}
+                    onClick={handleConnectGsm}
+                    className="w-full py-3 bg-gradient-to-r from-teal-600 to-emerald-600 hover:from-teal-500 hover:to-emerald-500 text-white font-black rounded-2xl text-xs sm:text-sm shadow-md shadow-teal-200 flex items-center justify-center gap-2 transition-all cursor-pointer disabled:opacity-50"
+                  >
+                    <Radio className="w-4 h-4" />
+                    <span>{isConnectingGsm ? "در حال اتصال به پورت..." : "انتخاب پورت USB و اتصال به مودم (Web Serial)"}</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleEnableSimulatedGsm}
+                    className="w-full py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold rounded-2xl text-xs transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Sparkles className="w-4 h-4 text-amber-500" />
+                    <span>فعال‌سازی شبیه‌ساز سخت‌افزار GSM (ارسال آزمایشی)</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsGsmConnectModalOpen(false);
+                      if (pendingGsmTargets.length > 0) {
+                        handleOpenSendViaChannelModal(pendingGsmTargets);
+                        setPendingGsmTargets([]);
+                      }
+                    }}
+                    className="w-full py-2 bg-white hover:bg-slate-50 text-indigo-600 font-bold rounded-xl text-xs transition-colors border border-indigo-200 flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Send className="w-3.5 h-3.5" />
+                    <span>ارسال با سایر کانال‌ها و وب‌سرویس‌های پیامک</span>
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* 8. GSM Sending Live Progress Modal */}
+      <AnimatePresence>
+        {gsmSendProgress.isOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 15 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 15 }}
+              transition={{ duration: 0.2 }}
+              className="bg-white rounded-3xl shadow-2xl border border-slate-200 max-w-lg w-full overflow-hidden text-right relative"
+              dir="rtl"
+            >
+              <div className="h-2 bg-gradient-to-r from-teal-500 to-emerald-600" />
+              <div className="p-6 space-y-4">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="flex items-center gap-3">
+                    <div className="w-12 h-12 rounded-2xl bg-teal-50 border border-teal-200 flex items-center justify-center text-teal-600 shrink-0 shadow-xs">
+                      {gsmSendProgress.isFinished ? (
+                        <CheckCircle2 className="w-6 h-6 text-emerald-600" />
+                      ) : (
+                        <RefreshCw className="w-6 h-6 animate-spin text-teal-600" />
+                      )}
+                    </div>
+                    <div>
+                      <h3 className="text-base font-black text-slate-800">
+                        {gsmSendProgress.isFinished ? "پایان ارسال پیامک‌ها با مودم GSM" : "در حال ارسال با مودم سخت‌افزاری GSM"}
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        {gsmSendProgress.isFinished
+                          ? `عملیات تکمیل شد: ${toPersianDigits(gsmSendProgress.successCount)} موفق، ${toPersianDigits(gsmSendProgress.failCount)} ناموفق`
+                          : `پیام ${toPersianDigits(gsmSendProgress.current)} از ${toPersianDigits(gsmSendProgress.total)}`}
+                      </p>
+                    </div>
+                  </div>
+                  {gsmSendProgress.isFinished && (
+                    <button
+                      onClick={() => setGsmSendProgress((prev) => ({ ...prev, isOpen: false }))}
+                      className="p-1.5 hover:bg-slate-100 rounded-xl text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+                    >
+                      <X className="w-5 h-5" />
+                    </button>
+                  )}
+                </div>
+
+                {/* Progress bar */}
+                <div className="space-y-1.5">
+                  <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden p-0.5 border border-slate-200">
+                    <div
+                      className="h-full bg-gradient-to-r from-teal-500 to-emerald-500 rounded-full transition-all duration-300"
+                      style={{
+                        width: `${gsmSendProgress.total > 0 ? (gsmSendProgress.current / gsmSendProgress.total) * 100 : 0}%`,
+                      }}
+                    />
+                  </div>
+                  <div className="flex items-center justify-between text-[11px] font-sans text-slate-500 font-bold">
+                    <span>
+                      {gsmSendProgress.recipient ? `گیرنده فعلی: ${toPersianDigits(gsmSendProgress.recipient)}` : ""}
+                    </span>
+                    <span>
+                      {gsmSendProgress.total > 0
+                        ? `${toPersianDigits(Math.round((gsmSendProgress.current / gsmSendProgress.total) * 100))}%`
+                        : "۰%"}
+                    </span>
+                  </div>
+                </div>
+
+                {/* Status Counter Chips */}
+                <div className="flex items-center gap-2">
+                  <span className="px-3 py-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-bold rounded-xl flex items-center gap-1.5">
+                    <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                    ارسال موفق: {toPersianDigits(gsmSendProgress.successCount)}
+                  </span>
+                  {gsmSendProgress.failCount > 0 && (
+                    <span className="px-3 py-1 bg-rose-50 border border-rose-200 text-rose-700 text-xs font-bold rounded-xl flex items-center gap-1.5">
+                      <XCircle className="w-3.5 h-3.5 text-rose-600" />
+                      ناموفق: {toPersianDigits(gsmSendProgress.failCount)}
+                    </span>
+                  )}
+                </div>
+
+                {/* Logs terminal box */}
+                <div className="bg-slate-950 text-slate-200 p-3 rounded-2xl text-[11px] font-mono space-y-1 max-h-36 overflow-y-auto custom-scrollbar border border-slate-800">
+                  {gsmSendProgress.logs.map((log, idx) => (
+                    <div key={idx} className="leading-relaxed">
+                      {log}
+                    </div>
+                  ))}
+                </div>
+
+                {/* Footer close button */}
+                {gsmSendProgress.isFinished && (
+                  <div className="pt-2 border-t border-slate-100 flex justify-end">
+                    <button
+                      type="button"
+                      onClick={() => setGsmSendProgress((prev) => ({ ...prev, isOpen: false }))}
+                      className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+                    >
+                      بستن پنجره
+                    </button>
+                  </div>
+                )}
               </div>
             </motion.div>
           </div>

@@ -526,6 +526,51 @@ class GsmUsbService {
     return [...this.receivedMessages];
   }
 
+  // Automatically connect to an already authorized serial port (if any exists in navigator.serial.getPorts())
+  public async autoConnectAuthorizedPort(baudRate = 115200): Promise<boolean> {
+    if (this.status.isConnected && (this.serialPort || this.status.isSimulated)) {
+      return true;
+    }
+    if (!this.isWebSerialSupported()) {
+      return false;
+    }
+    try {
+      const serial = (navigator as any).serial;
+      if (!serial?.getPorts) return false;
+      const ports = await serial.getPorts();
+      if (!ports || ports.length === 0) return false;
+
+      const port = ports[0];
+      await port.open({
+        baudRate,
+        dataBits: 8,
+        stopBits: 1,
+        parity: 'none',
+        flowControl: 'none',
+        bufferSize: 8192
+      });
+
+      this.serialPort = port;
+      this.status.isConnected = true;
+      this.status.isSimulated = false;
+      this.status.baudRate = baudRate;
+      this.status.portName = `پورت سریال USB (${baudRate} bps)`;
+      this.addLog('info', `اتصال خودکار به پورت USB قبلاً تایید شده با موفقیت برقرار شد.`);
+
+      try {
+        await port.setSignals({ dataTerminalReady: true, requestToSend: true });
+      } catch (e) {}
+
+      this.startReading();
+      this.runInitialHardwareSetup().catch(() => {});
+      this.notifyStatus();
+      return true;
+    } catch (err: any) {
+      console.warn('Auto-connect to authorized serial port failed:', err);
+      return false;
+    }
+  }
+
   // Connect using browser's Web Serial API to a physical USB GSM Dongle
   public async connectUsbPort(baudRate = 115200): Promise<{ success: boolean; message: string }> {
     if (!this.isWebSerialSupported()) {
@@ -941,7 +986,11 @@ class GsmUsbService {
     modeOverride?: 'auto' | 'pdu' | 'text'
   ): Promise<GsmSentResult> {
     if (!this.status.isConnected) {
-      return { success: false, error: 'دستگاه مودم GSM متصل نیست.' };
+      await this.autoConnectAuthorizedPort();
+    }
+
+    if (!this.status.isConnected) {
+      return { success: false, error: 'دستگاه مودم GSM متصل نیست. لطفاً ابتدا پورت مودم را متصل نمایید.' };
     }
 
     if (!to || !to.trim()) {
