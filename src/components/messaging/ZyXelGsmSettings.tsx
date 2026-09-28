@@ -868,7 +868,7 @@ export default function ZyXelGsmSettings({
                     <label className="text-xs font-bold text-gray-700">متن پیامک</label>
                     <span className="text-[11px] text-gray-500 font-mono">
                       کاراکترها: {toPersianDigits(messageBody.length)} | پارت‌ها:{" "}
-                      {toPersianDigits(Math.ceil(messageBody.length / 70) || 1)}
+                      {toPersianDigits(messageBody.length <= 70 ? 1 : Math.ceil(messageBody.length / 67))}
                     </span>
                   </div>
                   <textarea

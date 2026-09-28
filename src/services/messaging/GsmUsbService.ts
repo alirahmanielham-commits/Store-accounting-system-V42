@@ -95,8 +95,17 @@ export function isHexUcs2(str: string): boolean {
   return /^[0-9A-Fa-f]+$/.test(trimmed);
 }
 
-// Encode SMS-SUBMIT PDU (GSM 03.40 standard - universally supported by all GSM/3G modems)
-export function encodeSmsSubmitPdu(recipient: string, text: string): { pduHex: string; length: number } {
+// PDU Part Interface for Single & Multi-part (Concatenated) SMS
+export interface SmsPduPart {
+  pduHex: string;
+  length: number;
+  partIndex: number;
+  totalParts: number;
+  charCount: number;
+}
+
+// Encode SMS-SUBMIT PDU (GSM 03.40 / 3GPP TS 23.040 standard - handles single and multi-page concatenated SMS)
+export function encodeSmsSubmitPdus(recipient: string, text: string): SmsPduPart[] {
   let cleanNum = recipient.trim().replace(/[^\d+]/g, '');
   let isInternational = false;
   
@@ -127,47 +136,87 @@ export function encodeSmsSubmitPdu(recipient: string, text: string): { pduHex: s
     swappedDigits += paddedNum[i + 1] + paddedNum[i];
   }
 
-  // Detect Unicode (Persian/Arabic)
-  const isUnicode = /[^\u0000-\u007F]/.test(text);
-  const dcsHex = isUnicode ? '08' : '00'; // 08 = 16-bit UCS2
-
-  // Encode User Data
-  let userDataHex = '';
-  if (isUnicode) {
-    for (let i = 0; i < text.length; i++) {
-      userDataHex += text.charCodeAt(i).toString(16).padStart(4, '0').toUpperCase();
-    }
-  } else {
-    // Also use UCS2 for mixed/clean reliability if needed, or 16-bit
-    for (let i = 0; i < text.length; i++) {
-      userDataHex += text.charCodeAt(i).toString(16).padStart(4, '0').toUpperCase();
-    }
-  }
-  const udl = userDataHex.length / 2; // length in octets
-  const udlHex = udl.toString(16).padStart(2, '0').toUpperCase();
-
-  // PDU Structure:
-  // 00 = SMSC info length 0 (use default SMSC from SIM)
-  // 01 = First octet (SMS-SUBMIT)
-  // 00 = Message Reference (allocated by modem)
-  // DA = Dest Address (Len + Type + Swapped)
-  // 00 = Protocol Identifier
-  // DCS = 08 (UCS2 16-bit)
-  // UDL = User Data Length
-  // UD = User Data Hex
   const smsc = '00';
-  const firstOctet = '01';
   const mr = '00';
   const da = addressLengthHex + addressTypeHex + swappedDigits;
   const pid = '00';
+  const dcs = '08'; // 16-bit UCS2 (standard Persian & Unicode)
 
-  const pduBodyWithoutSmsc = firstOctet + mr + da + pid + '08' + udlHex + userDataHex;
-  const fullPduHex = smsc + pduBodyWithoutSmsc;
-  const pduLength = pduBodyWithoutSmsc.length / 2;
+  // Single part SMS fits in 70 UCS-2 characters (140 bytes of User Data)
+  if (text.length <= 70) {
+    const firstOctet = '01'; // TP-MTI = 01 (SMS-SUBMIT), TP-UDHI = 0
+    let userDataHex = '';
+    for (let i = 0; i < text.length; i++) {
+      userDataHex += text.charCodeAt(i).toString(16).padStart(4, '0').toUpperCase();
+    }
+    const udl = userDataHex.length / 2; // length in octets
+    const udlHex = udl.toString(16).padStart(2, '0').toUpperCase();
+    const pduBodyWithoutSmsc = firstOctet + mr + da + pid + dcs + udlHex + userDataHex;
+    const fullPduHex = smsc + pduBodyWithoutSmsc;
+    const pduLength = pduBodyWithoutSmsc.length / 2;
 
+    return [{
+      pduHex: fullPduHex,
+      length: pduLength,
+      partIndex: 1,
+      totalParts: 1,
+      charCount: text.length
+    }];
+  }
+
+  // Concatenated / Multi-part SMS (67 UCS-2 characters per part to leave 6 octets for standard UDH)
+  const maxCharsPerPart = 67;
+  const totalParts = Math.ceil(text.length / maxCharsPerPart);
+  // CSMS 8-bit Reference Number (1 to 255)
+  const csmsRef = Math.floor(Math.random() * 254) + 1;
+  const csmsRefHex = csmsRef.toString(16).padStart(2, '0').toUpperCase();
+  const totalPartsHex = totalParts.toString(16).padStart(2, '0').toUpperCase();
+
+  const parts: SmsPduPart[] = [];
+
+  for (let i = 0; i < totalParts; i++) {
+    const partNum = i + 1;
+    const partNumHex = partNum.toString(16).padStart(2, '0').toUpperCase();
+    const partText = text.substring(i * maxCharsPerPart, (i + 1) * maxCharsPerPart);
+    
+    // First octet with TP-UDHI bit 6 enabled: 0x01 | 0x40 = 0x41
+    const firstOctet = '41';
+
+    // Standard 6-octet UDH: 05 (length 5), 00 (IEI concatenated 8-bit), 03 (IEDL), ref, total, seq
+    const udhHex = `050003${csmsRefHex}${totalPartsHex}${partNumHex}`;
+
+    // Encode chunk characters to UCS2
+    let chunkHex = '';
+    for (let c = 0; c < partText.length; c++) {
+      chunkHex += partText.charCodeAt(c).toString(16).padStart(4, '0').toUpperCase();
+    }
+
+    const totalUserDataHex = udhHex + chunkHex;
+    const totalUdl = totalUserDataHex.length / 2; // length in octets
+    const udlHex = totalUdl.toString(16).padStart(2, '0').toUpperCase();
+
+    const pduBodyWithoutSmsc = firstOctet + mr + da + pid + dcs + udlHex + totalUserDataHex;
+    const fullPduHex = smsc + pduBodyWithoutSmsc;
+    const pduLength = pduBodyWithoutSmsc.length / 2;
+
+    parts.push({
+      pduHex: fullPduHex,
+      length: pduLength,
+      partIndex: partNum,
+      totalParts,
+      charCount: partText.length
+    });
+  }
+
+  return parts;
+}
+
+// Backward-compatible single-part or first-part helper
+export function encodeSmsSubmitPdu(recipient: string, text: string): { pduHex: string; length: number } {
+  const parts = encodeSmsSubmitPdus(recipient, text);
   return {
-    pduHex: fullPduHex,
-    length: pduLength
+    pduHex: parts[0]?.pduHex || '',
+    length: parts[0]?.length || 0
   };
 }
 
@@ -185,7 +234,9 @@ export function decodeSmsDeliverPdu(pduHex: string): { sender: string; text: str
       offset += smscLen * 2;
     }
 
-    // 2. First octet of SMS-DELIVER
+    // 2. First octet of SMS-DELIVER (check TP-UDHI bit 6: 0x40)
+    const firstOctet = parseInt(raw.substr(offset, 2), 16);
+    const hasUdhi = (firstOctet & 0x40) !== 0;
     offset += 2;
 
     // 3. Sender Address Length
@@ -235,7 +286,18 @@ export function decodeSmsDeliverPdu(pduHex: string): { sender: string; text: str
     offset += 2;
 
     // 8. User Data
-    const udHex = raw.substr(offset);
+    let udHex = raw.substr(offset);
+
+    // If message contains UDH (User Data Header), skip it to extract pure text
+    if (hasUdhi && udHex.length >= 2) {
+      const udhLen = parseInt(udHex.substr(0, 2), 16);
+      const udhTotalBytes = udhLen + 1;
+      const udhHexTotalLen = udhTotalBytes * 2;
+      if (udHex.length > udhHexTotalLen) {
+        udHex = udHex.substring(udhHexTotalLen);
+      }
+    }
+
     let text = '';
     if (isUcs2) {
       text = hexUcs2ToText(udHex);
@@ -891,24 +953,24 @@ class GsmUsbService {
     }
 
     const cleanNumber = to.trim().replace(/\s+/g, '');
-    const parts = Math.ceil(messageText.length / 70) || 1;
+    const estimatedParts = messageText.length > 70 ? Math.ceil(messageText.length / 67) : 1;
     const mode = modeOverride || this.status.preferredSmsMode || 'auto';
 
     try {
-      this.addLog('info', `در حال شروع فرایند ارسال پیامک به ${cleanNumber}...`);
+      this.addLog('info', `در حال شروع فرایند ارسال پیامک به ${cleanNumber} (${estimatedParts} بخش)...`);
 
       if (this.status.isSimulated || !this.serialPort) {
         await new Promise(r => setTimeout(r, 500));
         const msgId = `GSM-${Date.now().toString(36).toUpperCase()}`;
         this.addLog('received', `+CMGS: ${Math.floor(Math.random() * 50 + 1)}\r\nOK`);
-        this.addLog('info', `پیامک در حالت شبیه‌ساز با موفقیت ارسال شد (شناسه: ${msgId})`);
+        this.addLog('info', `پیامک در حالت شبیه‌ساز با موفقیت ارسال شد (${estimatedParts} بخش، شناسه: ${msgId})`);
 
         const result: GsmSentResult = {
           success: true,
           messageId: msgId,
           recipient: cleanNumber,
           timestamp: new Date().toLocaleTimeString('fa-IR'),
-          partsCount: parts,
+          partsCount: estimatedParts,
           modeUsed: 'simulated'
         };
 
@@ -946,48 +1008,71 @@ class GsmUsbService {
     }
   }
 
-  // PDU Mode Sending (Universal 3GPP GSM 03.40 standard - handles all Persian/Unicode text natively)
+  // PDU Mode Sending (Universal 3GPP GSM 03.40 standard with UDH Concatenated Multi-part SMS support)
   private async sendSmsViaPdu(cleanNumber: string, messageText: string): Promise<GsmSentResult> {
     try {
       this.addLog('info', 'تنظیم مودم روی حالت استاندارد جهانی PDU (AT+CMGF=0)...');
       await this.executeAtCommand('AT+CMGF=0', 3000);
 
-      const pdu = encodeSmsSubmitPdu(cleanNumber, messageText);
-      this.addLog('info', `PDU آماده شد. طول داده: ${pdu.length} بایت. ارسال فرمان AT+CMGS=${pdu.length}...`);
-
-      // Phase 1: Issue AT+CMGS=<length> and wait for prompt '>'
-      const promptResp = await this.executeAtCommand(`AT+CMGS=${pdu.length}`, 8000);
+      const pdus = encodeSmsSubmitPdus(cleanNumber, messageText);
+      const totalParts = pdus.length;
       
-      if (!promptResp.includes('>') && !promptResp.includes('> ')) {
-        throw new Error(`مودم پس از AT+CMGS پرامپت دریافت متن (>) را بازنگرداند. پاسخ: ${promptResp}`);
+      if (totalParts > 1) {
+        this.addLog('info', `پیامک چندصفحه‌ای شناسایی شد (${totalParts} پارت). آماده‌سازی ارسال ترتیبی بسته‌های PDU با سرآیند UDH...`);
       }
 
-      // Phase 2: Write PDU Hex + Ctrl+Z (0x1A)
-      this.addLog('info', 'پرامپت > دریافت شد. ارسال بسته PDU و خاتمه با Ctrl+Z...');
-      const sendResp = await this.executeAtCommand(`${pdu.pduHex}\x1A`, 25000);
+      let lastMessageId = '';
+      let lastRawResp = '';
 
-      if (sendResp.includes('OK') || sendResp.includes('+CMGS:')) {
-        const msgIdMatch = sendResp.match(/\+CMGS:\s*(\d+)/);
-        const msgId = msgIdMatch ? `PDU-${msgIdMatch[1]}` : `GSM-${Date.now().toString(36).toUpperCase()}`;
-        this.addLog('info', `پیامک با موفقیت از طریق پروتکل PDU به دکل مخابراتی ارسال شد (کد مرجع: ${msgId}).`);
+      for (let idx = 0; idx < pdus.length; idx++) {
+        const part = pdus[idx];
+        const partDesc = totalParts > 1 ? ` (بخش ${part.partIndex} از ${totalParts})` : '';
+        this.addLog('info', `PDU${partDesc} آماده شد (طول TPDU: ${part.length} بایت). ارسال فرمان AT+CMGS=${part.length}...`);
+
+        // Phase 1: Issue AT+CMGS=<length> and wait for prompt '>'
+        const promptResp = await this.executeAtCommand(`AT+CMGS=${part.length}`, 8000);
         
-        const result: GsmSentResult = {
-          success: true,
-          messageId: msgId,
-          recipient: cleanNumber,
-          timestamp: new Date().toLocaleTimeString('fa-IR'),
-          partsCount: Math.ceil(messageText.length / 70) || 1,
-          modeUsed: 'pdu',
-          rawResponse: sendResp
-        };
-
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('gsm_message_sent', { detail: result }));
+        if (!promptResp.includes('>') && !promptResp.includes('> ')) {
+          throw new Error(`مودم در${partDesc} پس از AT+CMGS پرامپت دریافت متن (>) را بازنگرداند. پاسخ: ${promptResp}`);
         }
-        return result;
-      } else {
-        throw new Error(translateCmsError(sendResp));
+
+        // Phase 2: Write PDU Hex + Ctrl+Z (0x1A)
+        this.addLog('info', `پرامپت > دریافت شد. ارسال بسته PDU${partDesc} و خاتمه با Ctrl+Z...`);
+        const sendResp = await this.executeAtCommand(`${part.pduHex}\x1A`, 30000);
+
+        if (sendResp.includes('OK') || sendResp.includes('+CMGS:')) {
+          const msgIdMatch = sendResp.match(/\+CMGS:\s*(\d+)/);
+          lastMessageId = msgIdMatch ? `PDU-${msgIdMatch[1]}` : `GSM-${Date.now().toString(36).toUpperCase()}`;
+          lastRawResp = sendResp;
+          this.addLog('info', `بسته PDU${partDesc} با موفقیت به دکل مخابراتی تحویل داده شد.`);
+
+          // Safe interval between multipart packets to prevent modem transmit buffer overrun
+          if (idx < pdus.length - 1) {
+            this.addLog('info', 'در حال اعمال وقفه ۱ ثانیه‌ای برای پردازش پارت بعدی در شبکه...');
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        } else {
+          throw new Error(translateCmsError(sendResp));
+        }
       }
+
+      const msgId = lastMessageId || `GSM-${Date.now().toString(36).toUpperCase()}`;
+      this.addLog('info', `کل پیامک (${totalParts} صفحه) با پروتکل استاندارد PDU با موفقیت ارسال شد (کد پیگیری: ${msgId}).`);
+      
+      const result: GsmSentResult = {
+        success: true,
+        messageId: msgId,
+        recipient: cleanNumber,
+        timestamp: new Date().toLocaleTimeString('fa-IR'),
+        partsCount: totalParts,
+        modeUsed: 'pdu',
+        rawResponse: lastRawResp
+      };
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gsm_message_sent', { detail: result }));
+      }
+      return result;
     } catch (err: any) {
       this.addLog('error', `ارسال در حالت PDU ناموفق بود: ${err.message || err}`);
       return {
@@ -997,7 +1082,7 @@ class GsmUsbService {
     }
   }
 
-  // Text Mode Sending (AT+CMGF=1 with AT+CSMP UCS2 configuration)
+  // Text Mode Sending (AT+CMGF=1 with UCS2 configuration & multi-part chunking)
   private async sendSmsViaText(cleanNumber: string, messageText: string): Promise<GsmSentResult> {
     try {
       this.addLog('info', 'تنظیم مودم روی حالت متنی (AT+CMGF=1)...');
@@ -1022,42 +1107,70 @@ class GsmUsbService {
         }
       }
 
-      // Phase 1: Issue AT+CMGS="phoneNumber"
-      const cmgsCmd = `AT+CMGS="${cleanNumber}"`;
-      this.addLog('info', `ارسال فرمان ${cmgsCmd} و انتظار برای پرامپت > ...`);
-      const promptResp = await this.executeAtCommand(cmgsCmd, 8000);
-
-      if (!promptResp.includes('>') && !promptResp.includes('> ')) {
-        throw new Error(`مودم در حالت متنی پرامپت > را ارسال نکرد. پاسخ: ${promptResp}`);
+      // Chunk size for Text Mode to fit modem buffer
+      const chunkSize = hasUnicode ? 70 : 160;
+      const textChunks: string[] = [];
+      for (let i = 0; i < messageText.length; i += chunkSize) {
+        textChunks.push(messageText.substring(i, i + chunkSize));
       }
 
-      // Phase 2: Send Body + Ctrl+Z
-      const bodyToSend = hasUnicode ? textToHexUcs2(messageText) : messageText;
-      this.addLog('info', 'ارسال بدنه پیامک و پایان با Ctrl+Z...');
-      const sendResp = await this.executeAtCommand(`${bodyToSend}\x1A`, 25000);
+      const totalParts = textChunks.length;
+      if (totalParts > 1) {
+        this.addLog('info', `متن در حالت متنی به ${totalParts} پارت تقسیم شد و به صورت ترتیبی ارسال می‌گردد.`);
+      }
 
-      if (sendResp.includes('OK') || sendResp.includes('+CMGS:')) {
-        const msgIdMatch = sendResp.match(/\+CMGS:\s*(\d+)/);
-        const msgId = msgIdMatch ? `TXT-${msgIdMatch[1]}` : `GSM-${Date.now().toString(36).toUpperCase()}`;
-        this.addLog('info', `پیامک با موفقیت در حالت متنی ارسال شد (کد مرجع: ${msgId}).`);
-        
-        const result: GsmSentResult = {
-          success: true,
-          messageId: msgId,
-          recipient: cleanNumber,
-          timestamp: new Date().toLocaleTimeString('fa-IR'),
-          partsCount: Math.ceil(messageText.length / 70) || 1,
-          modeUsed: 'text',
-          rawResponse: sendResp
-        };
+      let lastMessageId = '';
+      let lastRawResp = '';
 
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('gsm_message_sent', { detail: result }));
+      for (let idx = 0; idx < textChunks.length; idx++) {
+        const chunk = textChunks[idx];
+        const partDesc = totalParts > 1 ? ` (بخش ${idx + 1} از ${totalParts})` : '';
+
+        // Phase 1: Issue AT+CMGS="phoneNumber"
+        const cmgsCmd = `AT+CMGS="${cleanNumber}"`;
+        this.addLog('info', `ارسال فرمان ${cmgsCmd}${partDesc} و انتظار برای پرامپت > ...`);
+        const promptResp = await this.executeAtCommand(cmgsCmd, 8000);
+
+        if (!promptResp.includes('>') && !promptResp.includes('> ')) {
+          throw new Error(`مودم در حالت متنی${partDesc} پرامپت > را ارسال نکرد. پاسخ: ${promptResp}`);
         }
-        return result;
-      } else {
-        throw new Error(translateCmsError(sendResp));
+
+        // Phase 2: Send Body + Ctrl+Z
+        const bodyToSend = hasUnicode ? textToHexUcs2(chunk) : chunk;
+        this.addLog('info', `ارسال بدنه پیامک${partDesc} و پایان با Ctrl+Z...`);
+        const sendResp = await this.executeAtCommand(`${bodyToSend}\x1A`, 25000);
+
+        if (sendResp.includes('OK') || sendResp.includes('+CMGS:')) {
+          const msgIdMatch = sendResp.match(/\+CMGS:\s*(\d+)/);
+          lastMessageId = msgIdMatch ? `TXT-${msgIdMatch[1]}` : `GSM-${Date.now().toString(36).toUpperCase()}`;
+          lastRawResp = sendResp;
+          this.addLog('info', `بخش متنی${partDesc} با موفقیت ارسال شد.`);
+
+          if (idx < textChunks.length - 1) {
+            await new Promise(r => setTimeout(r, 1000));
+          }
+        } else {
+          throw new Error(translateCmsError(sendResp));
+        }
       }
+
+      const msgId = lastMessageId || `GSM-${Date.now().toString(36).toUpperCase()}`;
+      this.addLog('info', `پیامک با موفقیت در حالت متنی ارسال شد (${totalParts} پارت، شناسه: ${msgId}).`);
+      
+      const result: GsmSentResult = {
+        success: true,
+        messageId: msgId,
+        recipient: cleanNumber,
+        timestamp: new Date().toLocaleTimeString('fa-IR'),
+        partsCount: totalParts,
+        modeUsed: 'text',
+        rawResponse: lastRawResp
+      };
+
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('gsm_message_sent', { detail: result }));
+      }
+      return result;
     } catch (err: any) {
       this.addLog('error', `ارسال در حالت متنی ناموفق بود: ${err.message || err}`);
       return {
