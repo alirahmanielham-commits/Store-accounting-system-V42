@@ -20,16 +20,31 @@ import {
   Sparkles,
   RefreshCw,
   TrendingDown,
-  DollarSign,
   FileSpreadsheet,
   CheckCircle2,
   ChevronDown,
   Warehouse as WarehouseIcon,
-  Tag
+  Tag as TagIcon,
+  Hash,
+  Boxes,
+  Edit3
 } from "lucide-react";
 import * as XLSX from "xlsx";
-import { addProduct as addProductService } from "../../services/productService";
 import { safePrint } from "../../utils/printHelper";
+import { convertQuantityToBaseUnit, getUnitRatioDirection, UnitRatioDirection } from "../../utils/unitConversion";
+
+interface OrderItem {
+  id: string;
+  productId: string;
+  source: "auto" | "manual";
+  qty: number;
+  unitType: "main" | "secondary";
+  selectedUnit: string;
+  baseQty: number;
+  note: string;
+  priority: "normal" | "urgent" | "emergency";
+  tags: string[];
+}
 
 interface OrderListProps {
   products: Product[];
@@ -46,10 +61,33 @@ interface OrderListProps {
   setItems?: React.Dispatch<React.SetStateAction<any[]>>;
 }
 
+const POPULAR_TAGS = [
+  "تامین فوری",
+  "سفارش مشتری",
+  "پروژه",
+  "خرید محلی",
+  "انبار مرکزی",
+  "تولید و مونتاژ",
+  "فصلی",
+  "خرید عمده",
+  "کسری خط فروش"
+];
+
+const TAG_COLORS: Record<string, { bg: string; text: string; border: string }> = {
+  "تامین فوری": { bg: "bg-rose-50", text: "text-rose-700", border: "border-rose-200" },
+  "سفارش مشتری": { bg: "bg-indigo-50", text: "text-indigo-700", border: "border-indigo-200" },
+  "پروژه": { bg: "bg-purple-50", text: "text-purple-700", border: "border-purple-200" },
+  "خرید محلی": { bg: "bg-amber-50", text: "text-amber-700", border: "border-amber-200" },
+  "انبار مرکزی": { bg: "bg-blue-50", text: "text-blue-700", border: "border-blue-200" },
+  "تولید و مونتاژ": { bg: "bg-teal-50", text: "text-teal-700", border: "border-teal-200" },
+  "فصلی": { bg: "bg-orange-50", text: "text-orange-700", border: "border-orange-200" },
+  "خرید عمده": { bg: "bg-emerald-50", text: "text-emerald-700", border: "border-emerald-200" },
+  "کسری خط فروش": { bg: "bg-pink-50", text: "text-pink-700", border: "border-pink-200" }
+};
+
 export default function OrderList({
   products = [],
   categories = [],
-  formatCurrency = (val: number) => Number(val || 0).toLocaleString("fa-IR"),
   toPersianDigits = (val: string | number) => String(val ?? "").replace(/\d/g, d => "۰۱۲۳۴۵۶۷۸۹"[+d]),
   storeSettings = {},
   showNotification,
@@ -58,64 +96,63 @@ export default function OrderList({
   setActiveTab,
   warehouses = []
 }: OrderListProps) {
-  // Manual additions saved in localStorage
-  const [manualItems, setManualItems] = useState<{
-    id: string;
-    productId: string;
-    qty: number;
-    note: string;
-    priority?: "normal" | "urgent" | "emergency";
-  }[]>([]);
+  // Manual items saved in localStorage
+  const [manualItems, setManualItems] = useState<OrderItem[]>([]);
+  // Custom unit/tag overrides for auto items
+  const [autoOverrides, setAutoOverrides] = useState<Record<string, Partial<OrderItem>>>({});
   const [isClient, setIsClient] = useState(false);
 
   // Search & Filter State
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState<string>("all");
+  const [selectedTagFilter, setSelectedTagFilter] = useState<string>("all");
   const [filterSource, setFilterSource] = useState<"all" | "auto" | "manual">("all");
+  const [filterPriority, setFilterPriority] = useState<"all" | "normal" | "urgent" | "emergency">("all");
 
   // Quick Add / Search Product State
   const [productSearchInput, setProductSearchInput] = useState("");
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [selectedProductToAdd, setSelectedProductToAdd] = useState<Product | null>(null);
+  const [selectedUnitType, setSelectedUnitType] = useState<"main" | "secondary">("main");
   const [newQty, setNewQty] = useState<string>("1");
   const [newNote, setNewNote] = useState<string>("");
   const [newPriority, setNewPriority] = useState<"normal" | "urgent" | "emergency">("normal");
+  const [newTags, setNewTags] = useState<string[]>([]);
+  const [customTagInput, setCustomTagInput] = useState("");
 
-  // New Product Modal State
-  const [isNewProductModalOpen, setIsNewProductModalOpen] = useState(false);
-  const [isSavingNewProduct, setIsSavingNewProduct] = useState(false);
-  const [newProductForm, setNewProductForm] = useState({
-    name: "",
-    code: "",
-    barcode: "",
-    categoryId: "",
-    unit: "عدد",
-    purchasePrice: "",
-    price: "",
-    minStock: "5",
-    initialStock: "0",
-    warehouseId: "",
-    orderQuantityNow: "10",
-    description: ""
-  });
+  // Tag Editing Modal for a specific row
+  const [tagModalItem, setTagModalItem] = useState<{ id: string; name: string; currentTags: string[]; isAuto: boolean; productId: string } | null>(null);
+  const [modalCustomTagInput, setModalCustomTagInput] = useState("");
 
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     setIsClient(true);
-    const saved = localStorage.getItem("app_order_list_manual");
+    const saved = localStorage.getItem("app_order_list_manual_v2");
     if (saved) {
       try {
         setManualItems(JSON.parse(saved));
+      } catch (e) {}
+    }
+    const savedOverrides = localStorage.getItem("app_order_list_auto_overrides");
+    if (savedOverrides) {
+      try {
+        setAutoOverrides(JSON.parse(savedOverrides));
       } catch (e) {}
     }
   }, []);
 
   useEffect(() => {
     if (isClient) {
-      localStorage.setItem("app_order_list_manual", JSON.stringify(manualItems));
+      localStorage.setItem("app_order_list_manual_v2", JSON.stringify(manualItems));
     }
   }, [manualItems, isClient]);
+
+  useEffect(() => {
+    if (isClient) {
+      localStorage.setItem("app_order_list_auto_overrides", JSON.stringify(autoOverrides));
+    }
+  }, [autoOverrides, isClient]);
 
   // Click outside search container to close dropdown
   useEffect(() => {
@@ -128,7 +165,7 @@ export default function OrderList({
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
-  // Filter products for professional autocomplete dropdown
+  // Filter products for autocomplete dropdown
   const filteredSearchProducts = useMemo(() => {
     if (!productSearchInput.trim()) {
       return products
@@ -152,6 +189,7 @@ export default function OrderList({
     setSelectedProductToAdd(product);
     setProductSearchInput(product.name);
     setIsDropdownOpen(false);
+    setSelectedUnitType("main");
 
     // Suggest quantity based on minStock if available
     const minStock = product.minStock || product.minStockLevel || 0;
@@ -160,18 +198,43 @@ export default function OrderList({
     setNewQty(String(suggestedQty > 0 ? suggestedQty : 1));
   };
 
+  const handleToggleNewTag = (tag: string) => {
+    setNewTags(prev => prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]);
+  };
+
+  const handleAddCustomTag = () => {
+    if (!customTagInput.trim()) return;
+    const clean = customTagInput.trim();
+    if (!newTags.includes(clean)) {
+      setNewTags(prev => [...prev, clean]);
+    }
+    setCustomTagInput("");
+  };
+
   const handleAddManual = () => {
     if (!selectedProductToAdd) {
       if (showNotification) showNotification("error", "لطفاً ابتدا کالایی را از لیست انتخاب کنید");
       return;
     }
     const qtyNum = parseFloat(newQty) || 1;
-    const newItem = {
+    const isSec = selectedUnitType === "secondary" && Boolean(selectedProductToAdd.secondaryUnit);
+    const unitName = isSec ? (selectedProductToAdd.secondaryUnit || selectedProductToAdd.unit || "عدد") : (selectedProductToAdd.unit || "عدد");
+
+    const ratio = Number(selectedProductToAdd.unitRatio || 1);
+    const direction = getUnitRatioDirection(selectedProductToAdd);
+    const baseQuantity = convertQuantityToBaseUnit(qtyNum, isSec, ratio, direction);
+
+    const newItem: OrderItem = {
       id: Date.now().toString(),
       productId: selectedProductToAdd.id.toString(),
+      source: "manual",
       qty: qtyNum,
+      unitType: isSec ? "secondary" : "main",
+      selectedUnit: unitName,
+      baseQty: baseQuantity,
       note: newNote,
-      priority: newPriority
+      priority: newPriority,
+      tags: [...newTags]
     };
 
     setManualItems(prev => [...prev, newItem]);
@@ -180,9 +243,11 @@ export default function OrderList({
     setNewQty("1");
     setNewNote("");
     setNewPriority("normal");
+    setNewTags([]);
+    setSelectedUnitType("main");
 
     if (showNotification) {
-      showNotification("success", `کالای «${selectedProductToAdd.name}» به لیست سفارش افزوده شد`);
+      showNotification("success", `کالای «${selectedProductToAdd.name}» با واحد ${unitName} به لیست سفارش افزوده شد`);
     }
   };
 
@@ -195,19 +260,96 @@ export default function OrderList({
       handleRemoveManual(id);
       return;
     }
-    setManualItems(prev => prev.map(item => item.id === id ? { ...item, qty: newQuantity } : item));
+    setManualItems(prev => prev.map(item => {
+      if (item.id === id) {
+        const prod = products.find(p => p.id?.toString() === item.productId);
+        const isSec = item.unitType === "secondary";
+        const ratio = Number(prod?.unitRatio || 1);
+        const dir = getUnitRatioDirection(prod);
+        const baseQuantity = convertQuantityToBaseUnit(newQuantity, isSec, ratio, dir);
+        return { ...item, qty: newQuantity, baseQty: baseQuantity };
+      }
+      return item;
+    }));
+  };
+
+  const handleToggleItemUnit = (item: OrderItem, product: Product) => {
+    if (!product.secondaryUnit) return;
+    const nextUnitType = item.unitType === "main" ? "secondary" : "main";
+    const isSec = nextUnitType === "secondary";
+    const nextUnitName = isSec ? (product.secondaryUnit || product.unit || "عدد") : (product.unit || "عدد");
+
+    const ratio = Number(product.unitRatio || 1);
+    const dir = getUnitRatioDirection(product);
+
+    // Calculate converted quantity
+    let convertedQty = item.qty;
+    if (ratio > 0) {
+      if (nextUnitType === "secondary") {
+        // e.g. from 24 pcs to carton (1 carton = 24 pcs) => 24 / 24 = 1 carton
+        convertedQty = dir === "main_to_secondary" ? item.qty * ratio : Math.max(0.1, parseFloat((item.qty / ratio).toFixed(2)));
+      } else {
+        // from carton to pcs => 1 carton * 24 = 24 pcs
+        convertedQty = dir === "main_to_secondary" ? Math.max(0.1, parseFloat((item.qty / ratio).toFixed(2))) : item.qty * ratio;
+      }
+    }
+
+    const baseQuantity = convertQuantityToBaseUnit(convertedQty, isSec, ratio, dir);
+
+    if (item.source === "manual") {
+      setManualItems(prev => prev.map(mi => mi.id === item.id ? {
+        ...mi,
+        unitType: nextUnitType,
+        selectedUnit: nextUnitName,
+        qty: convertedQty,
+        baseQty: baseQuantity
+      } : mi));
+    } else {
+      // Auto item override
+      setAutoOverrides(prev => ({
+        ...prev,
+        [item.productId]: {
+          ...prev[item.productId],
+          unitType: nextUnitType,
+          selectedUnit: nextUnitName,
+          qty: convertedQty,
+          baseQty: baseQuantity
+        }
+      }));
+    }
+  };
+
+  // Open Tag Edit Modal for an item
+  const handleOpenTagModal = (item: OrderItem, product: Product) => {
+    setTagModalItem({
+      id: item.id,
+      name: product.name,
+      currentTags: item.tags || [],
+      isAuto: item.source === "auto",
+      productId: item.productId
+    });
+    setModalCustomTagInput("");
+  };
+
+  const handleSaveModalTags = (tags: string[]) => {
+    if (!tagModalItem) return;
+    if (tagModalItem.isAuto) {
+      setAutoOverrides(prev => ({
+        ...prev,
+        [tagModalItem.productId]: {
+          ...prev[tagModalItem.productId],
+          tags: tags
+        }
+      }));
+    } else {
+      setManualItems(prev => prev.map(mi => mi.id === tagModalItem.id ? { ...mi, tags: tags } : mi));
+    }
+    setTagModalItem(null);
   };
 
   // Compute final aggregated order list items
   const orderListItems = useMemo(() => {
-    const items: {
-      source: "auto" | "manual";
-      manualId?: string;
-      product: Product;
-      qty: number;
-      note: string;
-      priority: "normal" | "urgent" | "emergency";
-    }[] = [];
+    const items: (OrderItem & { product: Product })[] = [];
 
     // 1. Auto items (reached reorder point)
     products.forEach(p => {
@@ -215,14 +357,34 @@ export default function OrderList({
       const minStock = Number(p.minStock || p.minStockLevel || 0);
       const currentStock = Number(p.stock || 0);
       if (minStock > 0 && currentStock <= minStock) {
-        const shortage = Math.max(1, minStock - currentStock);
+        const defaultShortage = Math.max(1, minStock - currentStock);
         const isEmergency = currentStock <= 0;
+        const override = autoOverrides[p.id?.toString()];
+
+        const unitType = override?.unitType || "main";
+        const selectedUnit = override?.selectedUnit || p.unit || "عدد";
+        const qty = override?.qty !== undefined ? override.qty : defaultShortage;
+        const isSec = unitType === "secondary";
+        const ratio = Number(p.unitRatio || 1);
+        const dir = getUnitRatioDirection(p);
+        const baseQty = convertQuantityToBaseUnit(qty, isSec, ratio, dir);
+
+        const autoTags = override?.tags !== undefined
+          ? override.tags
+          : (isEmergency ? ["تامین فوری", "کسری خط فروش"] : ["کسری خط فروش"]);
+
         items.push({
+          id: `auto-${p.id}`,
+          productId: p.id.toString(),
           source: "auto",
           product: p,
-          qty: shortage,
-          note: `موجودی فعلی: ${currentStock} (نقطه سفارش: ${minStock})`,
-          priority: isEmergency ? "emergency" : "urgent"
+          qty: qty,
+          unitType: unitType,
+          selectedUnit: selectedUnit,
+          baseQty: baseQty,
+          note: override?.note || `موجودی: ${currentStock} (حداقل: ${minStock})`,
+          priority: override?.priority || (isEmergency ? "emergency" : "urgent"),
+          tags: autoTags
         });
       }
     });
@@ -232,52 +394,70 @@ export default function OrderList({
       const p = products.find(prod => prod.id === mi.productId || prod.id.toString() === mi.productId);
       if (p) {
         items.push({
-          source: "manual",
-          manualId: mi.id,
-          product: p,
-          qty: mi.qty,
-          note: mi.note || "ثبت دستی",
-          priority: mi.priority || "normal"
+          ...mi,
+          product: p
         });
       }
     });
 
     return items;
-  }, [products, manualItems]);
+  }, [products, manualItems, autoOverrides]);
 
-  // Summary statistics
-  const totalEstimatedCost = useMemo(() => {
-    return orderListItems.reduce((sum, item) => {
-      const price = Number(item.product.purchasePrice || item.product.price || 0);
-      return sum + (price * item.qty);
-    }, 0);
+  // All unique tags across all order list items
+  const allAvailableTags = useMemo(() => {
+    const tagSet = new Set<string>();
+    POPULAR_TAGS.forEach(t => tagSet.add(t));
+    orderListItems.forEach(item => {
+      (item.tags || []).forEach(t => tagSet.add(t));
+    });
+    return Array.from(tagSet);
   }, [orderListItems]);
 
-  const autoCount = useMemo(() => orderListItems.filter(i => i.source === "auto").length, [orderListItems]);
-  const manualCount = useMemo(() => orderListItems.filter(i => i.source === "manual").length, [orderListItems]);
+  // Filter & Group according to active filters (category, tag, priority, search)
+  const filteredOrderItems = useMemo(() => {
+    let list = orderListItems;
 
-  // Filter & Group
-  const filteredAndGrouped = useMemo(() => {
-    let filtered = orderListItems;
+    // Search query
     if (searchQuery.trim()) {
       const lowerQ = searchQuery.toLowerCase().trim();
-      filtered = filtered.filter(i =>
+      list = list.filter(i =>
         i.product.name.toLowerCase().includes(lowerQ) ||
         (i.product.code && i.product.code.toLowerCase().includes(lowerQ)) ||
-        (i.product.barcode && i.product.barcode.toLowerCase().includes(lowerQ))
+        (i.product.barcode && i.product.barcode.toLowerCase().includes(lowerQ)) ||
+        (i.note && i.note.toLowerCase().includes(lowerQ)) ||
+        (i.tags && i.tags.some(t => t.toLowerCase().includes(lowerQ)))
       );
     }
+
+    // Category filter
     if (selectedCategory !== "all") {
-      filtered = filtered.filter(
+      list = list.filter(
         i => (i.product.categoryId?.toString() === selectedCategory) || (i.product.category === selectedCategory)
       );
     }
-    if (filterSource !== "all") {
-      filtered = filtered.filter(i => i.source === filterSource);
+
+    // Tag filter
+    if (selectedTagFilter !== "all") {
+      list = list.filter(i => (i.tags || []).includes(selectedTagFilter));
     }
 
-    const grouped: Record<string, typeof filtered> = {};
-    filtered.forEach(item => {
+    // Source filter
+    if (filterSource !== "all") {
+      list = list.filter(i => i.source === filterSource);
+    }
+
+    // Priority filter
+    if (filterPriority !== "all") {
+      list = list.filter(i => i.priority === filterPriority);
+    }
+
+    return list;
+  }, [orderListItems, searchQuery, selectedCategory, selectedTagFilter, filterSource, filterPriority]);
+
+  // Group filtered items by category for clean presentation & print
+  const groupedFilteredItems = useMemo(() => {
+    const grouped: Record<string, typeof filteredOrderItems> = {};
+    filteredOrderItems.forEach(item => {
       const catName =
         categories?.find(c => c.id?.toString() === item.product.categoryId?.toString())?.name ||
         item.product.category ||
@@ -285,93 +465,28 @@ export default function OrderList({
       if (!grouped[catName]) grouped[catName] = [];
       grouped[catName].push(item);
     });
-
     return grouped;
-  }, [orderListItems, searchQuery, selectedCategory, filterSource, categories]);
+  }, [filteredOrderItems, categories]);
 
-  // Handle Quick Creation of New Product
-  const handleCreateProductSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newProductForm.name.trim()) {
-      if (showNotification) showNotification("error", "نام کالا الزامی است");
-      return;
-    }
+  // Summary statistics
+  const totalItemCount = filteredOrderItems.length;
+  const autoCount = filteredOrderItems.filter(i => i.source === "auto").length;
+  const manualCount = filteredOrderItems.filter(i => i.source === "manual").length;
+  const emergencyCount = filteredOrderItems.filter(i => i.priority === "emergency").length;
 
-    setIsSavingNewProduct(true);
-    try {
-      const productPayload: any = {
-        name: newProductForm.name.trim(),
-        code: newProductForm.code.trim() || `PRD-${Date.now().toString().slice(-5)}`,
-        barcode: newProductForm.barcode.trim(),
-        categoryId: newProductForm.categoryId || (categories[0]?.id?.toString() || ""),
-        unit: newProductForm.unit || "عدد",
-        purchasePrice: parseFloat(newProductForm.purchasePrice) || 0,
-        price: parseFloat(newProductForm.price) || (parseFloat(newProductForm.purchasePrice) || 0) * 1.2,
-        minStock: parseFloat(newProductForm.minStock) || 0,
-        stock: parseFloat(newProductForm.initialStock) || 0,
-        description: newProductForm.description,
-        isActive: true,
-        type: "physical"
-      };
-
-      const added = await addProductService(productPayload);
-      if (fetchProducts) await fetchProducts();
-
-      // Automatically add this new product to the Order List!
-      const orderQty = parseFloat(newProductForm.orderQuantityNow) || 1;
-      const targetId = added?.id ? added.id.toString() : productPayload.code;
-
-      setManualItems(prev => [
-        ...prev,
-        {
-          id: Date.now().toString(),
-          productId: targetId,
-          qty: orderQty,
-          note: "کالای جدید تعریف شده",
-          priority: "urgent"
-        }
-      ]);
-
-      setIsNewProductModalOpen(false);
-      setNewProductForm({
-        name: "",
-        code: "",
-        barcode: "",
-        categoryId: "",
-        unit: "عدد",
-        purchasePrice: "",
-        price: "",
-        minStock: "5",
-        initialStock: "0",
-        warehouseId: "",
-        orderQuantityNow: "10",
-        description: ""
-      });
-
-      if (showNotification) {
-        showNotification("success", `کالای «${productPayload.name}» با موفقیت تعریف و به لیست سفارش افزوده شد`);
-      }
-    } catch (err: any) {
-      console.error(err);
-      if (showNotification) showNotification("error", err?.message || "خطا در تعریف کالای جدید");
-    } finally {
-      setIsSavingNewProduct(false);
-    }
-  };
-
-  // Convert entire Order List into a Purchase Invoice Draft
+  // Convert filtered order list into a Purchase Invoice Draft
   const handleTransferToPurchaseInvoice = () => {
-    if (orderListItems.length === 0) {
-      if (showNotification) showNotification("warning", "لیست سفارش خالی است");
+    if (filteredOrderItems.length === 0) {
+      if (showNotification) showNotification("warning", "لیست سفارش برای انتقال خالی است");
       return;
     }
 
     try {
-      const invoiceItems = orderListItems.map(item => ({
+      const invoiceItems = filteredOrderItems.map(item => ({
         productId: item.product.id,
         name: item.product.name,
         code: item.product.code || "",
-        unit: item.product.unit || "عدد",
+        unit: item.selectedUnit || item.product.unit || "عدد",
         quantity: item.qty,
         unitPrice: Number(item.product.purchasePrice || item.product.price || 0),
         discountPercent: 0,
@@ -380,10 +495,9 @@ export default function OrderList({
         totalPrice: item.qty * Number(item.product.purchasePrice || item.product.price || 0)
       }));
 
-      // Store in localStorage draft for purchase invoice
       localStorage.setItem("app_purchase_invoice_draft_items", JSON.stringify(invoiceItems));
       if (showNotification) {
-        showNotification("success", `${orderListItems.length} قلم کالا به پیش‌نویس فاکتور خرید منتقل شد`);
+        showNotification("success", `${filteredOrderItems.length} قلم کالا به پیش‌نویس فاکتور خرید منتقل شد`);
       }
       if (setActiveTab) {
         setActiveTab("create_purchase");
@@ -394,19 +508,16 @@ export default function OrderList({
     }
   };
 
-  // Excel Export
+  // Excel Export (Quantities, Units, Tags, Reorder Points, Notes)
   const handleExportExcel = () => {
-    if (orderListItems.length === 0) {
+    if (filteredOrderItems.length === 0) {
       if (showNotification) showNotification("warning", "آیتمی برای خروجی اکسل وجود ندارد");
       return;
     }
 
     try {
-      const exportData = orderListItems.map((item, index) => {
+      const exportData = filteredOrderItems.map((item, index) => {
         const cat = categories.find(c => c.id?.toString() === item.product.categoryId?.toString())?.name || item.product.category || "-";
-        const unitPrice = Number(item.product.purchasePrice || item.product.price || 0);
-        const totalPrice = unitPrice * item.qty;
-
         return {
           "ردیف": index + 1,
           "نام کالا": item.product.name,
@@ -416,9 +527,10 @@ export default function OrderList({
           "موجودی فعلی": item.product.stock || 0,
           "نقطه سفارش (حداقل)": item.product.minStock || 0,
           "مقدار سفارش": item.qty,
-          "واحد سنجش": item.product.unit || "عدد",
-          "قیمت فی برآوردی (تومان)": unitPrice,
-          "مبلغ کل برآوردی (تومان)": totalPrice,
+          "واحد سفارش": item.selectedUnit || item.product.unit || "عدد",
+          "نوع واحد": item.unitType === "secondary" ? "واحد فرعی" : "واحد اصلی",
+          "معادل واحد اصلی": item.unitType === "secondary" ? `${item.baseQty} ${item.product.unit || "عدد"}` : "-",
+          "برچسب‌ها / تگ‌ها": (item.tags || []).join("، "),
           "نوع نیازسنجی": item.source === "auto" ? "کسری انبار (خودکار)" : "دستی",
           "اولویت": item.priority === "emergency" ? "اضطراری" : item.priority === "urgent" ? "فوری" : "عادی",
           "توضیحات": item.note || ""
@@ -430,7 +542,7 @@ export default function OrderList({
       XLSX.utils.book_append_sheet(workbook, worksheet, "لیست سفارش خرید");
       XLSX.writeFile(workbook, `Order_List_${new Date().toLocaleDateString("fa-IR").replace(/\//g, "-")}.xlsx`);
 
-      if (showNotification) showNotification("success", "فایل اکسل سفارش خرید با موفقیت ایجاد و دانلود شد");
+      if (showNotification) showNotification("success", "فایل اکسل سفارش با موفقیت ایجاد و دانلود شد");
     } catch (err) {
       console.error(err);
       if (showNotification) showNotification("error", "خطا در ایجاد فایل اکسل");
@@ -438,13 +550,16 @@ export default function OrderList({
   };
 
   const handlePrint = () => {
-    safePrint('.print-section');
+    safePrint("#order-list-printable-section", { timeoutMs: 2500 });
   };
 
-  const currency = storeSettings?.currency || "تومان";
+  const selectedCategoryName = useMemo(() => {
+    if (selectedCategory === "all") return "همه دسته‌بندی‌ها";
+    return categories.find(c => c.id?.toString() === selectedCategory)?.name || selectedCategory;
+  }, [selectedCategory, categories]);
 
   return (
-    <div className="bg-white rounded-3xl shadow-sm border border-slate-200/80 flex flex-col h-full overflow-hidden font-sans print-section" dir="rtl">
+    <div className="bg-white rounded-3xl shadow-sm border border-slate-200/80 flex flex-col h-full overflow-hidden font-sans print-section" id="order-list-printable-section" dir="rtl">
       {/* Top Header */}
       <div className="p-4 sm:p-6 border-b border-slate-100 flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-gradient-to-r from-slate-50 via-white to-indigo-50/20 print:hidden">
         <div className="flex items-center gap-3.5">
@@ -453,25 +568,29 @@ export default function OrderList({
           </div>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-lg sm:text-xl font-black text-slate-900">لیست سفارش و تامین کالا</h1>
+              <h1 className="text-lg sm:text-xl font-black text-slate-900">لیست سفارش و نیازمندی‌های خرید</h1>
               <span className="px-2.5 py-0.5 rounded-full text-xs font-black bg-indigo-100 text-indigo-800 border border-indigo-200">
-                {toPersianDigits(orderListItems.length)} قلم کالا
+                {toPersianDigits(filteredOrderItems.length)} قلم کالا
               </span>
             </div>
             <p className="text-xs sm:text-sm text-slate-500 font-medium mt-0.5">
-              مدیریت هوشمند نیازمندی‌های خرید، اقلام به نقطه سفارش رسیده و ثبت فوری سفارش کالا
+              مدیریت نیازسنجی اقلام، سفارش‌گذاری با واحدهای اصلی و فرعی، دسته‌بندی بر اساس تگ‌ها و خروجی چاپی
             </p>
           </div>
         </div>
 
         {/* Top Action Buttons */}
         <div className="flex flex-wrap items-center gap-2">
-          {/* Quick Create New Product Button */}
+          {/* Open Standard System Product Modal */}
           <button
             type="button"
-            onClick={() => setIsNewProductModalOpen(true)}
+            onClick={() => {
+              if (setIsProductModalOpen) {
+                setIsProductModalOpen(true);
+              }
+            }}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm shadow-emerald-600/20 transition-all cursor-pointer active:scale-95"
-            title="تعریف مستقیم کالای جدید و اضافه به این لیست"
+            title="باز کردن فرم استاندارد تعریف کالای جدید سیستم"
           >
             <PackagePlus className="w-4 h-4" />
             <span>تعریف کالای جدید</span>
@@ -481,9 +600,9 @@ export default function OrderList({
           <button
             type="button"
             onClick={handleTransferToPurchaseInvoice}
-            disabled={orderListItems.length === 0}
+            disabled={filteredOrderItems.length === 0}
             className="flex items-center gap-2 px-3.5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-50 text-white rounded-xl font-bold text-xs shadow-sm shadow-indigo-600/20 transition-all cursor-pointer active:scale-95"
-            title="انتقال اقلام این لیست به فاکتور خرید"
+            title="انتقال اقلام فیلتر شده به فاکتور خرید"
           >
             <ArrowRight className="w-4 h-4 rotate-180" />
             <span>صدور فاکتور خرید</span>
@@ -504,23 +623,46 @@ export default function OrderList({
           <button
             type="button"
             onClick={handlePrint}
-            className="flex items-center gap-1.5 px-3 py-2.5 bg-white border border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
-            title="چاپ رسمی لیست خرید"
+            className="flex items-center gap-1.5 px-3.5 py-2.5 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+            title="چاپ لیست طبق فیلترها و تگ‌های انتخابی"
           >
-            <Printer className="w-4 h-4 text-slate-600" />
-            <span>چاپ لیست</span>
+            <Printer className="w-4 h-4 text-indigo-600" />
+            <span>چاپ لیست (طبق فیلتر)</span>
           </button>
         </div>
       </div>
 
-      {/* Print-Only Header */}
-      <div className="hidden print:block text-center border-b-2 border-slate-800 pb-4 mb-6 p-4">
-        <h1 className="text-xl font-black text-slate-900">{storeSettings?.storeName || storeSettings?.companyName || "سیستم مدیریت بازرگانی و انبار"}</h1>
-        <h2 className="text-base font-bold text-slate-700 mt-1">فرم رسمی لیست سفارش و تامین موجودی کالا</h2>
-        <div className="flex justify-between items-center text-xs text-slate-600 mt-3 px-4">
-          <span>تاریخ گزارش: {new Date().toLocaleDateString("fa-IR")}</span>
-          <span>تعداد کل اقلام سفارش: {toPersianDigits(orderListItems.length)} قلم</span>
-          <span>مجموع برآورد ریالی: {formatCurrency(totalEstimatedCost)} {currency}</span>
+      {/* Print-Only Official Header */}
+      <div className="hidden print:block text-center border-b-2 border-slate-900 pb-4 mb-6 p-4">
+        <div className="flex justify-between items-start mb-2">
+          <div className="text-right">
+            <h1 className="text-xl font-black text-slate-900">{storeSettings?.storeName || storeSettings?.companyName || "سیستم جامع مدیریت و انبار"}</h1>
+            <h2 className="text-sm font-bold text-slate-700 mt-1">فرم رسمی لیست سفارش و تدارکات کالا</h2>
+          </div>
+          <div className="text-left text-xs font-mono text-slate-600 space-y-1">
+            <div>تاریخ چاپ: {new Date().toLocaleDateString("fa-IR")}</div>
+            <div>تعداد اقلام: {toPersianDigits(filteredOrderItems.length)} ردیف</div>
+          </div>
+        </div>
+
+        {/* Active Filters in Print Header */}
+        <div className="flex flex-wrap gap-3 items-center justify-start bg-slate-100 p-2 rounded-lg text-xs font-bold text-slate-800 mt-2 border border-slate-300">
+          <span>فیلترهای اعمال‌شده:</span>
+          {selectedCategory !== "all" && (
+            <span className="bg-white px-2 py-0.5 rounded border border-slate-300">دسته‌بندی: {selectedCategoryName}</span>
+          )}
+          {selectedTagFilter !== "all" && (
+            <span className="bg-indigo-50 text-indigo-800 px-2 py-0.5 rounded border border-indigo-300">تگ انتخابی: {selectedTagFilter}</span>
+          )}
+          {filterPriority !== "all" && (
+            <span className="bg-amber-50 text-amber-800 px-2 py-0.5 rounded border border-amber-300">اولویت: {filterPriority === "emergency" ? "اضطراری" : filterPriority === "urgent" ? "فوری" : "عادی"}</span>
+          )}
+          {searchQuery && (
+            <span className="bg-white px-2 py-0.5 rounded border border-slate-300">جستجو: {searchQuery}</span>
+          )}
+          {selectedCategory === "all" && selectedTagFilter === "all" && filterPriority === "all" && !searchQuery && (
+            <span className="text-slate-500 font-normal">نمایش کلیه اقلام لیست سفارش بدون محدودیت فیلتر</span>
+          )}
         </div>
       </div>
 
@@ -528,9 +670,9 @@ export default function OrderList({
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 p-4 sm:p-6 bg-slate-50/50 border-b border-slate-100 print:hidden">
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500 block">کل اقلام درخواستی</span>
+            <span className="text-xs font-bold text-slate-500 block">اقلام سفارش جاری (فیلترشده)</span>
             <span className="text-lg font-black text-slate-800 font-mono block mt-1">
-              {toPersianDigits(orderListItems.length)} <span className="text-xs font-normal font-sans text-slate-400">قلم</span>
+              {toPersianDigits(totalItemCount)} <span className="text-xs font-normal font-sans text-slate-400">ردیف</span>
             </span>
           </div>
           <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center">
@@ -540,7 +682,7 @@ export default function OrderList({
 
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500 block">اقلام کسری انبار (خودکار)</span>
+            <span className="text-xs font-bold text-slate-500 block">اقلام زیر نقطه سفارش (کسری)</span>
             <span className="text-lg font-black text-amber-600 font-mono block mt-1">
               {toPersianDigits(autoCount)} <span className="text-xs font-normal font-sans text-slate-400">کالا</span>
             </span>
@@ -552,7 +694,7 @@ export default function OrderList({
 
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500 block">اقلام افزوده شده دستی</span>
+            <span className="text-xs font-bold text-slate-500 block">اقلام ثبت‌شده دستی</span>
             <span className="text-lg font-black text-emerald-600 font-mono block mt-1">
               {toPersianDigits(manualCount)} <span className="text-xs font-normal font-sans text-slate-400">کالا</span>
             </span>
@@ -564,38 +706,38 @@ export default function OrderList({
 
         <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
           <div>
-            <span className="text-xs font-bold text-slate-500 block">مجموع برآورد بودجه خرید</span>
-            <span className="text-lg font-black text-slate-900 font-mono block mt-1" dir="ltr">
-              {formatCurrency(totalEstimatedCost)} <span className="text-xs font-bold font-sans text-slate-500">{currency}</span>
+            <span className="text-xs font-bold text-slate-500 block">اقلام با اولویت اضطراری</span>
+            <span className="text-lg font-black text-rose-600 font-mono block mt-1">
+              {toPersianDigits(emergencyCount)} <span className="text-xs font-normal font-sans text-slate-400">مورد</span>
             </span>
           </div>
-          <div className="w-10 h-10 bg-indigo-50 text-indigo-700 rounded-xl flex items-center justify-center">
-            <DollarSign className="w-5 h-5" />
+          <div className="w-10 h-10 bg-rose-50 text-rose-600 rounded-xl flex items-center justify-center">
+            <AlertTriangle className="w-5 h-5" />
           </div>
         </div>
       </div>
 
-      {/* Professional Product Search & Fast Add Bar */}
+      {/* Professional Product Search, Unit & Tag Selector Bar */}
       <div className="p-4 sm:p-6 bg-white border-b border-slate-100 space-y-4 print:hidden">
         <div className="bg-gradient-to-br from-indigo-50/60 to-slate-50 p-4 sm:p-5 rounded-2xl border border-indigo-100/80">
           <div className="flex items-center justify-between mb-3">
             <h2 className="text-xs sm:text-sm font-black text-slate-800 flex items-center gap-2">
               <Sparkles className="w-4 h-4 text-indigo-600" />
-              جستجوی حرفه‌ای و افزودن کالا به لیست سفارش
+              افزودن سریع کالا به لیست سفارش با تعیین واحد اصلی/فرعی و تگ
             </h2>
             <span className="text-[11px] font-bold text-slate-500 hidden sm:inline">
-              امکان جستجو با نام، بارکد، کد کالا و تعیین مقدار درخواستی
+              پشتیبانی از واحد فرعی با ضریب تبدیل و برچسب‌گذاری چندگانه
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-start">
             {/* Auto-complete Search Box */}
-            <div className="sm:col-span-6 relative" ref={searchContainerRef}>
+            <div className="sm:col-span-5 relative" ref={searchContainerRef}>
               <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
-                <span>جستجو و انتخاب کالا</span>
+                <span>انتخاب کالا</span>
                 {selectedProductToAdd && (
                   <span className="text-[10px] text-emerald-600 font-bold bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
-                    انتخاب شد: {selectedProductToAdd.code || selectedProductToAdd.name}
+                    {selectedProductToAdd.name}
                   </span>
                 )}
               </label>
@@ -603,7 +745,7 @@ export default function OrderList({
                 <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400 pointer-events-none" />
                 <input
                   type="text"
-                  placeholder="نام، کد کالا یا اسکن بارکد را وارد کنید..."
+                  placeholder="جستجوی نام کالا، کد یا اسکن بارکد..."
                   value={productSearchInput}
                   onChange={(e) => {
                     setProductSearchInput(e.target.value);
@@ -639,13 +781,12 @@ export default function OrderList({
                         type="button"
                         onClick={() => {
                           setIsDropdownOpen(false);
-                          setNewProductForm(prev => ({ ...prev, name: productSearchInput }));
-                          setIsNewProductModalOpen(true);
+                          if (setIsProductModalOpen) setIsProductModalOpen(true);
                         }}
                         className="mt-2 text-xs font-bold text-indigo-600 hover:text-indigo-800 underline flex items-center justify-center gap-1 mx-auto"
                       >
                         <Plus className="w-3.5 h-3.5" />
-                        تعریف «{productSearchInput}» به عنوان کالای جدید
+                        تعریف کالا در فرم استاندارد محصولات
                       </button>
                     </div>
                   ) : (
@@ -671,16 +812,20 @@ export default function OrderList({
                             <div className="text-xs text-slate-500 flex items-center gap-2 mt-0.5">
                               {prod.code && <span className="font-mono bg-slate-100 px-1.5 py-0.2 rounded text-[11px]">کد: {prod.code}</span>}
                               {prod.category && <span>دسته‌بندی: {prod.category}</span>}
-                              {prod.barcode && <span className="font-mono text-[10px] text-slate-400">بارکد: {prod.barcode}</span>}
+                              {prod.secondaryUnit && (
+                                <span className="text-indigo-600 font-bold">
+                                  (فرعی: {prod.secondaryUnit} با ضریب {prod.unitRatio || 1})
+                                </span>
+                              )}
                             </div>
                           </div>
 
                           <div className="flex flex-col items-end text-left shrink-0">
                             <span className="text-xs font-bold text-slate-700">
-                              موجودی: <strong className={isLow ? "text-rose-600" : "text-emerald-600"}>{toPersianDigits(prod.stock || 0)}</strong> {prod.unit || "عدد"}
+                              موجودی: <strong className={isLow ? "text-rose-600 font-mono" : "text-emerald-600 font-mono"}>{toPersianDigits(prod.stock || 0)}</strong> {prod.unit || "عدد"}
                             </span>
-                            <span className="text-[11px] font-bold text-indigo-600 font-mono">
-                              خرید: {formatCurrency(prod.purchasePrice || 0)} {currency}
+                            <span className="text-[11px] text-slate-400">
+                              نقطه سفارش: {toPersianDigits(prod.minStock || 0)}
                             </span>
                           </div>
                         </div>
@@ -691,10 +836,47 @@ export default function OrderList({
               )}
             </div>
 
+            {/* Unit Selector (Main vs Secondary Unit) */}
+            <div className="sm:col-span-3">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                واحد سنجش کالا
+              </label>
+              {selectedProductToAdd?.secondaryUnit ? (
+                <div className="flex rounded-xl p-1 bg-slate-200/80 border border-slate-300 text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUnitType("main")}
+                    className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
+                      selectedUnitType === "main"
+                        ? "bg-white text-indigo-700 shadow-sm font-black"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    اصلی ({selectedProductToAdd.unit || "عدد"})
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedUnitType("secondary")}
+                    className={`flex-1 py-1.5 rounded-lg transition-all text-center ${
+                      selectedUnitType === "secondary"
+                        ? "bg-white text-indigo-700 shadow-sm font-black"
+                        : "text-slate-600 hover:text-slate-900"
+                    }`}
+                  >
+                    فرعی ({selectedProductToAdd.secondaryUnit})
+                  </button>
+                </div>
+              ) : (
+                <div className="px-3 py-2.5 bg-slate-100 border border-slate-200 rounded-xl text-xs font-bold text-slate-600">
+                  {selectedProductToAdd ? `واحد اصلی (${selectedProductToAdd.unit || "عدد"})` : "ابتدا کالا را انتخاب کنید"}
+                </div>
+              )}
+            </div>
+
             {/* Quantity */}
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                تعداد / مقدار ({selectedProductToAdd?.unit || "واحد"})
+                مقدار سفارش
               </label>
               <input
                 type="number"
@@ -709,7 +891,7 @@ export default function OrderList({
 
             {/* Priority */}
             <div className="sm:col-span-2">
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">اولویت تامین</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">اولویت</label>
               <select
                 value={newPriority}
                 onChange={(e) => setNewPriority(e.target.value as any)}
@@ -721,8 +903,61 @@ export default function OrderList({
               </select>
             </div>
 
+            {/* Tags Selector */}
+            <div className="sm:col-span-10 pt-1">
+              <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                <TagIcon className="w-3.5 h-3.5 text-indigo-600" />
+                <span>برچسب‌ها / تگ‌های این قلم سفارش:</span>
+              </label>
+              <div className="flex flex-wrap gap-1.5 items-center">
+                {POPULAR_TAGS.map((tag) => {
+                  const isSelected = newTags.includes(tag);
+                  const style = TAG_COLORS[tag] || { bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-200" };
+                  return (
+                    <button
+                      key={tag}
+                      type="button"
+                      onClick={() => handleToggleNewTag(tag)}
+                      className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all cursor-pointer ${
+                        isSelected
+                          ? `${style.bg} ${style.text} ${style.border} ring-2 ring-indigo-500/30 font-black`
+                          : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                      }`}
+                    >
+                      {tag}
+                      {isSelected && <Check className="w-3 h-3 inline-block mr-1" />}
+                    </button>
+                  );
+                })}
+
+                {/* Custom Tag Input */}
+                <div className="flex items-center gap-1 bg-white border border-slate-200 rounded-lg px-2 py-0.5">
+                  <input
+                    type="text"
+                    placeholder="تگ دلخواه..."
+                    value={customTagInput}
+                    onChange={(e) => setCustomTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        handleAddCustomTag();
+                      }
+                    }}
+                    className="text-xs outline-none w-24 font-bold text-slate-700"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleAddCustomTag}
+                    className="text-indigo-600 hover:text-indigo-800 text-xs font-bold"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            </div>
+
             {/* Submit Button */}
-            <div className="sm:col-span-2 pt-6">
+            <div className="sm:col-span-2 pt-5">
               <button
                 type="button"
                 onClick={handleAddManual}
@@ -736,27 +971,27 @@ export default function OrderList({
           </div>
         </div>
 
-        {/* Filters & Search Within Order List */}
-        <div className="flex flex-col sm:flex-row gap-3 items-center justify-between">
-          <div className="flex flex-col sm:flex-row gap-3 flex-1 w-full">
+        {/* Filter Toolbar: Categories, Tags, Priorities & Search */}
+        <div className="flex flex-col lg:flex-row gap-3 items-center justify-between">
+          <div className="flex flex-wrap gap-2.5 items-center flex-1 w-full">
             {/* Search within list */}
-            <div className="relative flex-1">
+            <div className="relative min-w-[200px] flex-1">
               <Search className="absolute right-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-400" />
               <input
                 type="text"
-                placeholder="فیلتر در اقلام لیست سفارش (نام یا کد)..."
+                placeholder="جستجو در لیست سفارش (کد، نام، تگ یا یادداشت)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-3 pr-10 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
+                className="w-full pl-3 pr-10 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all"
               />
             </div>
 
             {/* Category Filter */}
-            <div className="w-full sm:w-56">
+            <div className="w-full sm:w-48">
               <select
                 value={selectedCategory}
                 onChange={(e) => setSelectedCategory(e.target.value)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               >
                 <option value="all">همه دسته‌بندی‌ها</option>
                 {categories.map((c, i) => (
@@ -765,60 +1000,107 @@ export default function OrderList({
               </select>
             </div>
 
-            {/* Source Filter */}
+            {/* Tag Filter */}
             <div className="w-full sm:w-48">
+              <select
+                value={selectedTagFilter}
+                onChange={(e) => setSelectedTagFilter(e.target.value)}
+                className="w-full px-3 py-2 bg-slate-50 border border-indigo-200 rounded-xl text-xs font-black text-indigo-900 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              >
+                <option value="all">همه تگ‌ها و برچسب‌ها</option>
+                {allAvailableTags.map((tag) => (
+                  <option key={tag} value={tag}>تگ: {tag}</option>
+                ))}
+              </select>
+            </div>
+
+            {/* Priority Filter */}
+            <div className="w-full sm:w-36">
+              <select
+                value={filterPriority}
+                onChange={(e) => setFilterPriority(e.target.value as any)}
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+              >
+                <option value="all">همه اولویت‌ها</option>
+                <option value="emergency">فقط اضطراری</option>
+                <option value="urgent">فقط فوری</option>
+                <option value="normal">عادی</option>
+              </select>
+            </div>
+
+            {/* Source Filter */}
+            <div className="w-full sm:w-36">
               <select
                 value={filterSource}
                 onChange={(e) => setFilterSource(e.target.value as any)}
-                className="w-full px-3 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
               >
-                <option value="all">همه منابع (خودکار + دستی)</option>
-                <option value="auto">فقط کسری انبار (خودکار)</option>
-                <option value="manual">فقط اقلام دستی</option>
+                <option value="all">همه منابع</option>
+                <option value="auto">کسری انبار (خودکار)</option>
+                <option value="manual">دستی</option>
               </select>
             </div>
           </div>
 
-          {/* Clear manual items button */}
-          {manualItems.length > 0 && (
-            <button
-              type="button"
-              onClick={() => {
-                if (window.confirm("آیا از پاک‌سازی تمام اقلام دستی لیست اطمینان دارید؟")) {
-                  setManualItems([]);
-                }
-              }}
-              className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-3 py-2 rounded-xl transition-colors shrink-0"
-            >
-              پاک‌سازی اقلام دستی
-            </button>
-          )}
+          {/* Clear Filter / Clear manual items */}
+          <div className="flex items-center gap-2 shrink-0">
+            {(selectedCategory !== "all" || selectedTagFilter !== "all" || filterPriority !== "all" || searchQuery) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedCategory("all");
+                  setSelectedTagFilter("all");
+                  setFilterPriority("all");
+                  setSearchQuery("");
+                }}
+                className="text-xs font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                حذف فیلترها
+              </button>
+            )}
+
+            {manualItems.length > 0 && (
+              <button
+                type="button"
+                onClick={() => {
+                  if (window.confirm("آیا از پاک‌سازی اقلام دستی این لیست اطمینان دارید؟")) {
+                    setManualItems([]);
+                  }
+                }}
+                className="text-xs font-bold text-rose-600 hover:text-rose-800 hover:bg-rose-50 px-2.5 py-1.5 rounded-lg transition-colors"
+              >
+                حذف اقلام دستی
+              </button>
+            )}
+          </div>
         </div>
       </div>
 
-      {/* Main Order List View */}
+      {/* Main Order List Table View */}
       <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-50/40 print:p-0 print:bg-white">
-        {Object.keys(filteredAndGrouped).length === 0 ? (
+        {Object.keys(groupedFilteredItems).length === 0 ? (
           <div className="flex flex-col items-center justify-center py-16 text-slate-400 text-center">
             <div className="w-16 h-16 rounded-3xl bg-slate-100 flex items-center justify-center text-slate-400 mb-4">
               <ShoppingCart className="w-8 h-8 opacity-40" />
             </div>
-            <p className="text-base font-black text-slate-600">لیست سفارش کالا خالی است</p>
+            <p className="text-base font-black text-slate-600">آیتمی منطبق با فیلترهای انتخابی یافت نشد</p>
             <p className="text-xs text-slate-400 mt-1 max-w-sm">
-              هیچ کالایی به نقطه سفارش نرسیده و یا آیتم دستی افزوده نشده است. از نوار بالا می‌توانید کالایی را جستجو یا تعریف کرده و اضافه نمایید.
+              می‌توانید فیلترها را تغییر داده یا از فرم بالا کالایی را جستجو یا به عنوان کالای جدید تعریف کنید.
             </p>
             <button
               type="button"
-              onClick={() => setIsNewProductModalOpen(true)}
-              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm hover:bg-indigo-700 transition-colors"
+              onClick={() => {
+                if (setIsProductModalOpen) setIsProductModalOpen(true);
+              }}
+              className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold flex items-center gap-1.5 shadow-sm hover:bg-indigo-700 transition-colors cursor-pointer"
             >
               <PackagePlus className="w-4 h-4" />
-              <span>تعریف کالای جدید برای خرید</span>
+              <span>تعریف کالای جدید در سیستم</span>
             </button>
           </div>
         ) : (
           <div className="space-y-6">
-            {Object.entries(filteredAndGrouped).map(([categoryName, items]) => (
+            {Object.entries(groupedFilteredItems).map(([categoryName, items]) => (
               <div key={categoryName} className="bg-white border border-slate-200/90 rounded-2xl overflow-hidden shadow-2xs print:border-slate-400 print:rounded-none">
                 {/* Category Header */}
                 <div className="bg-slate-100/90 px-4 py-3 border-b border-slate-200 flex items-center justify-between print:bg-slate-100">
@@ -831,7 +1113,7 @@ export default function OrderList({
                   </span>
                 </div>
 
-                {/* Items Table for Print & Screen */}
+                {/* Items Table for Print & Screen (WITHOUT PURCHASE PRICES) */}
                 <div className="overflow-x-auto">
                   <table className="w-full text-right text-xs border-collapse">
                     <thead>
@@ -841,17 +1123,15 @@ export default function OrderList({
                         <th className="p-3 w-28 text-center">کد / بارکد</th>
                         <th className="p-3 w-24 text-center">موجودی فعلی</th>
                         <th className="p-3 w-24 text-center">نقطه سفارش</th>
-                        <th className="p-3 w-32 text-center">مقدار درخواستی</th>
-                        <th className="p-3 w-32 text-left">قیمت فی خرید ({currency})</th>
-                        <th className="p-3 w-36 text-left">مجموع برآوردی ({currency})</th>
+                        <th className="p-3 w-36 text-center">مقدار و واحد درخواستی</th>
+                        <th className="p-3 min-w-[150px]">تگ‌ها / برچسب‌ها</th>
                         <th className="p-3 w-24 text-center">اولویت</th>
                         <th className="p-3 w-16 text-center print:hidden">عملیات</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-slate-100 text-slate-800">
                       {items.map((item, idx) => {
-                        const unitPrice = Number(item.product.purchasePrice || item.product.price || 0);
-                        const rowTotal = unitPrice * item.qty;
+                        const hasSecUnit = Boolean(item.product.secondaryUnit);
 
                         return (
                           <tr key={idx} className="hover:bg-slate-50/60 transition-colors">
@@ -878,47 +1158,85 @@ export default function OrderList({
                             </td>
                             <td className="p-3 text-center font-bold">
                               <span className={(item.product.stock || 0) <= 0 ? "text-rose-600 font-black" : "text-slate-700 font-mono"}>
-                                {toPersianDigits(item.product.stock || 0)}
+                                {toPersianDigits(item.product.stock || 0)} {item.product.unit || "عدد"}
                               </span>
                             </td>
                             <td className="p-3 text-center font-mono text-slate-500">
-                              {toPersianDigits(item.product.minStock || 0)}
+                              {toPersianDigits(item.product.minStock || 0)} {item.product.unit || "عدد"}
                             </td>
                             <td className="p-3 text-center">
-                              <div className="flex items-center justify-center gap-1.5">
-                                {item.source === "manual" && item.manualId ? (
+                              <div className="flex flex-col items-center justify-center gap-1">
+                                {item.source === "manual" ? (
                                   <div className="flex items-center border border-slate-200 rounded-lg overflow-hidden bg-white">
                                     <button
                                       type="button"
-                                      onClick={() => handleUpdateManualQty(item.manualId!, item.qty - 1)}
+                                      onClick={() => handleUpdateManualQty(item.id, item.qty - 1)}
                                       className="px-2 py-0.5 text-slate-500 hover:bg-slate-100 font-black print:hidden"
                                     >
                                       -
                                     </button>
                                     <span className="px-2 py-0.5 font-black text-indigo-700 font-mono text-xs">
-                                      {toPersianDigits(item.qty)} {item.product.unit || "عدد"}
+                                      {toPersianDigits(item.qty)} {item.selectedUnit}
                                     </span>
                                     <button
                                       type="button"
-                                      onClick={() => handleUpdateManualQty(item.manualId!, item.qty + 1)}
+                                      onClick={() => handleUpdateManualQty(item.id, item.qty + 1)}
                                       className="px-2 py-0.5 text-slate-500 hover:bg-slate-100 font-black print:hidden"
                                     >
                                       +
                                     </button>
                                   </div>
                                 ) : (
-                                  <span className="font-black text-indigo-700 font-mono text-xs bg-indigo-50/80 px-2 py-1 rounded-lg border border-indigo-100">
-                                    {toPersianDigits(item.qty)} {item.product.unit || "عدد"}
+                                  <span className="font-black text-indigo-700 font-mono text-xs bg-indigo-50/80 px-2.5 py-1 rounded-lg border border-indigo-100">
+                                    {toPersianDigits(item.qty)} {item.selectedUnit}
+                                  </span>
+                                )}
+
+                                {/* Main/Secondary unit switcher badge */}
+                                {hasSecUnit && (
+                                  <button
+                                    type="button"
+                                    onClick={() => handleToggleItemUnit(item, item.product)}
+                                    className="text-[10px] font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-1.5 py-0.5 rounded border border-indigo-200 transition-colors print:hidden cursor-pointer"
+                                    title="تغییر واحد بین اصلی و فرعی"
+                                  >
+                                    {item.unitType === "secondary" ? `واحد فرعی (معادل ${toPersianDigits(item.baseQty)} ${item.product.unit})` : `واحد اصلی (تبدیل به ${item.product.secondaryUnit})`}
+                                  </button>
+                                )}
+                                {hasSecUnit && item.unitType === "secondary" && (
+                                  <span className="text-[10px] text-slate-400 font-bold hidden print:inline">
+                                    معادل {toPersianDigits(item.baseQty)} {item.product.unit}
                                   </span>
                                 )}
                               </div>
                             </td>
-                            <td className="p-3 text-left font-mono font-bold text-slate-700" dir="ltr">
-                              {formatCurrency(unitPrice)}
+
+                            {/* Tags list */}
+                            <td className="p-3">
+                              <div className="flex flex-wrap items-center gap-1">
+                                {(item.tags || []).map((t, tIdx) => {
+                                  const color = TAG_COLORS[t] || { bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-200" };
+                                  return (
+                                    <span
+                                      key={tIdx}
+                                      className={`px-2 py-0.5 rounded-md text-[10px] font-bold border ${color.bg} ${color.text} ${color.border}`}
+                                    >
+                                      {t}
+                                    </span>
+                                  );
+                                })}
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenTagModal(item, item.product)}
+                                  className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-md transition-colors print:hidden"
+                                  title="ویرایش تگ‌ها"
+                                >
+                                  <Edit3 className="w-3 h-3" />
+                                </button>
+                              </div>
                             </td>
-                            <td className="p-3 text-left font-mono font-black text-slate-900" dir="ltr">
-                              {formatCurrency(rowTotal)}
-                            </td>
+
+                            {/* Priority */}
                             <td className="p-3 text-center">
                               <span
                                 className={`px-2 py-0.5 rounded-full text-[10px] font-black ${
@@ -932,12 +1250,14 @@ export default function OrderList({
                                 {item.priority === "emergency" ? "اضطراری" : item.priority === "urgent" ? "فوری" : "عادی"}
                               </span>
                             </td>
+
+                            {/* Operations */}
                             <td className="p-3 text-center print:hidden">
-                              {item.source === "manual" && item.manualId && (
+                              {item.source === "manual" && (
                                 <button
                                   type="button"
-                                  onClick={() => handleRemoveManual(item.manualId!)}
-                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors"
+                                  onClick={() => handleRemoveManual(item.id)}
+                                  className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
                                   title="حذف از لیست"
                                 >
                                   <Trash2 className="w-4 h-4" />
@@ -972,193 +1292,111 @@ export default function OrderList({
         </div>
       </div>
 
-      {/* QUICK DEFINE NEW PRODUCT MODAL */}
-      {isNewProductModalOpen && (
-        <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-4 print:hidden overflow-y-auto" dir="rtl">
-          <div className="bg-white rounded-3xl w-full max-w-xl shadow-2xl border border-slate-100 overflow-hidden flex flex-col my-auto">
-            {/* Modal Header */}
-            <div className="bg-gradient-to-r from-emerald-600 to-teal-600 text-white px-6 py-4 flex items-center justify-between">
-              <div className="flex items-center gap-2.5">
-                <PackagePlus className="w-5 h-5" />
-                <h3 className="font-black text-base">تعریف سریع کالای جدید و افزودن به لیست سفارش</h3>
+      {/* Edit Tags Modal */}
+      {tagModalItem && (
+        <div className="fixed inset-0 z-[99999] bg-slate-900/50 backdrop-blur-xs flex items-center justify-center p-4 print:hidden" dir="rtl">
+          <div className="bg-white rounded-2xl w-full max-w-md shadow-2xl border border-slate-100 overflow-hidden flex flex-col">
+            <div className="bg-slate-50 px-5 py-3.5 border-b border-slate-100 flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <TagIcon className="w-4 h-4 text-indigo-600" />
+                <h3 className="text-sm font-black text-slate-800">ویرایش تگ‌های: {tagModalItem.name}</h3>
               </div>
               <button
                 type="button"
-                onClick={() => setIsNewProductModalOpen(false)}
-                className="text-white/80 hover:text-white p-1 rounded-lg hover:bg-white/10 transition-colors"
+                onClick={() => setTagModalItem(null)}
+                className="text-slate-400 hover:text-slate-600 p-1 rounded-lg"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
-            {/* Modal Form */}
-            <form onSubmit={handleCreateProductSubmit} className="p-6 space-y-4">
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                {/* Product Name */}
-                <div className="sm:col-span-2">
-                  <label className="block text-xs font-bold text-slate-700 mb-1">
-                    نام کامل کالا <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={newProductForm.name}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, name: e.target.value })}
-                    placeholder="مثال: لوله پنج لایه سایز ۱۶ نیوپایپ"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-sm font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500 transition-all"
-                  />
-                </div>
-
-                {/* SKU Code */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">کد کالا (اختیاری)</label>
-                  <div className="flex gap-1.5">
-                    <input
-                      type="text"
-                      value={newProductForm.code}
-                      onChange={(e) => setNewProductForm({ ...newProductForm, code: e.target.value })}
-                      placeholder="PRD-1001"
-                      className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setNewProductForm({ ...newProductForm, code: `P-${Math.floor(1000 + Math.random() * 9000)}` })}
-                      className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-600 rounded-xl text-[10px] font-bold shrink-0"
-                      title="تولید کد خودکار"
-                    >
-                      تولید کد
-                    </button>
-                  </div>
-                </div>
-
-                {/* Barcode */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">بارکد (اختیاری)</label>
-                  <input
-                    type="text"
-                    value={newProductForm.barcode}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, barcode: e.target.value })}
-                    placeholder="اسکن یا تایپ بارکد..."
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                {/* Category */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">دسته‌بندی</label>
-                  <select
-                    value={newProductForm.categoryId}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, categoryId: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  >
-                    <option value="">-- بدون دسته‌بندی --</option>
-                    {categories.map((c, i) => (
-                      <option key={c.id || i} value={c.id?.toString() || c.name}>{c.name}</option>
-                    ))}
-                  </select>
-                </div>
-
-                {/* Unit */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">واحد سنجش</label>
-                  <select
-                    value={newProductForm.unit}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, unit: e.target.value })}
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  >
-                    <option value="عدد">عدد</option>
-                    <option value="شاخه">شاخه</option>
-                    <option value="متر">متر</option>
-                    <option value="کیلوگرم">کیلوگرم</option>
-                    <option value="بسته">بسته</option>
-                    <option value="کارتن">کارتن</option>
-                    <option value="حلقه">حلقه</option>
-                    <option value="لیتر">لیتر</option>
-                    <option value="دستگاه">دستگاه</option>
-                    <option value="جفت">جفت</option>
-                  </select>
-                </div>
-
-                {/* Purchase Price */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">قیمت برآوردی خرید ({currency})</label>
-                  <input
-                    type="number"
-                    value={newProductForm.purchasePrice}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, purchasePrice: e.target.value })}
-                    placeholder="0"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                {/* Sales Price */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">قیمت فروش ({currency})</label>
-                  <input
-                    type="number"
-                    value={newProductForm.price}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, price: e.target.value })}
-                    placeholder="0"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                {/* Min Stock */}
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1">نقطه سفارش (حداقل موجودی)</label>
-                  <input
-                    type="number"
-                    value={newProductForm.minStock}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, minStock: e.target.value })}
-                    placeholder="5"
-                    className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono font-bold focus:bg-white focus:ring-2 focus:ring-emerald-500/20 focus:border-emerald-500"
-                  />
-                </div>
-
-                {/* Initial Order Quantity */}
-                <div className="bg-emerald-50/70 p-2.5 rounded-xl border border-emerald-100">
-                  <label className="block text-xs font-black text-emerald-800 mb-1">
-                    تعداد سفارش فوری در این لیست
-                  </label>
-                  <input
-                    type="number"
-                    min="1"
-                    value={newProductForm.orderQuantityNow}
-                    onChange={(e) => setNewProductForm({ ...newProductForm, orderQuantityNow: e.target.value })}
-                    placeholder="10"
-                    className="w-full px-3 py-2 bg-white border border-emerald-300 rounded-lg text-xs font-mono font-black text-center text-emerald-900 focus:ring-2 focus:ring-emerald-500/20"
-                  />
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-2">انتخاب از تگ‌های پرکاربرد:</label>
+                <div className="flex flex-wrap gap-1.5">
+                  {POPULAR_TAGS.map(tag => {
+                    const isSelected = tagModalItem.currentTags.includes(tag);
+                    const color = TAG_COLORS[tag] || { bg: "bg-slate-100", text: "text-slate-700", border: "border-slate-200" };
+                    return (
+                      <button
+                        key={tag}
+                        type="button"
+                        onClick={() => {
+                          const next = isSelected
+                            ? tagModalItem.currentTags.filter(t => t !== tag)
+                            : [...tagModalItem.currentTags, tag];
+                          setTagModalItem({ ...tagModalItem, currentTags: next });
+                        }}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-bold border transition-all ${
+                          isSelected
+                            ? `${color.bg} ${color.text} ${color.border} font-black ring-2 ring-indigo-500/20`
+                            : "bg-white text-slate-600 border-slate-200 hover:border-slate-300"
+                        }`}
+                      >
+                        {tag} {isSelected && <Check className="w-3 h-3 inline-block mr-1" />}
+                      </button>
+                    );
+                  })}
                 </div>
               </div>
 
-              {/* Action Buttons */}
-              <div className="flex gap-2 pt-3 border-t border-slate-100">
+              <div>
+                <label className="block text-xs font-bold text-slate-600 mb-1.5">افزودن تگ سفارشی:</label>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="عنوان تگ..."
+                    value={modalCustomTagInput}
+                    onChange={(e) => setModalCustomTagInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter") {
+                        e.preventDefault();
+                        if (modalCustomTagInput.trim() && !tagModalItem.currentTags.includes(modalCustomTagInput.trim())) {
+                          setTagModalItem({
+                            ...tagModalItem,
+                            currentTags: [...tagModalItem.currentTags, modalCustomTagInput.trim()]
+                          });
+                          setModalCustomTagInput("");
+                        }
+                      }
+                    }}
+                    className="flex-1 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold focus:bg-white focus:ring-2 focus:ring-indigo-500/20"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (modalCustomTagInput.trim() && !tagModalItem.currentTags.includes(modalCustomTagInput.trim())) {
+                        setTagModalItem({
+                          ...tagModalItem,
+                          currentTags: [...tagModalItem.currentTags, modalCustomTagInput.trim()]
+                        });
+                        setModalCustomTagInput("");
+                      }
+                    }}
+                    className="px-3 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700"
+                  >
+                    افزودن
+                  </button>
+                </div>
+              </div>
+
+              <div className="pt-3 border-t border-slate-100 flex gap-2">
                 <button
-                  type="submit"
-                  disabled={isSavingNewProduct}
-                  className="flex-1 py-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black shadow-md shadow-emerald-600/20 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                  type="button"
+                  onClick={() => handleSaveModalTags(tagModalItem.currentTags)}
+                  className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm"
                 >
-                  {isSavingNewProduct ? (
-                    <>
-                      <RefreshCw className="w-4 h-4 animate-spin" />
-                      <span>در حال ذخیره...</span>
-                    </>
-                  ) : (
-                    <>
-                      <Check className="w-4 h-4" />
-                      <span>ثبت کالا و افزودن به لیست سفارش</span>
-                    </>
-                  )}
+                  ذخیره تگ‌ها
                 </button>
                 <button
                   type="button"
-                  onClick={() => setIsNewProductModalOpen(false)}
-                  className="px-5 py-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                  onClick={() => setTagModalItem(null)}
+                  className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold"
                 >
                   انصراف
                 </button>
               </div>
-            </form>
+            </div>
           </div>
         </div>
       )}
