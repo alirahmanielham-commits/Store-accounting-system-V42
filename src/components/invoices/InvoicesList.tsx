@@ -1,6 +1,8 @@
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../../utils/unitConversion";
+import { formatInvoiceDate } from "../../utils/format";
 import React, { useMemo, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
+import { safePrint } from "../../utils/printHelper";
 import * as lucide from 'lucide-react';
 const { Tag, Wallet, Ban, ChevronDown, Search, Plus, Filter, FileText, Download, CheckCircle, Edit2, Trash2, Printer, Check, X, ArrowUpRight, ArrowDownRight, ArrowRight, CornerDownLeft, Package, User, Clock, CheckCircle2, ChevronLeft, ChevronRight, Share2, Eye, Truck, MoreVertical, DollarSign, RefreshCw, XCircle, Warehouse, TrendingUp } = lucide as any;
 
@@ -657,17 +659,17 @@ export default function InvoicesList(props: any) {
                               >
                                 <Calendar className="w-3.5 h-3.5 text-indigo-500" />
                                 <span className="font-sans font-black text-xs text-slate-700">
-                                  {formatDateDisplay(inv.date || inv.jalaliDate, storeSettings?.calendarType)}
+                                  {formatInvoiceDate(inv.date || inv.jalaliDate || inv.issueDate || inv.invoiceDate || inv.createdAt, storeSettings?.calendarType, { showTime: false })}
                                 </span>
                               </div>
-                              {inv.dueDate && (
+                              {(inv.dueDate || inv.jalaliDueDate) && (
                                 <div
                                   className="flex items-center gap-1.5 justify-start text-xs font-bold text-slate-650 mt-1"
                                   dir="rtl"
                                 >
                                   <Calendar className="w-3.5 h-3.5 text-rose-500" />
                                   <span className="font-sans font-black text-[10px] text-rose-600">
-                                    سررسید: {formatDateDisplay(inv.dueDate, storeSettings?.calendarType)}
+                                    سررسید: {formatInvoiceDate(inv.dueDate || inv.jalaliDueDate, storeSettings?.calendarType, { showTime: false })}
                                   </span>
                                 </div>
                               )}
@@ -866,7 +868,7 @@ export default function InvoicesList(props: any) {
                                   <Package className="w-4 h-4" />
                                 </button>
                               )}
-<button
+                              <button
                                 onClick={() => {
                                   setViewingInvoice(inv);
                                 }}
@@ -874,6 +876,20 @@ export default function InvoicesList(props: any) {
                                 title={activeTab.includes("warehouse") ? "مشاهده نهایی سند" : "مشاهده نهایی فاکتور"}
                               >
                                 <Eye className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => {
+                                  if (setViewingInvoice) {
+                                    setViewingInvoice(inv);
+                                    setTimeout(() => {
+                                      safePrint("#invoice-sheet-to-print", { timeoutMs: 3000 });
+                                    }, 200);
+                                  }
+                                }}
+                                className="p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg cursor-pointer bg-transparent border-none"
+                                title="چاپ مستقیم فاکتور"
+                              >
+                                <Printer className="w-4 h-4" />
                               </button>
                               {inv.status !== "voided" && (
                                 <button

@@ -1,5 +1,5 @@
 import React from "react";
-import { formatDateDisplay, toPersianDigits, addCommas } from "../../../utils/format";
+import { formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas } from "../../../utils/format";
 import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 
 export default function CompactInvoiceTemplate({
@@ -21,6 +21,10 @@ export default function CompactInvoiceTemplate({
   const sumTotal = data.items?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
   const totalDiscount = sumTotal - (data.totalAmount || 0);
 
+  const getInvoiceDateOnly = (d: any) => {
+    return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });
+  };
+
   return (
     <div className="p-4 bg-white text-gray-900 font-sans text-sm border-2 border-dashed border-gray-400 m-4 print:m-0 mx-auto print:mx-auto max-w-full print:w-full rounded-xl print:rounded-none" dir="rtl">
       <style>{`
@@ -40,7 +44,7 @@ export default function CompactInvoiceTemplate({
          <div className="text-xl font-black">{title}</div>
          <div className="text-left text-xs space-y-1">
             <div>شماره: <span className="font-bold">{toPersianDigits(data.invoiceNumber)}</span></div>
-            <div>تاریخ: <span className="font-bold">{formatDateDisplay(data.date || data.createdAt)}</span></div>
+            <div>تاریخ: <span className="font-bold">{getInvoiceDateOnly(data.date || data.jalaliDate || data.issueDate || data.invoiceDate || data.createdAt)}</span></div>
          </div>
       </div>
       

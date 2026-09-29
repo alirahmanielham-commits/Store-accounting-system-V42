@@ -138,6 +138,16 @@ export async function safePrint(
   const requireImages = options.requireImagesLoaded ?? true;
   const requireFonts = options.requireFontsLoaded ?? true;
 
+  let targetElement: HTMLElement | null = null;
+  const cleanupBodyClasses = () => {
+    if (typeof document !== "undefined") {
+      document.body.classList.remove("printing-in-progress", "printing-modal-overlay", "printing-main-page");
+      if (targetElement) {
+        targetElement.removeAttribute("data-is-current-print-target");
+      }
+    }
+  };
+
   try {
     if (options.onBeforePrint) {
       options.onBeforePrint();
@@ -149,14 +159,35 @@ export async function safePrint(
     }
 
     // Step 2: Verify Target DOM Element
-    const element = await waitForElement(targetSelector, timeoutMs);
+    targetElement = await waitForElement(targetSelector, timeoutMs);
 
     // Step 3: Verify Images inside Target Element
-    if (element && requireImages) {
-      await waitForImages(element, 1500);
+    if (targetElement && requireImages) {
+      await waitForImages(targetElement, 1500);
     }
 
-    // Step 4: Double RAF to ensure browser layout & paint cycles are 100% committed
+    // Step 4: Classify print target (Modal vs In-Page) to hide background app layout
+    if (typeof document !== "undefined") {
+      document.body.classList.add("printing-in-progress");
+      if (targetElement) {
+        targetElement.setAttribute("data-is-current-print-target", "true");
+        const isInsideMainLayout = Boolean(targetElement.closest(".main-app-layout-wrapper"));
+        const isModalTarget =
+          !isInsideMainLayout ||
+          Boolean(targetElement.closest('[data-print-modal="true"]')) ||
+          targetElement.id === "invoice-sheet-to-print" ||
+          targetElement.classList.contains("invoice-print-container") ||
+          targetElement.classList.contains("receipt-print-container");
+
+        if (isModalTarget) {
+          document.body.classList.add("printing-modal-overlay");
+        } else {
+          document.body.classList.add("printing-main-page");
+        }
+      }
+    }
+
+    // Step 5: Double RAF to ensure browser layout & paint cycles are 100% committed
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
@@ -165,16 +196,28 @@ export async function safePrint(
       });
     });
 
-    // Step 5: Execute Window Print
+    // Step 6: Setup afterprint listener for automatic cleanup
+    if (typeof window !== "undefined") {
+      const handleAfterPrint = () => {
+        window.removeEventListener("afterprint", handleAfterPrint);
+        cleanupBodyClasses();
+        if (options.onAfterPrint) {
+          options.onAfterPrint();
+        }
+      };
+      window.addEventListener("afterprint", handleAfterPrint, { once: true });
+    }
+
+    // Step 7: Execute Window Print
     window.print();
 
-    if (options.onAfterPrint) {
-      options.onAfterPrint();
-    }
+    // Secondary fallback cleanup in case afterprint does not fire
+    setTimeout(cleanupBodyClasses, 1500);
 
     return true;
   } catch (error: any) {
     console.error("Pre-print check encountered an issue, falling back to standard print:", error);
+    cleanupBodyClasses();
     if (options.onError) {
       options.onError(error);
     }

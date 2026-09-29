@@ -122,7 +122,41 @@ export default function PreviewModals(props: any) {
     <>
       {/* Invoice Preview / Viewing */}
       {(viewingInvoice || previewInvoiceData) && (
-        <div className="fixed inset-0 z-[99999] flex flex-col bg-slate-900/50 backdrop-blur-sm print:bg-transparent print:backdrop-blur-none print-section" dir="rtl">
+        <div
+          data-print-modal="true"
+          id="invoice-preview-modal-root"
+          className="fixed inset-0 z-[99999] flex flex-col bg-slate-900/50 backdrop-blur-sm print:bg-transparent print:backdrop-blur-none print-section print-modal-active"
+          dir="rtl"
+        >
+          <style>{`
+            @media print {
+              @page {
+                size: ${printSettings.paperSize === 'a5' ? 'A5 portrait' : 'A4 portrait'};
+                margin: 5mm;
+              }
+              html, body {
+                background: white !important;
+                background-color: white !important;
+                padding: 0 !important;
+                margin: 0 !important;
+              }
+              .main-app-layout-wrapper {
+                display: none !important;
+                height: 0 !important;
+                overflow: hidden !important;
+                position: absolute !important;
+                left: -99999px !important;
+                visibility: hidden !important;
+              }
+              #invoice-sheet-to-print {
+                box-shadow: none !important;
+                border: none !important;
+                margin: 0 auto !important;
+                width: 100% !important;
+                max-width: ${printSettings.paperSize === 'a5' ? '138mm' : '196mm'} !important;
+              }
+            }
+          `}</style>
           <div className="flex-1 w-full max-w-5xl mx-auto my-0 sm:my-4 bg-slate-100 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden print:w-full print:max-w-none print:m-0 print:rounded-none print:shadow-none print:bg-white relative">
             <div className="bg-white border-b border-slate-200 p-4 flex items-center justify-between print:hidden shrink-0 z-20">
               <div className="flex items-center gap-3">
@@ -443,7 +477,10 @@ export default function PreviewModals(props: any) {
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 print:p-0 print:overflow-visible print:bg-white flex justify-center items-start print:block">
-              <div className={`bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:mx-auto print:w-full print:max-w-none relative overflow-hidden box-border ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}>
+              <div
+                id="invoice-sheet-to-print"
+                className={`invoice-print-container bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:mx-auto print:w-full print:max-w-none relative overflow-hidden box-border ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}
+              >
                 {/* Visual Watermarks for Draft and Voided */}
                 {isVoided && (
                   <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-30 overflow-hidden print:flex">
@@ -491,7 +528,7 @@ export default function PreviewModals(props: any) {
                 >
                   انصراف و ویرایش
                 </button>
-                <button onClick={() => safePrint(".print-section")} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
+                <button onClick={() => safePrint("#invoice-sheet-to-print", { timeoutMs: 3000 })} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
                    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
                    چاپ پیش‌نمایش
                  </button>
@@ -511,7 +548,7 @@ export default function PreviewModals(props: any) {
             )}
             {viewingInvoice && (
                <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3 print:hidden shrink-0">
-                 <button onClick={() => safePrint(".print-section")} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
+                 <button onClick={() => safePrint("#invoice-sheet-to-print", { timeoutMs: 3000 })} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
                    <Printer className="w-5 h-5" />
                    چاپ
                  </button>

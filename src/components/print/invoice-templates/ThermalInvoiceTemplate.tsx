@@ -1,5 +1,5 @@
 import React from "react";
-import { formatDateDisplay, toPersianDigits, addCommas } from "../../../utils/format";
+import { formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas } from "../../../utils/format";
 import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 
 export default function ThermalInvoiceTemplate({
@@ -22,6 +22,10 @@ export default function ThermalInvoiceTemplate({
   const sumTotal = data.items?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
   const totalDiscount = sumTotal - (data.totalAmount || 0);
 
+  const getInvoiceDateOnly = (d: any) => {
+    return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });
+  };
+
   return (
     <div className="p-2 bg-white text-black font-sans text-[11px] leading-tight w-full max-w-[80mm] mx-auto print:w-[78mm] print:m-0" dir="rtl">
       <style>{`
@@ -42,7 +46,7 @@ export default function ThermalInvoiceTemplate({
          <span>شماره: {toPersianDigits(data.invoiceNumber)}</span>
       </div>
       <div className="flex justify-between mb-1">
-         <span>تاریخ: {formatDateDisplay(data.date || data.createdAt)}</span>
+         <span>تاریخ: {getInvoiceDateOnly(data.date || data.jalaliDate || data.issueDate || data.invoiceDate || data.createdAt)}</span>
       </div>
       <div className="flex justify-between border-b border-dashed border-black pb-2 mb-2">
          <span>مشتری: {relatedPerson?.name || "عمومی"}</span>

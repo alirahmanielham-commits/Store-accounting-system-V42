@@ -1,5 +1,5 @@
 import React from "react";
-import { formatDateDisplay, toPersianDigits, addCommas, numToPersianWords } from "../../../utils/format";
+import { formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, numToPersianWords } from "../../../utils/format";
 import { Store, Building2, User, Phone, MapPin, CheckCircle, Percent } from "lucide-react";
 import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 
@@ -42,12 +42,7 @@ export default function StandardInvoiceTemplate({
   );
 
   const getInvoiceDateOnly = (d: any) => {
-    if (!d) return "-";
-    const formatted = formatDateDisplay(d, storeSettings?.calendarType);
-    if (formatted.includes(" ")) {
-      return formatted.split(" ")[0];
-    }
-    return formatted;
+    return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });
   };
 
   const allocatedTransactions = (transactions || []).filter((t: any) => {
@@ -373,12 +368,16 @@ export default function StandardInvoiceTemplate({
                   </div>
                   <div className="flex justify-end gap-2 items-center">
                     <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>تاریخ صدور:</span>
-                    <span className={`font-bold text-slate-800 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>{getInvoiceDateOnly(data.date || data.createdAt)}</span>
+                    <span className={`font-bold text-slate-800 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>
+                      {getInvoiceDateOnly(data.date || data.jalaliDate || data.issueDate || data.invoiceDate || data.createdAt)}
+                    </span>
                   </div>
-                  {data.dueDate && (
+                  {(data.dueDate || data.jalaliDueDate) && (
                      <div className="flex justify-end gap-2 items-center">
                        <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>تاریخ سررسید:</span>
-                       <span className={`font-bold text-indigo-700 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>{getInvoiceDateOnly(data.dueDate)}</span>
+                       <span className={`font-bold text-indigo-700 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>
+                         {getInvoiceDateOnly(data.dueDate || data.jalaliDueDate)}
+                       </span>
                      </div>
                   )}
                   {data.sellerInvoiceNumber && (

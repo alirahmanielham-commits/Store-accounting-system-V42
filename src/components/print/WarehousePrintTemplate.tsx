@@ -1,5 +1,5 @@
 import React from "react";
-import { formatDateDisplay, toPersianDigits } from "../../utils/format";
+import { formatDateDisplay, formatInvoiceDate, toPersianDigits } from "../../utils/format";
 import { User, Box, Building2, MapPin, Phone } from "lucide-react";
 
 interface WarehousePrintTemplateProps {
@@ -62,7 +62,7 @@ export default function WarehousePrintTemplate({
           <div className="flex items-center gap-2 text-xs font-bold">
             <span className="text-slate-500 w-16">تاریخ:</span>
             <span>
-              {formatDateDisplay(data.jalaliDate || data.date)}
+              {formatInvoiceDate(data.date || data.jalaliDate || data.issueDate || data.invoiceDate || data.createdAt, storeSettings?.calendarType, { showTime: false })}
             </span>
           </div>
           <div className="flex items-center gap-2 text-xs font-bold">

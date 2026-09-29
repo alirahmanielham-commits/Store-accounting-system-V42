@@ -1,5 +1,5 @@
 import React from "react";
-import { formatDateDisplay, toPersianDigits, addCommas, numToPersianWords } from "../../../utils/format";
+import { formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, numToPersianWords } from "../../../utils/format";
 import { Store, Building2, User, Phone, MapPin, Hash, Calendar, CheckCircle, Percent } from "lucide-react";
 import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 
@@ -80,12 +80,7 @@ export default function MinimalInvoiceTemplate({
 
   // Format date cleanly without unwanted time strings
   const getInvoiceDateOnly = (d: any) => {
-    if (!d) return "-";
-    const formatted = formatDateDisplay(d, storeSettings?.calendarType);
-    if (formatted.includes(" ")) {
-      return formatted.split(" ")[0];
-    }
-    return formatted;
+    return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });
   };
 
   // Calculate allocated transactions
@@ -356,12 +351,16 @@ export default function MinimalInvoiceTemplate({
               </div>
               <div className="flex justify-between items-center gap-2">
                 <span className="text-slate-400 font-medium">تاریخ صدور:</span>
-                <span className="font-bold text-slate-800">{getInvoiceDateOnly(data.date || data.createdAt)}</span>
+                <span className="font-bold text-slate-800">
+                  {getInvoiceDateOnly(data.date || data.jalaliDate || data.issueDate || data.invoiceDate || data.createdAt)}
+                </span>
               </div>
-              {data.dueDate && (
+              {(data.dueDate || data.jalaliDueDate) && (
                 <div className="flex justify-between items-center gap-2">
                   <span className="text-slate-400 font-medium">سررسید:</span>
-                  <span className="font-bold text-indigo-700">{getInvoiceDateOnly(data.dueDate)}</span>
+                  <span className="font-bold text-indigo-700">
+                    {getInvoiceDateOnly(data.dueDate || data.jalaliDueDate)}
+                  </span>
                 </div>
               )}
               {data.sellerInvoiceNumber && (

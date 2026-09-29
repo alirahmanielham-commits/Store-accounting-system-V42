@@ -146,6 +146,70 @@ export function formatDateDisplay(dateInput: string | Date | number | undefined 
   }
 }
 
+/**
+ * Accurately formats invoice issue dates and due dates for preview and printing.
+ * Handles Jalali string inputs directly without timezone corruption,
+ * removes time cleanly without truncating Persian month names,
+ * and falls back gracefully to a formatted Persian date.
+ */
+export function formatInvoiceDate(
+  dateInput: any,
+  calendarType?: string,
+  options?: { showTime?: boolean; fallback?: string }
+): string {
+  if (!dateInput && dateInput !== 0) {
+    return options?.fallback || "-";
+  }
+
+  // Handle object with toDate method (e.g. DateObject or Firestore Timestamp)
+  if (dateInput && typeof dateInput.toDate === "function") {
+    dateInput = dateInput.toDate();
+  }
+
+  const calType = calendarType || "jalali";
+
+  // Check if string is already a Jalali date string like "1403/07/08" or "1403-07-08" or "۱۴۰۳/۰۷/۰۸"
+  if (typeof dateInput === "string") {
+    const clean = dateInput.trim();
+    // Normalize Persian/Arabic digits to Latin digits
+    const latinDigits = clean
+      .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
+      .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
+
+    // Matches YYYY/MM/DD or YYYY-MM-DD
+    const match = latinDigits.match(/^(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/);
+    if (match) {
+      const year = parseInt(match[1], 10);
+      if (year >= 1300 && year <= 1500 && calType !== "gregorian") {
+        // It is already a valid Jalali date!
+        const month = match[2].padStart(2, "0");
+        const day = match[3].padStart(2, "0");
+        return toPersianDigits(`${year}/${month}/${day}`);
+      }
+    }
+  }
+
+  try {
+    const formatted = formatDateDisplay(dateInput, calType);
+    if (!formatted || formatted === "-") {
+      return options?.fallback || "-";
+    }
+
+    if (!options?.showTime) {
+      // Remove trailing time pattern safely (e.g. " 14:30", " ۱۲:۰۰", " 08:30:15 ب.ظ")
+      const withoutTime = formatted
+        .replace(/\s+([۰-۹0-9]{1,2}:[۰-۹0-9]{1,2}(:[۰-۹0-9]{1,2})?(\s*(ق\.ظ|ب\.ظ|am|pm))?)$/i, "")
+        .trim();
+      return withoutTime || formatted;
+    }
+
+    return formatted;
+  } catch (err) {
+    console.error("formatInvoiceDate error:", err);
+    return String(dateInput);
+  }
+}
+
 export function convertToGregorian(dateInput: string | Date | number | any): string {
   if (!dateInput) return new Date().toISOString();
   if (dateInput instanceof Date) {

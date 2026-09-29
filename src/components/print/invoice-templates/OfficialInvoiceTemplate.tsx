@@ -1,5 +1,5 @@
 import React from "react";
-import { formatDateDisplay, toPersianDigits, addCommas, numToPersianWords } from "../../../utils/format";
+import { formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, numToPersianWords } from "../../../utils/format";
 import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 
 export default function OfficialInvoiceTemplate({
@@ -26,12 +26,7 @@ export default function OfficialInvoiceTemplate({
   const relatedPerson = persons.find(p => p.id?.toString() === data.customerId?.toString());
 
   const getInvoiceDateOnly = (d: any) => {
-    if (!d) return "-";
-    const formatted = formatDateDisplay(d, storeSettings?.calendarType);
-    if (formatted.includes(" ")) {
-      return formatted.split(" ")[0];
-    }
-    return formatted;
+    return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });
   };
 
   // Calculations
@@ -144,8 +139,8 @@ export default function OfficialInvoiceTemplate({
         </div>
         <div className="flex-1 text-left text-[11px] space-y-0.5">
            <div>شماره سریال فاکتور: <span className="font-bold font-mono">{toPersianDigits(data.invoiceNumber || "---")}</span></div>
-           <div>تاریخ صدور: <span className="font-bold">{getInvoiceDateOnly(data.date || data.createdAt)}</span></div>
-           {data.dueDate && <div>تاریخ سررسید: <span className="font-bold">{getInvoiceDateOnly(data.dueDate)}</span></div>}
+           <div>تاریخ صدور: <span className="font-bold">{getInvoiceDateOnly(data.date || data.jalaliDate || data.issueDate || data.invoiceDate || data.createdAt)}</span></div>
+           {(data.dueDate || data.jalaliDueDate) && <div>تاریخ سررسید: <span className="font-bold">{getInvoiceDateOnly(data.dueDate || data.jalaliDueDate)}</span></div>}
         </div>
       </div>
 
