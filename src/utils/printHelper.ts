@@ -1,6 +1,6 @@
 /**
  * Unified Printing System with Isolated Iframe & Safe Fallback
- * Ensures that the EXACT preview content, custom webfonts (IRANYekanXFaNum),
+ * Ensures that the EXACT preview content, custom webfonts (IRANYekanXFaNum & Vazirmatn),
  * CSS rules, logos, barcodes, and print layouts are sent to the printer
  * without any leakage from the host application, background tables, or modal controls.
  */
@@ -137,7 +137,11 @@ async function waitForFonts(timeoutMs: number = 1500): Promise<void> {
   if (typeof document !== "undefined" && "fonts" in document && document.fonts.ready) {
     try {
       await Promise.race([
-        document.fonts.ready,
+        Promise.all([
+          document.fonts.ready,
+          document.fonts.load?.("14px IRANYekanXFaNum"),
+          document.fonts.load?.("bold 14px IRANYekanXFaNum"),
+        ]),
         new Promise((resolve) => setTimeout(resolve, timeoutMs))
       ]);
     } catch (_) {}
@@ -149,12 +153,13 @@ async function waitForFonts(timeoutMs: number = 1500): Promise<void> {
  * from the parent document to inject into the printing iframe.
  */
 function extractStyles(): string {
-  let combinedStyles = "";
+  let combinedStyles = `<link rel="stylesheet" href="/Webfonts/fontiran.css">\n`;
+  combinedStyles += `<link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">\n`;
 
   // 1. Collect all linked CSS stylesheets
   const linkTags = Array.from(document.querySelectorAll<HTMLLinkElement>('link[rel="stylesheet"]'));
   linkTags.forEach((link) => {
-    if (link.href) {
+    if (link.href && !link.href.includes("fontiran.css")) {
       combinedStyles += `<link rel="stylesheet" href="${link.href}">\n`;
     }
   });
@@ -228,14 +233,69 @@ export async function printViaIframe(
       pageCss = `size: ${paperSize} portrait; margin: ${options.margin};`;
     }
 
-    // Isolated print CSS reset
+    // Isolated print CSS reset with forced Persian font-family
     const isolatedPrintCss = `
       <style>
+        @font-face {
+          font-family: 'IRANYekanXFaNum';
+          font-style: normal;
+          font-weight: 300;
+          font-display: swap;
+          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Light.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'IRANYekanXFaNum';
+          font-style: normal;
+          font-weight: 400;
+          font-display: swap;
+          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Regular.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'IRANYekanXFaNum';
+          font-style: normal;
+          font-weight: 500;
+          font-display: swap;
+          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Medium.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'IRANYekanXFaNum';
+          font-style: normal;
+          font-weight: 600;
+          font-display: swap;
+          src: url('/Webfonts/Woff2/IRANYekanXFaNum-DemiBold.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'IRANYekanXFaNum';
+          font-style: normal;
+          font-weight: 700;
+          font-display: swap;
+          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Bold.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'IRANYekanXFaNum';
+          font-style: normal;
+          font-weight: 800;
+          font-display: swap;
+          src: url('/Webfonts/Woff2/IRANYekanXFaNum-ExtraBold.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'IRANYekanXFaNum';
+          font-style: normal;
+          font-weight: 900;
+          font-display: swap;
+          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Black.woff2') format('woff2');
+        }
+
         @page {
           ${pageCss}
         }
         *, *::before, *::after {
           box-sizing: border-box !important;
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+        :root {
+          --font-sans: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
         html, body {
           background: #ffffff !important;
@@ -250,9 +310,10 @@ export async function printViaIframe(
           overflow: visible !important;
           direction: rtl !important;
           text-align: right !important;
-          font-family: 'IRANYekanXFaNum', 'Vazirmatn', system-ui, -apple-system, sans-serif !important;
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
           -webkit-print-color-adjust: exact !important;
           print-color-adjust: exact !important;
+          -webkit-font-smoothing: antialiased;
         }
         #print-root {
           width: 100% !important;
@@ -260,6 +321,7 @@ export async function printViaIframe(
           margin: 0 auto !important;
           padding: 0 !important;
           background: #ffffff !important;
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
         /* Override desktop preview bounds to allow natural multi-page flow */
         .invoice-print-container,
@@ -269,7 +331,8 @@ export async function printViaIframe(
         .compact-invoice-sheet,
         .warehouse-print-sheet,
         .receipt-print-container,
-        .print-section {
+        .print-section,
+        .print-wrapper-target {
           width: 100% !important;
           max-width: 100% !important;
           min-height: 0 !important;
@@ -278,6 +341,7 @@ export async function printViaIframe(
           margin: 0 auto !important;
           padding: 0 !important;
           background: #ffffff !important;
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
         }
         table {
           width: 100% !important;
@@ -295,6 +359,12 @@ export async function printViaIframe(
         }
         tfoot {
           display: table-footer-group !important;
+        }
+        .accounting-num, .font-mono, [dir="ltr"] {
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+          font-feature-settings: 'tnum' 1, 'ss01' 1 !important;
+          font-variant-numeric: tabular-nums !important;
+          letter-spacing: -0.01em;
         }
         .no-print, [data-no-print="true"], .print\\:hidden {
           display: none !important;
@@ -348,11 +418,16 @@ export async function printViaIframe(
     iframeDoc.close();
 
     // Step 8: Wait for fonts & images inside the iframe
-    if (iframeDoc.fonts?.ready) {
+    if (iframeDoc.fonts) {
       try {
         await Promise.race([
-          iframeDoc.fonts.ready,
-          new Promise((resolve) => setTimeout(resolve, 1000))
+          Promise.all([
+            iframeDoc.fonts.load?.("14px IRANYekanXFaNum"),
+            iframeDoc.fonts.load?.("bold 14px IRANYekanXFaNum"),
+            iframeDoc.fonts.load?.("bold 16px IRANYekanXFaNum"),
+            iframeDoc.fonts.ready,
+          ]),
+          new Promise((resolve) => setTimeout(resolve, 1500))
         ]);
       } catch (_) {}
     }
@@ -365,7 +440,7 @@ export async function printViaIframe(
     await new Promise<void>((resolve) => {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => {
-          setTimeout(resolve, 80);
+          setTimeout(resolve, 100);
         });
       });
     });

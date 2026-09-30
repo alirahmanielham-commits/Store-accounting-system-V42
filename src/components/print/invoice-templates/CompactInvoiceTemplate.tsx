@@ -26,8 +26,15 @@ export default function CompactInvoiceTemplate({
   };
 
   return (
-    <div className="p-4 bg-white text-gray-900 font-sans text-sm border-2 border-dashed border-gray-400 m-4 print:m-0 mx-auto print:mx-auto max-w-full print:w-full rounded-xl print:rounded-none" dir="rtl">
+    <div
+      className="compact-invoice-sheet p-4 bg-white text-gray-900 font-sans text-sm border-2 border-dashed border-gray-400 m-4 print:m-0 mx-auto print:mx-auto max-w-full print:w-full rounded-xl print:rounded-none"
+      dir="rtl"
+      style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
+    >
       <style>{`
+        .compact-invoice-sheet, .compact-invoice-sheet * {
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif !important;
+        }
         @media print {
           @page { size: auto; margin: 6mm; }
           html, body { background: white !important; margin: 0 auto !important; width: 100% !important; }

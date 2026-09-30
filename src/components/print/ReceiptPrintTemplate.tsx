@@ -205,6 +205,7 @@ export default function ReceiptPrintTemplate({
             : 'border border-slate-300 shadow-sm rounded-2xl p-4 sm:p-6 m-1 print:m-0 print:border-slate-800 print:rounded-none print:shadow-none'
         } ${isA5 ? 'text-xs leading-normal' : 'text-sm leading-relaxed'}`}
         dir="rtl"
+        style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
       >
         {/* TOP HEADER */}
         <div>
@@ -577,7 +578,10 @@ export default function ReceiptPrintTemplate({
         }
       `}} />
 
-      <div className={`receipt-print-container mx-auto ${getContainerDimensions()}`}>
+      <div
+        className={`receipt-print-container mx-auto ${getContainerDimensions()}`}
+        style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
+      >
         {paperSize === 'a4_2copy' ? (
           // Two copies on one A4 page with a perforated cut line in between
           <div className="flex flex-col justify-between h-[280mm] space-y-4 print:space-y-0">

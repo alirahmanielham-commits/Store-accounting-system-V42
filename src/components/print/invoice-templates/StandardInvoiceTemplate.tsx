@@ -235,8 +235,15 @@ export default function StandardInvoiceTemplate({
     : "bg-slate-100/70 text-slate-800 font-black border-b-2 border-slate-300";
 
   return (
-    <div className={`standard-invoice-sheet bg-white text-slate-800 font-sans mx-auto ${isA5 ? 'text-[9.5px]' : 'text-xs sm:text-sm'}`} dir="rtl">
+    <div
+      className={`standard-invoice-sheet bg-white text-slate-800 font-sans mx-auto ${isA5 ? 'text-[9.5px]' : 'text-xs sm:text-sm'}`}
+      dir="rtl"
+      style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
+    >
       <style>{`
+        .standard-invoice-sheet, .standard-invoice-sheet * {
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif !important;
+        }
         @media print {
           @page {
             size: ${isA5 ? 'A5' : 'A4'} portrait;

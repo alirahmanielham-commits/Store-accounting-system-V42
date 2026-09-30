@@ -107,8 +107,15 @@ export default function OfficialInvoiceTemplate({
   const currencyLabel = storeSettings.currency || "تومان";
 
   return (
-    <div className="official-invoice-sheet p-4 bg-white min-h-[297mm] text-black font-sans text-xs border border-black mx-auto print:mx-auto print:w-full print:p-3" dir="rtl">
+    <div
+      className="official-invoice-sheet p-4 bg-white min-h-[297mm] text-black font-sans text-xs border border-black mx-auto print:mx-auto print:w-full print:p-3"
+      dir="rtl"
+      style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
+    >
       <style>{`
+        .official-invoice-sheet, .official-invoice-sheet * {
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif !important;
+        }
         @media print {
           @page {
             size: A4 portrait;

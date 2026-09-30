@@ -517,6 +517,7 @@ export default function PreviewModals(props: any) {
               <div
                 id="invoice-sheet-to-print"
                 className={`invoice-print-container bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:mx-auto print:w-full print:max-w-none relative overflow-hidden box-border ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : printSettings.paperSize === 'pos80' ? 'max-w-[80mm] min-h-[100mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}
+                style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
               >
                 {(viewingInvoice?.type?.includes("warehouse") || previewInvoiceData?.type?.includes("warehouse")) ? (
                   <WarehousePrintTemplate

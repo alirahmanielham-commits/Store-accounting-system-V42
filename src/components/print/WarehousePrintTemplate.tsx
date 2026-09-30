@@ -45,8 +45,14 @@ export default function WarehousePrintTemplate({
   ) || ((warehouses || []).length === 1 ? warehouses[0] : null);
 
   return (
-    <div className="warehouse-print-sheet w-full text-sm text-slate-800 font-sans p-4 print:p-0 mx-auto print:mx-auto">
+    <div
+      className="warehouse-print-sheet w-full text-sm text-slate-800 font-sans p-4 print:p-0 mx-auto print:mx-auto"
+      style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
+    >
       <style>{`
+        .warehouse-print-sheet, .warehouse-print-sheet * {
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif !important;
+        }
         @media print {
           @page { size: A4 portrait; margin: 8mm; }
           html, body { width: 100% !important; margin: 0 auto !important; background: white !important; }

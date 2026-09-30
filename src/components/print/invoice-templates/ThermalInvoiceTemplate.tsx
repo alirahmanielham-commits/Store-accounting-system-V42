@@ -27,8 +27,15 @@ export default function ThermalInvoiceTemplate({
   };
 
   return (
-    <div className="p-2 bg-white text-black font-sans text-[11px] leading-tight w-full max-w-[80mm] mx-auto print:w-[78mm] print:m-0" dir="rtl">
+    <div
+      className="thermal-invoice-sheet p-2 bg-white text-black font-sans text-[11px] leading-tight w-full max-w-[80mm] mx-auto print:w-[78mm] print:m-0"
+      dir="rtl"
+      style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
+    >
       <style>{`
+        .thermal-invoice-sheet, .thermal-invoice-sheet * {
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif !important;
+        }
         @media print {
           @page { size: 80mm auto; margin: 2mm; }
           html, body { width: 100% !important; margin: 0 auto !important; background: white !important; }

@@ -229,8 +229,12 @@ export default function MinimalInvoiceTemplate({
           : 'max-w-[210mm] min-h-[297mm] p-8 text-xs'
       } print:w-full print:max-w-none print:p-0 print:m-0`}
       dir="rtl"
+      style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
     >
       <style>{`
+        .minimal-invoice-sheet, .minimal-invoice-sheet * {
+          font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif !important;
+        }
         @media print {
           @page {
             size: ${isA5 ? 'A5' : 'A4'} portrait;
