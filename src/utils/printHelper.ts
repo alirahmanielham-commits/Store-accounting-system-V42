@@ -184,8 +184,19 @@ export async function printViaIframe(
   target: string | HTMLElement = "#invoice-sheet-to-print",
   options: PrintOptions = {}
 ): Promise<boolean> {
+  const getStoredPaperSize = (): string => {
+    try {
+      const saved = localStorage.getItem("company_user_invoice_print_settings");
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed.paperSize) return parsed.paperSize;
+      }
+    } catch (_) {}
+    return "a4";
+  };
+
   const timeoutMs = options.timeoutMs ?? 3500;
-  const paperSize = options.paperSize || "a4";
+  const paperSize = options.paperSize || getStoredPaperSize();
   const documentTitle = options.documentTitle || "پیش‌نمایش و چاپ سند";
 
   try {
@@ -336,6 +347,8 @@ export async function printViaIframe(
           width: 100% !important;
           max-width: 100% !important;
           min-height: 0 !important;
+          height: auto !important;
+          overflow: visible !important;
           box-shadow: none !important;
           border: none !important;
           margin: 0 auto !important;
@@ -350,7 +363,7 @@ export async function printViaIframe(
           margin-left: auto !important;
           margin-right: auto !important;
         }
-        tr, .print-avoid-break {
+        tr, .print-avoid-break, .avoid-break, .summary-avoid-break, .signature-block {
           page-break-inside: avoid !important;
           break-inside: avoid !important;
         }
@@ -358,7 +371,26 @@ export async function printViaIframe(
           display: table-header-group !important;
         }
         tfoot {
-          display: table-footer-group !important;
+          display: table-row-group !important;
+          page-break-inside: avoid !important;
+          break-inside: avoid !important;
+        }
+        .break-after-page, .page-break-after, .invoice-page-break {
+          page-break-after: always !important;
+          break-after: page !important;
+        }
+        .break-before-page, .page-break-before {
+          page-break-before: always !important;
+          break-before: page !important;
+        }
+        .invoice-page-sheet {
+          box-sizing: border-box !important;
+          page-break-after: always !important;
+          break-after: page !important;
+        }
+        .invoice-page-sheet:last-child {
+          page-break-after: auto !important;
+          break-after: auto !important;
         }
         .accounting-num, .font-mono, [dir="ltr"] {
           font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;

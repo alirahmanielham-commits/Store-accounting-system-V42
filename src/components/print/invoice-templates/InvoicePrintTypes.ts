@@ -19,10 +19,14 @@ export interface InvoicePrintSettings {
   showBalance?: boolean;
   showNotes?: boolean;
   showFooter?: boolean;
+  showQrCode?: boolean;
   designType?: string;
   paperSize?: "a4" | "a5" | "pos80";
   columns?: InvoiceColumnSettings;
   boldBorders?: boolean;
+  paginationMode?: "auto" | "chunked";
+  itemsPerPage?: number;
+  fontSize?: "compact" | "normal" | "large";
 }
 
 export interface InvoicePrintTemplateProps {

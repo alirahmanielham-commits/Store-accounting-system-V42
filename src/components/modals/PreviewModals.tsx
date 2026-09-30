@@ -8,6 +8,58 @@ import ReceiptConfirmationModal from "../financial/ReceiptConfirmationModal";
 import { InvoicePrintSettings, InvoiceColumnSettings } from "../print/invoice-templates/InvoicePrintTypes";
 import { safePrint, printViaIframe } from "../../utils/printHelper";
 
+const INVOICE_PRINT_SETTINGS_STORAGE_KEY = "company_user_invoice_print_settings";
+
+const getDefaultPrintSettings = (storeSettings: any): InvoicePrintSettings => ({
+  showStoreLogo: true,
+  showSignatures: true,
+  showTransactions: true,
+  showBalance: true,
+  showNotes: true,
+  showFooter: true,
+  showQrCode: true,
+  boldBorders: false,
+  designType: (storeSettings?.invoicePrintFormat as any) || 'modern',
+  paperSize: 'a4',
+  paginationMode: 'auto',
+  itemsPerPage: 12,
+  fontSize: 'normal',
+  columns: {
+    rowIndex: true,
+    productCode: false,
+    productName: true,
+    quantity: true,
+    unit: true,
+    unitPrice: true,
+    grossAmount: true,
+    discountPercent: true,
+    discountAmount: true,
+    tax: true,
+    totalPrice: true,
+  }
+});
+
+const getInitialPrintSettings = (storeSettings: any): InvoicePrintSettings => {
+  const defaults = getDefaultPrintSettings(storeSettings);
+  try {
+    const saved = localStorage.getItem(INVOICE_PRINT_SETTINGS_STORAGE_KEY);
+    if (saved) {
+      const parsed = JSON.parse(saved);
+      return {
+        ...defaults,
+        ...parsed,
+        columns: {
+          ...defaults.columns,
+          ...(parsed.columns || {})
+        }
+      };
+    }
+  } catch (e) {
+    console.warn("Could not load stored invoice print settings:", e);
+  }
+  return defaults;
+};
+
 export default function PreviewModals(props: any) {
   const {
     viewingInvoice, setViewingInvoice,
@@ -25,40 +77,30 @@ export default function PreviewModals(props: any) {
   const isDraft = currentInvoice?.status === "draft" || currentInvoice?.isDraft === true;
 
   const [showColumnDropdown, setShowColumnDropdown] = useState(false);
+  const [showAdvancedSettings, setShowAdvancedSettings] = useState(false);
+  const [justSavedNotification, setJustSavedNotification] = useState(false);
 
-  const [printSettings, setPrintSettings] = useState<InvoicePrintSettings>({
-    showStoreLogo: true,
-    showSignatures: true,
-    showTransactions: true,
-    showBalance: true,
-    showNotes: true,
-    showFooter: true,
-    boldBorders: false,
-    designType: (storeSettings?.invoicePrintFormat as any) || 'minimal',
-    paperSize: 'a4',
-    columns: {
-      rowIndex: true,
-      productCode: false,
-      productName: true,
-      quantity: true,
-      unit: true,
-      unitPrice: true,
-      grossAmount: true,
-      discountPercent: true,
-      discountAmount: true,
-      tax: true,
-      totalPrice: true,
-    }
-  });
+  const [printSettings, setPrintSettings] = useState<InvoicePrintSettings>(() =>
+    getInitialPrintSettings(storeSettings)
+  );
 
+  // Auto-save any setting change to localStorage so the user never has to re-configure
   useEffect(() => {
-    if (storeSettings?.invoicePrintFormat) {
-      setPrintSettings(prev => ({
-        ...prev,
-        designType: (storeSettings.invoicePrintFormat as any) || prev.designType
-      }));
-    }
-  }, [storeSettings?.invoicePrintFormat]);
+    try {
+      localStorage.setItem(INVOICE_PRINT_SETTINGS_STORAGE_KEY, JSON.stringify(printSettings));
+      setJustSavedNotification(true);
+      const timer = setTimeout(() => setJustSavedNotification(false), 2000);
+      return () => clearTimeout(timer);
+    } catch (e) {}
+  }, [printSettings]);
+
+  const handleResetPrintSettings = () => {
+    const defaults = getDefaultPrintSettings(storeSettings);
+    setPrintSettings(defaults);
+    try {
+      localStorage.setItem(INVOICE_PRINT_SETTINGS_STORAGE_KEY, JSON.stringify(defaults));
+    } catch (e) {}
+  };
 
   const handleDesignTypeChange = (newType: string) => {
     setPrintSettings(prev => ({
@@ -92,8 +134,8 @@ export default function PreviewModals(props: any) {
     }));
   };
 
-  const setColumnPreset = (preset: 'all' | 'compact' | 'standard') => {
-    if (preset === 'all') {
+  const setColumnPreset = (preset: 'all' | 'compact' | 'standard' | 'official') => {
+    if (preset === 'all' || preset === 'official') {
       setPrintSettings(prev => ({
         ...prev,
         columns: {
@@ -211,18 +253,29 @@ export default function PreviewModals(props: any) {
                 <div className="hidden lg:flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
                   <div className="flex items-center gap-1 text-xs font-bold text-slate-600 px-1">
                     <Settings className="w-3.5 h-3.5" />
-                    <span>تنظیمات:</span>
+                    <span>تنظیمات چاپ:</span>
                   </div>
+
+                  {/* Auto-save notification badge */}
+                  {justSavedNotification && (
+                    <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-bold flex items-center gap-1 animate-pulse">
+                      <Check className="w-3 h-3 text-emerald-600" />
+                      ذخیره شد
+                    </span>
+                  )}
 
                   {/* Columns Selector Dropdown */}
                   <div className="relative">
                     <button
                       type="button"
-                      onClick={() => setShowColumnDropdown(!showColumnDropdown)}
+                      onClick={() => {
+                        setShowColumnDropdown(!showColumnDropdown);
+                        setShowAdvancedSettings(false);
+                      }}
                       className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-lg transition-colors shadow-xs"
                     >
                       <Columns className="w-3.5 h-3.5 text-indigo-500" />
-                      <span>ستون‌های جدول ({toPersianDigits(activeColumnCount)})</span>
+                      <span>ستون‌ها ({toPersianDigits(activeColumnCount)})</span>
                       <ChevronDown className={`w-3 h-3 transition-transform ${showColumnDropdown ? 'rotate-180' : ''}`} />
                     </button>
 
@@ -240,27 +293,34 @@ export default function PreviewModals(props: any) {
                         </div>
 
                         {/* Quick Presets */}
-                        <div className="flex items-center gap-1 mb-2.5 pb-2 border-b border-slate-100">
+                        <div className="grid grid-cols-2 gap-1 mb-2.5 pb-2 border-b border-slate-100">
                           <button
                             type="button"
                             onClick={() => setColumnPreset('standard')}
-                            className="flex-1 py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
+                            className="py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
                           >
                             استاندارد
                           </button>
                           <button
                             type="button"
                             onClick={() => setColumnPreset('compact')}
-                            className="flex-1 py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
+                            className="py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
                           >
-                            خلاصه
+                            فشرده
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => setColumnPreset('official')}
+                            className="py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
+                          >
+                            رسمی و مالیاتی
                           </button>
                           <button
                             type="button"
                             onClick={() => setColumnPreset('all')}
-                            className="flex-1 py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
+                            className="py-1 text-[10.5px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 rounded transition-colors"
                           >
-                            تمام ستون‌ها
+                            همه ستون‌ها
                           </button>
                         </div>
 
@@ -369,6 +429,123 @@ export default function PreviewModals(props: any) {
                     )}
                   </div>
 
+                  {/* Advanced Print & Pagination Settings Dropdown */}
+                  <div className="relative">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setShowAdvancedSettings(!showAdvancedSettings);
+                        setShowColumnDropdown(false);
+                      }}
+                      className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 hover:border-indigo-300 hover:text-indigo-600 rounded-lg transition-colors shadow-xs"
+                    >
+                      <SlidersHorizontal className="w-3.5 h-3.5 text-indigo-500" />
+                      <span>صفحه‌بندی و پیشرفته</span>
+                      <ChevronDown className={`w-3 h-3 transition-transform ${showAdvancedSettings ? 'rotate-180' : ''}`} />
+                    </button>
+
+                    {showAdvancedSettings && (
+                      <div className="absolute top-full right-0 mt-1.5 w-72 bg-white rounded-xl shadow-xl border border-slate-200 p-3.5 z-50 text-right space-y-3">
+                        <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                          <span className="text-xs font-black text-slate-800">تنظیمات صفحه‌بندی و چاپ</span>
+                          <button
+                            type="button"
+                            onClick={() => setShowAdvancedSettings(false)}
+                            className="text-slate-400 hover:text-slate-600 p-0.5"
+                          >
+                            <X className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+
+                        {/* Pagination Mode */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">نوع صفحه‌بندی اقلام:</label>
+                          <div className="grid grid-cols-2 gap-1.5 p-1 bg-slate-100 rounded-lg">
+                            <button
+                              type="button"
+                              onClick={() => setPrintSettings(s => ({ ...s, paginationMode: 'auto' }))}
+                              className={`py-1 px-2 text-xs font-bold rounded-md transition-colors ${
+                                printSettings.paginationMode !== 'chunked'
+                                  ? 'bg-white text-indigo-700 shadow-xs'
+                                  : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                            >
+                              جریان خودکار
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setPrintSettings(s => ({ ...s, paginationMode: 'chunked' }))}
+                              className={`py-1 px-2 text-xs font-bold rounded-md transition-colors ${
+                                printSettings.paginationMode === 'chunked'
+                                  ? 'bg-white text-indigo-700 shadow-xs'
+                                  : 'text-slate-600 hover:text-slate-900'
+                              }`}
+                            >
+                              برگه‌بندی مجزا
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Items Per Page if chunked */}
+                        {printSettings.paginationMode === 'chunked' && (
+                          <div>
+                            <label className="block text-[11px] font-bold text-slate-700 mb-1">تعداد اقلام در هر برگه:</label>
+                            <select
+                              value={printSettings.itemsPerPage || 12}
+                              onChange={(e) => setPrintSettings(s => ({ ...s, itemsPerPage: Number(e.target.value) }))}
+                              className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-1.5 font-bold text-slate-700 outline-none"
+                            >
+                              <option value={8}>۸ قلم در هر برگه</option>
+                              <option value={10}>۱۰ قلم در هر برگه</option>
+                              <option value={12}>۱۲ قلم در هر برگه (استاندارد)</option>
+                              <option value={15}>۱۵ قلم در هر برگه</option>
+                              <option value={20}>۲۰ قلم در هر برگه (فشرده)</option>
+                            </select>
+                          </div>
+                        )}
+
+                        {/* Font Size */}
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 mb-1">اندازه قلم چاپ:</label>
+                          <select
+                            value={printSettings.fontSize || 'normal'}
+                            onChange={(e) => setPrintSettings(s => ({ ...s, fontSize: e.target.value as any }))}
+                            className="w-full text-xs bg-slate-50 border border-slate-200 rounded-lg p-1.5 font-bold text-slate-700 outline-none"
+                          >
+                            <option value="compact">فشرده (ریز برای اقلام پرتعداد)</option>
+                            <option value="normal">استاندارد و متوازن</option>
+                            <option value="large">درشت (خوانایی حداکثری)</option>
+                          </select>
+                        </div>
+
+                        {/* Barcode toggle */}
+                        <label className="flex items-center justify-between text-xs py-1 px-1 hover:bg-slate-50 rounded cursor-pointer">
+                          <span className="font-bold text-slate-700">بارکد استعلام فاکتور</span>
+                          <input
+                            type="checkbox"
+                            checked={printSettings.showQrCode !== false}
+                            onChange={(e) => setPrintSettings(s => ({ ...s, showQrCode: e.target.checked }))}
+                            className="rounded text-indigo-600 focus:ring-0"
+                          />
+                        </label>
+
+                        {/* Reset button */}
+                        <div className="pt-2 border-t border-slate-100">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              handleResetPrintSettings();
+                              setShowAdvancedSettings(false);
+                            }}
+                            className="w-full py-1.5 text-xs font-bold text-rose-600 bg-rose-50 hover:bg-rose-100 rounded-lg transition-colors border border-rose-200"
+                          >
+                            بازنشانی تنظیمات چاپ به پیش‌فرض
+                          </button>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
                   {/* Bold Borders Toggle */}
                   <label className="flex items-center gap-1.5 text-xs font-bold text-slate-700 cursor-pointer bg-white border border-slate-200 hover:border-slate-300 px-2 py-1 rounded-lg shadow-xs">
                     <input
@@ -413,8 +590,8 @@ export default function PreviewModals(props: any) {
                     onChange={(e) => handleDesignTypeChange(e.target.value)}
                     className="text-xs bg-white font-bold text-slate-700 border border-slate-200 rounded-lg px-2 py-1 outline-none shadow-xs"
                   >
-                    <option value="minimal">طراحی مینیمال (پیشنهادی)</option>
-                    <option value="modern">طراحی مدرن</option>
+                    <option value="modern">طراحی مدرن (پیشنهادی)</option>
+                    <option value="minimal">طراحی مینیمال</option>
                     <option value="classic">طراحی کلاسیک</option>
                     <option value="official">طراحی رسمی (مالیاتی)</option>
                     <option value="compact">طراحی فشرده</option>
@@ -504,8 +681,8 @@ export default function PreviewModals(props: any) {
                 onChange={(e) => handleDesignTypeChange(e.target.value)}
                 className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none font-medium text-slate-700 shrink-0"
               >
-                <option value="minimal">مینیمال</option>
                 <option value="modern">مدرن</option>
+                <option value="minimal">مینیمال</option>
                 <option value="classic">کلاسیک</option>
                 <option value="official">رسمی</option>
                 <option value="compact">فشرده</option>
@@ -516,7 +693,13 @@ export default function PreviewModals(props: any) {
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 print:p-0 print:overflow-visible print:bg-white flex justify-center items-start print:block">
               <div
                 id="invoice-sheet-to-print"
-                className={`invoice-print-container bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:mx-auto print:w-full print:max-w-none relative overflow-hidden box-border ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : printSettings.paperSize === 'pos80' ? 'max-w-[80mm] min-h-[100mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}
+                className={`invoice-print-container bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:mx-auto print:w-full print:max-w-none relative overflow-visible box-border p-4 sm:p-6 print:p-0 ${
+                  printSettings.paperSize === 'a5'
+                    ? 'max-w-[148mm] min-h-[210mm] print:min-h-0'
+                    : printSettings.paperSize === 'pos80'
+                      ? 'max-w-[80mm] min-h-[100mm] print:min-h-0'
+                      : 'max-w-[210mm] min-h-[297mm] print:min-h-0'
+                }`}
                 style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
               >
                 {(viewingInvoice?.type?.includes("warehouse") || previewInvoiceData?.type?.includes("warehouse")) ? (

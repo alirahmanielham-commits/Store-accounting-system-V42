@@ -1,4 +1,5 @@
 import React from "react";
+import Barcode from "react-barcode";
 import { formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, numToPersianWords } from "../../../utils/format";
 import { Store, Building2, User, Phone, MapPin, CheckCircle, Percent } from "lucide-react";
 import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
@@ -18,8 +19,12 @@ export default function StandardInvoiceTemplate({
     showTransactions: true,
     showBalance: true,
     showNotes: true,
+    showQrCode: true,
     designType: 'modern',
-    paperSize: 'a4'
+    paperSize: 'a4',
+    paginationMode: 'auto',
+    itemsPerPage: 12,
+    fontSize: 'normal'
   }
 }: InvoicePrintTemplateProps) {
   const isSale = data.type === "sale" || data.type === "sale_return";
@@ -111,18 +116,16 @@ export default function StandardInvoiceTemplate({
   const absBalance = Math.abs(personBalance);
 
   // --- Financial & Quantity Calculations ---
-  // 1. Total Quantity of all items
-  const totalQuantity = (data.items || []).reduce((sum: number, item: any) => sum + (Number(item.quantity) || 0), 0);
+  const allItems = data.items || [];
+  const totalQuantity = allItems.reduce((sum: number, item: any) => sum + (Number(item.quantity) || 0), 0);
 
-  // 2. Gross Total before discount
-  const rawItemsTotal = (data.items || []).reduce((sum: number, item: any) => {
+  const rawItemsTotal = allItems.reduce((sum: number, item: any) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
     return sum + (qty * price);
   }, 0);
 
-  // 3. Row Discounts Total
-  const totalRowDiscounts = (data.items || []).reduce((sum: number, item: any) => {
+  const totalRowDiscounts = allItems.reduce((sum: number, item: any) => {
     const qty = Number(item.quantity) || 0;
     const price = Number(item.unitPrice) || 0;
     const gross = qty * price;
@@ -133,10 +136,8 @@ export default function StandardInvoiceTemplate({
     return sum + Math.round(gross * (discPct / 100));
   }, 0);
 
-  // 4. Subtotal After Row Discounts
   const subtotalAfterRowDiscounts = Math.max(0, rawItemsTotal - totalRowDiscounts);
 
-  // 5. Overall Invoice Discount
   const overallDiscountPercent = Number(data.overallDiscountPercent) || 0;
   const overallDiscountAmount = overallDiscountPercent > 0
     ? Math.round(subtotalAfterRowDiscounts * (overallDiscountPercent / 100))
@@ -145,8 +146,7 @@ export default function StandardInvoiceTemplate({
   const totalDiscount = totalRowDiscounts + overallDiscountAmount;
   const subtotalAfterAllDiscounts = Math.max(0, rawItemsTotal - totalDiscount);
 
-  // 6. Tax / VAT Calculation
-  const itemsTaxSum = (data.items || []).reduce((sum: number, item: any) => sum + (Number(item.tax) || 0), 0);
+  const itemsTaxSum = allItems.reduce((sum: number, item: any) => sum + (Number(item.tax) || 0), 0);
   let totalTax = 0;
   let taxPercent = 0;
 
@@ -170,23 +170,20 @@ export default function StandardInvoiceTemplate({
     }
   }
 
-  // 7. Final Net Payable
   const finalTotal = data.totalAmount !== undefined && Number(data.totalAmount) > 0
     ? Number(data.totalAmount)
     : (subtotalAfterAllDiscounts + totalTax);
 
-  // 8. Payment Status
   const paidAmount = Number(data.paidAmount) || totalAllocated || 0;
   const remainingInvoiceBalance = Math.max(0, finalTotal - paidAmount);
   const currencyLabel = storeSettings.currency || "تومان";
 
-  // Layout Styles
+  // Layout Tokens & Options
   const isClassic = printSettings.designType === 'classic';
   const paperSize = printSettings.paperSize || 'a4';
   const isA5 = paperSize === 'a5';
   const isBold = isA5 || printSettings?.boldBorders;
 
-  // Customizable columns
   const defaultCols = {
     rowIndex: true,
     productCode: false,
@@ -202,22 +199,16 @@ export default function StandardInvoiceTemplate({
   };
   const cols = { ...defaultCols, ...printSettings?.columns };
 
-  const totalColCount = 
-    (cols.rowIndex ? 1 : 0) +
-    (cols.productCode ? 1 : 0) +
-    1 + // productName
-    (cols.quantity ? 1 : 0) +
-    (cols.unit ? 1 : 0) +
-    (cols.unitPrice ? 1 : 0) +
-    (cols.grossAmount ? 1 : 0) +
-    (cols.discountPercent ? 1 : 0) +
-    (cols.discountAmount ? 1 : 0) +
-    (cols.tax ? 1 : 0) +
-    (cols.totalPrice ? 1 : 0);
-
   const leadingColSpan = (cols.rowIndex ? 1 : 0) + (cols.productCode ? 1 : 0) + 1;
 
-  // Border & styling tokens for prominent, dark lines
+  // Font size calculation
+  const fontSizeClass = printSettings.fontSize === 'compact'
+    ? (isA5 ? 'text-[8.5px]' : 'text-[11px]')
+    : printSettings.fontSize === 'large'
+      ? (isA5 ? 'text-[10.5px]' : 'text-[13px]')
+      : (isA5 ? 'text-[9.5px]' : 'text-xs sm:text-sm');
+
+  // Styling tokens
   const boxBorderClass = isBold
     ? "border-2 border-slate-700 print:border-slate-800"
     : (isClassic ? "border-2 border-slate-600" : "border border-slate-300 print:border-slate-400");
@@ -234,9 +225,150 @@ export default function StandardInvoiceTemplate({
     ? "bg-slate-100 text-slate-900 font-black border-b-2 border-slate-700 print:border-slate-800"
     : "bg-slate-100/70 text-slate-800 font-black border-b-2 border-slate-300";
 
+  // --- Pagination Partitioning ---
+  const isChunked = printSettings.paginationMode === 'chunked';
+  const configuredItemsPerPage = Number(printSettings.itemsPerPage) || (isA5 ? 8 : 12);
+  const firstPageLimit = Math.max(3, configuredItemsPerPage - (isA5 ? 3 : 4));
+  const subsequentLimit = configuredItemsPerPage;
+
+  interface PageChunk {
+    items: any[];
+    startIndex: number;
+    pageNumber: number;
+  }
+
+  let pageChunks: PageChunk[] = [];
+  if (isChunked && allItems.length > firstPageLimit) {
+    pageChunks.push({
+      items: allItems.slice(0, firstPageLimit),
+      startIndex: 0,
+      pageNumber: 1
+    });
+    let currentIdx = firstPageLimit;
+    let pageNum = 2;
+    while (currentIdx < allItems.length) {
+      const nextLimit = currentIdx + subsequentLimit;
+      pageChunks.push({
+        items: allItems.slice(currentIdx, nextLimit),
+        startIndex: currentIdx,
+        pageNumber: pageNum
+      });
+      currentIdx = nextLimit;
+      pageNum++;
+    }
+  } else {
+    // Single page chunk or continuous auto flow
+    pageChunks = [{
+      items: allItems,
+      startIndex: 0,
+      pageNumber: 1
+    }];
+  }
+
+  const totalPages = pageChunks.length;
+
+  // Render Table Row
+  const renderItemRow = (item: any, globalIndex: number) => {
+    const qty = Number(item.quantity) || 0;
+    const unitPrice = Number(item.unitPrice) || 0;
+    const rowGross = qty * unitPrice;
+    const rowDiscPct = Number(item.discountPercent) || 0;
+    const rowDiscAmount = item.discount !== undefined && Number(item.discount) > 0
+      ? Number(item.discount)
+      : Math.round(rowGross * (rowDiscPct / 100));
+    const rowAfterDisc = Math.max(0, rowGross - rowDiscAmount);
+    const rowTax = Number(item.tax) || (taxPercent > 0 ? Math.round(rowAfterDisc * (taxPercent / 100)) : 0);
+    const rowFinal = item.totalPrice !== undefined && Number(item.totalPrice) > 0
+      ? Number(item.totalPrice) + (Number(item.tax) || 0)
+      : (rowAfterDisc + rowTax);
+
+    return (
+      <tr
+        key={globalIndex}
+        className={`hover:bg-slate-50/80 transition-colors ${globalIndex % 2 === 1 ? 'bg-slate-50/40' : 'bg-white'}`}
+      >
+        {cols.rowIndex && (
+          <td className={`py-1.5 px-1.5 text-center text-slate-500 font-mono ${cellBorderClass} w-8`}>
+            {toPersianDigits(globalIndex + 1)}
+          </td>
+        )}
+        {cols.productCode && (
+          <td className={`py-1.5 px-2 text-center text-slate-600 font-mono ${cellBorderClass}`}>
+            {toPersianDigits(item.productCode || item.productId || "-")}
+          </td>
+        )}
+        <td className={`py-1.5 px-3 ${cellBorderClass}`}>
+          <div className="font-black text-slate-900">{item.productName}</div>
+          {!cols.productCode && item.productCode && (
+            <div className="text-[8.5px] text-slate-500 font-mono mt-0.5">
+              کد: {toPersianDigits(item.productCode)}
+            </div>
+          )}
+        </td>
+        {cols.quantity && (
+          <td className={`py-1.5 px-2 text-center font-black text-slate-900 ${cellBorderClass} whitespace-nowrap`}>
+            <span>{toPersianDigits(item.quantity)}</span>{" "}
+            {!cols.unit && (
+              <span className="text-[8.5px] font-normal text-slate-500">
+                {item.selectedUnit || item.unit || "عدد"}
+              </span>
+            )}
+          </td>
+        )}
+        {cols.unit && (
+          <td className={`py-1.5 px-1.5 text-center text-slate-700 ${cellBorderClass}`}>
+            {item.selectedUnit || item.unit || "عدد"}
+          </td>
+        )}
+        {cols.unitPrice && (
+          <td className={`py-1.5 px-2 text-left font-bold text-slate-800 ${cellBorderClass} accounting-num`} dir="ltr">
+            {toPersianDigits(addCommas(unitPrice))}
+          </td>
+        )}
+        {cols.grossAmount && (
+          <td className={`py-1.5 px-2 text-left font-bold text-slate-800 ${cellBorderClass} accounting-num`} dir="ltr">
+            {toPersianDigits(addCommas(rowGross))}
+          </td>
+        )}
+        {cols.discountPercent && (
+          <td className={`py-1.5 px-1 text-center font-bold text-slate-700 ${cellBorderClass}`}>
+            {rowDiscPct > 0 ? (
+              <span className="text-rose-700 font-bold">٪{toPersianDigits(rowDiscPct)}</span>
+            ) : (
+              <span className="text-slate-400">-</span>
+            )}
+          </td>
+        )}
+        {cols.discountAmount && (
+          <td className={`py-1.5 px-2 text-left font-bold text-slate-700 ${cellBorderClass} accounting-num`} dir="ltr">
+            {rowDiscAmount > 0 ? (
+              <span className="text-rose-700 font-bold">{toPersianDigits(addCommas(rowDiscAmount))}</span>
+            ) : (
+              <span className="text-slate-400">-</span>
+            )}
+          </td>
+        )}
+        {cols.tax && (
+          <td className={`py-1.5 px-2 text-left font-bold text-slate-700 ${cellBorderClass} accounting-num`} dir="ltr">
+            {rowTax > 0 ? (
+              <span className="text-indigo-800 font-bold">{toPersianDigits(addCommas(rowTax))}</span>
+            ) : (
+              <span className="text-slate-400">۰</span>
+            )}
+          </td>
+        )}
+        {cols.totalPrice && (
+          <td className="py-1.5 px-3 text-left font-black text-slate-950 accounting-num" dir="ltr">
+            {toPersianDigits(addCommas(rowFinal))}
+          </td>
+        )}
+      </tr>
+    );
+  };
+
   return (
     <div
-      className={`standard-invoice-sheet bg-white text-slate-800 font-sans mx-auto ${isA5 ? 'text-[9.5px]' : 'text-xs sm:text-sm'}`}
+      className={`standard-invoice-sheet bg-white text-slate-800 font-sans mx-auto ${fontSizeClass}`}
       dir="rtl"
       style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
     >
@@ -265,560 +397,564 @@ export default function StandardInvoiceTemplate({
             box-sizing: border-box !important;
           }
           .print-avoid-break {
-            page-break-inside: avoid;
-            break-inside: avoid;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
           }
           thead {
-            display: table-header-group;
+            display: table-header-group !important;
           }
           tfoot {
-            display: table-footer-group;
+            display: table-row-group !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          tr {
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+          }
+          .invoice-page-sheet {
+            page-break-after: always !important;
+            break-after: page !important;
+          }
+          .invoice-page-sheet:last-child {
+            page-break-after: auto !important;
+            break-after: auto !important;
           }
         }
       `}</style>
 
-      <table className="w-full text-right" style={{ borderCollapse: 'collapse' }}>
-        <thead className="print-table-header">
-          {/* Main Invoice Header (Store & Customer) */}
-          <tr>
-            <th colSpan={totalColCount} className="font-normal p-0 border-0">
-              <div className={`flex justify-between items-start ${isA5 ? 'mb-3 pb-2' : 'mb-5 pb-4'} ${isClassic ? 'border-b border-slate-400' : 'border-b border-slate-200'}`}>
-                
-                {/* Store branding */}
-                <div className="flex-1">
-                  {printSettings.showStoreLogo && (
-                    <div className={`flex items-center ${isA5 ? 'gap-2 mb-1.5' : 'gap-3 mb-2'}`}>
-                      {storeSettings.logo ? (
-                        <img
-                          src={storeSettings.logo}
-                          alt={storeSettings.storeName || "لوگو"}
-                          referrerPolicy="no-referrer"
-                          className={`${isA5 ? 'w-8 h-8' : 'w-12 h-12'} object-contain rounded-lg border border-slate-200`}
-                        />
-                      ) : (
-                        <div className={`${isA5 ? 'w-8 h-8' : 'w-11 h-11'} flex items-center justify-center bg-slate-100 rounded-xl border border-slate-200`}>
-                          <Store className={`${isA5 ? 'w-4 h-4' : 'w-6 h-6'} text-slate-700`} />
-                        </div>
-                      )}
-                      <div>
-                        <h1 className={`${isA5 ? 'text-sm' : 'text-xl'} font-black text-slate-900`}>
-                          {storeSettings.storeName || storeSettings.companyName || "نام فروشگاه"}
-                        </h1>
-                        <p className="text-[9px] text-slate-400 font-medium">سیستم حسابداری و صدور فاکتور</p>
-                      </div>
-                    </div>
-                  )}
-                  {!printSettings.showStoreLogo && (
-                    <h1 className={`${isA5 ? 'text-sm mb-1' : 'text-xl mb-2'} font-black text-slate-900`}>
-                      {storeSettings.storeName || storeSettings.companyName || "نام فروشگاه"}
-                    </h1>
-                  )}
+      {/* RENDER PAGES (Chunked or Single continuous) */}
+      {pageChunks.map((chunk, pageIdx) => {
+        const isFirstPage = pageIdx === 0;
+        const isLastPage = pageIdx === totalPages - 1;
 
-                  <div className={`grid grid-cols-2 gap-x-4 gap-y-0.5 text-slate-500 font-medium ${isA5 ? 'text-[9px]' : 'text-[11px]'}`}>
-                    {(storeSettings.phone || storeSettings.mobile) && (
-                      <div>
-                        <span className="text-slate-400">تلفن: </span>
-                        <span className="font-bold text-slate-700" dir="ltr">{toPersianDigits(storeSettings.phone || storeSettings.mobile)}</span>
-                      </div>
-                    )}
-                    {storeSettings.taxId && (
-                      <div>
-                        <span className="text-slate-400">شماره اقتصادی: </span>
-                        <span className="font-bold text-slate-700">{toPersianDigits(storeSettings.taxId)}</span>
-                      </div>
-                    )}
-                    {storeSettings.registrationNumber && (
-                      <div>
-                        <span className="text-slate-400">شناسه ملی: </span>
-                        <span className="font-bold text-slate-700">{toPersianDigits(storeSettings.registrationNumber)}</span>
-                      </div>
-                    )}
-                    {storeSettings.postalCode && (
-                      <div>
-                        <span className="text-slate-400">کد پستی: </span>
-                        <span className="font-bold text-slate-700">{toPersianDigits(storeSettings.postalCode)}</span>
-                      </div>
-                    )}
-                  </div>
-
-                  {storeSettings.address && (
-                    <div className={`${isA5 ? 'text-[9px] mt-1' : 'text-[11px] mt-1.5'} font-medium text-slate-600 leading-relaxed`}>
-                      <span className="text-slate-400">نشانی: </span>{storeSettings.address}
-                    </div>
-                  )}
-                </div>
-                
-                {/* Title badge */}
-                <div className="flex flex-col items-center justify-center px-4 shrink-0">
-                  <h2 className={`${isA5 ? 'text-xs px-3 py-1' : 'text-lg px-5 py-1.5'} font-black rounded-lg ${
-                    isVoided 
-                      ? 'border border-rose-300 text-rose-700 bg-rose-50' 
-                      : isDraft 
-                        ? 'border border-amber-300 text-amber-800 bg-amber-50' 
-                        : 'border border-slate-300 text-slate-800 bg-slate-50'
-                  }`}>
-                    {title}
-                  </h2>
-                  {isVoided && (
-                    <span className="text-[9px] font-black text-rose-700 mt-1">فاقد اثر مالی و قانونی</span>
-                  )}
-                  {isDraft && !isVoided && (
-                    <span className="text-[9px] font-bold text-amber-700 mt-1">نسخه پیش‌نویس - غیر رسمی</span>
-                  )}
-                </div>
-
-                {/* Serial & Date */}
-                <div className="flex-1 text-left space-y-1 shrink-0">
-                  <div className="flex justify-end gap-2 items-center">
-                    <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>شماره فاکتور:</span>
-                    <span className={`font-mono font-black text-slate-900 ${isA5 ? 'text-xs' : 'text-base'}`}>{toPersianDigits(data.invoiceNumber || "-")}</span>
-                  </div>
-                  <div className="flex justify-end gap-2 items-center">
-                    <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>تاریخ صدور:</span>
-                    <span className={`font-bold text-slate-800 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>
-                      {getInvoiceDateOnly(data.date || data.jalaliDate || data.issueDate || data.invoiceDate || data.createdAt)}
-                    </span>
-                  </div>
-                  {(data.dueDate || data.jalaliDueDate) && (
-                     <div className="flex justify-end gap-2 items-center">
-                       <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>تاریخ سررسید:</span>
-                       <span className={`font-bold text-indigo-700 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>
-                         {getInvoiceDateOnly(data.dueDate || data.jalaliDueDate)}
-                       </span>
-                     </div>
-                  )}
-                  {data.sellerInvoiceNumber && (
-                    <div className="flex justify-end gap-2 items-center">
-                      <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>ارجاع / تامین‌کننده:</span>
-                      <span className={`font-bold text-slate-700 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>{toPersianDigits(data.sellerInvoiceNumber)}</span>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Customer Info Box */}
-              <div className={`rounded-xl border border-slate-200 bg-slate-50/40 ${isA5 ? 'p-2.5 mb-3' : 'p-3.5 mb-5'}`}>
-                <div className="flex justify-between items-center border-b border-slate-200/60 pb-1.5 mb-2">
-                  <div className="font-bold text-slate-700 flex items-center gap-1.5 text-[11px]">
-                    <User className="w-3.5 h-3.5 text-slate-500" />
-                    <span>مشخصات {isSale ? 'خریدار / مشتری' : 'فروشنده / تامین‌کننده'}</span>
-                  </div>
-                  {printSettings.showBalance && relatedPerson && (
-                    <div className="flex items-center gap-1.5 text-[10px]">
-                      <span className="text-slate-400 font-medium">وضعیت حساب:</span>
-                      <span className="font-bold text-slate-800 accounting-num" dir="ltr">
-                        {toPersianDigits(addCommas(absBalance))} {currencyLabel}
-                      </span>
-                      <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
-                        balanceType === 'بدهکار' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
-                        balanceType === 'بستانکار' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
-                        'bg-slate-100 text-slate-600'
-                      }`}>
-                        {balanceType}
-                      </span>
-                    </div>
-                  )}
-                </div>
-
-                <div className={`grid grid-cols-2 md:grid-cols-4 gap-3 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
-                  <div>
-                    <span className="text-slate-400 block text-[9px]">نام طرف حساب:</span>
-                    <span className="font-black text-slate-900">{relatedPerson?.name || 'مشتری عمومی'}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[9px]">تلفن / همراه:</span>
-                    <span className="font-bold text-slate-800" dir="ltr">{toPersianDigits(relatedPerson?.mobile || relatedPerson?.phone || "-")}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[9px]">کد / شناسه ملی:</span>
-                    <span className="font-bold text-slate-800">{toPersianDigits(relatedPerson?.nationalId || "-")}</span>
-                  </div>
-                  <div>
-                    <span className="text-slate-400 block text-[9px]">شماره اقتصادی:</span>
-                    <span className="font-bold text-slate-800">{toPersianDigits(relatedPerson?.taxId || relatedPerson?.economicCode || "-")}</span>
-                  </div>
-                  {relatedPerson?.address && (
-                    <div className="col-span-2 md:col-span-4 pt-1 border-t border-slate-100 text-slate-600 flex items-center gap-1">
-                      <span className="text-slate-400">نشانی:</span>
-                      <span>{relatedPerson.address}</span>
-                      {relatedPerson.postalCode && <span className="mr-2 text-slate-400">(کد پستی: {toPersianDigits(relatedPerson.postalCode)})</span>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            </th>
-          </tr>
-
-          {/* Table Columns Header */}
-          <tr className={`${tableHeadClass} ${isA5 ? 'text-[9px]' : 'text-[11px]'}`}>
-            {cols.rowIndex && (
-              <th className={`py-2 px-1.5 text-center w-8 ${cellBorderClass}`}>#</th>
-            )}
-            {cols.productCode && (
-              <th className={`py-2 px-2 text-center w-16 ${cellBorderClass}`}>کد کالا</th>
-            )}
-            <th className={`py-2 px-3 ${cellBorderClass}`}>شرح کالا / خدمات</th>
-            {cols.quantity && (
-              <th className={`py-2 px-2 text-center ${cellBorderClass} w-16`}>
-                {cols.unit ? "تعداد / مقدار" : "تعداد"}
-              </th>
-            )}
-            {cols.unit && (
-              <th className={`py-2 px-1.5 text-center ${cellBorderClass} w-12`}>واحد</th>
-            )}
-            {cols.unitPrice && (
-              <th className={`py-2 px-2 text-left ${cellBorderClass} w-24`}>مبلغ واحد (فی)</th>
-            )}
-            {cols.grossAmount && (
-              <th className={`py-2 px-2 text-left ${cellBorderClass} w-24`}>مبلغ ناخالص</th>
-            )}
-            {cols.discountPercent && (
-              <th className={`py-2 px-1 text-center ${cellBorderClass} w-14`}>تخفیف (%)</th>
-            )}
-            {cols.discountAmount && (
-              <th className={`py-2 px-2 text-left ${cellBorderClass} w-20`}>مبلغ تخفیف</th>
-            )}
-            {cols.tax && (
-              <th className={`py-2 px-2 text-left ${cellBorderClass} w-18`}>مالیات</th>
-            )}
-            {cols.totalPrice && (
-              <th className="py-2 px-3 text-left w-28">مبلغ خالص نهایی</th>
-            )}
-          </tr>
-        </thead>
-        
-        <tbody className={`divide-y ${isBold ? 'divide-slate-300 print:divide-slate-400' : 'divide-slate-100'} border-b ${innerDividerClass} ${isA5 ? 'text-[9.5px]' : 'text-[11px]'}`}>
-          {(data.items || []).map((item: any, idx: number) => {
-            const qty = Number(item.quantity) || 0;
-            const unitPrice = Number(item.unitPrice) || 0;
-            const rowGross = qty * unitPrice;
-            const rowDiscPct = Number(item.discountPercent) || 0;
-            const rowDiscAmount = item.discount !== undefined && Number(item.discount) > 0
-              ? Number(item.discount)
-              : Math.round(rowGross * (rowDiscPct / 100));
-            const rowAfterDisc = Math.max(0, rowGross - rowDiscAmount);
-            const rowTax = Number(item.tax) || (taxPercent > 0 ? Math.round(rowAfterDisc * (taxPercent / 100)) : 0);
-            const rowFinal = item.totalPrice !== undefined && Number(item.totalPrice) > 0
-              ? Number(item.totalPrice) + (Number(item.tax) || 0)
-              : (rowAfterDisc + rowTax);
-
-            return (
-              <tr key={idx} className="print-avoid-break hover:bg-slate-50/40 transition-colors print:hover:bg-transparent">
-                {cols.rowIndex && (
-                  <td className={`py-1.5 px-1.5 text-center font-bold text-slate-600 ${cellBorderClass}`}>
-                    {toPersianDigits(idx + 1)}
-                  </td>
-                )}
-                {cols.productCode && (
-                  <td className={`py-1.5 px-2 text-center font-mono text-slate-700 ${cellBorderClass}`}>
-                    {toPersianDigits(item.productCode || "-")}
-                  </td>
-                )}
-                <td className={`py-1.5 px-3 ${cellBorderClass}`}>
-                  <div className="font-black text-slate-900">{item.productName}</div>
-                  {!cols.productCode && item.productCode && (
-                    <div className="text-[8.5px] text-slate-500 font-mono mt-0.5">
-                      کد: {toPersianDigits(item.productCode)}
-                    </div>
-                  )}
-                </td>
-                {cols.quantity && (
-                  <td className={`py-1.5 px-2 text-center font-black text-slate-900 ${cellBorderClass} whitespace-nowrap`}>
-                    <span>{toPersianDigits(item.quantity)}</span>{" "}
-                    {!cols.unit && (
-                      <span className="text-[8.5px] font-normal text-slate-500">
-                        {item.selectedUnit || item.unit || "عدد"}
-                      </span>
-                    )}
-                  </td>
-                )}
-                {cols.unit && (
-                  <td className={`py-1.5 px-1.5 text-center text-slate-700 ${cellBorderClass}`}>
-                    {item.selectedUnit || item.unit || "عدد"}
-                  </td>
-                )}
-                {cols.unitPrice && (
-                  <td className={`py-1.5 px-2 text-left font-bold text-slate-800 ${cellBorderClass} accounting-num`} dir="ltr">
-                    {toPersianDigits(addCommas(unitPrice))}
-                  </td>
-                )}
-                {cols.grossAmount && (
-                  <td className={`py-1.5 px-2 text-left font-bold text-slate-800 ${cellBorderClass} accounting-num`} dir="ltr">
-                    {toPersianDigits(addCommas(rowGross))}
-                  </td>
-                )}
-                {cols.discountPercent && (
-                  <td className={`py-1.5 px-1 text-center font-bold text-slate-700 ${cellBorderClass}`}>
-                    {rowDiscPct > 0 ? (
-                      <span className="text-rose-700 font-bold">٪{toPersianDigits(rowDiscPct)}</span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                )}
-                {cols.discountAmount && (
-                  <td className={`py-1.5 px-2 text-left font-bold text-slate-700 ${cellBorderClass} accounting-num`} dir="ltr">
-                    {rowDiscAmount > 0 ? (
-                      <span className="text-rose-700 font-bold">{toPersianDigits(addCommas(rowDiscAmount))}</span>
-                    ) : (
-                      <span className="text-slate-400">-</span>
-                    )}
-                  </td>
-                )}
-                {cols.tax && (
-                  <td className={`py-1.5 px-2 text-left font-bold text-slate-700 ${cellBorderClass} accounting-num`} dir="ltr">
-                    {rowTax > 0 ? (
-                      <span className="text-indigo-800 font-bold">{toPersianDigits(addCommas(rowTax))}</span>
-                    ) : (
-                      <span className="text-slate-400">۰</span>
-                    )}
-                  </td>
-                )}
-                {cols.totalPrice && (
-                  <td className="py-1.5 px-3 text-left font-black text-slate-950 accounting-num" dir="ltr">
-                    {toPersianDigits(addCommas(rowFinal))}
-                  </td>
-                )}
-              </tr>
-            );
-          })}
-        </tbody>
-
-        {/* TABLE TOTALS FOOTER ROW (جمع‌های سطری و تعداد) */}
-        <tfoot>
-          <tr className={`${tableFootClass} ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
-            <td colSpan={leadingColSpan} className={`py-2 px-3 ${cellBorderClass}`}>
-              <div className="flex items-center justify-between">
-                <span>جمع کل اقلام ردیف‌ها:</span>
-                <span className="text-indigo-900 font-extrabold px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
-                  {toPersianDigits(data.items?.length || 0)} سطر کالا
-                </span>
-              </div>
-            </td>
-            {cols.quantity && (
-              <td className={`py-2 px-2 text-center text-indigo-950 ${cellBorderClass} font-black`}>
-                <span>{toPersianDigits(totalQuantity)}</span>
-              </td>
-            )}
-            {cols.unit && (
-              <td className={`py-2 px-1.5 text-center text-slate-400 ${cellBorderClass}`}>---</td>
-            )}
-            {cols.unitPrice && (
-              <td className={`py-2 px-2 text-center text-slate-400 ${cellBorderClass}`}>---</td>
-            )}
-            {cols.grossAmount && (
-              <td className={`py-2 px-2 text-left accounting-num ${cellBorderClass} font-black text-slate-900`} dir="ltr">
-                {toPersianDigits(addCommas(rawItemsTotal))}
-              </td>
-            )}
-            {cols.discountPercent && (
-              <td className={`py-2 px-1 text-center text-slate-400 ${cellBorderClass}`}>---</td>
-            )}
-            {cols.discountAmount && (
-              <td className={`py-2 px-2 text-left text-rose-700 accounting-num ${cellBorderClass} font-black`} dir="ltr">
-                {totalRowDiscounts > 0 ? toPersianDigits(addCommas(totalRowDiscounts)) : "۰"}
-              </td>
-            )}
-            {cols.tax && (
-              <td className={`py-2 px-2 text-left text-indigo-800 accounting-num ${cellBorderClass} font-black`} dir="ltr">
-                {totalTax > 0 ? toPersianDigits(addCommas(totalTax)) : "۰"}
-              </td>
-            )}
-            {cols.totalPrice && (
-              <td className="py-2 px-3 text-left text-slate-950 accounting-num font-black" dir="ltr">
-                {toPersianDigits(addCommas(finalTotal))}
-              </td>
-            )}
-          </tr>
-
-          {/* FINANCIAL SUMMARY, NOTES, AND SIGNATURES */}
-          <tr>
-            <td colSpan={totalColCount} className="p-0 border-0 pt-4">
-              
-              {/* Summary Area */}
-              <div className={`flex flex-col md:flex-row justify-between items-start gap-4 print-avoid-break ${isA5 ? 'mb-3' : 'mb-6'}`}>
-                
-                {/* Left: Notes, Amount in Words, Payment terms */}
-                <div className="flex-1 w-full space-y-3">
-                  {/* Amount in Persian Words */}
-                  <div className={`p-3 rounded-xl ${boxBorderClass} bg-indigo-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
-                    <span className="text-indigo-900 font-bold ml-1">مبلغ به حروف:</span>
-                    <span className="font-black text-indigo-950 leading-relaxed">
-                      {numToPersianWords(Math.round(finalTotal))} {currencyLabel} تمام
-                    </span>
-                  </div>
-
-                  {/* Payment Details */}
-                  <div className={`grid grid-cols-2 gap-2 p-2.5 rounded-xl ${boxBorderClass} bg-slate-50/40 ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
-                    <div>
-                      <span className="text-slate-500 font-medium block">نحوه تسویه:</span>
-                      <span className="font-bold text-slate-800">
-                        {data.paymentMethod === "cash" ? "نقدی" : data.paymentMethod === "credit" ? "نسیه" : "ترکیبی / واریز"}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-500 font-medium block">وضعیت پرداخت:</span>
-                      <span className={`font-black ${
-                        paidAmount >= finalTotal ? 'text-emerald-700' :
-                        paidAmount > 0 ? 'text-amber-700' : 'text-rose-700'
-                      }`}>
-                        {paidAmount >= finalTotal ? "تسویه کامل" : paidAmount > 0 ? "پرداخت جزئی" : "تسویه نشده"}
-                      </span>
-                    </div>
-                  </div>
-
-                  {/* Notes */}
-                  {printSettings.showNotes && (data.description || data.note) && (
-                    <div className={`p-2.5 rounded-xl ${boxBorderClass} bg-white ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
-                      <span className="text-slate-600 font-bold block mb-0.5">توضیحات فاکتور:</span>
-                      <div className="text-slate-800 font-medium leading-relaxed whitespace-pre-line">
-                        {data.description || data.note}
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* Right: Step-by-Step Financial Breakdown Box */}
-                <div className={`w-full md:w-80 shrink-0 ${boxBorderClass} rounded-xl overflow-hidden bg-slate-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
-                  <div className={`p-2.5 border-b ${innerDividerClass} font-black text-slate-800 bg-slate-100`}>
-                    خلاصه محاسبات مالی
-                  </div>
-                  <div className="p-3 space-y-2">
-                    <div className="flex justify-between items-center text-slate-600">
-                      <span className="font-medium">جمع ناخالص کالاها:</span>
-                      <span className="font-bold text-slate-800 accounting-num" dir="ltr">
-                        {toPersianDigits(addCommas(rawItemsTotal))} <span className="text-[9px] font-normal text-slate-400">{currencyLabel}</span>
-                      </span>
-                    </div>
-
-                    {totalRowDiscounts > 0 && (
-                      <div className="flex justify-between items-center text-rose-600">
-                        <span className="font-medium">تخفیف سطری اقلام:</span>
-                        <span className="font-bold accounting-num" dir="ltr">
-                          - {toPersianDigits(addCommas(totalRowDiscounts))} <span className="text-[9px] font-normal text-rose-400">{currencyLabel}</span>
-                        </span>
-                      </div>
-                    )}
-
-                    {overallDiscountAmount > 0 && (
-                      <div className="flex justify-between items-center text-rose-600">
-                        <span className="font-medium">
-                          تخفیف کلی فاکتور {overallDiscountPercent > 0 ? `(٪${toPersianDigits(overallDiscountPercent)})` : ""}:
-                        </span>
-                        <span className="font-bold accounting-num" dir="ltr">
-                          - {toPersianDigits(addCommas(overallDiscountAmount))} <span className="text-[9px] font-normal text-rose-400">{currencyLabel}</span>
-                        </span>
-                      </div>
-                    )}
-
-                    {totalDiscount > 0 && (
-                      <div className="flex justify-between items-center text-slate-500 pt-1 border-t border-slate-200/50">
-                        <span className="font-medium">مبلغ پس از تخفیف:</span>
-                        <span className="font-bold text-slate-700 accounting-num" dir="ltr">
-                          {toPersianDigits(addCommas(subtotalAfterAllDiscounts))} {currencyLabel}
-                        </span>
-                      </div>
-                    )}
-
-                    <div className="flex justify-between items-center text-slate-700 pt-1 border-t border-slate-200/50">
-                      <span className="font-medium">
-                        مالیات و عوارض ارزش افزوده {taxPercent > 0 ? `(٪${toPersianDigits(taxPercent)})` : ""}:
-                      </span>
-                      <span className="font-bold text-indigo-900 accounting-num" dir="ltr">
-                        {totalTax > 0 ? (
-                          <>+ {toPersianDigits(addCommas(totalTax))} <span className="text-[9px] font-normal text-slate-400">{currencyLabel}</span></>
+        return (
+          <div
+            key={pageIdx}
+            className={`invoice-page-sheet relative bg-white ${
+              !isLastPage ? 'break-after-page page-break-after mb-8 print:mb-0' : ''
+            }`}
+          >
+            {/* Header: Full header on Page 1 */}
+            {isFirstPage && (
+              <div className={`print-avoid-break ${isA5 ? 'mb-2 pb-1.5' : 'mb-3.5 pb-2.5'}`}>
+                <div className={`flex justify-between items-start ${isA5 ? 'mb-2 pb-1.5' : 'mb-3 pb-2.5'} ${isClassic ? 'border-b border-slate-400' : 'border-b border-slate-200'}`}>
+                  
+                  {/* Store branding */}
+                  <div className="flex-1">
+                    {printSettings.showStoreLogo && (
+                      <div className={`flex items-center ${isA5 ? 'gap-2 mb-1.5' : 'gap-3 mb-2'}`}>
+                        {storeSettings.logo ? (
+                          <img
+                            src={storeSettings.logo}
+                            alt={storeSettings.storeName || "لوگو"}
+                            referrerPolicy="no-referrer"
+                            className={`${isA5 ? 'w-8 h-8' : 'w-12 h-12'} object-contain rounded-lg border border-slate-200`}
+                          />
                         ) : (
-                          <span className="text-slate-400 font-normal">معاف / ۰</span>
-                        )}
-                      </span>
-                    </div>
-
-                    <div className={`p-2.5 rounded-lg bg-slate-900 text-white font-black flex justify-between items-center ${isA5 ? 'mt-2 text-xs' : 'mt-3 text-sm'}`}>
-                      <span className="tracking-tight">مبلغ قابل پرداخت:</span>
-                      <span className="accounting-num text-base sm:text-lg text-emerald-400" dir="ltr">
-                        {toPersianDigits(addCommas(finalTotal))}{" "}
-                        <span className="text-[10px] text-slate-300 font-normal">{currencyLabel}</span>
-                      </span>
-                    </div>
-
-                    {(paidAmount > 0 || remainingInvoiceBalance > 0) && (
-                      <div className="pt-2 border-t border-slate-200 space-y-1 text-[10px]">
-                        <div className="flex justify-between items-center text-slate-600">
-                          <span>مبلغ پرداخت شده:</span>
-                          <span className="font-bold text-emerald-700 accounting-num" dir="ltr">
-                            {toPersianDigits(addCommas(paidAmount))} {currencyLabel}
-                          </span>
-                        </div>
-                        {remainingInvoiceBalance > 0 && (
-                          <div className="flex justify-between items-center text-rose-700 font-bold">
-                            <span>مانده فاکتور:</span>
-                            <span className="accounting-num" dir="ltr">
-                              {toPersianDigits(addCommas(remainingInvoiceBalance))} {currencyLabel}
-                            </span>
+                          <div className={`${isA5 ? 'w-8 h-8' : 'w-11 h-11'} flex items-center justify-center bg-slate-100 rounded-xl border border-slate-200`}>
+                            <Store className={`${isA5 ? 'w-4 h-4' : 'w-6 h-6'} text-slate-700`} />
                           </div>
                         )}
+                        <div>
+                          <h1 className={`${isA5 ? 'text-sm' : 'text-xl'} font-black text-slate-900`}>
+                            {storeSettings.storeName || storeSettings.companyName || "نام فروشگاه"}
+                          </h1>
+                          <p className="text-[9px] text-slate-400 font-medium">سیستم حسابداری و صدور فاکتور</p>
+                        </div>
+                      </div>
+                    )}
+                    {!printSettings.showStoreLogo && (
+                      <h1 className={`${isA5 ? 'text-sm mb-1' : 'text-xl mb-2'} font-black text-slate-900`}>
+                        {storeSettings.storeName || storeSettings.companyName || "نام فروشگاه"}
+                      </h1>
+                    )}
+
+                    <div className={`grid grid-cols-2 gap-x-4 gap-y-0.5 text-slate-500 font-medium ${isA5 ? 'text-[9px]' : 'text-[11px]'}`}>
+                      {(storeSettings.phone || storeSettings.mobile) && (
+                        <div>
+                          <span className="text-slate-400">تلفن: </span>
+                          <span className="font-bold text-slate-700" dir="ltr">{toPersianDigits(storeSettings.phone || storeSettings.mobile)}</span>
+                        </div>
+                      )}
+                      {storeSettings.taxId && (
+                        <div>
+                          <span className="text-slate-400">شماره اقتصادی: </span>
+                          <span className="font-bold text-slate-700">{toPersianDigits(storeSettings.taxId)}</span>
+                        </div>
+                      )}
+                      {storeSettings.registrationNumber && (
+                        <div>
+                          <span className="text-slate-400">شناسه ملی: </span>
+                          <span className="font-bold text-slate-700">{toPersianDigits(storeSettings.registrationNumber)}</span>
+                        </div>
+                      )}
+                      {storeSettings.postalCode && (
+                        <div>
+                          <span className="text-slate-400">کد پستی: </span>
+                          <span className="font-bold text-slate-700">{toPersianDigits(storeSettings.postalCode)}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {storeSettings.address && (
+                      <div className={`${isA5 ? 'text-[9px] mt-1' : 'text-[11px] mt-1.5'} font-medium text-slate-600 leading-relaxed`}>
+                        <span className="text-slate-400">نشانی: </span>{storeSettings.address}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {/* Title badge */}
+                  <div className="flex flex-col items-center justify-center px-4 shrink-0">
+                    <h2 className={`${isA5 ? 'text-xs px-3 py-1' : 'text-lg px-5 py-1.5'} font-black rounded-lg ${
+                      isVoided 
+                        ? 'border border-rose-300 text-rose-700 bg-rose-50' 
+                        : isDraft 
+                          ? 'border border-amber-300 text-amber-800 bg-amber-50' 
+                          : 'border border-slate-300 text-slate-800 bg-slate-50'
+                    }`}>
+                      {title}
+                    </h2>
+                    {isVoided && (
+                      <span className="text-[9px] font-black text-rose-700 mt-1">فاقد اثر مالی و قانونی</span>
+                    )}
+                    {isDraft && !isVoided && (
+                      <span className="text-[9px] font-bold text-amber-700 mt-1">نسخه پیش‌نویس - غیر رسمی</span>
+                    )}
+                    {totalPages > 1 && (
+                      <div className="mt-1 text-[9.5px] font-bold text-slate-600 bg-slate-100 px-2.5 py-0.5 rounded-full border border-slate-200">
+                        صفحه {toPersianDigits(1)} از {toPersianDigits(totalPages)}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Serial, Date & Barcode */}
+                  <div className="flex-1 text-left space-y-1 shrink-0">
+                    <div className="flex justify-end gap-2 items-center">
+                      <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>شماره فاکتور:</span>
+                      <span className={`font-mono font-black text-slate-900 ${isA5 ? 'text-xs' : 'text-base'}`}>{toPersianDigits(data.invoiceNumber || "-")}</span>
+                    </div>
+                    <div className="flex justify-end gap-2 items-center">
+                      <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>تاریخ صدور:</span>
+                      <span className={`font-bold text-slate-800 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>
+                        {getInvoiceDateOnly(data.date || data.jalaliDate || data.issueDate || data.invoiceDate || data.createdAt)}
+                      </span>
+                    </div>
+                    {(data.dueDate || data.jalaliDueDate) && (
+                       <div className="flex justify-end gap-2 items-center">
+                         <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>تاریخ سررسید:</span>
+                         <span className={`font-bold text-indigo-700 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>
+                           {getInvoiceDateOnly(data.dueDate || data.jalaliDueDate)}
+                         </span>
+                       </div>
+                    )}
+                    {data.sellerInvoiceNumber && (
+                      <div className="flex justify-end gap-2 items-center">
+                        <span className={`font-medium text-slate-400 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>ارجاع / تامین‌کننده:</span>
+                        <span className={`font-bold text-slate-700 ${isA5 ? 'text-[9px]' : 'text-xs'}`}>{toPersianDigits(data.sellerInvoiceNumber)}</span>
+                      </div>
+                    )}
+
+                    {/* Barcode */}
+                    {printSettings.showQrCode !== false && (data.invoiceNumber || data.id) && (
+                      <div className="flex flex-col items-end pt-1">
+                        <Barcode
+                          value={String(data.invoiceNumber || data.id)}
+                          height={isA5 ? 18 : 24}
+                          width={isA5 ? 1.0 : 1.2}
+                          fontSize={isA5 ? 8 : 9}
+                          margin={0}
+                          displayValue={false}
+                        />
+                        <span className="text-[8px] text-slate-400 font-mono tracking-wider">
+                          {toPersianDigits(data.invoiceNumber || data.id)}
+                        </span>
                       </div>
                     )}
                   </div>
                 </div>
 
+                {/* Customer Info Box */}
+                <div className={`rounded-xl border border-slate-200 bg-slate-50/40 ${isA5 ? 'p-2' : 'p-3'}`}>
+                  <div className="flex justify-between items-center border-b border-slate-200/60 pb-1.5 mb-1.5">
+                    <div className="font-bold text-slate-700 flex items-center gap-1.5 text-[11px]">
+                      <User className="w-3.5 h-3.5 text-slate-500" />
+                      <span>مشخصات {isSale ? 'خریدار / مشتری' : 'فروشنده / تامین‌کننده'}</span>
+                    </div>
+                    {printSettings.showBalance && relatedPerson && (
+                      <div className="flex items-center gap-1.5 text-[10px]">
+                        <span className="text-slate-400 font-medium">وضعیت حساب:</span>
+                        <span className="font-bold text-slate-800 accounting-num" dir="ltr">
+                          {toPersianDigits(addCommas(absBalance))} {currencyLabel}
+                        </span>
+                        <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                          balanceType === 'بدهکار' ? 'bg-rose-50 text-rose-700 border border-rose-200' :
+                          balanceType === 'بستانکار' ? 'bg-emerald-50 text-emerald-700 border border-emerald-200' :
+                          'bg-slate-100 text-slate-600'
+                        }`}>
+                          {balanceType}
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className={`grid grid-cols-2 md:grid-cols-4 gap-2.5 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
+                    <div>
+                      <span className="text-slate-400 block text-[9px]">نام طرف حساب:</span>
+                      <span className="font-black text-slate-900">{relatedPerson?.name || 'مشتری عمومی'}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[9px]">تلفن / همراه:</span>
+                      <span className="font-bold text-slate-800" dir="ltr">{toPersianDigits(relatedPerson?.mobile || relatedPerson?.phone || "-")}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[9px]">کد / شناسه ملی:</span>
+                      <span className="font-bold text-slate-800">{toPersianDigits(relatedPerson?.nationalId || "-")}</span>
+                    </div>
+                    <div>
+                      <span className="text-slate-400 block text-[9px]">شماره اقتصادی:</span>
+                      <span className="font-bold text-slate-800">{toPersianDigits(relatedPerson?.taxId || relatedPerson?.economicCode || "-")}</span>
+                    </div>
+                    {relatedPerson?.address && (
+                      <div className="col-span-2 md:col-span-4 pt-1 border-t border-slate-100 text-slate-600 flex items-center gap-1">
+                        <span className="text-slate-400">نشانی:</span>
+                        <span>{relatedPerson.address}</span>
+                        {relatedPerson.postalCode && <span className="mr-2 text-slate-400">(کد پستی: {toPersianDigits(relatedPerson.postalCode)})</span>}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
+            )}
 
-              {/* Allocated Transactions Area */}
-              {printSettings.showTransactions && allocatedTransactions.length > 0 && (
-                <div className={`rounded-xl ${boxBorderClass} overflow-hidden ${isA5 ? 'mb-3' : 'mb-6'} print-avoid-break`}>
-                  <div className={`bg-slate-100 px-3 py-1.5 border-b ${innerDividerClass} font-bold text-slate-800 text-[10px]`}>
-                    تراکنش‌های مالی مرتبط با این فاکتور
+            {/* Header: Running Compact Header on Pages 2+ */}
+            {!isFirstPage && (
+              <div className="flex justify-between items-center border-b-2 border-slate-300 pb-2 mb-3 pt-1 text-slate-700 print-avoid-break">
+                <div className="flex items-center gap-2">
+                  <span className="font-black text-slate-900">{storeSettings.storeName || "فروشگاه"}</span>
+                  <span className="text-slate-400 text-xs">|</span>
+                  <span className="text-slate-600 text-xs">{title}</span>
+                </div>
+                <div className="text-xs font-bold text-slate-800">
+                  فاکتور شماره: <span className="font-mono text-slate-900">{toPersianDigits(data.invoiceNumber || "-")}</span>
+                  {" - "}
+                  مشتری: <span className="text-slate-900">{relatedPerson?.name || "عمومی"}</span>
+                </div>
+                <div className="flex items-center gap-3 text-xs">
+                  <span>تاریخ: {getInvoiceDateOnly(data.date || data.createdAt)}</span>
+                  <span className="bg-slate-100 text-slate-800 font-bold px-2 py-0.5 rounded border border-slate-200">
+                    صفحه {toPersianDigits(chunk.pageNumber)} از {toPersianDigits(totalPages)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Items Table for this chunk */}
+            <table className="w-full text-right" style={{ borderCollapse: 'collapse' }}>
+              <thead className="print-table-header">
+                <tr className={`${tableHeadClass} ${isA5 ? 'text-[9px]' : 'text-[11px]'}`}>
+                  {cols.rowIndex && (
+                    <th className={`py-2 px-1.5 text-center w-8 ${cellBorderClass}`}>#</th>
+                  )}
+                  {cols.productCode && (
+                    <th className={`py-2 px-2 text-center w-16 ${cellBorderClass}`}>کد</th>
+                  )}
+                  <th className={`py-2 px-3 text-right ${cellBorderClass}`}>شرح کالا یا خدمات</th>
+                  {cols.quantity && (
+                    <th className={`py-2 px-2 text-center w-14 ${cellBorderClass}`}>تعداد</th>
+                  )}
+                  {cols.unit && (
+                    <th className={`py-2 px-1.5 text-center w-12 ${cellBorderClass}`}>واحد</th>
+                  )}
+                  {cols.unitPrice && (
+                    <th className={`py-2 px-2 text-left w-24 ${cellBorderClass}`}>فی ({currencyLabel})</th>
+                  )}
+                  {cols.grossAmount && (
+                    <th className={`py-2 px-2 text-left w-24 ${cellBorderClass}`}>مبلغ ناخالص</th>
+                  )}
+                  {cols.discountPercent && (
+                    <th className={`py-2 px-1 text-center w-12 ${cellBorderClass}`}>تخفیف (%)</th>
+                  )}
+                  {cols.discountAmount && (
+                    <th className={`py-2 px-2 text-left w-20 ${cellBorderClass}`}>مبلغ تخفیف</th>
+                  )}
+                  {cols.tax && (
+                    <th className={`py-2 px-2 text-left w-20 ${cellBorderClass}`}>مالیات</th>
+                  )}
+                  {cols.totalPrice && (
+                    <th className={`py-2 px-3 text-left w-28 text-slate-900 font-black`}>مبلغ نهایی ({currencyLabel})</th>
+                  )}
+                </tr>
+              </thead>
+              <tbody className={`divide-y ${isBold ? 'divide-slate-300' : 'divide-slate-100'}`}>
+                {chunk.items.map((item: any, rowIdx: number) => {
+                  const globalIdx = chunk.startIndex + rowIdx;
+                  return renderItemRow(item, globalIdx);
+                })}
+              </tbody>
+
+              {/* Table Totals Row (Renders on the last page chunk or in auto mode) */}
+              {isLastPage && (
+                <tfoot>
+                  <tr className={`${tableFootClass} ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+                    <td colSpan={leadingColSpan} className={`py-2 px-3 ${cellBorderClass}`}>
+                      <div className="flex items-center justify-between">
+                        <span>جمع کل اقلام ردیف‌ها:</span>
+                        <span className="text-indigo-900 font-extrabold px-1.5 py-0.5 bg-indigo-50 border border-indigo-200 rounded">
+                          {toPersianDigits(allItems.length)} سطر کالا
+                        </span>
+                      </div>
+                    </td>
+                    {cols.quantity && (
+                      <td className={`py-2 px-2 text-center text-indigo-950 ${cellBorderClass} font-black`}>
+                        <span>{toPersianDigits(totalQuantity)}</span>
+                      </td>
+                    )}
+                    {cols.unit && (
+                      <td className={`py-2 px-1.5 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+                    )}
+                    {cols.unitPrice && (
+                      <td className={`py-2 px-2 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+                    )}
+                    {cols.grossAmount && (
+                      <td className={`py-2 px-2 text-left accounting-num ${cellBorderClass} font-black text-slate-900`} dir="ltr">
+                        {toPersianDigits(addCommas(rawItemsTotal))}
+                      </td>
+                    )}
+                    {cols.discountPercent && (
+                      <td className={`py-2 px-1 text-center text-slate-400 ${cellBorderClass}`}>---</td>
+                    )}
+                    {cols.discountAmount && (
+                      <td className={`py-2 px-2 text-left text-rose-700 accounting-num ${cellBorderClass} font-black`} dir="ltr">
+                        {totalRowDiscounts > 0 ? toPersianDigits(addCommas(totalRowDiscounts)) : "۰"}
+                      </td>
+                    )}
+                    {cols.tax && (
+                      <td className={`py-2 px-2 text-left text-indigo-800 accounting-num ${cellBorderClass} font-black`} dir="ltr">
+                        {totalTax > 0 ? toPersianDigits(addCommas(totalTax)) : "۰"}
+                      </td>
+                    )}
+                    {cols.totalPrice && (
+                      <td className="py-2 px-3 text-left text-slate-950 accounting-num font-black" dir="ltr">
+                        {toPersianDigits(addCommas(finalTotal))}
+                      </td>
+                    )}
+                  </tr>
+                </tfoot>
+              )}
+            </table>
+
+            {/* Continuation indicator if there are more pages */}
+            {!isLastPage && (
+              <div className="flex justify-between items-center py-2 px-3 mt-2 bg-slate-50 border border-slate-200 rounded-lg text-xs font-bold text-slate-600 print-avoid-break">
+                <span className="text-indigo-700">ادامه اقلام در صفحه بعدی ({toPersianDigits(chunk.pageNumber + 1)}) ...</span>
+                <span>صفحه {toPersianDigits(chunk.pageNumber)} از {toPersianDigits(totalPages)}</span>
+              </div>
+            )}
+
+            {/* Financial Summary, Notes, and Signatures (Only on Last Page) */}
+            {isLastPage && (
+              <div className="pt-3 print-avoid-break">
+                
+                {/* Summary Area */}
+                <div className={`flex flex-col md:flex-row justify-between items-start gap-3.5 print-avoid-break ${isA5 ? 'mb-2' : 'mb-4'}`}>
+                  
+                  {/* Left: Notes, Amount in Words, Payment terms */}
+                  <div className="flex-1 w-full space-y-2.5">
+                    {/* Amount in Persian Words */}
+                    <div className={`p-2.5 rounded-xl ${boxBorderClass} bg-indigo-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
+                      <span className="text-indigo-900 font-bold ml-1">مبلغ به حروف:</span>
+                      <span className="font-black text-indigo-950 leading-relaxed">
+                        {numToPersianWords(Math.round(finalTotal))} {currencyLabel} تمام
+                      </span>
+                    </div>
+
+                    {/* Payment Details */}
+                    <div className={`grid grid-cols-2 gap-2 p-2 rounded-xl ${boxBorderClass} bg-slate-50/40 ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+                      <div>
+                        <span className="text-slate-500 font-medium block">نحوه تسویه:</span>
+                        <span className="font-bold text-slate-800">
+                          {data.paymentMethod === "cash" ? "نقدی" : data.paymentMethod === "credit" ? "نسیه" : "ترکیبی / واریز"}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-500 font-medium block">وضعیت پرداخت:</span>
+                        <span className={`font-black ${
+                          paidAmount >= finalTotal ? 'text-emerald-700' :
+                          paidAmount > 0 ? 'text-amber-700' : 'text-rose-700'
+                        }`}>
+                          {paidAmount >= finalTotal ? "تسویه کامل" : paidAmount > 0 ? "پرداخت جزئی" : "تسویه نشده"}
+                        </span>
+                      </div>
+                    </div>
+
+                    {/* Notes */}
+                    {printSettings.showNotes && (data.description || data.note) && (
+                      <div className={`p-2 rounded-xl ${boxBorderClass} bg-white ${isA5 ? 'text-[9px]' : 'text-[10.5px]'}`}>
+                        <span className="text-slate-600 font-bold block mb-0.5">توضیحات فاکتور:</span>
+                        <div className="text-slate-800 font-medium leading-relaxed whitespace-pre-line">
+                          {data.description || data.note}
+                        </div>
+                      </div>
+                    )}
                   </div>
-                  <table className="w-full text-right text-[10px]">
-                    <thead className={`bg-slate-100/70 border-b ${innerDividerClass} text-slate-700 font-bold`}>
-                      <tr>
-                        <th className={`py-1.5 px-3 ${cellBorderClass}`}>تاریخ</th>
-                        <th className={`py-1.5 px-3 ${cellBorderClass}`}>نوع</th>
-                        <th className={`py-1.5 px-3 ${cellBorderClass}`}>روش</th>
-                        <th className={`py-1.5 px-3 ${cellBorderClass}`}>شماره/پیگیری</th>
-                        <th className="py-1.5 px-3 text-left">مبلغ ({currencyLabel})</th>
-                      </tr>
-                    </thead>
-                    <tbody className={`divide-y ${isBold ? 'divide-slate-300' : 'divide-slate-100'}`}>
-                      {allocatedTransactions.map((tx: any, idx: number) => (
-                        <tr key={idx}>
-                          <td className={`py-1 px-3 ${cellBorderClass}`}>{getInvoiceDateOnly(tx.jalaliDate || tx.date)}</td>
-                          <td className={`py-1 px-3 ${cellBorderClass}`}>{tx.type === "receive" ? "دریافت" : "پرداخت"}</td>
-                          <td className={`py-1 px-3 ${cellBorderClass}`}>{tx.method === "cash" ? "نقدی" : tx.method === "check" ? "چک" : "کارت‌خوان/سند"}</td>
-                          <td className={`py-1 px-3 ${cellBorderClass} font-mono`}>{toPersianDigits(tx.checkNumber || tx.receiptNumber || "-")}</td>
-                          <td className="py-1 px-3 text-left font-bold text-slate-900 accounting-num" dir="ltr">{toPersianDigits(addCommas(tx.linkedInvoices[data.id] || tx.amount || 0))}</td>
+
+                  {/* Right: Step-by-Step Financial Breakdown Box */}
+                  <div className={`w-full md:w-80 shrink-0 ${boxBorderClass} rounded-xl overflow-hidden bg-slate-50/40 ${isA5 ? 'text-[9.5px]' : 'text-[11.5px]'}`}>
+                    <div className={`p-2 border-b ${innerDividerClass} font-black text-slate-800 bg-slate-100 text-center`}>
+                      خلاصه محاسبات مالی
+                    </div>
+                    <div className="p-2.5 space-y-1.5">
+                      <div className="flex justify-between items-center text-slate-600">
+                        <span className="font-medium">جمع ناخالص کالاها:</span>
+                        <span className="font-bold text-slate-800 accounting-num" dir="ltr">
+                          {toPersianDigits(addCommas(rawItemsTotal))} <span className="text-[9px] font-normal text-slate-400">{currencyLabel}</span>
+                        </span>
+                      </div>
+
+                      {totalRowDiscounts > 0 && (
+                        <div className="flex justify-between items-center text-rose-600">
+                          <span className="font-medium">تخفیف سطری اقلام:</span>
+                          <span className="font-bold accounting-num" dir="ltr">
+                            - {toPersianDigits(addCommas(totalRowDiscounts))} <span className="text-[9px] font-normal text-rose-400">{currencyLabel}</span>
+                          </span>
+                        </div>
+                      )}
+
+                      {overallDiscountAmount > 0 && (
+                        <div className="flex justify-between items-center text-rose-600">
+                          <span className="font-medium">
+                            تخفیف کلی فاکتور {overallDiscountPercent > 0 ? `(٪${toPersianDigits(overallDiscountPercent)})` : ""}:
+                          </span>
+                          <span className="font-bold accounting-num" dir="ltr">
+                            - {toPersianDigits(addCommas(overallDiscountAmount))} <span className="text-[9px] font-normal text-rose-400">{currencyLabel}</span>
+                          </span>
+                        </div>
+                      )}
+
+                      {totalDiscount > 0 && (
+                        <div className="flex justify-between items-center text-slate-500 pt-1 border-t border-slate-200/50">
+                          <span className="font-medium">مبلغ پس از تخفیف:</span>
+                          <span className="font-bold text-slate-700 accounting-num" dir="ltr">
+                            {toPersianDigits(addCommas(subtotalAfterAllDiscounts))} {currencyLabel}
+                          </span>
+                        </div>
+                      )}
+
+                      <div className="flex justify-between items-center text-slate-700 pt-1 border-t border-slate-200/50">
+                        <span className="font-medium">
+                          مالیات ارزش افزوده {taxPercent > 0 ? `(٪${toPersianDigits(taxPercent)})` : ""}:
+                        </span>
+                        <span className="font-bold text-indigo-900 accounting-num" dir="ltr">
+                          {totalTax > 0 ? (
+                            <>+ {toPersianDigits(addCommas(totalTax))} <span className="text-[9px] font-normal text-slate-400">{currencyLabel}</span></>
+                          ) : (
+                            <span className="text-slate-400 font-normal">معاف / ۰</span>
+                          )}
+                        </span>
+                      </div>
+
+                      <div className={`p-2 rounded-lg bg-slate-900 text-white font-black flex justify-between items-center ${isA5 ? 'mt-1.5 text-xs' : 'mt-2 text-sm'}`}>
+                        <span className="tracking-tight">مبلغ قابل پرداخت:</span>
+                        <span className="accounting-num text-base sm:text-lg text-emerald-400" dir="ltr">
+                          {toPersianDigits(addCommas(finalTotal))}{" "}
+                          <span className="text-[10px] text-slate-300 font-normal">{currencyLabel}</span>
+                        </span>
+                      </div>
+
+                      {(paidAmount > 0 || remainingInvoiceBalance > 0) && (
+                        <div className="pt-1.5 border-t border-slate-200 space-y-1 text-[10px]">
+                          <div className="flex justify-between items-center text-slate-600">
+                            <span>مبلغ پرداخت شده:</span>
+                            <span className="font-bold text-emerald-700 accounting-num" dir="ltr">
+                              {toPersianDigits(addCommas(paidAmount))} {currencyLabel}
+                            </span>
+                          </div>
+                          {remainingInvoiceBalance > 0 && (
+                            <div className="flex justify-between items-center text-rose-700 font-bold">
+                              <span>مانده فاکتور:</span>
+                              <span className="accounting-num" dir="ltr">
+                                {toPersianDigits(addCommas(remainingInvoiceBalance))} {currencyLabel}
+                              </span>
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                </div>
+
+                {/* Allocated Transactions Area */}
+                {printSettings.showTransactions && allocatedTransactions.length > 0 && (
+                  <div className={`rounded-xl ${boxBorderClass} overflow-hidden ${isA5 ? 'mb-2' : 'mb-3.5'} print-avoid-break`}>
+                    <div className={`bg-slate-100 px-3 py-1 border-b ${innerDividerClass} font-bold text-slate-800 text-[10px]`}>
+                      تراکنش‌های مالی مرتبط با این فاکتور
+                    </div>
+                    <table className="w-full text-right text-[10px]">
+                      <thead className={`bg-slate-100/70 border-b ${innerDividerClass} text-slate-700 font-bold`}>
+                        <tr>
+                          <th className={`py-1 px-3 ${cellBorderClass}`}>تاریخ</th>
+                          <th className={`py-1 px-3 ${cellBorderClass}`}>نوع</th>
+                          <th className={`py-1 px-3 ${cellBorderClass}`}>روش</th>
+                          <th className={`py-1 px-3 ${cellBorderClass}`}>شماره/پیگیری</th>
+                          <th className="py-1 px-3 text-left">مبلغ ({currencyLabel})</th>
                         </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
-              )}
-
-              {/* Signatures */}
-              {printSettings.showSignatures && (
-                <div className={`grid grid-cols-2 gap-8 text-center text-slate-800 font-bold print-avoid-break ${isA5 ? 'mt-4 mb-2 text-[9.5px]' : 'mt-8 mb-4 text-[11px]'}`}>
-                  <div className="flex flex-col items-center">
-                    <span className="text-slate-600">مهر و امضای فروشنده</span>
-                    <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
+                      </thead>
+                      <tbody className={`divide-y ${isBold ? 'divide-slate-300' : 'divide-slate-100'}`}>
+                        {allocatedTransactions.map((tx: any, idx: number) => (
+                          <tr key={idx}>
+                            <td className={`py-1 px-3 ${cellBorderClass}`}>{getInvoiceDateOnly(tx.jalaliDate || tx.date)}</td>
+                            <td className={`py-1 px-3 ${cellBorderClass}`}>{tx.type === "receive" ? "دریافت" : "پرداخت"}</td>
+                            <td className={`py-1 px-3 ${cellBorderClass}`}>{tx.method === "cash" ? "نقدی" : tx.method === "check" ? "چک" : "کارت‌خوان/سند"}</td>
+                            <td className={`py-1 px-3 ${cellBorderClass} font-mono`}>{toPersianDigits(tx.checkNumber || tx.receiptNumber || "-")}</td>
+                            <td className="py-1 px-3 text-left font-bold text-slate-900 accounting-num" dir="ltr">{toPersianDigits(addCommas(tx.linkedInvoices[data.id] || tx.amount || 0))}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
-                  <div className="flex flex-col items-center">
-                    <span className="text-slate-600">مهر و امضای خریدار</span>
-                    <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-8' : 'mt-12'}`}></div>
+                )}
+
+                {/* Signatures */}
+                {printSettings.showSignatures && (
+                  <div className={`grid grid-cols-2 gap-8 text-center text-slate-800 font-bold print-avoid-break ${isA5 ? 'mt-3 mb-1 text-[9px]' : 'mt-5 mb-2 text-[10.5px]'}`}>
+                    <div className="flex flex-col items-center">
+                      <span className="text-slate-600">مهر و امضای فروشنده</span>
+                      <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-7' : 'mt-10'}`}></div>
+                    </div>
+                    <div className="flex flex-col items-center">
+                      <span className="text-slate-600">مهر و امضای خریدار</span>
+                      <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-7' : 'mt-10'}`}></div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Footer Note & Page Number */}
+                <div className={`flex justify-between items-center text-slate-400 border-t border-slate-100 pt-2 ${isA5 ? 'mt-1 text-[8px]' : 'mt-3 text-[9.5px]'}`}>
+                  <div className="font-medium">
+                    {storeSettings.print_footer_note || "از خرید و اعتماد شما سپاسگزاریم."}
+                  </div>
+                  <div className="font-bold text-slate-500">
+                    صفحه {toPersianDigits(chunk.pageNumber)} از {toPersianDigits(totalPages)}
                   </div>
                 </div>
-              )}
+              </div>
+            )}
 
-              {/* Footer Note */}
-              {storeSettings.print_footer_note && (
-                <div className={`text-center font-medium text-slate-400 border-t border-slate-100 pt-2 ${isA5 ? 'mt-2 text-[8px]' : 'mt-4 text-[10px]'}`}>
-                   {storeSettings.print_footer_note}
-                </div>
-              )}
-            </td>
-          </tr>
-        </tfoot>
-      </table>
+            {/* Preview Sheet Divider for multi-page invoices */}
+            {!isLastPage && (
+              <div className="print:hidden my-6 flex items-center justify-center gap-3">
+                <div className="h-px bg-slate-300 flex-1 border-t border-dashed border-slate-300"></div>
+                <span className="text-xs bg-slate-100 text-slate-600 px-3 py-1 rounded-full font-bold border border-slate-200 shadow-2xs">
+                  پایان برگه {toPersianDigits(chunk.pageNumber)} - شروع برگه {toPersianDigits(chunk.pageNumber + 1)}
+                </span>
+                <div className="h-px bg-slate-300 flex-1 border-t border-dashed border-slate-300"></div>
+              </div>
+            )}
+          </div>
+        );
+      })}
     </div>
   );
 }
