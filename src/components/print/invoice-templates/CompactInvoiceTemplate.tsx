@@ -17,7 +17,7 @@ export default function CompactInvoiceTemplate({
     : isDraft
       ? `${rawTitle} (پیش‌نویس)`
       : rawTitle;
-  const relatedPerson = persons.find(p => p.id === data.customerId);
+  const relatedPerson = persons.find(p => p.id?.toString() === data.customerId?.toString());
   const sumTotal = data.items?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
   const totalDiscount = sumTotal - (data.totalAmount || 0);
 

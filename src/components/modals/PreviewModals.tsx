@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { X, Printer, CheckCircle, Eye, Wallet, Settings, AlertTriangle, Ban, FileText, AlertCircle, Columns, SlidersHorizontal, ChevronDown, Check } from "lucide-react";
 import InvoicePrintTemplate from "../print/InvoicePrintTemplate";
 import WarehousePrintTemplate from "../print/WarehousePrintTemplate";
@@ -6,7 +6,7 @@ import ReceiptPrintTemplate from "../print/ReceiptPrintTemplate";
 import ReceiptPrintModal from "../print/ReceiptPrintModal";
 import ReceiptConfirmationModal from "../financial/ReceiptConfirmationModal";
 import { InvoicePrintSettings, InvoiceColumnSettings } from "../print/invoice-templates/InvoicePrintTypes";
-import { safePrint } from "../../utils/printHelper";
+import { safePrint, printViaIframe } from "../../utils/printHelper";
 
 export default function PreviewModals(props: any) {
   const {
@@ -50,6 +50,37 @@ export default function PreviewModals(props: any) {
       totalPrice: true,
     }
   });
+
+  useEffect(() => {
+    if (storeSettings?.invoicePrintFormat) {
+      setPrintSettings(prev => ({
+        ...prev,
+        designType: (storeSettings.invoicePrintFormat as any) || prev.designType
+      }));
+    }
+  }, [storeSettings?.invoicePrintFormat]);
+
+  const handleDesignTypeChange = (newType: string) => {
+    setPrintSettings(prev => ({
+      ...prev,
+      designType: newType,
+      paperSize: newType === 'thermal' ? 'pos80' : (prev.paperSize === 'pos80' ? 'a4' : prev.paperSize)
+    }));
+  };
+
+  const handlePrintInvoice = () => {
+    const invNum = currentInvoice?.invoiceNumber || currentInvoice?.id || "";
+    const isWh = Boolean(viewingInvoice?.type?.includes("warehouse") || previewInvoiceData?.type?.includes("warehouse"));
+    const docTitle = isWh
+      ? `سند انبار شماره ${toPersianDigits(invNum)}`
+      : `فاکتور شماره ${toPersianDigits(invNum)}`;
+
+    safePrint("#invoice-sheet-to-print", {
+      paperSize: printSettings.paperSize,
+      documentTitle: docTitle,
+      timeoutMs: 3500
+    });
+  };
 
   const toggleColumn = (key: keyof InvoiceColumnSettings) => {
     setPrintSettings(prev => ({
@@ -369,22 +400,25 @@ export default function PreviewModals(props: any) {
 
                   <select 
                     value={printSettings.paperSize}
-                    onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value as 'a4' | 'a5'}))}
+                    onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value as any}))}
                     className="text-xs bg-white font-bold text-slate-700 border border-slate-200 rounded-lg px-2 py-1 outline-none shadow-xs"
                   >
                     <option value="a4">سایز A4</option>
                     <option value="a5">سایز A5 (بهینه‌شده)</option>
+                    <option value="pos80">فیش پرینتر (80mm)</option>
                   </select>
 
                   <select 
                     value={printSettings.designType}
-                    onChange={(e) => setPrintSettings(s => ({...s, designType: e.target.value as any}))}
+                    onChange={(e) => handleDesignTypeChange(e.target.value)}
                     className="text-xs bg-white font-bold text-slate-700 border border-slate-200 rounded-lg px-2 py-1 outline-none shadow-xs"
                   >
                     <option value="minimal">طراحی مینیمال (پیشنهادی)</option>
                     <option value="modern">طراحی مدرن</option>
                     <option value="classic">طراحی کلاسیک</option>
-                    <option value="official">طراحی رسمی</option>
+                    <option value="official">طراحی رسمی (مالیاتی)</option>
+                    <option value="compact">طراحی فشرده</option>
+                    <option value="thermal">فیش پرینتر (حرارتی)</option>
                   </select>
                 </div>
               </div>
@@ -458,44 +492,32 @@ export default function PreviewModals(props: any) {
               </label>
               <select 
                 value={printSettings.paperSize}
-                onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value as 'a4' | 'a5'}))}
+                onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value as any}))}
                 className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none shrink-0 font-medium"
               >
                 <option value="a4">سایز A4</option>
                 <option value="a5">سایز A5</option>
+                <option value="pos80">فیش پرینتر (80mm)</option>
               </select>
               <select 
                 value={printSettings.designType}
-                onChange={(e) => setPrintSettings(s => ({...s, designType: e.target.value as any}))}
+                onChange={(e) => handleDesignTypeChange(e.target.value)}
                 className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none font-medium text-slate-700 shrink-0"
               >
                 <option value="minimal">مینیمال</option>
                 <option value="modern">مدرن</option>
                 <option value="classic">کلاسیک</option>
                 <option value="official">رسمی</option>
+                <option value="compact">فشرده</option>
+                <option value="thermal">حرارتی</option>
               </select>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 print:p-0 print:overflow-visible print:bg-white flex justify-center items-start print:block">
               <div
                 id="invoice-sheet-to-print"
-                className={`invoice-print-container bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:mx-auto print:w-full print:max-w-none relative overflow-hidden box-border ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}
+                className={`invoice-print-container bg-white rounded-xl shadow-sm border border-slate-200 print:border-none print:shadow-none mx-auto print:mx-auto print:w-full print:max-w-none relative overflow-hidden box-border ${printSettings.paperSize === 'a5' ? 'max-w-[148mm] min-h-[210mm] print:min-h-0' : printSettings.paperSize === 'pos80' ? 'max-w-[80mm] min-h-[100mm] print:min-h-0' : 'max-w-[210mm] min-h-[297mm] print:min-h-0'}`}
               >
-                {/* Visual Watermarks for Draft and Voided */}
-                {isVoided && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-30 overflow-hidden print:flex">
-                    <div className="transform -rotate-45 border-8 border-red-600/35 text-red-600/35 font-black text-6xl sm:text-7xl md:text-8xl px-12 py-6 rounded-3xl tracking-widest text-center shadow-xs">
-                      ابطال شد
-                    </div>
-                  </div>
-                )}
-                {isDraft && !isVoided && (
-                  <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none z-30 overflow-hidden print:flex">
-                    <div className="transform -rotate-45 border-8 border-dashed border-amber-600/35 text-amber-600/35 font-black text-6xl sm:text-7xl md:text-8xl px-12 py-6 rounded-3xl tracking-widest text-center shadow-xs">
-                      پیش‌نویس
-                    </div>
-                  </div>
-                )}
                 {(viewingInvoice?.type?.includes("warehouse") || previewInvoiceData?.type?.includes("warehouse")) ? (
                   <WarehousePrintTemplate
                     data={viewingInvoice || previewInvoiceData}
@@ -528,8 +550,8 @@ export default function PreviewModals(props: any) {
                 >
                   انصراف و ویرایش
                 </button>
-                <button onClick={() => safePrint("#invoice-sheet-to-print", { timeoutMs: 3000 })} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
-                   <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 6 2 18 2 18 9"></polyline><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"></path><rect x="6" y="14" width="12" height="8"></rect></svg>
+                <button onClick={handlePrintInvoice} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
+                   <Printer className="w-5 h-5" />
                    چاپ پیش‌نمایش
                  </button>
                  <button
@@ -548,7 +570,7 @@ export default function PreviewModals(props: any) {
             )}
             {viewingInvoice && (
                <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3 print:hidden shrink-0">
-                 <button onClick={() => safePrint("#invoice-sheet-to-print", { timeoutMs: 3000 })} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
+                 <button onClick={handlePrintInvoice} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
                    <Printer className="w-5 h-5" />
                    چاپ
                  </button>

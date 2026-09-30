@@ -882,8 +882,11 @@ export default function InvoicesList(props: any) {
                                   if (setViewingInvoice) {
                                     setViewingInvoice(inv);
                                     setTimeout(() => {
-                                      safePrint("#invoice-sheet-to-print", { timeoutMs: 3000 });
-                                    }, 200);
+                                      safePrint("#invoice-sheet-to-print", {
+                                        timeoutMs: 4000,
+                                        documentTitle: `فاکتور شماره ${inv.invoiceNumber || inv.id || ""}`
+                                      });
+                                    }, 250);
                                   }
                                 }}
                                 className="p-1.5 text-gray-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg cursor-pointer bg-transparent border-none"

@@ -20,7 +20,7 @@ export interface InvoicePrintSettings {
   showNotes?: boolean;
   showFooter?: boolean;
   designType?: string;
-  paperSize?: "a4" | "a5";
+  paperSize?: "a4" | "a5" | "pos80";
   columns?: InvoiceColumnSettings;
   boldBorders?: boolean;
 }
@@ -35,6 +35,6 @@ export interface InvoicePrintTemplateProps {
   issuedChecks?: any[];
   receivedChecks?: any[];
   printSettings?: InvoicePrintSettings;
-  paperSize?: "a4" | "a5";
+  paperSize?: "a4" | "a5" | "pos80";
 }
 

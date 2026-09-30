@@ -30,7 +30,7 @@ export default function WarehousePrintTemplate({
       ? `${rawTitle} (پیش‌نویس)`
       : rawTitle;
   const relatedPerson = persons.find(
-    (p) => p.id === data.customerId,
+    (p) => p.id?.toString() === data.customerId?.toString(),
   );
 
   const resolvedWhId = data.warehouseId ||

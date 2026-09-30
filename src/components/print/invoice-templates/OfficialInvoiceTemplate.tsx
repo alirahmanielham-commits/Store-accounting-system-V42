@@ -25,6 +25,22 @@ export default function OfficialInvoiceTemplate({
       
   const relatedPerson = persons.find(p => p.id?.toString() === data.customerId?.toString());
 
+  const defaultCols = {
+    rowIndex: true,
+    productCode: true,
+    productName: true,
+    quantity: true,
+    unit: true,
+    unitPrice: true,
+    grossAmount: true,
+    discountPercent: true,
+    discountAmount: true,
+    tax: true,
+    totalPrice: true,
+  };
+  const cols = { ...defaultCols, ...printSettings?.columns };
+  const leadingColSpan = (cols.rowIndex ? 1 : 0) + (cols.productCode ? 1 : 0) + 1; // 1 for productName
+
   const getInvoiceDateOnly = (d: any) => {
     return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });
   };
@@ -174,17 +190,17 @@ export default function OfficialInvoiceTemplate({
       <table className="w-full text-center border-collapse border border-black mb-2 text-[10.5px]">
         <thead className="bg-gray-100">
           <tr>
-            <th className="border border-black p-1 w-8">ردیف</th>
-            <th className="border border-black p-1 w-16">کد کالا</th>
+            {cols.rowIndex && <th className="border border-black p-1 w-8">ردیف</th>}
+            {cols.productCode && <th className="border border-black p-1 w-16">کد کالا</th>}
             <th className="border border-black p-1">شرح کالا یا خدمات</th>
-            <th className="border border-black p-1 w-12">تعداد</th>
-            <th className="border border-black p-1 w-12">واحد</th>
-            <th className="border border-black p-1 w-20">مبلغ واحد ({currencyLabel})</th>
-            <th className="border border-black p-1 w-20">مبلغ ناخالص</th>
-            <th className="border border-black p-1 w-12">تخفیف (%)</th>
-            <th className="border border-black p-1 w-20">مبلغ تخفیف</th>
-            <th className="border border-black p-1 w-20">مالیات و عوارض</th>
-            <th className="border border-black p-1 w-24">مبلغ نهایی سطر</th>
+            {cols.quantity && <th className="border border-black p-1 w-12">تعداد</th>}
+            {cols.unit && <th className="border border-black p-1 w-12">واحد</th>}
+            {cols.unitPrice && <th className="border border-black p-1 w-20">مبلغ واحد ({currencyLabel})</th>}
+            {cols.grossAmount && <th className="border border-black p-1 w-20">مبلغ ناخالص</th>}
+            {cols.discountPercent && <th className="border border-black p-1 w-12">تخفیف (%)</th>}
+            {cols.discountAmount && <th className="border border-black p-1 w-20">مبلغ تخفیف</th>}
+            {cols.tax && <th className="border border-black p-1 w-20">مالیات و عوارض</th>}
+            {cols.totalPrice && <th className="border border-black p-1 w-24">مبلغ نهایی سطر</th>}
           </tr>
         </thead>
         <tbody>
@@ -204,32 +220,32 @@ export default function OfficialInvoiceTemplate({
 
              return (
                <tr key={idx}>
-                 <td className="border border-black p-1">{toPersianDigits(idx + 1)}</td>
-                 <td className="border border-black p-1 font-mono">{toPersianDigits(item.productCode || item.productId || "-")}</td>
+                 {cols.rowIndex && <td className="border border-black p-1">{toPersianDigits(idx + 1)}</td>}
+                 {cols.productCode && <td className="border border-black p-1 font-mono">{toPersianDigits(item.productCode || item.productId || "-")}</td>}
                  <td className="border border-black p-1 text-right font-bold">{item.productName}</td>
-                 <td className="border border-black p-1 font-bold">{toPersianDigits(item.quantity)}</td>
-                 <td className="border border-black p-1">{item.selectedUnit || item.unit || "عدد"}</td>
-                 <td className="border border-black p-1 accounting-num" dir="ltr">{toPersianDigits(addCommas(unitPrice))}</td>
-                 <td className="border border-black p-1 accounting-num" dir="ltr">{toPersianDigits(addCommas(rowGross))}</td>
-                 <td className="border border-black p-1">{rowDiscPct > 0 ? `٪${toPersianDigits(rowDiscPct)}` : "-"}</td>
-                 <td className="border border-black p-1 text-rose-700 accounting-num" dir="ltr">{rowDiscAmount > 0 ? toPersianDigits(addCommas(rowDiscAmount)) : "-"}</td>
-                 <td className="border border-black p-1 text-indigo-700 accounting-num" dir="ltr">{rowTax > 0 ? toPersianDigits(addCommas(rowTax)) : "۰"}</td>
-                 <td className="border border-black p-1 font-bold accounting-num" dir="ltr">{toPersianDigits(addCommas(rowFinal))}</td>
+                 {cols.quantity && <td className="border border-black p-1 font-bold">{toPersianDigits(item.quantity)}</td>}
+                 {cols.unit && <td className="border border-black p-1">{item.selectedUnit || item.unit || "عدد"}</td>}
+                 {cols.unitPrice && <td className="border border-black p-1 accounting-num" dir="ltr">{toPersianDigits(addCommas(unitPrice))}</td>}
+                 {cols.grossAmount && <td className="border border-black p-1 accounting-num" dir="ltr">{toPersianDigits(addCommas(rowGross))}</td>}
+                 {cols.discountPercent && <td className="border border-black p-1">{rowDiscPct > 0 ? `٪${toPersianDigits(rowDiscPct)}` : "-"}</td>}
+                 {cols.discountAmount && <td className="border border-black p-1 text-rose-700 accounting-num" dir="ltr">{rowDiscAmount > 0 ? toPersianDigits(addCommas(rowDiscAmount)) : "-"}</td>}
+                 {cols.tax && <td className="border border-black p-1 text-indigo-700 accounting-num" dir="ltr">{rowTax > 0 ? toPersianDigits(addCommas(rowTax)) : "۰"}</td>}
+                 {cols.totalPrice && <td className="border border-black p-1 font-bold accounting-num" dir="ltr">{toPersianDigits(addCommas(rowFinal))}</td>}
                </tr>
              );
           })}
         </tbody>
         <tfoot className="font-bold bg-gray-100">
           <tr>
-            <td colSpan={3} className="border border-black p-1 text-right">جمع کل اقلام ردیف‌ها</td>
-            <td className="border border-black p-1 font-black">{toPersianDigits(totalQuantity)}</td>
-            <td className="border border-black p-1">---</td>
-            <td className="border border-black p-1">---</td>
-            <td className="border border-black p-1 accounting-num" dir="ltr">{toPersianDigits(addCommas(rawItemsTotal))}</td>
-            <td className="border border-black p-1">---</td>
-            <td className="border border-black p-1 text-rose-700 accounting-num" dir="ltr">{totalRowDiscounts > 0 ? toPersianDigits(addCommas(totalRowDiscounts)) : "۰"}</td>
-            <td className="border border-black p-1 text-indigo-700 accounting-num" dir="ltr">{totalTax > 0 ? toPersianDigits(addCommas(totalTax)) : "۰"}</td>
-            <td className="border border-black p-1 font-black accounting-num" dir="ltr">{toPersianDigits(addCommas(finalTotal))}</td>
+            <td colSpan={leadingColSpan} className="border border-black p-1 text-right">جمع کل اقلام ردیف‌ها</td>
+            {cols.quantity && <td className="border border-black p-1 font-black">{toPersianDigits(totalQuantity)}</td>}
+            {cols.unit && <td className="border border-black p-1">---</td>}
+            {cols.unitPrice && <td className="border border-black p-1">---</td>}
+            {cols.grossAmount && <td className="border border-black p-1 accounting-num" dir="ltr">{toPersianDigits(addCommas(rawItemsTotal))}</td>}
+            {cols.discountPercent && <td className="border border-black p-1">---</td>}
+            {cols.discountAmount && <td className="border border-black p-1 text-rose-700 accounting-num" dir="ltr">{totalRowDiscounts > 0 ? toPersianDigits(addCommas(totalRowDiscounts)) : "۰"}</td>}
+            {cols.tax && <td className="border border-black p-1 text-indigo-700 accounting-num" dir="ltr">{totalTax > 0 ? toPersianDigits(addCommas(totalTax)) : "۰"}</td>}
+            {cols.totalPrice && <td className="border border-black p-1 font-black accounting-num" dir="ltr">{toPersianDigits(addCommas(finalTotal))}</td>}
           </tr>
         </tfoot>
       </table>
