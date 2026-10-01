@@ -1,13 +1,15 @@
 import React, { useMemo } from 'react';
 import { ShieldCheck, ArrowDownLeft, ArrowUpRight, TrendingDown } from 'lucide-react';
+import { formatNumber } from '../../utils/format';
 
 interface PersonCheckHistoryProps {
   personId: string | number;
   issuedChecks: any[];
   receivedChecks: any[];
+  storeSettings?: any;
 }
 
-export function PersonCheckHistory({ personId, issuedChecks = [], receivedChecks = [] }: PersonCheckHistoryProps) {
+export function PersonCheckHistory({ personId, issuedChecks = [], receivedChecks = [], storeSettings }: PersonCheckHistoryProps) {
   
   const history = useMemo(() => {
     const personIssued = issuedChecks.filter(c => c.payeeId?.toString() === personId?.toString());
@@ -54,7 +56,7 @@ export function PersonCheckHistory({ personId, issuedChecks = [], receivedChecks
       return null;
   }
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('fa-IR').format(val);
+  const formatCurrency = (val: number) => formatNumber(val, storeSettings);
 
   return (
     <div className="bg-white rounded-3xl p-6 border border-slate-200 shadow-sm md:col-span-3">

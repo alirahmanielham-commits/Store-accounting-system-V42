@@ -92,6 +92,16 @@ export default function ReceiptPrintModal({
     }
   }, [printSettings]);
 
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && isOpen) {
+        onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isOpen, onClose]);
+
   if (!isOpen || !data) return null;
 
   const handlePrint = () => {
@@ -341,10 +351,11 @@ export default function ReceiptPrintModal({
           <button
             type="button"
             onClick={onClose}
-            className="p-2 text-slate-400 hover:text-slate-700 hover:bg-slate-100 rounded-xl transition-colors"
-            title="بستن پیش‌نمایش"
+            className="px-4 py-2 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 hover:border-rose-600 border border-rose-200 rounded-xl text-xs sm:text-sm font-black flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0 active:scale-95"
+            title="بستن پنجره پیش‌نمایش (Esc)"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
+            <span>بستن</span>
           </button>
         </div>
       </div>

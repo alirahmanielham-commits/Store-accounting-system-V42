@@ -1,5 +1,5 @@
 import { getUnitRatioDirection, convertQuantityToBaseUnit } from "../../utils/unitConversion";
-import { convertToGregorian } from '../../utils/format';
+import { convertToGregorian, formatNumber as formatNumberUtil, getActiveStoreSettings } from '../../utils/format';
 import React, { useState, useEffect, useMemo } from "react";
 import { Package, Search, Download, FileText, ArrowUpDown, Filter, Printer, Box, RefreshCw, AlertTriangle, ArrowDownToLine, ArrowUpFromLine } from "lucide-react";
 const BeautifulLoading = () => <div className="flex justify-center items-center h-48"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>;
@@ -12,19 +12,30 @@ import { Product, Warehouse, CompanySettings } from '../../types';
 import CustomDatePicker from "../ui/CustomDatePicker";
 const DatePicker = CustomDatePicker;
 
-const formatNumber = (num: number) => new Intl.NumberFormat('fa-IR').format(num);
-const formatCurrency = formatNumber;
-
 interface InventoryReportProps {
   showNotification?: (type: 'success' | 'error', message: string) => void;
   categories?: any[];
+  formatNumber?: (num: number | string) => string;
+  storeSettings?: any;
 }
 
-const InventoryReport: React.FC<InventoryReportProps> = ({ showNotification, categories = [] }) => {
+const InventoryReport: React.FC<InventoryReportProps> = ({
+  showNotification,
+  categories = [],
+  formatNumber: propFormatNumber,
+  storeSettings: propStoreSettings
+}) => {
   const [products, setProducts] = useState<Product[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(propStoreSettings || null);
+  
+  const activeSettings = settings || propStoreSettings || getActiveStoreSettings();
+  const formatNumber = (num: number | string) => {
+    if (propFormatNumber) return propFormatNumber(num);
+    return formatNumberUtil(num, activeSettings);
+  };
+  const formatCurrency = formatNumber;
   
   const [isLoading, setIsLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');

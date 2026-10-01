@@ -959,7 +959,7 @@ export default function App() {
                         storeSettings={storeSettings}
                         user={user}
                         PersonLedgerActionsDropdown={PersonLedgerActionsDropdown} ledgerPersonId={ledgerPersonId} setActiveTab={setActiveTab} setCustomerId={setCustomerId} setReceiptPersonId={setReceiptPersonId} handleEditPerson={handleEditPerson} setIsPersonModalOpen={setIsPersonModalOpen} sendNotification={sendNotification} setPrintingPersonLedger={setPrintingPersonLedger} fetchInvoices={fetchInvoices} fetchTransactions={fetchTransactions} fetchAccountingDocuments={fetchAccountingDocuments} User={User} Select={Select} mapPersonToOption={mapPersonToOption} setLedgerPersonId={setLedgerPersonId} customPersonFilter={customPersonFilter} accountingDocuments={accountingDocuments} payslips={payslips} invoices={invoices} convertToGregorian={convertToGregorian} printingPersonLedger={printingPersonLedger} getPersonDisplayName={getPersonDisplayName} formatNumber={formatNumber} formatDateDisplay={formatDateDisplay} getRoleBadgeClasses={getRoleBadgeClasses} getRoleName={getRoleName} setLedgerTab={setLedgerTab} ledgerTab={ledgerTab} PersonNotesAndAttachments={PersonNotesAndAttachments} List={List} setViewingInvoice={setViewingInvoice} transactions={transactions} setViewingPayslip={setViewingPayslip} setPreviewReceiptData={setPreviewReceiptData} setPrintingTransaction={setPrintingTransaction} issuedChecks={issuedChecks} setViewingCheck={setViewingCheck} receivedChecks={receivedChecks} Calendar={Calendar} Tag={Tag} />} />
-<Route path="/debts_credits" element={<DebtsCreditsReport showNotification={showNotification} />} />
+<Route path="/debts_credits" element={<DebtsCreditsReport showNotification={showNotification} formatNumber={formatNumber} formatCurrency={formatCurrency} storeSettings={storeSettings} />} />
 <Route path="/debtors_showcase" element={<DebtorsShowcase persons={persons} accountingDocuments={accountingDocuments} storeSettings={storeSettings} formatNumber={formatNumber} />} />
 <Route path="/transfer" element={<motion.div
                         initial={{ opacity: 0, y: 10 }}
@@ -1107,7 +1107,7 @@ export default function App() {
                         ChevronUp={ChevronUp}
                         Check={Check}
                         X={X} />} />
-<Route path="/inventory_report" element={<InventoryReport showNotification={showNotification} categories={productCategories} />} />
+<Route path="/inventory_report" element={<InventoryReport showNotification={showNotification} categories={productCategories} formatNumber={formatNumber} storeSettings={storeSettings} />} />
 <Route path="/order_list" element={<OrderList 
                         formatCurrency={formatCurrency} 
                         products={products}
@@ -1123,7 +1123,7 @@ export default function App() {
                       />} />
 <Route path="/kardex" element={<KardexReport />} />
 <Route path="/crm_dashboard" element={<CRMDashboard persons={persons} showNotification={showNotification} confirmAction={confirmAction} />} />
-<Route path="/sales_report" element={<SalesReport showNotification={showNotification} toPersianDigits={toPersianDigits} formatCurrency={formatCurrency} formatDateDisplay={formatDateDisplay} setViewingInvoice={setViewingInvoice} setActiveTab={setActiveTab} />} />
+<Route path="/sales_report" element={<SalesReport showNotification={showNotification} toPersianDigits={toPersianDigits} formatCurrency={formatCurrency} formatNumber={formatNumber} formatDateDisplay={formatDateDisplay} setViewingInvoice={setViewingInvoice} setActiveTab={setActiveTab} storeSettings={storeSettings} />} />
 <Route path="/analytical_dashboard" element={<AnalyticalDashboard showNotification={showNotification} />} />
 <Route path="/send_message" element={<SendMessageView showNotification={showNotification} persons={persons} personGroups={personGroups} />} />
 <Route path="/messaging_channels" element={<MessagingChannelsView showNotification={showNotification} />} />

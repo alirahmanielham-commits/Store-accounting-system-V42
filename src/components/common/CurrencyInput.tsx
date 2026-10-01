@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { addCommas, numberToWords } from "../../utils/format";
+import { addCommas, numberToWords, getActiveStoreSettings } from "../../utils/format";
 
 const persianToEnglish = (str: string) => {
   const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
@@ -30,12 +30,13 @@ export const CurrencyInput = ({
   const handleChange = (e: any) => {
     let raw = persianToEnglish(e.target.value).replace(/,/g, "");
     
-    // Check storeSettings if provided
-    if (props.storeSettings) {
-      if (!props.storeSettings.use_decimals) {
+    // Check storeSettings if provided or fallback to active global settings
+    const activeSettings = props.storeSettings || getActiveStoreSettings();
+    if (activeSettings) {
+      if (!activeSettings.use_decimals) {
          raw = raw.replace(/\./g, '');
       } else {
-         const places = props.storeSettings.decimal_places || 2;
+         const places = typeof activeSettings.decimal_places === 'number' ? activeSettings.decimal_places : 2;
          const parts = raw.split('.');
          if (parts.length > 1 && parts[1].length > places) {
              return;

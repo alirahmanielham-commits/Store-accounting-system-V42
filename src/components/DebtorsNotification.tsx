@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import { AlertCircle, X, User, Terminal, ShieldAlert, Skull, Cpu, Crosshair, ArrowLeft, Volume2 } from "lucide-react";
-import { addCommas, toPersianDigits } from "../utils/format";
+import { addCommas, toPersianDigits, formatNumber } from "../utils/format";
 import { playHackerAlertSound, playHackerDataBeep } from "../utils/audio";
 
 interface DebtorsNotificationProps {
@@ -252,7 +252,7 @@ export default function DebtorsNotification({
                           <span className="text-xs font-bold text-gray-300">مانده بدهی:</span>
                           <div className="text-left" dir="ltr">
                             <span className="font-black text-lg text-[#ff3333] tracking-wider hacker-glow-red">
-                              {toPersianDigits(addCommas(debtor.debtAmount))}
+                              {formatNumber(debtor.debtAmount, settings)}
                             </span>
                             <span className="text-xs font-bold text-gray-400 mr-1.5 font-['IRANYekanXFaNum','Vazirmatn',sans-serif]">
                               {settings?.currency || "تومان"}
@@ -294,7 +294,7 @@ export default function DebtorsNotification({
                       <div className="text-white/90 text-sm leading-relaxed flex flex-col gap-1">
                         <span className="opacity-80">مبلغ بدهی:</span>
                         <span className="font-black text-xl tracking-tight bg-white/20 px-2 py-1 rounded-lg inline-block w-max">
-                          {addCommas(debtor.debtAmount)} {settings?.currency || "تومان"}
+                          {formatNumber(debtor.debtAmount, settings)} {settings?.currency || "تومان"}
                         </span>
                       </div>
                     </div>

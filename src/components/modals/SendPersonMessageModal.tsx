@@ -32,7 +32,7 @@ import {
   Trash2
 } from "lucide-react";
 import { addDatabaseLog } from "../../services/coreService";
-import { addCommas, toPersianDigits, formatDateDisplay } from "../../utils/format";
+import { addCommas, toPersianDigits, formatDateDisplay, formatNumber } from "../../utils/format";
 import { generateCiteableMessageId, deleteSmsMessage } from "../../services/crmService";
 
 export interface SendPersonMessageModalProps {
@@ -126,16 +126,16 @@ export default function SendPersonMessageModal({
       return {
         amount: b.amount || 0,
         status: b.status || (isDeb ? "بدهکار" : isCred ? "بستانکار" : "بی‌حساب"),
-        formatted: toPersianDigits(addCommas(b.amount || 0)),
+        formatted: formatNumber(b.amount || 0, storeSettings),
         isDebtor: isDeb,
         isCreditor: isCred
       };
     }
     const rawBal = Number(person.calculatedBalance || person.balance || 0);
     if (rawBal > 0) {
-      return { amount: rawBal, status: "بدهکار", formatted: toPersianDigits(addCommas(rawBal)), isDebtor: true, isCreditor: false };
+      return { amount: rawBal, status: "بدهکار", formatted: formatNumber(rawBal, storeSettings), isDebtor: true, isCreditor: false };
     } else if (rawBal < 0) {
-      return { amount: Math.abs(rawBal), status: "بستانکار", formatted: toPersianDigits(addCommas(Math.abs(rawBal))), isDebtor: false, isCreditor: true };
+      return { amount: Math.abs(rawBal), status: "بستانکار", formatted: formatNumber(Math.abs(rawBal), storeSettings), isDebtor: false, isCreditor: true };
     }
     return { amount: 0, status: "بی‌حساب", formatted: "۰", isDebtor: false, isCreditor: false };
   }, [person, calculatePersonBalance]);

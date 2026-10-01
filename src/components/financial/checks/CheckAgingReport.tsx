@@ -1,6 +1,7 @@
 import React, { useMemo } from 'react';
 import { AlertTriangle, Clock, ArrowDownLeft, ArrowUpRight } from 'lucide-react';
 import { IssuedCheck, ReceivedCheck } from '../../../types';
+import { formatNumber as formatNumberUtil } from '../../../utils/format';
 
 interface CheckAgingReportProps {
   issuedChecks: IssuedCheck[];
@@ -54,8 +55,8 @@ export function CheckAgingReport({ issuedChecks, receivedChecks, storeSettings }
   const issuedBuckets = useMemo(() => calculateBuckets(issuedChecks, true), [issuedChecks]);
   const receivedBuckets = useMemo(() => calculateBuckets(receivedChecks, false), [receivedChecks]);
 
-  const formatCurrency = (val: number) => new Intl.NumberFormat('fa-IR').format(val);
-  const formatNumber = (val: number) => new Intl.NumberFormat('fa-IR').format(val);
+  const formatCurrency = (val: number) => formatNumberUtil(val, storeSettings);
+  const formatNumber = (val: number) => formatNumberUtil(val, storeSettings);
 
   const renderTable = (buckets: any, title: string, isIssued: boolean) => {
     const totalAmount = buckets.notDue.amount + buckets.days1To7.amount + buckets.days8To30.amount + buckets.over30.amount;

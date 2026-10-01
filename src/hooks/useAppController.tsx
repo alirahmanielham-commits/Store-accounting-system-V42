@@ -157,6 +157,8 @@ import {
   numToPersianWords,
   toPersianDigits,
   formatDateDisplay, convertToGregorian, customPersonFilter,
+  setGlobalStoreSettings,
+  formatNumber as formatNumberUtil,
 } from "../utils/format";
 import html2pdf from "html2pdf.js";
 import DateObject from "react-date-object";
@@ -732,21 +734,32 @@ const [receivedChecks, setReceivedChecks] = useState<any[]>([]);
 
 const [smsMessages, setSmsMessages] = useState<any[]>([]);
 
-const [storeSettings, setStoreSettings] = useState<any>({
-    storeName: "فروشگاه پیش‌فرض",
-    address: "",
-    phone: "",
-    logoUrl: "",
-    currency: "تومان",
-    isSetup: false,
-    fontFamily: "Vazirmatn",
-    theme: "classic",
-    dateFormat: "YYYY/MM/DD",
-    dateSeparator: "/",
-    dateYearFormat: "YYYY",
-    dateShowTime: true,
-    dateTimeFormat: "24",
-    calendarType: "jalali",
+const [storeSettings, setStoreSettings] = useState<any>(() => {
+    let cachedProfile: any = {};
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        const stored = localStorage.getItem('number_format_config') || localStorage.getItem('company_profile');
+        if (stored) cachedProfile = JSON.parse(stored);
+      } catch (_) {}
+    }
+    return {
+      storeName: "فروشگاه پیش‌فرض",
+      address: "",
+      phone: "",
+      logoUrl: "",
+      currency: "تومان",
+      isSetup: false,
+      fontFamily: "Vazirmatn",
+      theme: "classic",
+      dateFormat: "YYYY/MM/DD",
+      dateSeparator: "/",
+      dateYearFormat: "YYYY",
+      dateShowTime: true,
+      dateTimeFormat: "24",
+      calendarType: "jalali",
+      use_decimals: cachedProfile.use_decimals ?? false,
+      decimal_places: cachedProfile.decimal_places ?? 2,
+    };
   });
 
 const isGmailTheme = storeSettings?.theme === "gmail";
@@ -3647,8 +3660,11 @@ const fetchSettings = async () => {
           notify_on_payable_check: savedData.notify_on_payable_check ?? true,
           notify_on_debtors: savedData.notify_on_debtors ?? savedData.smsDebtThresholdEnabled ?? true,
           notify_on_installment: savedData.notify_on_installment ?? true,
+          use_decimals: savedData.use_decimals ?? false,
+          decimal_places: savedData.decimal_places ?? 2,
         };
         setStoreSettings(mergedSettings);
+        setGlobalStoreSettings(mergedSettings);
         globalDateFormatter.updateConfig({
           dateFormat: mergedSettings.dateFormat,
           dateSeparator: mergedSettings.dateSeparator,
@@ -3680,6 +3696,15 @@ const handleSaveSettings = async (e: React.FormEvent) => {
       const payload = { ...settingsForm, isSetup: true };
       const counters = payload.doc_counters || {};
       delete payload.doc_counters;
+      setGlobalStoreSettings(payload);
+      try {
+        localStorage.setItem('company_profile', JSON.stringify(payload));
+        localStorage.setItem('number_format_config', JSON.stringify({
+          use_decimals: payload.use_decimals,
+          decimal_places: payload.decimal_places,
+          currency: payload.currency
+        }));
+      } catch (_) {}
       await saveStoreSettings(payload as any);
       // Also update the database name in global businesses table
       try {
@@ -6641,18 +6666,8 @@ const invoiceTotalDiscount = () => {
     return Math.max(0, original - final);
   };
 
-const formatCurrency = (amount: number) => {
-    let maxDigits = 4;
-    let minDigits = 0;
-    if (storeSettings && storeSettings.use_decimals === false) {
-      maxDigits = 0;
-    } else if (storeSettings && storeSettings.use_decimals === true) {
-      maxDigits = storeSettings.decimal_places || 2;
-    }
-    return new Intl.NumberFormat("fa-IR", { 
-      maximumFractionDigits: maxDigits,
-      minimumFractionDigits: minDigits
-    }).format(amount || 0);
+const formatCurrency = (amount: number | string | undefined | null) => {
+    return formatNumberUtil(amount, storeSettings);
   };
 
 const toPersianDigits = (str: string | number | undefined | null) => {
@@ -6670,18 +6685,8 @@ const currencyLabel =
       ? invoiceCurrency
       : storeSettings.currency;
 
-const formatNumber = (num: number) => {
-    let maxDigits = 4;
-    let minDigits = 0;
-    if (storeSettings && storeSettings.use_decimals === false) {
-      maxDigits = 0;
-    } else if (storeSettings && storeSettings.use_decimals === true) {
-      maxDigits = storeSettings.decimal_places || 2;
-    }
-    return new Intl.NumberFormat("fa-IR", { 
-      maximumFractionDigits: maxDigits,
-      minimumFractionDigits: minDigits
-    }).format(num || 0);
+const formatNumber = (num: number | string | undefined | null) => {
+    return formatNumberUtil(num, storeSettings);
   };
 
 const openPayslip = (tx: any) => {

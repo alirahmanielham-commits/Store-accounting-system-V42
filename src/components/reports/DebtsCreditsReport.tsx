@@ -6,26 +6,38 @@ import { Users, Search, Filter, Printer, RefreshCw, HandCoins, UserX, UserCheck,
 import { motion } from 'motion/react';
 import { getPersons, getInvoices, getTransactions, getIssuedChecks, getReceivedChecks, getStoreSettings, getPersonGroups, getAccountingDocuments } from '../../services/dataService';
 import { Person, PersonGroup } from '../../types';
-import { getDefaultExchangeRate, formatDateDisplay } from '../../utils/format';
+import { getDefaultExchangeRate, formatDateDisplay, formatNumber as formatNumberUtil, formatCurrency as formatCurrencyUtil, getActiveStoreSettings } from '../../utils/format';
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 import { safePrint } from '../../utils/printHelper';
 
-const formatNumber = (num: number) => new Intl.NumberFormat('fa-IR').format(num);
-
 interface DebtsCreditsReportProps {
   showNotification?: (type: 'success' | 'error', message: string) => void;
+  formatNumber?: (num: number | string) => string;
+  formatCurrency?: (num: number | string) => string;
+  storeSettings?: any;
 }
 
-const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({ showNotification }) => {
+const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({
+  showNotification,
+  formatNumber: propFormatNumber,
+  formatCurrency: propFormatCurrency,
+  storeSettings: propStoreSettings
+}) => {
   const [persons, setPersons] = useState<Person[]>([]);
   const [invoices, setInvoices] = useState<any[]>([]);
   const [transactions, setTransactions] = useState<any[]>([]);
   const [issuedChecks, setIssuedChecks] = useState<any[]>([]);
   const [receivedChecks, setReceivedChecks] = useState<any[]>([]);
   const [accountingDocuments, setAccountingDocuments] = useState<any[]>([]);
-  const [settings, setSettings] = useState<any>(null);
+  const [settings, setSettings] = useState<any>(propStoreSettings || null);
   const [groups, setGroups] = useState<PersonGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+
+  const activeSettings = settings || propStoreSettings || getActiveStoreSettings();
+  const formatNumber = (num: number | string) => {
+    if (propFormatNumber) return propFormatNumber(num);
+    return formatNumberUtil(num, activeSettings);
+  };
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedGroup, setSelectedGroup] = useState<string>('all');

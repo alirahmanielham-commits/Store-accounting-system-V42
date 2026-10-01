@@ -15,7 +15,7 @@ import {
   FileCheck, Coins
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
-import { convertToGregorian, formatDateDisplay, toPersianDigits, addCommas } from "../../utils/format";
+import { convertToGregorian, formatDateDisplay, toPersianDigits, addCommas, formatNumber as formatNumberUtil } from "../../utils/format";
 import { safePrint } from "../../utils/printHelper";
 
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_year' | 'all' | 'custom';
@@ -26,7 +26,7 @@ export default function ReceiptsList(props: any) {
     activeTab = 'list_receive_receipt',
     persons = [],
     getPersonDisplayName,
-    formatCurrency = (v: any) => addCommas(v || 0),
+    formatCurrency = (v: any) => formatNumberUtil(v, storeSettings),
     formatDateDisplay: propFormatDateDisplay,
     renderPersonLink = (id: any, name: any) => <span>{name || 'نامشخص'}</span>,
     storeSettings = {},
@@ -36,7 +36,7 @@ export default function ReceiptsList(props: any) {
     toPersianDigits: propToPersianDigits = toPersianDigits,
     accounts = [],
     cashboxes = [],
-    formatNumber = (v: any) => addCommas(v || 0),
+    formatNumber = (v: any) => formatNumberUtil(v, storeSettings),
     numToPersianWords = (v: any) => '',
     openPayslip,
     setPrintingTransaction,
@@ -453,7 +453,7 @@ export default function ReceiptsList(props: any) {
           <div className="text-[11px] text-slate-500 font-bold mt-2 flex items-center gap-1.5">
             <span>تعداد: {toPersianDigits(summaryMetrics.count)} رسید</span>
             <span>•</span>
-            <span>میانگین: {toPersianDigits(formatCurrency(Math.round(summaryMetrics.avgAmount)))} {currency}</span>
+            <span>میانگین: {toPersianDigits(formatCurrency(summaryMetrics.avgAmount))} {currency}</span>
           </div>
         </div>
 

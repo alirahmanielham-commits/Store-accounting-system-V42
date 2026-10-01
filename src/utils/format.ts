@@ -8,9 +8,77 @@ import gregorian_en from "react-date-object/locales/gregorian_en";
 import { globalDateFormatter } from "./dateFormatter";
 
 
-export function addCommas(num: number | string): string {
+export interface NumberFormatConfig {
+  use_decimals?: boolean;
+  decimal_places?: number;
+  currency?: string;
+}
+
+let activeStoreSettingsCache: NumberFormatConfig = (() => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      const cfg = localStorage.getItem('number_format_config');
+      if (cfg) return JSON.parse(cfg);
+      const comp = localStorage.getItem('company_profile');
+      if (comp) {
+        const parsed = JSON.parse(comp);
+        if (parsed.use_decimals !== undefined) {
+          return {
+            use_decimals: parsed.use_decimals,
+            decimal_places: parsed.decimal_places,
+            currency: parsed.currency
+          };
+        }
+      }
+    } catch (_) {}
+  }
+  return { use_decimals: false, decimal_places: 2, currency: 'تومان' };
+})();
+
+export const setGlobalStoreSettings = (settings: Partial<NumberFormatConfig> | null | undefined) => {
+  if (!settings) return;
+  activeStoreSettingsCache = {
+    ...activeStoreSettingsCache,
+    ...settings,
+    use_decimals: settings.use_decimals !== undefined ? Boolean(settings.use_decimals) : activeStoreSettingsCache.use_decimals,
+    decimal_places: typeof settings.decimal_places === 'number' ? settings.decimal_places : (activeStoreSettingsCache.decimal_places || 2),
+    currency: settings.currency || activeStoreSettingsCache.currency || 'تومان'
+  };
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      localStorage.setItem('number_format_config', JSON.stringify(activeStoreSettingsCache));
+    } catch (_) {}
+  }
+};
+
+export const getActiveStoreSettings = (): NumberFormatConfig => {
+  return activeStoreSettingsCache;
+};
+
+export function addCommas(num: number | string, storeSettings?: any): string {
     if (!num && num !== 0 && num !== '0') return '';
-    const parts = num.toString().split('.');
+    
+    const settings = storeSettings || getActiveStoreSettings();
+    const useDecimals = Boolean(settings?.use_decimals);
+    const places = typeof settings?.decimal_places === 'number' ? settings.decimal_places : 2;
+
+    let str = num.toString().trim();
+    
+    // Only adjust decimals if it's a valid numeric value and not ending with a dot (mid-typing in inputs)
+    if (!str.endsWith('.') && !isNaN(Number(str))) {
+      let val = Number(str);
+      if (!useDecimals) {
+        val = Math.round(val);
+        str = val.toString();
+      } else {
+        const parts = str.split('.');
+        if (parts.length > 1 && parts[1].length > places) {
+          str = val.toFixed(places);
+        }
+      }
+    }
+
+    const parts = str.split('.');
     parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ',');
     return parts.join('.');
 }
@@ -293,28 +361,62 @@ export const customPersonFilter = (option: any, inputValue: string) => {
   return terms.every((term) => searchable.includes(term));
 };
 
-export function formatAmount(num: number | string, storeSettings?: any): string {
-    if (!num && num !== 0 && num !== '0') return '';
-    let val = Number(num);
-    if (isNaN(val)) return num.toString();
-    
-    if (storeSettings && storeSettings.use_decimals === false) {
-        val = Math.round(val);
-    } else if (storeSettings && storeSettings.use_decimals === true) {
-        const places = storeSettings.decimal_places || 2;
-        val = Number(val.toFixed(places));
-    } else {
-        // default: round to 2 places maximum if not specified
-        val = Number(val.toFixed(4));
-    }
-    return addCommas(val.toString());
+export function formatAmount(num: number | string | undefined | null, storeSettings?: any): string {
+    if (num === undefined || num === null || num === '') return '';
+    return addCommas(num, storeSettings);
 }
 
-export function formatNumber(num: number | string | undefined | null): string {
-  if (num === undefined || num === null) return "0";
-  return addCommas(num);
+export function formatNumber(
+  num: number | string | undefined | null,
+  storeSettings?: any
+): string {
+  if (num === undefined || num === null || num === "") return "0";
+  
+  let cleanNum = num;
+  if (typeof cleanNum === 'string') {
+    const persianToEnglish: Record<string, string> = {
+      '۰': '0', '۱': '1', '۲': '2', '۳': '3', '۴': '4',
+      '۵': '5', '۶': '6', '۷': '7', '۸': '8', '۹': '9',
+      '٠': '0', '١': '1', '٢': '2', '٣': '3', '٤': '4',
+      '٥': '5', '٦': '6', '٧': '7', '٨': '8', '٩': '9'
+    };
+    cleanNum = cleanNum
+      .replace(/[۰-۹٠-٩]/g, (d) => persianToEnglish[d] || d)
+      .replace(/,/g, '')
+      .replace(/٬/g, '')
+      .replace(/٫/g, '.')
+      .trim();
+  }
+  
+  let val = Number(cleanNum);
+  if (isNaN(val)) return String(num);
+
+  const settings = storeSettings || getActiveStoreSettings();
+  const useDecimals = Boolean(settings?.use_decimals);
+  const places = typeof settings?.decimal_places === 'number' ? settings.decimal_places : 2;
+
+  let maxDigits = 0;
+  if (useDecimals) {
+    maxDigits = places;
+    val = Number(val.toFixed(places));
+  } else {
+    maxDigits = 0;
+    val = Math.round(val);
+  }
+
+  return new Intl.NumberFormat("fa-IR", {
+    maximumFractionDigits: maxDigits,
+    minimumFractionDigits: 0
+  }).format(val);
 }
 
-export function formatPrice(num: number | string | undefined | null): string {
-  return formatNumber(num);
+export function formatCurrency(
+  amount: number | string | undefined | null,
+  storeSettings?: any
+): string {
+  return formatNumber(amount, storeSettings);
+}
+
+export function formatPrice(num: number | string | undefined | null, storeSettings?: any): string {
+  return formatNumber(num, storeSettings);
 }

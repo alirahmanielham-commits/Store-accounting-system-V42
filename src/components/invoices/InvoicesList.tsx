@@ -15,7 +15,7 @@ import {
   ShoppingCart
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
-import { convertToGregorian, formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas } from "../../utils/format";
+import { convertToGregorian, formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, formatNumber } from "../../utils/format";
 import { getUnitRatioDirection, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../../utils/unitConversion";
 import { safePrint } from "../../utils/printHelper";
 
@@ -31,7 +31,7 @@ export default function InvoicesList(props: any) {
     setActiveTab,
     purchaseFilter,
     setPurchaseFilter,
-    formatCurrency = (v: any) => addCommas(v || 0),
+    formatCurrency = (v: any) => formatNumber(v, storeSettings),
     getPersonDisplayName,
     formatDateDisplay: propFormatDateDisplay,
     calculateInvoiceTotal,
@@ -862,7 +862,7 @@ export default function InvoicesList(props: any) {
             <span className="text-[10px] sm:text-xs font-bold text-slate-500 mr-1.5">تحویل انبار</span>
           </div>
           <div className="text-[11px] text-slate-500 font-bold mt-2 flex items-center gap-1.5">
-            <span>میانگین فاکتور: {toPersianDigits(formatCurrency(Math.round(summaryMetrics.avgInvoiceAmount)))} {currency}</span>
+            <span>میانگین فاکتور: {toPersianDigits(formatCurrency(summaryMetrics.avgInvoiceAmount))} {currency}</span>
           </div>
         </div>
       </div>

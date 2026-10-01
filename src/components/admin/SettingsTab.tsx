@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
 import { SmsTemplateEditor } from './SmsTemplateEditor';
 import ZyXelGsmSettings from '../messaging/ZyXelGsmSettings';
+import { setGlobalStoreSettings, formatNumber } from '../../utils/format';
 
 export default function SettingsTab(props: any) {
   const {
@@ -173,37 +174,66 @@ export default function SettingsTab(props: any) {
                                   <div className="flex items-center justify-between mb-4">
                                     <div>
                                       <label className="block text-sm font-bold text-gray-800 mb-1">
-                                        استفاده از اعداد اعشاری در مقادیر
+                                        استفاده از اعداد اعشاری در مقادیر و مبالغ
                                       </label>
                                       <p className="text-xs text-gray-500">
-                                        در صورت فعال بودن، می‌توانید تعداد اعشار برای قیمت و تعداد را مشخص کنید.
+                                        در صورت فعال بودن، در تمامی صفحات و بخش‌ها (مانند فاکتورها، رسیدها، گزارش بدهکاران و بستانکاران debts_credits، گزارشات مالی و دفاتر حساب) ارقام اعشار نمایش داده می‌شود.
                                       </p>
                                     </div>
                                     <button
                                       type="button"
-                                      onClick={() => setSettingsForm({ ...settingsForm, use_decimals: !settingsForm.use_decimals })}
-                                      className={`w-12 h-6 rounded-full p-1 transition-colors ${settingsForm.use_decimals ? "bg-indigo-600" : "bg-gray-300"}`}
+                                      onClick={() => {
+                                        const nextState = !settingsForm.use_decimals;
+                                        const updated = { ...settingsForm, use_decimals: nextState };
+                                        setSettingsForm(updated);
+                                        setGlobalStoreSettings(updated);
+                                      }}
+                                      className={`w-12 h-6 rounded-full p-1 transition-colors cursor-pointer ${settingsForm.use_decimals ? "bg-indigo-600" : "bg-gray-300"}`}
+                                      title="فعال / غیرفعال‌سازی اعداد اعشاری"
                                     >
                                       <div className={`bg-white w-4 h-4 rounded-full shadow-sm transition-transform transform ${settingsForm.use_decimals ? "-translate-x-6" : "translate-x-0"}`}></div>
                                     </button>
                                   </div>
                                   
                                   {settingsForm.use_decimals && (
-                                    <div className="mt-4 pt-4 border-t border-gray-100">
-                                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                                        تعداد ارقام اعشار مجاز
-                                      </label>
-                                      <select
-                                        value={settingsForm.decimal_places || 2}
-                                        onChange={(e) => setSettingsForm({ ...settingsForm, decimal_places: parseInt(e.target.value) })}
-                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm text-right"
-                                        dir="rtl"
-                                      >
-                                        <option value={1}>۱ رقم اعشار</option>
-                                        <option value={2}>۲ رقم اعشار</option>
-                                        <option value={3}>۳ رقم اعشار</option>
-                                        <option value={4}>۴ رقم اعشار</option>
-                                      </select>
+                                    <div className="mt-4 pt-4 border-t border-gray-100 space-y-4">
+                                      <div>
+                                        <label className="block text-sm font-bold text-gray-700 mb-2">
+                                          تعداد ارقام اعشار مجاز
+                                        </label>
+                                        <select
+                                          value={settingsForm.decimal_places || 2}
+                                          onChange={(e) => {
+                                            const places = parseInt(e.target.value, 10);
+                                            const updated = { ...settingsForm, decimal_places: places };
+                                            setSettingsForm(updated);
+                                            setGlobalStoreSettings(updated);
+                                          }}
+                                          className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm text-right bg-white"
+                                          dir="rtl"
+                                        >
+                                          <option value={1}>۱ رقم اعشار (مثال: ۱۲.۵)</option>
+                                          <option value={2}>۲ رقم اعشار (مثال: ۱۲.۵۰)</option>
+                                          <option value={3}>۳ رقم اعشار (مثال: ۱۲.۵۰۰)</option>
+                                          <option value={4}>۴ رقم اعشار (مثال: ۱۲.۵۰۰۰)</option>
+                                        </select>
+                                      </div>
+
+                                      {/* Live Preview Box */}
+                                      <div className="bg-indigo-50/70 border border-indigo-100 p-4 rounded-xl flex flex-col sm:flex-row items-center justify-between gap-3">
+                                        <div className="text-right">
+                                          <span className="text-xs font-black text-indigo-900 block mb-0.5">
+                                            پیش‌نمایش زنده نحوه نمایش مبالغ در سیستم:
+                                          </span>
+                                          <span className="text-[11px] text-indigo-700">
+                                            بر اساس {settingsForm.decimal_places || 2} رقم اعشار
+                                          </span>
+                                        </div>
+                                        <div className="flex items-center gap-2 font-mono font-black text-indigo-900 bg-white px-3 py-1.5 rounded-lg border border-indigo-200 shadow-xs text-sm" dir="ltr">
+                                          <span>{formatNumber(1250000.758, settingsForm)}</span>
+                                          <span className="text-xs text-slate-500">{settingsForm.currency || "تومان"}</span>
+                                        </div>
+                                      </div>
                                     </div>
                                   )}
                                 </div>

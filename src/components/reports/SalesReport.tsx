@@ -62,22 +62,21 @@ import { convertQuantityToBaseUnit, getUnitRatioDirection } from '../../utils/un
 
 import { safePrint } from '../../utils/printHelper';
 
+import { formatNumber, getActiveStoreSettings } from '../../utils/format';
+
 interface SalesReportProps {
   showNotification?: (type: 'success' | 'error' | 'info', message: string) => void;
   toPersianDigits?: (str: string | number | undefined | null) => string;
   formatCurrency?: (num: number | string) => string;
+  formatNumber?: (num: number | string) => string;
   formatDateDisplay?: (date: string | Date | number | undefined | null) => string;
   setViewingInvoice?: (inv: any) => void;
   setActiveTab?: (tab: string) => void;
+  storeSettings?: any;
 }
 
 type ViewMode = 'invoices' | 'daily' | 'monthly' | 'products' | 'customers' | 'charts';
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_season' | 'this_year' | 'all' | 'custom';
-
-const formatNumFa = (val: number | string) => {
-  const n = Number(val) || 0;
-  return new Intl.NumberFormat('fa-IR').format(Math.round(n));
-};
 
 export default function SalesReport(props: SalesReportProps) {
   const {
@@ -91,8 +90,14 @@ export default function SalesReport(props: SalesReportProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [persons, setPersons] = useState<Person[]>([]);
   const [warehouses, setWarehouses] = useState<Warehouse[]>([]);
-  const [storeSettings, setStoreSettings] = useState<CompanySettings | null>(null);
+  const [storeSettings, setStoreSettings] = useState<CompanySettings | null>(props.storeSettings || null);
   const [isLoading, setIsLoading] = useState(true);
+
+  const activeSettings = storeSettings || props.storeSettings || getActiveStoreSettings();
+  const formatNumFa = (val: number | string) => {
+    if (props.formatNumber) return props.formatNumber(val);
+    return formatNumber(val, activeSettings);
+  };
 
   // Active view tab
   const [viewMode, setViewMode] = useState<ViewMode>('invoices');

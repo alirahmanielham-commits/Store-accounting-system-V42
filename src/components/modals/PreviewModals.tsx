@@ -94,6 +94,23 @@ export default function PreviewModals(props: any) {
     } catch (e) {}
   }, [printSettings]);
 
+  const handleCloseModal = () => {
+    if (setViewingInvoice) setViewingInvoice(null);
+    if (setPreviewInvoiceData) setPreviewInvoiceData(null);
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (viewingInvoice || previewInvoiceData) {
+          handleCloseModal();
+        }
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [viewingInvoice, previewInvoiceData]);
+
   const handleResetPrintSettings = () => {
     const defaults = getDefaultPrintSettings(storeSettings);
     setPrintSettings(defaults);
@@ -198,9 +215,24 @@ export default function PreviewModals(props: any) {
         <div
           data-print-modal="true"
           id="invoice-preview-modal-root"
-          className="fixed inset-0 z-[99999] flex flex-col bg-slate-900/50 backdrop-blur-sm print:bg-transparent print:backdrop-blur-none print-section print-modal-active"
+          className="fixed inset-0 z-[99999] flex flex-col bg-slate-900/60 backdrop-blur-sm print:bg-transparent print:backdrop-blur-none print-section print-modal-active overflow-y-auto"
           dir="rtl"
+          onClick={(e) => {
+            if (e.target === e.currentTarget) {
+              handleCloseModal();
+            }
+          }}
         >
+          {/* Floating High-Visibility Close Button at top corner */}
+          <button
+            type="button"
+            onClick={handleCloseModal}
+            className="fixed top-3 left-3 z-[100000] px-3.5 py-2 bg-slate-900/90 hover:bg-rose-600 text-white rounded-xl backdrop-blur-md shadow-2xl transition-all cursor-pointer print:hidden flex items-center gap-1.5 text-xs font-black border border-white/20 active:scale-95"
+            title="بستن پنجره پیش‌نمایش (Esc)"
+          >
+            <X className="w-4 h-4" />
+            <span>بستن (Esc)</span>
+          </button>
           <style>{`
             @media print {
               @page {
@@ -231,30 +263,67 @@ export default function PreviewModals(props: any) {
             }
           `}</style>
           <div className="flex-1 w-full max-w-5xl mx-auto my-0 sm:my-4 bg-slate-100 sm:rounded-2xl shadow-2xl flex flex-col overflow-hidden print:w-full print:max-w-none print:m-0 print:rounded-none print:shadow-none print:bg-white relative">
-            <div className="bg-white border-b border-slate-200 p-4 flex items-center justify-between print:hidden shrink-0 z-20">
-              <div className="flex items-center gap-3">
-                <h3 className="text-lg font-black text-slate-800">
-                  {viewingInvoice ? "پیش‌نمایش سند" : "تایید نهایی و پیش‌نمایش سند"}
-                </h3>
+            <div className="bg-white border-b border-slate-200 px-4 py-3 flex items-center justify-between gap-3 print:hidden shrink-0 z-20">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shrink-0">
+                  <FileText className="w-5 h-5" />
+                </div>
+                <div className="min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base sm:text-lg font-black text-slate-800 truncate">
+                      {viewingInvoice ? "پیش‌نمایش سند" : "تایید نهایی و پیش‌نمایش سند"}
+                    </h3>
+                    {currentInvoice?.invoiceNumber && (
+                      <span className="font-sans font-black text-xs px-2 py-0.5 bg-slate-100 text-slate-700 rounded-md border border-slate-200 shrink-0">
+                        #{toPersianDigits(currentInvoice.invoiceNumber)}
+                      </span>
+                    )}
+                  </div>
+                </div>
                 {isVoided && (
-                  <span className="px-3 py-1 bg-red-100 text-red-700 border border-red-200 rounded-full text-xs font-black flex items-center gap-1.5 shadow-xs">
+                  <span className="hidden sm:flex px-2.5 py-0.5 bg-red-100 text-red-700 border border-red-200 rounded-lg text-xs font-black items-center gap-1 shrink-0">
                     <Ban className="w-3.5 h-3.5 text-red-600" />
-                    ابطال شده (فاقد اعتبار مالی)
+                    ابطال شده
                   </span>
                 )}
                 {isDraft && !isVoided && (
-                  <span className="px-3 py-1 bg-amber-100 text-amber-800 border border-amber-300 rounded-full text-xs font-black flex items-center gap-1.5 shadow-xs">
+                  <span className="hidden sm:flex px-2.5 py-0.5 bg-amber-100 text-amber-800 border border-amber-300 rounded-lg text-xs font-black items-center gap-1 shrink-0">
                     <FileText className="w-3.5 h-3.5 text-amber-600" />
-                    پیش‌نویس (غیر رسمی)
+                    پیش‌نویس
                   </span>
                 )}
-                
-                {/* Desktop Print Settings Bar */}
-                <div className="hidden lg:flex items-center gap-2 bg-slate-50 p-1.5 rounded-xl border border-slate-200">
-                  <div className="flex items-center gap-1 text-xs font-bold text-slate-600 px-1">
-                    <Settings className="w-3.5 h-3.5" />
-                    <span>تنظیمات چاپ:</span>
-                  </div>
+              </div>
+
+              {/* Action Buttons: Print + Prominent Close Button */}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={handlePrintInvoice}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs transition-all shadow-xs flex items-center gap-1.5 cursor-pointer active:scale-95"
+                  title="چاپ مستقیم فاکتور"
+                >
+                  <Printer className="w-4 h-4" />
+                  <span className="hidden sm:inline">چاپ فاکتور</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="px-4 py-2 bg-rose-50 hover:bg-rose-600 hover:text-white text-rose-700 hover:border-rose-600 border border-rose-200 rounded-xl font-black text-xs sm:text-sm flex items-center gap-1.5 transition-all shadow-xs cursor-pointer shrink-0 active:scale-95"
+                  title="بستن پنجره پیش‌نمایش (Esc)"
+                >
+                  <X className="w-4 h-4" />
+                  <span>بستن</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Dedicated Print Settings Bar (Universal for all screens) */}
+            <div className="bg-slate-50 border-b border-slate-200 px-4 py-2 flex items-center gap-2.5 overflow-x-auto print:hidden shrink-0 whitespace-nowrap text-xs">
+              <div className="flex items-center gap-1 text-xs font-bold text-slate-600 px-1 shrink-0">
+                <Settings className="w-3.5 h-3.5 text-indigo-600" />
+                <span>تنظیمات چاپ:</span>
+              </div>
 
                   {/* Auto-save notification badge */}
                   {justSavedNotification && (
@@ -598,17 +667,6 @@ export default function PreviewModals(props: any) {
                     <option value="thermal">فیش پرینتر (حرارتی)</option>
                   </select>
                 </div>
-              </div>
-              <button
-                onClick={() => {
-                  setViewingInvoice(null);
-                  setPreviewInvoiceData(null);
-                }}
-                className="p-2 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-full transition-colors"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
 
             {/* Informational Alert Banner for Voided or Draft */}
             {isVoided && (
@@ -629,66 +687,6 @@ export default function PreviewModals(props: any) {
                 <span className="bg-amber-600 text-white text-[10px] px-2 py-0.5 rounded font-black">پیش‌نویس</span>
               </div>
             )}
-            
-            {/* Mobile / Tablet Print Settings */}
-            <div className="lg:hidden bg-slate-50 border-b border-slate-200 p-2.5 shrink-0 print:hidden overflow-x-auto flex items-center gap-3 whitespace-nowrap">
-              <button
-                type="button"
-                onClick={() => setShowColumnDropdown(!showColumnDropdown)}
-                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg shrink-0"
-              >
-                <Columns className="w-3.5 h-3.5 text-indigo-500" />
-                <span>ستون‌ها ({toPersianDigits(activeColumnCount)})</span>
-              </button>
-
-              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
-                <input
-                  type="checkbox"
-                  checked={!!printSettings.boldBorders || printSettings.paperSize === 'a5'}
-                  onChange={(e) => setPrintSettings(s => ({ ...s, boldBorders: e.target.checked }))}
-                  className="rounded text-indigo-600"
-                />
-                <span className="font-bold">خطوط پررنگ</span>
-              </label>
-
-              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
-                <input type="checkbox" checked={printSettings.showStoreLogo} onChange={(e) => setPrintSettings(s => ({...s, showStoreLogo: e.target.checked}))} className="rounded text-indigo-600" />
-                <span>لوگو</span>
-              </label>
-              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
-                <input type="checkbox" checked={printSettings.showSignatures} onChange={(e) => setPrintSettings(s => ({...s, showSignatures: e.target.checked}))} className="rounded text-indigo-600" />
-                <span>امضاها</span>
-              </label>
-              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
-                <input type="checkbox" checked={printSettings.showTransactions} onChange={(e) => setPrintSettings(s => ({...s, showTransactions: e.target.checked}))} className="rounded text-indigo-600" />
-                <span>تراکنش‌ها</span>
-              </label>
-              <label className="flex items-center gap-1 text-xs cursor-pointer shrink-0">
-                <input type="checkbox" checked={printSettings.showBalance} onChange={(e) => setPrintSettings(s => ({...s, showBalance: e.target.checked}))} className="rounded text-indigo-600" />
-                <span>مانده</span>
-              </label>
-              <select 
-                value={printSettings.paperSize}
-                onChange={(e) => setPrintSettings(s => ({...s, paperSize: e.target.value as any}))}
-                className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none shrink-0 font-medium"
-              >
-                <option value="a4">سایز A4</option>
-                <option value="a5">سایز A5</option>
-                <option value="pos80">فیش پرینتر (80mm)</option>
-              </select>
-              <select 
-                value={printSettings.designType}
-                onChange={(e) => handleDesignTypeChange(e.target.value)}
-                className="text-xs bg-white border border-slate-200 rounded px-2 py-1 outline-none font-medium text-slate-700 shrink-0"
-              >
-                <option value="modern">مدرن</option>
-                <option value="minimal">مینیمال</option>
-                <option value="classic">کلاسیک</option>
-                <option value="official">رسمی</option>
-                <option value="compact">فشرده</option>
-                <option value="thermal">حرارتی</option>
-              </select>
-            </div>
 
             <div className="flex-1 overflow-y-auto p-4 sm:p-6 bg-slate-100 print:p-0 print:overflow-visible print:bg-white flex justify-center items-start print:block">
               <div
@@ -727,38 +725,65 @@ export default function PreviewModals(props: any) {
             </div>
             
             {previewInvoiceData && (
-              <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3 print:hidden shrink-0">
+              <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between gap-3 print:hidden shrink-0">
                 <button
-                  onClick={() => setPreviewInvoiceData(null)}
-                  className="px-4 py-2 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold transition-colors"
+                  type="button"
+                  onClick={handleCloseModal}
+                  className="px-5 py-2.5 text-slate-700 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 rounded-xl font-black text-xs sm:text-sm border border-slate-200 flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-95"
                 >
-                  انصراف و ویرایش
+                  <X className="w-4 h-4 text-slate-500" />
+                  <span>بستن و انصراف</span>
                 </button>
-                <button onClick={handlePrintInvoice} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
-                   <Printer className="w-5 h-5" />
-                   چاپ پیش‌نمایش
-                 </button>
-                 <button
-                  onClick={() => {
-                    const finalData = { ...previewInvoiceData, isDraft: false, status: 'final' };
-                    saveInvoiceData(finalData, false);
-                    setPreviewInvoiceData(null);
-                  }}
-                  disabled={submitting}
-                  className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm"
-                >
-                  <CheckCircle className="w-5 h-5" />
-                  تایید و ثبت نهایی
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={handlePrintInvoice}
+                    className="px-5 py-2.5 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-black text-xs sm:text-sm transition-colors flex items-center gap-2 border border-indigo-200 shadow-xs cursor-pointer active:scale-95"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>چاپ پیش‌نمایش</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const finalData = { ...previewInvoiceData, isDraft: false, status: 'final' };
+                      saveInvoiceData(finalData, false);
+                      setPreviewInvoiceData(null);
+                    }}
+                    disabled={submitting}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-300 text-white rounded-xl font-black text-xs sm:text-sm transition-all flex items-center gap-2 shadow-md shadow-indigo-600/20 cursor-pointer active:scale-95"
+                  >
+                    <CheckCircle className="w-4 h-4" />
+                    <span>تایید و ثبت نهایی</span>
+                  </button>
+                </div>
               </div>
             )}
             {viewingInvoice && (
-               <div className="p-4 bg-white border-t border-slate-200 flex justify-end gap-3 print:hidden shrink-0">
-                 <button onClick={handlePrintInvoice} className="px-6 py-2 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 rounded-xl font-bold transition-colors flex items-center gap-2 shadow-sm cursor-pointer">
-                   <Printer className="w-5 h-5" />
-                   چاپ
-                 </button>
-               </div>
+              <div className="p-4 bg-white border-t border-slate-200 flex items-center justify-between gap-3 print:hidden shrink-0">
+                <div className="text-xs text-slate-500 font-bold hidden sm:block">
+                  شماره سند: <span className="font-sans font-black text-slate-800">#{toPersianDigits(currentInvoice?.invoiceNumber || currentInvoice?.id || '')}</span>
+                </div>
+                <div className="flex items-center gap-3 mr-auto">
+                  <button
+                    type="button"
+                    onClick={handleCloseModal}
+                    className="px-5 py-2.5 bg-slate-100 hover:bg-rose-50 hover:text-rose-700 hover:border-rose-200 text-slate-700 rounded-xl font-black text-xs sm:text-sm border border-slate-200 flex items-center gap-2 transition-all cursor-pointer shadow-xs active:scale-95"
+                    title="بستن پنجره پیش‌نمایش (Esc)"
+                  >
+                    <X className="w-4 h-4 text-slate-500" />
+                    <span>بستن پنجره</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handlePrintInvoice}
+                    className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black text-xs sm:text-sm transition-all flex items-center gap-2 shadow-md shadow-indigo-600/20 cursor-pointer active:scale-95"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>چاپ فاکتور</span>
+                  </button>
+                </div>
+              </div>
             )}
           </div>
         </div>

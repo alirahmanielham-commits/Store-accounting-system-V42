@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, ReferenceLine } from 'recharts';
 import { Calendar, DollarSign, TrendingDown, TrendingUp, AlertTriangle } from 'lucide-react';
+import { formatNumber as formatNumberUtil } from '../../../utils/format';
 
 export function CashFlowForecast({ issuedChecks = [], receivedChecks = [], accounts = [], storeSettings }: any) {
   const [days, setDays] = useState<30 | 60 | 90>(30);
@@ -58,7 +59,7 @@ export function CashFlowForecast({ issuedChecks = [], receivedChecks = [], accou
   }, [issuedChecks, receivedChecks, accounts, days]);
 
   const formatCurrency = (val: number) => {
-    return new Intl.NumberFormat('fa-IR').format(val) + ' ' + (storeSettings?.currency || 'تومان');
+    return formatNumberUtil(val, storeSettings) + ' ' + (storeSettings?.currency || 'تومان');
   };
 
   const CustomTooltip = ({ active, payload }: any) => {
@@ -70,7 +71,7 @@ export function CashFlowForecast({ issuedChecks = [], receivedChecks = [], accou
             {payload.map((entry: any, index: number) => (
               <div key={index} className="flex justify-between items-center gap-4">
                 <span style={{ color: entry.color }} className="opacity-90">{entry.name}:</span>
-                <span className="font-bold text-white tracking-widest">{new Intl.NumberFormat('fa-IR').format(entry.value)}</span>
+                <span className="font-bold text-white tracking-widest">{formatNumberUtil(entry.value, storeSettings)}</span>
               </div>
             ))}
           </div>
