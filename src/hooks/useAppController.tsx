@@ -3902,11 +3902,10 @@ useEffect(() => {
       activeTab === "settings" && settingsForm?.fontFamily
         ? settingsForm.fontFamily
         : storeSettings?.fontFamily || "IRANYekanXFaNum";
-    document.documentElement.style.setProperty(
-      "--font-sans",
-      `"${font}", "Vazirmatn", ui-sans-serif, system-ui, sans-serif`,
-    );
-    document.body.style.fontFamily = `"${font}", "Vazirmatn", sans-serif`;
+    const fontStack = `"${font}", "IRANYekanXFaNum", "Vazirmatn", "Vazirmatn FD", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
+    document.documentElement.style.setProperty("--app-font", fontStack);
+    document.documentElement.style.setProperty("--font-sans", fontStack);
+    document.body.style.fontFamily = fontStack;
   }, [settingsForm?.fontFamily, activeTab, storeSettings?.fontFamily]);
 
 const fetchChecks = async () => {

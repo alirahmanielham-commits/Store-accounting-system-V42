@@ -250,9 +250,30 @@ export async function printViaIframe(
         @font-face {
           font-family: 'IRANYekanXFaNum';
           font-style: normal;
-          font-weight: normal;
+          font-weight: 400;
           font-display: swap;
-          src: local('IRANYekanXFaNum'), local('IRANYekanX'), local('IRANYekan'), local('Vazirmatn'), local('Tahoma');
+          src: url('/fonts/vazirmatn/Vazirmatn-FD-Regular.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'IRANYekanXFaNum';
+          font-style: normal;
+          font-weight: 700;
+          font-display: swap;
+          src: url('/fonts/vazirmatn/Vazirmatn-FD-Bold.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'Vazirmatn';
+          font-style: normal;
+          font-weight: 400;
+          font-display: swap;
+          src: url('/fonts/vazirmatn/Vazirmatn-FD-Regular.woff2') format('woff2');
+        }
+        @font-face {
+          font-family: 'Vazirmatn';
+          font-style: normal;
+          font-weight: 700;
+          font-display: swap;
+          src: url('/fonts/vazirmatn/Vazirmatn-FD-Bold.woff2') format('woff2');
         }
 
         @page {

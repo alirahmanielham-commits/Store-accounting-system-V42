@@ -1,21 +1,45 @@
 @import "tailwindcss";
 
 @font-face {
-	font-family: 'IRANYekanXFaNum';
-	font-style: normal;
-	font-weight: normal;
-	font-display: swap;
-	src: local('IRANYekanXFaNum'), local('IRANYekanX'), local('IRANYekan'), local('Vazirmatn'), local('Tahoma');
+  font-family: 'IRANYekanXFaNum';
+  src: url('/fonts/vazirmatn/Vazirmatn-FD-Regular.woff2') format('woff2'),
+       url('/Webfonts/Woff2/IRANYekanXFaNum-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'IRANYekanXFaNum';
+  src: url('/fonts/vazirmatn/Vazirmatn-FD-Bold.woff2') format('woff2'),
+       url('/Webfonts/Woff2/IRANYekanXFaNum-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/vazirmatn/Vazirmatn-FD-Regular.woff2') format('woff2');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+@font-face {
+  font-family: 'Vazirmatn';
+  src: url('/fonts/vazirmatn/Vazirmatn-FD-Bold.woff2') format('woff2');
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
 }
 
 @theme {
-  --font-sans: var(--app-font, 'Vazirmatn'), ui-sans-serif, system-ui, sans-serif;
+  --font-sans: var(--app-font, 'IRANYekanXFaNum', 'Vazirmatn'), ui-sans-serif, system-ui, sans-serif;
 }
 
 body {
-  font-family: var(--app-font, 'Vazirmatn'), sans-serif;
+  font-family: var(--app-font, 'IRANYekanXFaNum', 'Vazirmatn'), sans-serif;
   direction: rtl;
   background-color: #f3f4f6;
+  font-feature-settings: "ss01" 1, "cv01" 1, "tnum" 1;
 }
 
 .hide-scrollbar::-webkit-scrollbar {
