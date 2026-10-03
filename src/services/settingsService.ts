@@ -17,6 +17,7 @@ import {
 } from './coreService';
 import { CompanySettings } from '../types';
 import { convertToGregorian } from '../utils/format';
+import { logActivity, createDiffSummary } from '../utils/auditLogger';
 
 
 export const getStoreSettings = async (): Promise<CompanySettings | null> => {
@@ -24,7 +25,21 @@ export const getStoreSettings = async (): Promise<CompanySettings | null> => {
 };
 
 export const saveStoreSettings = async (settings: CompanySettings): Promise<void> => {
+  const oldSettings = await getStoreSettings();
   await saveLocalData('company_profile', settings);
+  try {
+    const { diffSummary, changesObj } = createDiffSummary(oldSettings, settings);
+    await logActivity({
+      action: 'SETTINGS_CHANGE',
+      entityType: 'settings',
+      entityId: (settings as any).id || 'company_profile',
+      details: `تغییر در تنظیمات مالی و پیکربندی سیستم (${(settings as any).storeName || 'تنظیمات'})`,
+      diffSummary: diffSummary || 'بروزرسانی مشخصات و تنظیمات مالی فروشگاه',
+      oldData: oldSettings,
+      newData: settings,
+      changes: JSON.stringify(changesObj)
+    });
+  } catch (_) {}
 };
 
 export const getFinancialYears = async () => {
@@ -32,7 +47,19 @@ export const getFinancialYears = async () => {
 };
 
 export const saveFinancialYears = async (years: any[]) => {
+  const oldYears = await getFinancialYears();
   await saveLocalData('financial_years', years);
+  try {
+    await logActivity({
+      action: 'SETTINGS_CHANGE',
+      entityType: 'financial_years',
+      entityId: 'financial_years',
+      details: `بروزرسانی و تغییر در سال‌های مالی (${years.length} سال مالی)`,
+      diffSummary: 'تغییر در پیکربندی سال‌های مالی سیستم',
+      oldData: oldYears,
+      newData: years
+    });
+  } catch (_) {}
 };
 
 export const getActiveFinancialYear = async () => {

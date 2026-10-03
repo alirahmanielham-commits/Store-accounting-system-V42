@@ -371,11 +371,16 @@ async function dispatchAdminNotificationIfSensitive(logEntry: any) {
       message = `یک فاکتور توسط کاربر «${actorName}» (@${actorUsername}) حذف شد.\nشرح: ${details}\nآدرس IP: ${ip}`;
     }
     // 2. Settings & Financial Configuration Changes
-    else if (['settings', 'financial_years', 'tax_settings', 'company_profile'].includes(entity) || action === 'SETTINGS_CHANGE' || details.includes('تنظیمات')) {
+    else if (['settings', 'financial_years', 'tax_settings', 'company_profile', 'doc_counters', 'number_format_config', 'accounting_settings'].includes(entity) || action === 'SETTINGS_CHANGE' || details.includes('تنظیمات') || details.includes('سال مالی') || details.includes('ارز')) {
       isSensitive = true;
-      severity = 'warning';
-      title = 'هشدار مدیریتی: تغییر در تنظیمات مالی یا سیستم';
-      message = `تنظیمات مالی یا پیکربندی سیستم توسط کاربر «${actorName}» (@${actorUsername}) تغییر یافت.\nشرح: ${details}\nآدرس IP: ${ip}`;
+      const isDelete = action === 'DELETE';
+      severity = isDelete ? 'critical' : 'warning';
+      title = isDelete 
+        ? 'هشدار مدیریتی: حذف تنظیمات یا دوره مالی در سیستم' 
+        : (details.includes('مالی') || entity === 'financial_years' || details.includes('ارز') || details.includes('مالیات')
+          ? 'هشدار مدیریتی: تغییر در تنظیمات مالی سیستم' 
+          : 'هشدار مدیریتی: تغییر در تنظیمات و پیکربندی سیستم');
+      message = `تنظیمات مالی یا پیکربندی سیستم توسط کاربر «${actorName}» (@${actorUsername}) بروزرسانی گردید.\nشرح: ${details}\nآدرس IP: ${ip}`;
     }
     // 3. Financial Transactions & Accounting Documents Deletion
     else if (action === 'DELETE' && ['transactions', 'receipt_transactions', 'payment_transactions', 'accounting_documents', 'accounts', 'cashboxes'].includes(entity)) {
@@ -899,6 +904,7 @@ router.post('/api/data/:key/append', async (req, res) => {
           } else {
              await setDbData('system_logs', sysLogs);
           }
+          dispatchAdminNotificationIfSensitive(log).catch(e => console.error(e));
         } catch (logErr) {
           console.error('Error writing system_logs on create:', logErr);
         }
@@ -1111,6 +1117,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
           } else {
              await setDbData('system_logs', sysLogs);
           }
+          dispatchAdminNotificationIfSensitive(log).catch(e => console.error(e));
         } catch (logErr) {
           console.error('Error writing system_logs on update:', logErr);
         }
@@ -1253,6 +1260,9 @@ router.post('/api/data/:key', async (req, res) => {
                sysLogs.unshift(...logs);
                if (sysLogs.length > 3000) sysLogs.length = 3000;
                await setDbData('system_logs', sysLogs);
+               for (const l of logs) {
+                  dispatchAdminNotificationIfSensitive(l).catch(e => console.error(e));
+               }
             }
          }
       } catch(err) {

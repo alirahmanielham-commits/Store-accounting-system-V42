@@ -171,14 +171,23 @@ export default function CheckCardPage({
     setLoading(false);
   };
 
-  const filteredChecks = useMemo(() => {
-    if (!searchQuery) return allChecks;
-    return allChecks.filter(c => 
-      c.checkNumber?.includes(searchQuery) || 
-      c.sayadId?.includes(searchQuery) || 
-      String(c.amount).includes(searchQuery)
+  const filteredChecks = !searchQuery ? allChecks : allChecks.filter(c => 
+    c.checkNumber?.includes(searchQuery) || 
+    c.sayadId?.includes(searchQuery) || 
+    String(c.amount).includes(searchQuery)
+  );
+
+  const linkedDocs = !check ? [] : (accountingDocs || []).filter((d: any) => {
+    if (d.isDeleted) return false;
+    const sId = String(d.sourceId || '');
+    const cId = String(check.id);
+    return (
+      sId === cId ||
+      sId.startsWith(`${cId}_`) ||
+      (d.sourceType === `check_${checkType}_init` && sId === cId) ||
+      (d.sourceType === `check_${checkType}_status` && sId.startsWith(`${cId}_`))
     );
-  }, [allChecks, searchQuery]);
+  });
 
 
   const openEditModal = () => {
@@ -509,21 +518,6 @@ export default function CheckCardPage({
     }
     return null;
   };
-
-  const linkedDocs = useMemo(() => {
-    if (!check) return [];
-    return (accountingDocs || []).filter((d: any) => {
-      if (d.isDeleted) return false;
-      const sId = String(d.sourceId || '');
-      const cId = String(check.id);
-      return (
-        sId === cId ||
-        sId.startsWith(`${cId}_`) ||
-        (d.sourceType === `check_${checkType}_init` && sId === cId) ||
-        (d.sourceType === `check_${checkType}_status` && sId.startsWith(`${cId}_`))
-      );
-    });
-  }, [accountingDocs, check, checkType]);
 
   const lastStatusChangeLog = history.find(l => l.oldStatus && l.newStatus === check.status);
   const previousStatus = lastStatusChangeLog ? lastStatusChangeLog.oldStatus : getStaticPreviousStatus(currentStatus, checkType);

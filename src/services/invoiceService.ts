@@ -25,6 +25,7 @@ import {
 import { CompanySettings } from '../types';
 import { convertToGregorian } from '../utils/format';
 import { convertPriceToBaseUnit, convertQuantityToBaseUnit, getUnitRatioDirection } from '../utils/unitConversion';
+import { logActivity } from '../utils/auditLogger';
 
 
 export const syncInvoiceAllocations = async (tx: any) => {
@@ -1300,6 +1301,9 @@ export const deleteInvoice = async (id: string, forceDelete: boolean = false, sk
 
     const operations: any[] = [];
     
+    const invTypeName = invoiceToDelete.type === 'sale' ? 'فاکتور فروش' : invoiceToDelete.type === 'purchase' ? 'فاکتور خرید' : invoiceToDelete.type === 'sale_return' ? 'برگشت از فروش' : 'فاکتور';
+    const amount = Number(invoiceToDelete.totalPrice || invoiceToDelete.finalAmount || 0).toLocaleString('fa-IR');
+
     // Fast path for draft invoices: they do not affect price history, accounting, or payments
     if (invoiceToDelete.status === 'draft' || invoiceToDelete.isDraft) {
       toDeleteIds.forEach(delId => {
@@ -1308,6 +1312,16 @@ export const deleteInvoice = async (id: string, forceDelete: boolean = false, sk
       if (operations.length > 0) {
         await batchLocalData(operations);
       }
+      try {
+        await logActivity({
+          action: 'DELETE',
+          entityType: 'invoices',
+          entityId: invoiceToDelete.id,
+          details: `حذف پیش‌نویس ${invTypeName} شماره «${invoiceToDelete.invoiceNumber || invoiceToDelete.id}» (مبلغ: ${amount} ریال)`,
+          diffSummary: `حذف پیش‌نویس فاکتور شماره ${invoiceToDelete.invoiceNumber || invoiceToDelete.id} به مبلغ ${amount} ریال`,
+          oldData: invoiceToDelete
+        });
+      } catch (_) {}
       return;
     }
 
@@ -1375,9 +1389,18 @@ export const deleteInvoice = async (id: string, forceDelete: boolean = false, sk
         }
     } catch(e) {}
 
-    if (typeof addSystemLog !== 'undefined') {
-       // addSystemLog is no-op, backend handles log for batch
-    }
+    try {
+      const invTypeName = invoiceToDelete.type === 'sale' ? 'فاکتور فروش' : invoiceToDelete.type === 'purchase' ? 'فاکتور خرید' : invoiceToDelete.type === 'sale_return' ? 'برگشت از فروش' : 'فاکتور';
+      const amount = Number(invoiceToDelete.totalPrice || invoiceToDelete.finalAmount || 0).toLocaleString('fa-IR');
+      await logActivity({
+        action: 'DELETE',
+        entityType: 'invoices',
+        entityId: invoiceToDelete.id,
+        details: `حذف ${invTypeName} شماره «${invoiceToDelete.invoiceNumber || invoiceToDelete.id}» (مبلغ: ${amount} ریال)`,
+        diffSummary: `حذف فاکتور شماره ${invoiceToDelete.invoiceNumber || invoiceToDelete.id} به مبلغ ${amount} ریال`,
+        oldData: invoiceToDelete
+      });
+    } catch (_) {}
 
     // Recalculate warehouse stocks automatically
     if (!skipRecalc) {

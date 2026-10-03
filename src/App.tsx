@@ -272,6 +272,8 @@ const MobileRestrictedAccess = React.lazy(() => import('./components/mobile/Mobi
 import { MOBILE_ALLOWED_TABS } from './components/MobileRestrictedMenu';
 import { hasPagePermission } from './utils/permissionUtils';
 import AccessRestricted from './components/common/AccessRestricted';
+import NotificationBell from './components/notifications/NotificationBell';
+import LiveAdminAlertToast from './components/notifications/LiveAdminAlertToast';
 const MinimalMobilePersonModal = React.lazy(() => import('./components/modals/MinimalMobilePersonModal'));
 
 const WarehouseManager = React.lazy(() => import('./components/warehouses/WarehouseManager'));
@@ -2500,7 +2502,7 @@ if (requiresInitSetup && user) {
                           </span>
                         )}
                       </button>
-                      {/* NotificationBell */}
+                      <NotificationBell setActiveTab={setActiveTab} user={user} />
                       <button
                         onClick={() => setIsCalculatorOpen(true)}
                         className="p-2 border rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 bg-white border-slate-200"
@@ -2718,6 +2720,7 @@ if (requiresInitSetup && user) {
 </div>
 </div>
 )}
+<LiveAdminAlertToast user={user} setActiveTab={setActiveTab} />
 <Suspense fallback={null}><SalePaymentModal
       isOpen={appState.isSalePaymentModalOpen}
       onClose={() => appState.setIsSalePaymentModalOpen(false)}

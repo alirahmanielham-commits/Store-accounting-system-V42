@@ -250,51 +250,9 @@ export async function printViaIframe(
         @font-face {
           font-family: 'IRANYekanXFaNum';
           font-style: normal;
-          font-weight: 300;
+          font-weight: normal;
           font-display: swap;
-          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Light.woff2') format('woff2');
-        }
-        @font-face {
-          font-family: 'IRANYekanXFaNum';
-          font-style: normal;
-          font-weight: 400;
-          font-display: swap;
-          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Regular.woff2') format('woff2');
-        }
-        @font-face {
-          font-family: 'IRANYekanXFaNum';
-          font-style: normal;
-          font-weight: 500;
-          font-display: swap;
-          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Medium.woff2') format('woff2');
-        }
-        @font-face {
-          font-family: 'IRANYekanXFaNum';
-          font-style: normal;
-          font-weight: 600;
-          font-display: swap;
-          src: url('/Webfonts/Woff2/IRANYekanXFaNum-DemiBold.woff2') format('woff2');
-        }
-        @font-face {
-          font-family: 'IRANYekanXFaNum';
-          font-style: normal;
-          font-weight: 700;
-          font-display: swap;
-          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Bold.woff2') format('woff2');
-        }
-        @font-face {
-          font-family: 'IRANYekanXFaNum';
-          font-style: normal;
-          font-weight: 800;
-          font-display: swap;
-          src: url('/Webfonts/Woff2/IRANYekanXFaNum-ExtraBold.woff2') format('woff2');
-        }
-        @font-face {
-          font-family: 'IRANYekanXFaNum';
-          font-style: normal;
-          font-weight: 900;
-          font-display: swap;
-          src: url('/Webfonts/Woff2/IRANYekanXFaNum-Black.woff2') format('woff2');
+          src: local('IRANYekanXFaNum'), local('IRANYekanX'), local('IRANYekan'), local('Vazirmatn'), local('Tahoma');
         }
 
         @page {

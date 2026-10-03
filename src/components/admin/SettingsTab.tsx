@@ -41,7 +41,7 @@ export default function SettingsTab(props: any) {
 
   const [smsCategoryFilter, setSmsCategoryFilter] = useState<'all' | 'invoices' | 'treasury' | 'warehouse' | 'checks' | 'loans'>('all');
   const [smsSearchQuery, setSmsSearchQuery] = useState('');
-  const [notifySubTab, setNotifySubTab] = useState<'general' | 'zyxel_gsm'>('general');
+  const [notifySubTab, setNotifySubTab] = useState<'general' | 'zyxel_gsm' | 'security_alerts'>('general');
 
   return (
                   <motion.div
@@ -1375,6 +1375,21 @@ export default function SettingsTab(props: any) {
                                     ارسال و دریافت مستقیم
                                   </span>
                                 </button>
+                                <button
+                                  type="button"
+                                  onClick={() => setNotifySubTab("security_alerts")}
+                                  className={`flex-1 py-3 px-4 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                                    notifySubTab === "security_alerts"
+                                      ? "bg-rose-600 text-white shadow-sm"
+                                      : "text-gray-600 hover:text-gray-900 hover:bg-gray-50"
+                                  }`}
+                                >
+                                  <lucide.ShieldAlert className="w-4 h-4 text-rose-300" />
+                                  هشدارهای امنیتی مدیر (فعالیت‌های حساس)
+                                  <span className="text-[10px] px-2 py-0.5 rounded-full bg-rose-500/20 text-rose-700 font-bold border border-rose-300/40">
+                                    حذف فاکتور و تنظیمات
+                                  </span>
+                                </button>
                               </div>
 
                               {notifySubTab === "zyxel_gsm" ? (
@@ -1384,6 +1399,187 @@ export default function SettingsTab(props: any) {
                                     setSettingsForm({ ...settingsForm, [key]: val })
                                   }
                                 />
+                              ) : notifySubTab === "security_alerts" ? (
+                                <div className="space-y-6">
+                                  <div className="bg-gradient-to-r from-rose-50 via-white to-amber-50 p-6 rounded-3xl border border-rose-200/80">
+                                    <div className="flex items-center gap-3 mb-2">
+                                      <div className="w-10 h-10 rounded-2xl bg-rose-100 flex items-center justify-center text-rose-700">
+                                        <lucide.ShieldAlert className="w-6 h-6" />
+                                      </div>
+                                      <div>
+                                        <h3 className="text-base font-black text-rose-950">
+                                          تنظیمات اعلان بلادرنگ فعالیت‌های حساس به مدیر سیستم
+                                        </h3>
+                                        <p className="text-xs font-bold text-rose-700/80 mt-0.5">
+                                          ارسال فوری نوتیفیکیشن، هشدار صوتی و پیام دسکتاپ هنگام وقوع رویدادهای پرخطر و حساس در سیستم
+                                        </p>
+                                      </div>
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-white p-6 rounded-3xl border border-gray-200/90 shadow-xs space-y-4">
+                                    <h4 className="text-sm font-black text-gray-800 flex items-center gap-2">
+                                      <lucide.Sliders className="w-4 h-4 text-indigo-600" />
+                                      رویدادهای حساس مشمول ارسال اعلان
+                                    </h4>
+
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                      <label className="flex items-start gap-3 p-4 rounded-2xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 cursor-pointer transition-all">
+                                        <input
+                                          type="checkbox"
+                                          checked={settingsForm.notify_on_invoice_delete !== false}
+                                          onChange={(e) => setSettingsForm({ ...settingsForm, notify_on_invoice_delete: e.target.checked })}
+                                          className="mt-1 rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                                        />
+                                        <div>
+                                          <span className="block text-xs font-black text-gray-900">
+                                            حذف فاکتورها (فروش، خرید، برگشتی و پیش‌فاکتور)
+                                          </span>
+                                          <span className="block text-[11px] font-bold text-gray-500 mt-1">
+                                            ارسال هشدار فوری با ذکر شماره فاکتور، مبلغ، نام کاربر و آدرس IP هنگام حذف فاکتور
+                                          </span>
+                                        </div>
+                                      </label>
+
+                                      <label className="flex items-start gap-3 p-4 rounded-2xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 cursor-pointer transition-all">
+                                        <input
+                                          type="checkbox"
+                                          checked={settingsForm.notify_on_settings_change !== false}
+                                          onChange={(e) => setSettingsForm({ ...settingsForm, notify_on_settings_change: e.target.checked })}
+                                          className="mt-1 rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                                        />
+                                        <div>
+                                          <span className="block text-xs font-black text-gray-900">
+                                            تغییر تنظیمات مالی و پیکربندی سیستم
+                                          </span>
+                                          <span className="block text-[11px] font-bold text-gray-500 mt-1">
+                                            ارسال اعلان هنگام تغییر در درصد مالیات، ارزش افزوده، نام فروشگاه یا سال مالی
+                                          </span>
+                                        </div>
+                                      </label>
+
+                                      <label className="flex items-start gap-3 p-4 rounded-2xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 cursor-pointer transition-all">
+                                        <input
+                                          type="checkbox"
+                                          checked={settingsForm.notify_on_financial_doc_delete !== false}
+                                          onChange={(e) => setSettingsForm({ ...settingsForm, notify_on_financial_doc_delete: e.target.checked })}
+                                          className="mt-1 rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                                        />
+                                        <div>
+                                          <span className="block text-xs font-black text-gray-900">
+                                            حذف تراکنش‌های مالی و اسناد حسابداری
+                                          </span>
+                                          <span className="block text-[11px] font-bold text-gray-500 mt-1">
+                                            ارسال اعلان در صورت حذف رسید پرداخت، دریافت وجه یا سند حسابداری دوبل
+                                          </span>
+                                        </div>
+                                      </label>
+
+                                      <label className="flex items-start gap-3 p-4 rounded-2xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 cursor-pointer transition-all">
+                                        <input
+                                          type="checkbox"
+                                          checked={settingsForm.notify_on_check_delete !== false}
+                                          onChange={(e) => setSettingsForm({ ...settingsForm, notify_on_check_delete: e.target.checked })}
+                                          className="mt-1 rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                                        />
+                                        <div>
+                                          <span className="block text-xs font-black text-gray-900">
+                                            حذف یا تغییرات حساس چک‌های صیادی
+                                          </span>
+                                          <span className="block text-[11px] font-bold text-gray-500 mt-1">
+                                            ارسال هشدار فوری هنگام حذف چک دریافتی/پرداختی یا برگشت خوردن چک
+                                          </span>
+                                        </div>
+                                      </label>
+
+                                      <label className="flex items-start gap-3 p-4 rounded-2xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 cursor-pointer transition-all">
+                                        <input
+                                          type="checkbox"
+                                          checked={settingsForm.notify_on_user_change !== false}
+                                          onChange={(e) => setSettingsForm({ ...settingsForm, notify_on_user_change: e.target.checked })}
+                                          className="mt-1 rounded text-rose-600 focus:ring-rose-500 w-4 h-4"
+                                        />
+                                        <div>
+                                          <span className="block text-xs font-black text-gray-900">
+                                            حذف یا تغییر سطوح دسترسی کاربران
+                                          </span>
+                                          <span className="block text-[11px] font-bold text-gray-500 mt-1">
+                                            ارسال هشدار در صورت حذف کاربر، تغییر نقش به مدیر یا تغییر وضعیت فعال/غیرفعال
+                                          </span>
+                                        </div>
+                                      </label>
+
+                                      <label className="flex items-start gap-3 p-4 rounded-2xl border border-gray-200 bg-gray-50/50 hover:bg-gray-50 cursor-pointer transition-all">
+                                        <input
+                                          type="checkbox"
+                                          checked={settingsForm.notify_sound_enabled !== false}
+                                          onChange={(e) => setSettingsForm({ ...settingsForm, notify_sound_enabled: e.target.checked })}
+                                          className="mt-1 rounded text-indigo-600 focus:ring-indigo-500 w-4 h-4"
+                                        />
+                                        <div>
+                                          <span className="block text-xs font-black text-gray-900">
+                                            پخش صدای زنگ هشدار (Chime Audio)
+                                          </span>
+                                          <span className="block text-[11px] font-bold text-gray-500 mt-1">
+                                            پخش ملایم زنگ هشدار در مرورگر هنگام دریافت اعلان حساس جدید
+                                          </span>
+                                        </div>
+                                      </label>
+                                    </div>
+                                  </div>
+
+                                  <div className="bg-slate-50 p-6 rounded-3xl border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-4">
+                                    <div>
+                                      <h4 className="text-xs font-black text-slate-800">
+                                        تست و بررسی عملکرد مرکز اعلان‌های حساس
+                                      </h4>
+                                      <p className="text-[11px] font-bold text-slate-500 mt-0.5">
+                                        یک اعلان آزمایشی با اولویت بالا به زنگوله و بنر شناور ارسال نموده و پخش صدا را آزمایش کنید.
+                                      </p>
+                                    </div>
+
+                                    <button
+                                      type="button"
+                                      onClick={async () => {
+                                        try {
+                                          const testAlert = {
+                                            id: 'notif_test_' + Date.now(),
+                                            userId: 'admin',
+                                            targetRole: 'admin',
+                                            title: 'هشدار امنیتی آزمایشی: حذف فاکتور نمونه',
+                                            message: 'این پیام تست جهت بررسی اتصال زنگوله اعلان‌ها و هشدار صوتی مدیر ارسال شده است.',
+                                            type: 'critical',
+                                            read: false,
+                                            createdAt: new Date().toISOString(),
+                                            metadata: {
+                                              action: 'DELETE',
+                                              entityType: 'invoices',
+                                              actorUsername: user?.username || 'admin',
+                                              actorName: user?.name || 'مدیر سیستم',
+                                              ip: '127.0.0.1',
+                                              timestamp: Date.now()
+                                            }
+                                          };
+                                          await fetch('/api/data/notifications', {
+                                            method: 'POST',
+                                            headers: {
+                                              'Content-Type': 'application/json',
+                                              'Authorization': 'Bearer ' + (sessionStorage.getItem('access_token') || localStorage.getItem('access_token') || '')
+                                            },
+                                            body: JSON.stringify([testAlert])
+                                          });
+                                          alert('اعلان آزمایشی با موفقیت ارسال شد. زنگوله بالای صفحه را بررسی کنید.');
+                                        } catch (e) {
+                                          alert('خطا در ارسال اعلان آزمایشی');
+                                        }
+                                      }}
+                                      className="px-5 py-2.5 rounded-2xl bg-rose-600 hover:bg-rose-700 text-white font-black text-xs shadow-sm transition-all active:scale-95 flex items-center gap-2 shrink-0 cursor-pointer"
+                                    >
+                                      <lucide.Sparkles className="w-4 h-4" />
+                                      <span>ارسال اعلان آزمایشی به مدیر</span>
+                                    </button>
+                                  </div>
+                                </div>
                               ) : (
                                 <div className="space-y-8">
                                   <div>

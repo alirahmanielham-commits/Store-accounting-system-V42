@@ -3,58 +3,9 @@
 @font-face {
 	font-family: 'IRANYekanXFaNum';
 	font-style: normal;
-	font-weight: 100;
-	font-display: swap;
-	src: url('/Webfonts/Woff2/IRANYekanXFaNum-Thin.woff2') format('woff2');		
-}
-@font-face {
-	font-family: 'IRANYekanXFaNum';
-	font-style: normal;
-	font-weight: 200;
-	font-display: swap;
-	src: url('/Webfonts/Woff2/IRANYekanXFaNum-UltraLight.woff2') format('woff2');	
-}
-@font-face {
-	font-family: 'IRANYekanXFaNum';
-	font-style: normal;
-	font-weight: 300;
-	font-display: swap;
-	src: url('/Webfonts/Woff2/IRANYekanXFaNum-Light.woff2') format('woff2');		 
-}
-@font-face {
-	font-family: 'IRANYekanXFaNum';
-	font-style: normal;
-	font-weight: 500;
-	font-display: swap;
-	src: url('/Webfonts/Woff2/IRANYekanXFaNum-Medium.woff2') format('woff2');		 
-}
-@font-face {
-	font-family: 'IRANYekanXFaNum';
-	font-style: normal;
 	font-weight: normal;
 	font-display: swap;
-	src: url('/Webfonts/Woff2/IRANYekanXFaNum-Regular.woff2') format('woff2');	
-}
-@font-face {
-	font-family: 'IRANYekanXFaNum';
-	font-style: normal;
-	font-weight: 700;
-	font-display: swap;
-	src: url('/Webfonts/Woff2/IRANYekanXFaNum-Bold.woff2') format('woff2');	
-}
-@font-face {
-	font-family: 'IRANYekanXFaNum';
-	font-style: normal;
-	font-weight: 800;
-	font-display: swap;
-	src: url('/Webfonts/Woff2/IRANYekanXFaNum-ExtraBold.woff2') format('woff2');	
-}
-@font-face {
-	font-family: 'IRANYekanXFaNum';
-	font-style: normal;
-	font-weight: 900;
-	font-display: swap;
-	src: url('/Webfonts/Woff2/IRANYekanXFaNum-Black.woff2') format('woff2');	
+	src: local('IRANYekanXFaNum'), local('IRANYekanX'), local('IRANYekan'), local('Vazirmatn'), local('Tahoma');
 }
 
 @theme {
