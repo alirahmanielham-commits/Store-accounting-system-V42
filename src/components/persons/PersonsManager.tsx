@@ -11,6 +11,8 @@ import {
 } from "lucide-react";
 import { updatePerson } from '../../services/personService';
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
+import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
+import { getActiveStoreSettings } from '../../utils/format';
 
 export default function PersonsManager(props: any) {
   const { 
@@ -386,21 +388,100 @@ export default function PersonsManager(props: any) {
   };
 
   const handleBulkExport = () => {
-     const selectedData = sortedPersons.filter((p:any) => selectedIds.includes(p.id));
-     const headers = ['کد', 'نام شخص/شرکت', 'تلفن', 'موبایل', 'مانده حساب', 'وضعیت', 'نقش'];
-     const csvContent = "data:text/csv;charset=utf-8,﻿" + 
-        headers.join(",") + "\n" +
-        selectedData.map((p:any) => {
-           return `"${p.accountingCode || p.personCode || ''}","${getPersonDisplayName(p)}","${p.phone || ''}","${p.mobile || ''}","${p.calculatedBalance}","${p.isActive === false ? 'غیرفعال' : 'فعال'}","${getRoleName(p.role)}"`;
-        }).join("\n");
-     const encodedUri = encodeURI(csvContent);
-     const link = document.createElement("a");
-     link.setAttribute("href", encodedUri);
-     link.setAttribute("download", "persons_export.csv");
-     document.body.appendChild(link);
-     link.click();
-     document.body.removeChild(link);
-     notify("خروجی با موفقیت دانلود شد", "success");
+     try {
+       const selectedData = sortedPersons.filter((p:any) => selectedIds.includes(p.id));
+       if (selectedData.length === 0) return;
+
+       const activeSettings = props.storeSettings || getActiveStoreSettings();
+       const curr = activeSettings?.currency || 'تومان';
+
+       const excelRows = selectedData.map((p: any, idx: number) => {
+         const balVal = typeof p.calculatedBalance === 'number' 
+           ? p.calculatedBalance 
+           : (Number(String(p.calculatedBalance || 0).replace(/,/g, '')) || 0);
+
+         let balStatus = 'تسویه';
+         if (balVal > 0) balStatus = 'بدهکار (به ما)';
+         else if (balVal < 0) balStatus = 'بستانکار (از ما)';
+
+         return {
+           'ردیف': idx + 1,
+           'کد حسابداری': p.accountingCode || p.personCode || '-',
+           'نام شخص / شرکت': getPersonDisplayName(p),
+           'نام مستعار': p.alias || '-',
+           'نقش': getRoleName(p.role),
+           'گروه': p.group || '-',
+           'تلفن': p.phone || '-',
+           'موبایل': p.mobile || '-',
+           'کد ملی / شناسه': p.nationalId || '-',
+           [`مانده حساب (${curr})`]: formatDecimalForExcel(Math.abs(balVal), activeSettings),
+           'وضعیت تراز': balStatus,
+           'وضعیت': p.isActive === false ? 'غیرفعال' : 'فعال'
+         };
+       });
+
+       const fileName = `اشخاص_منتخب_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+       exportToExcel({
+         filename: fileName,
+         sheetName: 'اشخاص منتخب',
+         data: excelRows,
+         storeSettings: activeSettings
+       });
+
+       notify("خروجی اکسل اشخاص منتخب با موفقیت دانلود شد", "success");
+     } catch(e) {
+       console.error(e);
+       notify("خطا در خروجی فایل اکسل", "error");
+     }
+  };
+
+  const handleExportPersonsExcel = () => {
+    try {
+      const activeSettings = props.storeSettings || getActiveStoreSettings();
+      const curr = activeSettings?.currency || 'تومان';
+
+      const excelRows = sortedPersons.map((p: any, idx: number) => {
+        const balVal = typeof p.calculatedBalance === 'number' 
+          ? p.calculatedBalance 
+          : (Number(String(p.calculatedBalance || 0).replace(/,/g, '')) || 0);
+
+        let balStatus = 'تسویه';
+        if (balVal > 0) balStatus = 'بدهکار (به ما)';
+        else if (balVal < 0) balStatus = 'بستانکار (از ما)';
+
+        return {
+          'ردیف': idx + 1,
+          'کد حسابداری': p.accountingCode || p.personCode || '-',
+          'نام و نام خانوادگی / شرکت': getPersonDisplayName(p),
+          'نام مستعار / عنوان': p.alias || '-',
+          'نقش': getRoleName(p.role),
+          'گروه': p.group || '-',
+          'تلفن': p.phone || '-',
+          'موبایل': p.mobile || '-',
+          'کد ملی / شناسه ملی': p.nationalId || '-',
+          [`مانده حساب (${curr})`]: formatDecimalForExcel(Math.abs(balVal), activeSettings),
+          'وضعیت تراز': balStatus,
+          [`سقف اعتبار (${curr})`]: formatDecimalForExcel(p.creditLimit || 0, activeSettings),
+          'وضعیت': p.isActive === false ? 'غیرفعال' : 'فعال',
+          'آدرس': p.address || '-'
+        };
+      });
+
+      const fileName = `لیست_اشخاص_و_طرف‌حساب‌ها_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+      exportToExcel({
+        filename: fileName,
+        sheetName: 'لیست اشخاص',
+        data: excelRows,
+        storeSettings: activeSettings
+      });
+
+      notify('فایل اکسل لیست اشخاص با موفقیت دانلود شد', 'success');
+    } catch (err) {
+      console.error(err);
+      notify('خطا در خروجی فایل اکسل اشخاص', 'error');
+    }
   };
 
   const handleToggleActive = async (p: any, e: React.MouseEvent) => {
@@ -457,11 +538,19 @@ export default function PersonsManager(props: any) {
               کدگذاری
             </button>
             <button
+              onClick={handleExportPersonsExcel}
+              className="px-3 py-2 border border-emerald-300 hover:bg-emerald-50 text-emerald-700 bg-white rounded-lg flex items-center gap-1.5 transition-all text-xs font-bold cursor-pointer shadow-2xs"
+              title="خروجی مستقیم اکسل از جدول فعلی اشخاص با رعایت فرمت اعشار"
+            >
+              <Download className="w-4 h-4 text-emerald-600" />
+              خروجی اکسل (.xlsx)
+            </button>
+            <button
               onClick={() => { setPersonIOAction("export"); setIsPersonIOModalOpen(true); }}
               className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 bg-white rounded-lg flex items-center gap-1.5 transition-all text-xs font-bold"
             >
               <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              اکسل
+              درون‌ریزی / برون‌ریزی
             </button>
             <button
               onClick={() => {

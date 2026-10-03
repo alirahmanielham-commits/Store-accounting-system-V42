@@ -85,19 +85,28 @@ export const mapInvoiceTypeToTable = (type: string) => {
 export const getAuthHeaders = (): Record<string, string> => {
   let token = '';
   let storeId = 'default';
-  if (typeof window !== 'undefined' && typeof window.localStorage !== 'undefined') {
+  let userInfoHeader = '';
+  if (typeof window !== 'undefined') {
     try {
-      token = window.localStorage.getItem('access_token') || '';
-      storeId = window.localStorage.getItem('activeStoreId') || 'default';
+      token = window.sessionStorage?.getItem('access_token') || window.localStorage?.getItem('access_token') || '';
+      storeId = window.sessionStorage?.getItem('activeStoreId') || window.localStorage?.getItem('activeStoreId') || 'default';
+      const userStr = window.sessionStorage?.getItem('auth_user') || window.localStorage?.getItem('auth_user');
+      if (userStr) {
+        userInfoHeader = encodeURIComponent(userStr);
+      }
     } catch (_) {}
   }
-  return {
+  const headers: Record<string, string> = {
     'Authorization': 'Bearer ' + token,
     'x-store-id': storeId,
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0'
   };
+  if (userInfoHeader) {
+    headers['x-user-info'] = userInfoHeader;
+  }
+  return headers;
 };
 
 export const getLocalData = async <T>(key: string, defaultValue: T, queryParams: Record<string, string | number> = {}, retries = 3): Promise<T> => {
@@ -448,7 +457,7 @@ export const addDatabaseLog = async (action: string, entityType: string, entityI
   let userId = 'system';
   if (typeof window !== 'undefined') {
      try {
-       const sessionStr = window.localStorage.getItem('auth_user');
+       const sessionStr = window.sessionStorage?.getItem('auth_user') || window.localStorage?.getItem('auth_user');
        if (sessionStr) {
           const session = JSON.parse(sessionStr);
           if (session.name) userId = session.name;
@@ -485,9 +494,28 @@ export const addDatabaseLog = async (action: string, entityType: string, entityI
   } catch(e) {}
 };
 
-export const getSystemLogs = async () => {
-  const logs = await getLocalData<any[]>('system_logs', [], { limit: 50 });
-  return logs.sort((a, b) => b.timestamp - a.timestamp);
+export const getSystemLogs = async (params: { action?: string; entityType?: string; userId?: string | number; search?: string; limit?: number } = {}) => {
+  try {
+    const qs = new URLSearchParams();
+    if (params.action && params.action !== 'ALL') qs.set('action', params.action);
+    if (params.entityType && params.entityType !== 'ALL') qs.set('entityType', params.entityType);
+    if (params.userId && params.userId !== 'ALL') qs.set('userId', String(params.userId));
+    if (params.search) qs.set('search', params.search);
+    if (params.limit) qs.set('limit', String(params.limit));
+    else qs.set('limit', '1000');
+
+    const res = await fetch(`/api/system_logs?${qs.toString()}`, {
+      headers: getAuthHeaders()
+    });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data)) return data;
+    }
+  } catch (e) {
+    console.error('Error fetching system logs from API:', e);
+  }
+  const logs = await getLocalData<any[]>('system_logs', [], { limit: 200 });
+  return Array.isArray(logs) ? logs.sort((a, b) => (b.timestamp || 0) - (a.timestamp || 0)) : [];
 };
 
 export const addSystemLog = async (action, details, entityType, entityId) => {

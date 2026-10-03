@@ -15,8 +15,12 @@ import {
     MapPin,
     User,
     Activity,
-    X
-, RefreshCw} from "lucide-react";
+    X,
+    RefreshCw,
+    Download
+} from "lucide-react";
+import { exportToExcel, formatDecimalForExcel } from "../../utils/exportUtils";
+import { getActiveStoreSettings } from "../../utils/format";
 
 export default function WarehouseManager(props: any) {
   const {
@@ -87,34 +91,111 @@ export default function WarehouseManager(props: any) {
                       </div>
 
                       {warehouseSubTab === "list" ? (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingWarehouseId(null);
-                            setNewWarehouseName("");
-                            setNewWarehouseManager("");
-                            setNewWarehouseLocation("");
-                            setNewWarehouseIsActive(true);
-                            setIsWarehouseModalOpen(true);
-                          }}
-                          className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-semibold self-start lg:self-auto cursor-pointer"
-                        >
-                          <Plus className="w-4 h-4" />
-                          انبار جدید
-                        </button>
+                        <div className="flex items-center gap-2 self-start lg:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try {
+                                const settings = getActiveStoreSettings();
+                                const excelRows = (warehouses || []).map((w: any, idx: number) => ({
+                                  'ردیف': idx + 1,
+                                  'نام انبار': w.name || '',
+                                  'مسئول انبار': w.manager || '-',
+                                  'موقعیت / آدرس': w.location || '-',
+                                  'وضعیت': w.isActive ? 'فعال' : 'غیرفعال'
+                                }));
+                                exportToExcel({
+                                  filename: `لیست_انبارها_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`,
+                                  sheetName: 'انبارها',
+                                  data: excelRows,
+                                  storeSettings: settings
+                                });
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            }}
+                            className="px-3.5 py-2.5 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl shadow-2xs transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold cursor-pointer"
+                            title="خروجی فایل اکسل از لیست شعب انبارها"
+                          >
+                            <Download className="w-4 h-4 text-emerald-600" />
+                            <span>خروجی اکسل</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setEditingWarehouseId(null);
+                              setNewWarehouseName("");
+                              setNewWarehouseManager("");
+                              setNewWarehouseLocation("");
+                              setNewWarehouseIsActive(true);
+                              setIsWarehouseModalOpen(true);
+                            }}
+                            className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-semibold cursor-pointer"
+                          >
+                            <Plus className="w-4 h-4" />
+                            انبار جدید
+                          </button>
+                        </div>
                       ) : (
-                        <button
-                          type="button"
-                          disabled={recalculating}
-                          onClick={handleRecalculateStocks}
-                          className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-semibold self-start lg:self-auto cursor-pointer"
-                          title="محاسبه مجدد موجودی بر اساس اسناد رسید و حواله"
-                        >
-                          <RefreshCw
-                            className={`w-4 h-4 ${recalculating ? "animate-spin" : ""}`}
-                          />
-                          محاسبه مجدد موجودی انبارها
-                        </button>
+                        <div className="flex items-center gap-2 self-start lg:self-auto">
+                          <button
+                            type="button"
+                            onClick={() => {
+                              try {
+                                const settings = getActiveStoreSettings();
+                                const filteredStocks = (warehouseStocks || []).filter((stock: any) => {
+                                  const prodName = products?.find((p: any) => p.id?.toString() === stock.productId?.toString())?.name || "";
+                                  const whName = warehouses?.find((w: any) => w.id?.toString() === stock.warehouseId?.toString())?.name || "";
+                                  const searchLower = (whStockSearch || "").toLowerCase();
+                                  return prodName.toLowerCase().includes(searchLower) || whName.toLowerCase().includes(searchLower);
+                                });
+
+                                const excelRows = filteredStocks.map((stock: any, idx: number) => {
+                                  const prod = products?.find((p: any) => p.id?.toString() === stock.productId?.toString());
+                                  const wh = warehouses?.find((w: any) => w.id?.toString() === stock.warehouseId?.toString());
+                                  return {
+                                    'ردیف': idx + 1,
+                                    'نام کالا': prod?.name || 'کالای ناشناخته',
+                                    'کد کالا': prod?.code || '-',
+                                    'انبار ذخیره‌سازی': wh?.name || 'انبار ناشناخته',
+                                    'موجودی فیزیکی': formatDecimalForExcel(stock.physicalStock, settings),
+                                    'رزرو شده (فاکتورها)': formatDecimalForExcel(stock.reservedStock, settings),
+                                    'موجودی آزاد (قابل فروش)': formatDecimalForExcel(stock.availableStock, settings),
+                                    'واحد شمارش': prod?.unit || 'عدد'
+                                  };
+                                });
+
+                                exportToExcel({
+                                  filename: `موجودی_تفکیکی_انبارها_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`,
+                                  sheetName: 'موجودی انبارها',
+                                  data: excelRows,
+                                  storeSettings: settings
+                                });
+                              } catch (e) {
+                                console.error(e);
+                              }
+                            }}
+                            className="px-3.5 py-2.5 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl shadow-2xs transition-all flex items-center justify-center gap-1.5 text-xs sm:text-sm font-bold cursor-pointer"
+                            title="خروجی فایل اکسل از جدول موجودی انبارها با رعایت تنظیمات اعشار"
+                          >
+                            <Download className="w-4 h-4 text-emerald-600" />
+                            <span>خروجی اکسل</span>
+                          </button>
+
+                          <button
+                            type="button"
+                            disabled={recalculating}
+                            onClick={handleRecalculateStocks}
+                            className="px-4 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-400 text-white rounded-xl shadow-sm hover:shadow transition-all flex items-center justify-center gap-2 text-sm font-semibold cursor-pointer"
+                            title="محاسبه مجدد موجودی بر اساس اسناد رسید و حواله"
+                          >
+                            <RefreshCw
+                              className={`w-4 h-4 ${recalculating ? "animate-spin" : ""}`}
+                            />
+                            محاسبه مجدد موجودی انبارها
+                          </button>
+                        </div>
                       )}
                     </div>
 

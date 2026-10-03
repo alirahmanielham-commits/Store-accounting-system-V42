@@ -15,7 +15,8 @@ import {
   FileCheck, Coins
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
-import { convertToGregorian, formatDateDisplay, toPersianDigits, addCommas, formatNumber as formatNumberUtil } from "../../utils/format";
+import { convertToGregorian, formatDateDisplay, toPersianDigits, addCommas, formatNumber as formatNumberUtil, getActiveStoreSettings } from "../../utils/format";
+import { formatDecimalForExcel } from "../../utils/exportUtils";
 import { safePrint } from "../../utils/printHelper";
 
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_year' | 'all' | 'custom';
@@ -289,7 +290,10 @@ export default function ReceiptsList(props: any) {
   // Export to Excel (.xlsx)
   const exportToExcel = () => {
     try {
+      const activeSettings = storeSettings || getActiveStoreSettings();
+      const curr = activeSettings?.currency || 'تومان';
       const wb = XLSX.utils.book_new();
+
       const exportData = filteredTxs.map((tx: any, idx: number) => {
         const person = persons.find((p: any) => String(p.id) === String(tx.personId));
         const personName = person ? (person.alias || person.name || `${person.firstName || ''} ${person.lastName || ''}`) : (tx.personName || 'نامشخص');
@@ -301,7 +305,7 @@ export default function ReceiptsList(props: any) {
           'طرف حساب': personName,
           'تاریخ': formatDateDisplay(tx.date || tx.jalaliDate || tx.createdAt),
           'منبع مالی': getResourceLabel(tx),
-          'مبلغ (تومان)': Math.round(Number(tx.amount || 0)),
+          [`مبلغ (${curr})`]: formatDecimalForExcel(tx.amount || 0, activeSettings),
           'مبلغ به حروف': numToPersianWords(tx.amount || 0),
           'شرح / توضیحات': tx.note || tx.description || '-'
         };
@@ -309,8 +313,9 @@ export default function ReceiptsList(props: any) {
 
       const sheetTitle = isReceive ? 'رسیدهای دریافت' : 'رسیدهای پرداخت';
       const ws = XLSX.utils.json_to_sheet(exportData);
+      if (!ws['!dir']) ws['!dir'] = 'rtl';
       XLSX.utils.book_append_sheet(wb, ws, sheetTitle);
-      XLSX.writeFile(wb, `${sheetTitle}_${new Date().toISOString().split('T')[0]}.xlsx`);
+      XLSX.writeFile(wb, `${sheetTitle}_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}.xlsx`);
     } catch (e) {
       console.error('Excel export error:', e);
     }

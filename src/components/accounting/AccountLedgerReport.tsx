@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { Book, Search, FileText, ArrowLeftRight, CheckCircle, Calculator } from 'lucide-react';
+import { Book, Search, FileText, ArrowLeftRight, CheckCircle, Calculator, Download } from 'lucide-react';
 import { getAccountingDocuments, getLedgerAccounts, getPersons, getStoreSettings } from '../../services/dataService';
 import { AccountingDocument, LedgerAccount, Person } from '../../types';
 import { formatNumber, formatDateDisplay } from '../../utils/format';
+import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import CustomDatePicker from "../ui/CustomDatePicker";
 
 export default function AccountLedgerReport({ showNotification, onNavigateToDoc }: any) {
@@ -141,6 +142,58 @@ export default function AccountLedgerReport({ showNotification, onNavigateToDoc 
   const totalCredit = transactions.reduce((sum, t) => sum + (Number(t.credit) || 0), 0);
   const currency = storeSettings?.currency || 'تومان';
 
+  const handleExportExcel = () => {
+    try {
+      const selectedLedger = ledgerAccounts.find(a => a.id.toString() === selectedLedgerId);
+      const curr = storeSettings?.currency || 'تومان';
+
+      const excelRows: any[] = [];
+
+      if (openingBalance) {
+        excelRows.push({
+          'ردیف': 'افتتاحیه',
+          'تاریخ': fromDate ? formatDateDisplay(fromDate) : '-',
+          'شماره سند': '-',
+          'تفضیل (شخص)': '-',
+          'شرح': 'مانده از قبل (تراز افتتاحیه)',
+          [`بدهکار (${curr})`]: 0,
+          [`بستانکار (${curr})`]: 0,
+          [`تراز (${curr})`]: formatDecimalForExcel(openingBalance.amount, storeSettings),
+          'تشخیص': openingBalance.type
+        });
+      }
+
+      transactions.forEach((t, i) => {
+        excelRows.push({
+          'ردیف': i + 1,
+          'تاریخ': formatDateDisplay(t.date),
+          'شماره سند': t.docNumber || '-',
+          'تفضیل (شخص)': t.personName || '-',
+          'شرح': t.description || '-',
+          [`بدهکار (${curr})`]: formatDecimalForExcel(t.debit || 0, storeSettings),
+          [`بستانکار (${curr})`]: formatDecimalForExcel(t.credit || 0, storeSettings),
+          [`تراز (${curr})`]: formatDecimalForExcel(t.balance || 0, storeSettings),
+          'تشخیص': t.balanceType
+        });
+      });
+
+      const ledgerName = selectedLedger ? `${selectedLedger.code}_${(selectedLedger as any).title || (selectedLedger as any).name || 'حساب'}` : 'دفتر_معین';
+      const fileName = `دفتر_حساب_${ledgerName}_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+      exportToExcel({
+        filename: fileName,
+        sheetName: 'دفتر حساب',
+        data: excelRows,
+        storeSettings
+      });
+
+      if (showNotification) showNotification('فایل اکسل دفتر حساب با موفقیت دانلود شد', 'success');
+    } catch (e) {
+      console.error(e);
+      if (showNotification) showNotification('خطا در خروجی فایل اکسل', 'error');
+    }
+  };
+
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-100 flex flex-col h-[calc(100vh-140px)] overflow-hidden" dir="rtl">
       <div className="p-6 border-b border-slate-100 flex flex-col gap-4 bg-slate-50/50">
@@ -197,10 +250,22 @@ export default function AccountLedgerReport({ showNotification, onNavigateToDoc 
                 </div>
                 <button 
                   onClick={handleSearch}
-                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-xl flex items-center justify-center transition-colors"
+                  className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 rounded-xl flex items-center justify-center transition-colors cursor-pointer"
+                  title="جستجو"
                 >
                   <Search className="w-5 h-5" />
                 </button>
+                {hasSearched && (
+                  <button 
+                    type="button"
+                    onClick={handleExportExcel}
+                    className="bg-white border border-emerald-300 hover:bg-emerald-50 text-emerald-700 px-3.5 rounded-xl flex items-center gap-1.5 transition-all text-xs font-bold shadow-2xs cursor-pointer"
+                    title="خروجی فایل اکسل از دفتر حساب با رعایت فرمت اعشار"
+                  >
+                    <Download className="w-4 h-4 text-emerald-600" />
+                    اکسل (.xlsx)
+                  </button>
+                )}
             </div>
           </div>
         </div>

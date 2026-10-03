@@ -1,4 +1,6 @@
+import { exportToExcel, formatDecimalForExcel } from "../utils/exportUtils";
 import { autoGenerateRentCommitments } from "../services/hrService";
+import { hasPagePermission, getPageTitle } from "../utils/permissionUtils";
 import { suspendAppDataChanged, resumeAppDataChanged, invalidateCache } from "../services/coreService";
 import CustomDatePicker from "../components/ui/CustomDatePicker";
 import { SystemUpdatePage } from "../components/admin/SystemUpdatePage";
@@ -394,6 +396,11 @@ useEffect(() => {
 
 const setActiveTab = (tab: any, force: boolean = false) => {
     if (tab === activeTab) return;
+
+    if (tab !== "welcome_page" && user && !hasPagePermission(user, tab)) {
+      showNotification(`دسترسی به بخش «${getPageTitle(tab)}» برای شما مجاز نیست.`, "warning");
+      return;
+    }
 
     if (!force) {
       const isInvoiceTab =
@@ -1888,18 +1895,43 @@ const fetchProducts = async () => {
   };
 
 const handleExportProductsData = () => {
-    const worksheet = XLSX.utils.json_to_sheet(
-      (products || []).map((p) => {
-        const mapped = { ...p };
-        delete (mapped as any).priceHistory;
-        return mapped;
-      }),
-    );
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, worksheet, "Products");
-    const filename = `products_export_${new Date().toLocaleDateString(storeSettings?.calendarType === "gregorian" ? "en-US" : "fa-IR").replace(/\//g, "-")}.xlsx`;
-    XLSX.writeFile(workbook, filename);
-    showNotification("خروجی اکسل کالاها با موفقیت دریافت شد.", "success");
+    try {
+      const curr = storeSettings?.currency || "تومان";
+      const excelRows = (products || []).map((p: any, idx: number) => {
+        const catName = (productCategories || []).find((c: any) => c.id?.toString() === p.categoryId?.toString())?.name || "بدون دسته‌بندی";
+        const currentStock = calculateProductCurrentStock ? calculateProductCurrentStock(p.id) : (p.currentStock ?? 0);
+        return {
+          "ردیف": idx + 1,
+          "نام کالا / خدمات": p.name || "",
+          "کد کالا": p.code || "-",
+          "بارکد": p.barcode || "-",
+          "نوع": p.type === "service" ? "خدمات" : "کالا",
+          "دسته‌بندی": catName,
+          [`قیمت خرید (${curr})`]: formatDecimalForExcel(p.buyPrice || 0, storeSettings),
+          [`قیمت فروش (${curr})`]: formatDecimalForExcel(p.sellPrice || 0, storeSettings),
+          "موجودی فعلی": formatDecimalForExcel(currentStock, storeSettings),
+          "حداقل موجودی (نقطه سفارش)": formatDecimalForExcel(p.minStockLevel || 0, storeSettings),
+          "واحد اصلی": p.unit || "عدد",
+          "واحد فرعی": p.subUnit || "-",
+          "ضریب تبدیل": p.unitRatio ? formatDecimalForExcel(p.unitRatio, storeSettings) : "-",
+          "مکان در انبار": p.location || "-",
+          "توضیحات": p.description || ""
+        };
+      });
+
+      const filename = `لیست_کالاها_و_خدمات_${new Date().toLocaleDateString(storeSettings?.calendarType === "gregorian" ? "en-US" : "fa-IR").replace(/\//g, "-")}`;
+      exportToExcel({
+        filename,
+        sheetName: "کالاها و خدمات",
+        data: excelRows,
+        storeSettings
+      });
+
+      showNotification("خروجی اکسل کالاها و خدمات با موفقیت دریافت شد.", "success");
+    } catch (err) {
+      console.error("Error exporting products to excel:", err);
+      showNotification("خطا در صدور فایل اکسل کالاها", "error");
+    }
   };
 
 const handleDownloadProductsTemplate = () => {

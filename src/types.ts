@@ -233,7 +233,20 @@ export type InvoiceItem = {
   maxQuantity?: number;
 };
 
-export type UserRole = 'admin' | 'manager' | 'employee' | 'customer' | 'guest' | 'accountant' | 'cashier';
+export type UserRole = 'admin' | 'manager' | 'employee' | 'customer' | 'guest' | 'accountant' | 'cashier' | 'warehouseman' | 'viewer';
+
+export interface UserSpecialPermissions {
+  canEditPrices?: boolean;
+  canDeleteInvoices?: boolean;
+  canGiveDiscounts?: boolean;
+  canViewCostAndProfit?: boolean;
+  canManageUsers?: boolean;
+  canManageSettings?: boolean;
+  canManageDatabase?: boolean;
+  canApproveChecks?: boolean;
+  canAccessAllWarehouses?: boolean;
+  allowedWarehouseIds?: (string | number)[];
+}
 
 export type RefundRequest = {
   id?: string | number;
@@ -337,6 +350,11 @@ export type User = {
   personId?: string | number;
   autoLogoutMinutes?: number;
   isProfileRequired?: boolean;
+  allowedTabs?: string[];
+  deniedTabs?: string[];
+  allowedModules?: string[];
+  specialPermissions?: UserSpecialPermissions;
+  customPermissionsEnabled?: boolean;
 }; 
 export type CompanySettings = {
   checkApprovalThreshold?: number;
@@ -548,12 +566,24 @@ export type Installment = { id: string | number; loanId: string | number; dueDat
 export type SystemLog = {
   id: string | number;
   action: string;
-  userId: string | number;
+  userId?: string | number;
+  username?: string;
+  userName?: string;
+  userRole?: string;
   details: string;
   entityType: string;
-  entityId: string | number;
+  entityId?: string | number;
   timestamp: number;
+  dateStr?: string;
   changes?: string;
+  oldData?: any;
+  newData?: any;
+  diffSummary?: string;
+  browser?: string;
+  os?: string;
+  device?: string;
+  ip?: string;
+  userAgent?: string;
 };
 
 export type ProductPriceHistory = {

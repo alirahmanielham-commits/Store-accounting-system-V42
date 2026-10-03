@@ -15,7 +15,8 @@ import {
   ShoppingCart
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
-import { convertToGregorian, formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, formatNumber } from "../../utils/format";
+import { convertToGregorian, formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, formatNumber, getActiveStoreSettings } from "../../utils/format";
+import { formatDecimalForExcel } from "../../utils/exportUtils";
 import { getUnitRatioDirection, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../../utils/unitConversion";
 import { safePrint } from "../../utils/printHelper";
 
@@ -556,7 +557,10 @@ export default function InvoicesList(props: any) {
   // Export to Excel (.xlsx)
   const exportToExcel = () => {
     try {
+      const activeSettings = storeSettings || getActiveStoreSettings();
+      const curr = activeSettings?.currency || 'تومان';
       const wb = XLSX.utils.book_new();
+
       const exportData = filteredInvoicesList.map((inv: any, idx: number) => {
         const p = persons.find(
           (per: any) => String(per.id) === String(inv.customerId || inv.personId)
@@ -572,9 +576,9 @@ export default function InvoicesList(props: any) {
           'طرف حساب': pName,
           'تاریخ': formatInvoiceDate(inv.date || inv.jalaliDate || inv.createdAt, storeSettings?.calendarType, { showTime: false }),
           'سررسید': inv.dueDate ? formatInvoiceDate(inv.dueDate, storeSettings?.calendarType, { showTime: false }) : '-',
-          'مبلغ کل (تومان)': Math.round(inv.totalAmount || 0),
-          'دریافتی / پرداختی (تومان)': Math.round(inv.paidAmount || 0),
-          'مانده (تومان)': Math.round(Math.max((inv.totalAmount || 0) - (inv.paidAmount || 0), 0)),
+          [`مبلغ کل (${curr})`]: formatDecimalForExcel(inv.totalAmount || 0, activeSettings),
+          [`دریافتی / پرداختی (${curr})`]: formatDecimalForExcel(inv.paidAmount || 0, activeSettings),
+          [`مانده (${curr})`]: formatDecimalForExcel(Math.max((inv.totalAmount || 0) - (inv.paidAmount || 0), 0), activeSettings),
           'وضعیت تسویه': inv.paymentStatus === 'paid' ? 'تسویه کامل' : (inv.paymentStatus === 'partial' ? 'علی‌الحساب' : 'پرداخت نشده'),
           'وضعیت انبار': whStatusLabel,
           'انبار': getDocWarehouseName(inv),
@@ -583,9 +587,10 @@ export default function InvoicesList(props: any) {
       });
 
       const ws = XLSX.utils.json_to_sheet(exportData);
+      if (!ws['!dir']) ws['!dir'] = 'rtl';
       XLSX.utils.book_append_sheet(wb, ws, pageConfig.title);
-      XLSX.writeFile(wb, `${pageConfig.title}_${new Date().toISOString().split('T')[0]}.xlsx`);
-      if (setSuccessMsg) setSuccessMsg('خروجی اکسل با موفقیت دانلود شد');
+      XLSX.writeFile(wb, `${pageConfig.title}_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}.xlsx`);
+      if (setSuccessMsg) setSuccessMsg('خروجی اکسل با رعایت فرمت اعشار با موفقیت دانلود شد');
     } catch (e) {
       console.error('Excel export error:', e);
     }

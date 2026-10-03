@@ -1,5 +1,7 @@
 import React, { useState, useMemo } from "react";
 import { motion, AnimatePresence } from "motion/react";
+import { useAuth } from "../context/AuthContext";
+import { hasPagePermission } from "../utils/permissionUtils";
 import {
   Receipt,
   BookOpen,
@@ -243,23 +245,39 @@ export default function MobileRestrictedMenu({
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 
+  const { user } = useAuth();
+
+  // Filter categories and subItems by user permissions
+  const permittedCategories = useMemo(() => {
+    return MOBILE_CATEGORIES.map((cat) => ({
+      ...cat,
+      subItems: cat.subItems.filter((sub) => hasPagePermission(user, sub.id)),
+    })).filter((cat) => cat.subItems.length > 0);
+  }, [user]);
+
   // Find active category
   const activeCategory = useMemo(() => {
+    if (permittedCategories.length === 0) return null;
     return (
-      MOBILE_CATEGORIES.find((cat) =>
+      permittedCategories.find((cat) =>
         cat.subItems.some((sub) => sub.id === activeTab)
-      ) || MOBILE_CATEGORIES[0]
+      ) || permittedCategories[0]
     );
-  }, [activeTab]);
+  }, [activeTab, permittedCategories]);
 
   const displayedCategory = useMemo(() => {
+    if (!activeCategory) return null;
     if (selectedCategoryId) {
       return (
-        MOBILE_CATEGORIES.find((c) => c.id === selectedCategoryId) || activeCategory
+        permittedCategories.find((c) => c.id === selectedCategoryId) || activeCategory
       );
     }
     return activeCategory;
-  }, [selectedCategoryId, activeCategory]);
+  }, [selectedCategoryId, activeCategory, permittedCategories]);
+
+  if (!activeCategory || permittedCategories.length === 0) {
+    return null;
+  }
 
   return (
     <div className="block md:hidden select-none w-full" dir="rtl">
@@ -305,7 +323,7 @@ export default function MobileRestrictedMenu({
       {/* Main Mobile Bottom Navigation Bar (Fixed 64px / h-16 height) */}
       <div className="fixed bottom-0 inset-x-0 h-16 z-[80] bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe">
         <div className="flex justify-around items-center h-16 px-1">
-          {MOBILE_CATEGORIES.map((cat) => {
+          {permittedCategories.map((cat) => {
             const isCategoryActive = activeCategory.id === cat.id;
             const IconComponent = cat.icon;
 

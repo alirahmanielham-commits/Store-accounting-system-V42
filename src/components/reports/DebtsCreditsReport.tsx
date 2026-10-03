@@ -7,6 +7,7 @@ import { motion } from 'motion/react';
 import { getPersons, getInvoices, getTransactions, getIssuedChecks, getReceivedChecks, getStoreSettings, getPersonGroups, getAccountingDocuments } from '../../services/dataService';
 import { Person, PersonGroup } from '../../types';
 import { getDefaultExchangeRate, formatDateDisplay, formatNumber as formatNumberUtil, formatCurrency as formatCurrencyUtil, getActiveStoreSettings } from '../../utils/format';
+import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 import { safePrint } from '../../utils/printHelper';
 
@@ -159,6 +160,41 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({
   const totalCredits = rows.filter(r => r.balanceValue < 0).reduce((sum, r) => sum + Math.abs(r.balanceValue), 0);
   const netBalance = totalDebts - totalCredits;
 
+  const handleExportExcel = () => {
+    try {
+      const curr = settings?.currency || 'تومان';
+      const activeSettings = settings || getActiveStoreSettings();
+      const excelRows = rows.map((r, idx) => ({
+        'ردیف': idx + 1,
+        'کد حسابداری': r.personCode || r.accountingCode || '-',
+        'نام شخص / طرف حساب': r.name,
+        'نام مستعار / عنوان': r.alias || '-',
+        'تلفن': r.phone || '-',
+        'موبایل': r.mobile || '-',
+        'گروه': r.groupName || '-',
+        'وضعیت': r.balanceValue > 0 ? 'بدهکار به ما' : (r.balanceValue < 0 ? 'بستانکار از ما' : 'تسویه'),
+        [`مبلغ بدهی (${curr})`]: formatDecimalForExcel(r.balanceValue > 0 ? r.balanceValue : 0, activeSettings),
+        [`مبلغ بستانکاری (${curr})`]: formatDecimalForExcel(r.balanceValue < 0 ? Math.abs(r.balanceValue) : 0, activeSettings),
+        [`مانده نهایی (${curr})`]: formatDecimalForExcel(Math.abs(r.balanceValue), activeSettings)
+      }));
+
+      const filterTitle = filterType === 'debtor' ? 'بدهکاران' : (filterType === 'creditor' ? 'بستانکاران' : (filterType === 'settled' ? 'تسویه_شده‌ها' : 'همه_اشخاص'));
+      const fileName = `گزارش_بدهی_طلب_اشخاص_${filterTitle}_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+      exportToExcel({
+        filename: fileName,
+        sheetName: 'بدهی‌ها و طلب‌ها',
+        data: excelRows,
+        storeSettings: activeSettings
+      });
+
+      if (showNotification) showNotification('success', 'فایل اکسل گزارش بدهی‌ها و طلب‌ها با رعایت فرمت اعشار با موفقیت دانلود شد');
+    } catch (e) {
+      console.error(e);
+      if (showNotification) showNotification('error', 'خطا در خروجی فایل اکسل');
+    }
+  };
+
   if (isLoading) {
     return (
       <BeautifulLoading />
@@ -182,13 +218,23 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({
             مشاهده وضعیت حساب و پرداختی‌های اشخاص و شرکت‌ها
           </p>
         </div>
-        <button 
-          onClick={() => setIsPrintModalOpen(true)}
-          className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-bold text-sm shadow-sm"
-        >
-          <Printer className="w-4 h-4" />
-          چاپ گزارش
-        </button>
+        <div className="flex items-center gap-2">
+          <button 
+            onClick={handleExportExcel}
+            className="flex items-center gap-2 px-4 py-2.5 bg-white border border-emerald-300 text-emerald-700 rounded-xl hover:bg-emerald-50 transition-all font-bold text-xs shadow-2xs cursor-pointer"
+            title="خروجی فایل اکسل از لیست بدهی‌ها و طلب‌ها با رعایت فرمت اعشار"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            خروجی اکسل (.xlsx)
+          </button>
+          <button 
+            onClick={() => setIsPrintModalOpen(true)}
+            className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-bold text-sm shadow-sm cursor-pointer"
+          >
+            <Printer className="w-4 h-4" />
+            چاپ گزارش
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-4 gap-4 print:hidden">

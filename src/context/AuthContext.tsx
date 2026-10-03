@@ -1,19 +1,20 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useRef, useCallback } from 'react';
 import { User, UserRole } from '../types';
 import { Lock, User as UserIcon, LogIn, AlertCircle, KeyRound, Zap, ArrowRight, ClipboardList, ShieldCheck, LineChart, LayoutDashboard,
-  Layers, ArrowLeft } from 'lucide-react';
+  Layers, ArrowLeft, Clock } from 'lucide-react';
 import FastProductCreateModal from '../components/products/FastProductCreateModal';
 import WelcomePage from "../components/WelcomePage";
 import SystemChecklist from '../components/admin/SystemChecklist';
-import { addProduct } from '../services/dataService';
+import { addProduct, getUsers } from '../services/dataService';
 
 interface AuthContextType {
   user: User | null;
   loading: boolean;
   accessToken: string | null;
-  signIn: (u: User) => Promise<void>;
+  signIn: (u: User, token?: string) => Promise<void>;
   signOut: () => Promise<void>;
   checkAuth: () => void;
+  refreshUserData: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -22,7 +23,8 @@ const AuthContext = createContext<AuthContextType>({
   accessToken: null,
   signIn: async () => {},
   signOut: async () => {},
-  checkAuth: () => {}
+  checkAuth: () => {},
+  refreshUserData: async () => {}
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -32,6 +34,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [showLogin, setShowLogin] = useState(false);
   const [accessToken, setAccessToken] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+
+  // Inactivity tracking
+  const lastActivityRef = useRef<number>(Date.now());
 
   // Login form state
   const [username, setUsername] = useState('');
@@ -47,37 +52,162 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isFastProductModalOpen, setIsFastProductModalOpen] = useState(false);
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
 
-  const checkAuth = () => {
-    const storedUser = localStorage.getItem('auth_user');
-    const storedToken = localStorage.getItem('access_token');
-    if (storedUser && storedToken) {
-      setUser(JSON.parse(storedUser));
-      setAccessToken(storedToken);
+  const checkAuth = useCallback(async () => {
+    // Session expiration on browser close:
+    // If the browser was closed, sessionStorage is empty.
+    const isSessionActive = sessionStorage.getItem('taraz_session_active');
+    const storedUserStr = sessionStorage.getItem('auth_user');
+    const storedToken = sessionStorage.getItem('access_token');
+    
+    if (!isSessionActive || !storedUserStr) {
+      // Browser was closed or brand new session -> expire any old session
+      localStorage.removeItem('auth_user');
+      localStorage.removeItem('access_token');
+      localStorage.removeItem('taraz_session_active');
+      sessionStorage.removeItem('auth_user');
+      sessionStorage.removeItem('access_token');
+      sessionStorage.removeItem('taraz_session_active');
+      sessionStorage.removeItem('taraz_last_activity');
+      setUser(null);
+      setAccessToken(null);
+      setLoading(false);
+      return;
+    }
+
+    if (storedUserStr) {
+      try {
+        const parsedUser: User = JSON.parse(storedUserStr);
+        setUser(parsedUser);
+        if (storedToken) setAccessToken(storedToken);
+
+        // Fetch fresh user data from database to pick up any updated permissions made by admin
+        getUsers().then(usersList => {
+          if (Array.isArray(usersList)) {
+            const freshUser = usersList.find(u => String(u.id) === String(parsedUser.id) || u.username === parsedUser.username);
+            if (freshUser && freshUser.isActive !== false) {
+              const merged: User = { ...parsedUser, ...freshUser };
+              setUser(merged);
+              sessionStorage.setItem('auth_user', JSON.stringify(merged));
+            } else if (freshUser && freshUser.isActive === false) {
+              // User was deactivated by admin
+              handleSignOut();
+              setError('حساب کاربری شما توسط مدیر غیرفعال شده است.');
+              setShowLogin(true);
+            }
+          }
+        }).catch(() => {});
+      } catch (e) {
+        console.error('Error parsing stored user:', e);
+      }
     }
     setLoading(false);
+  }, []);
+
+  const refreshUserData = async () => {
+    if (!user) return;
+    try {
+      const usersList = await getUsers();
+      if (Array.isArray(usersList)) {
+        const freshUser = usersList.find(u => String(u.id) === String(user.id) || u.username === user.username);
+        if (freshUser) {
+          const merged: User = { ...user, ...freshUser };
+          setUser(merged);
+          sessionStorage.setItem('auth_user', JSON.stringify(merged));
+        }
+      }
+    } catch (e) {
+      console.error('Error refreshing user data:', e);
+    }
   };
 
   useEffect(() => {
     checkAuth();
-  }, []);
+  }, [checkAuth]);
 
-  const signIn = async (u: User) => {
+  const signIn = async (u: User, token?: string) => {
     setUser(u);
-    localStorage.setItem('auth_user', JSON.stringify(u));
+    const now = Date.now();
+    lastActivityRef.current = now;
+    // Mark session active in sessionStorage (cleared automatically when browser is closed)
+    sessionStorage.setItem('taraz_session_active', '1');
+    sessionStorage.setItem('auth_user', JSON.stringify(u));
+    sessionStorage.setItem('taraz_last_activity', now.toString());
+    if (token) {
+      sessionStorage.setItem('access_token', token);
+      setAccessToken(token);
+    }
+    // Clean up localStorage to ensure session cannot outlive browser closing
+    localStorage.removeItem('auth_user');
+    localStorage.removeItem('access_token');
+    localStorage.removeItem('taraz_session_active');
   };
 
   const handleSignOut = async () => {
     setUser(null);
     setAccessToken(null);
+    sessionStorage.removeItem('taraz_session_active');
+    sessionStorage.removeItem('auth_user');
+    sessionStorage.removeItem('access_token');
+    sessionStorage.removeItem('taraz_last_activity');
     localStorage.removeItem('auth_user');
     localStorage.removeItem('access_token');
+    localStorage.removeItem('taraz_session_active');
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch(e) {}
   };
 
-  // Helper to intercept fetch and add token (not strictly enforced everywhere yet, but available)
-  // Removed global fetch override due to "Cannot set property fetch of #<Window> which has only a getter"
+  // --- Inactivity Timeout Watcher ---
+  useEffect(() => {
+    if (!user) return;
+
+    // Timeout in minutes set per user by administrator (defaults to 15 mins if not set)
+    const timeoutMinutes = (typeof user.autoLogoutMinutes === 'number' && user.autoLogoutMinutes > 0)
+      ? user.autoLogoutMinutes
+      : 15;
+    const timeoutMs = timeoutMinutes * 60 * 1000;
+
+    let lastRecorded = Date.now();
+    lastActivityRef.current = lastRecorded;
+    sessionStorage.setItem('taraz_last_activity', lastRecorded.toString());
+
+    const handleActivity = () => {
+      const now = Date.now();
+      // Throttle updating timestamp to once per second
+      if (now - lastRecorded > 1000) {
+        lastRecorded = now;
+        lastActivityRef.current = now;
+        sessionStorage.setItem('taraz_last_activity', now.toString());
+      }
+    };
+
+    const activityEvents = ['mousedown', 'mousemove', 'keydown', 'scroll', 'touchstart', 'click', 'wheel'];
+    activityEvents.forEach(evt => {
+      window.addEventListener(evt, handleActivity, { passive: true });
+    });
+
+    // Inactivity poll interval every 2.5 seconds
+    const interval = setInterval(() => {
+      const now = Date.now();
+      const storedLast = Number(sessionStorage.getItem('taraz_last_activity')) || lastActivityRef.current;
+      const latestActivity = Math.max(lastActivityRef.current, storedLast);
+      const elapsed = now - latestActivity;
+
+      if (elapsed >= timeoutMs) {
+        console.warn(`User inactive for ${timeoutMinutes} minutes. Automatic logout triggered.`);
+        handleSignOut();
+        setError(`نشست کاری شما به دلیل عدم فعالیت به مدت ${timeoutMinutes} دقیقه منقضی شد. لطفاً مجدداً وارد شوید.`);
+        setShowLogin(true);
+      }
+    }, 2500);
+
+    return () => {
+      activityEvents.forEach(evt => {
+        window.removeEventListener(evt, handleActivity);
+      });
+      clearInterval(interval);
+    };
+  }, [user]);
 
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,9 +231,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
          setTempToken(data.tempToken);
          if (data.message) setSuccessMsg(data.message); // Demo only: show OTP code
       } else {
-         localStorage.setItem('access_token', data.accessToken);
-         setAccessToken(data.accessToken);
-         signIn(data.user);
+         signIn(data.user, data.accessToken);
       }
     } catch(err) {
        setError('خطا در ارتباط با سرور.');
@@ -126,10 +254,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         return;
       }
       
-      localStorage.setItem('access_token', data.accessToken);
-      setAccessToken(data.accessToken);
       setRequireOTP(false);
-      signIn(data.user);
+      signIn(data.user, data.accessToken);
     } catch(err) {
       setError('خطا در ارتباط با سرور.');
     }
@@ -336,7 +462,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   }
 
   return (
-    <AuthContext.Provider value={{ user, loading, accessToken, signIn, signOut: handleSignOut, checkAuth }}>
+    <AuthContext.Provider value={{ user, loading, accessToken, signIn, signOut: handleSignOut, checkAuth, refreshUserData }}>
       {children}
     </AuthContext.Provider>
   );

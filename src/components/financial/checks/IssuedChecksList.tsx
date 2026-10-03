@@ -4,7 +4,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import { 
   CheckCircle, Clock, Search, DollarSign, AlertTriangle, 
   History, Activity, Edit2, Trash2, BookOpen, ChevronDown, 
-  Filter, MoreHorizontal, ArrowUpRight, ArrowDownLeft, Wallet, Printer
+  Filter, MoreHorizontal, ArrowUpRight, ArrowDownLeft, Wallet, Printer, Download
 } from 'lucide-react';
 import DatePickerModule, { Calendar as RMCalendar } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
@@ -138,35 +138,45 @@ export function IssuedChecksList({
         <div className="flex flex-col sm:flex-row items-center gap-3 w-full xl:w-auto">
           {/* Export Button */}
           <button 
+            type="button"
             onClick={async () => {
               try {
-                const { exportToExcel } = await import('../../../utils/exportUtils');
+                const { exportToExcel, formatDecimalForExcel } = await import('../../../utils/exportUtils');
+                const curr = storeSettings?.currency || 'تومان';
                 
-                const data = filteredIssuedChecks.map((c: any) => {
+                const data = filteredIssuedChecks.map((c: any, idx: number) => {
                   const payee = persons.find((p: any) => p.id === c.payeeId);
                   const cb = checkbooks.find((b: any) => b.id === c.checkbookId);
                   
                   return {
-                    'شماره چک': c.checkNumber,
+                    'ردیف': idx + 1,
+                    'شماره چک': c.checkNumber || '-',
                     'تاریخ سررسید': formatDateDisplay(c.dueDate, storeSettings?.calendarType),
-                    'مبلغ (تومان)': c.amount,
-                    'گیرنده': payee?.name || c.payeeId || 'ناشناس',
-                    'بابت': c.description || '',
-                    'بانک': cb ? `${cb.bankName} - ${cb.accountNumber}` : (c.bankName || ''),
+                    [`مبلغ (${curr})`]: formatDecimalForExcel(c.amount || 0, storeSettings),
+                    'گیرنده (طرف حساب)': payee?.name || c.payeeId || 'ناشناس',
+                    'بابت': c.description || '-',
+                    'بانک و حساب': cb ? `${cb.bankName} - ${cb.accountNumber}` : (c.bankName || '-'),
                     'وضعیت': c.status === 'cashed' ? 'پاس شده' : c.status === 'bounced' ? 'برگشتی' : c.status === 'cancelled' ? 'باطل شده' : 'در جریان'
                   };
                 });
                 
-                exportToExcel({ filename: 'چک‌های_پرداختی', title: 'گزارش چک‌های پرداختی', data, columns: Object.keys(data[0] || {}).map(k => ({ header: k, key: k, width: 20 })) });
+                exportToExcel({ 
+                  filename: `چک‌های_پرداختی_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`, 
+                  title: 'گزارش چک‌های پرداختی', 
+                  data,
+                  storeSettings
+                });
+                showNotification?.('خروجی اکسل چک‌های پرداختی با موفقیت دریافت شد', 'success');
               } catch (err) {
                 console.error("Export failed:", err);
                 showNotification?.('خطا در دریافت فایل خروجی', 'error');
               }
             }}
-            className="flex items-center gap-2 bg-white border border-slate-200 text-slate-700 px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-slate-50 transition-colors shadow-sm w-full sm:w-auto justify-center whitespace-nowrap"
+            className="flex items-center gap-1.5 bg-white border border-emerald-300 text-emerald-700 px-4 py-2.5 rounded-xl text-xs font-bold hover:bg-emerald-50 transition-colors shadow-2xs w-full sm:w-auto justify-center whitespace-nowrap cursor-pointer"
+            title="خروجی فایل اکسل چک‌های پرداختی با رعایت تنظیمات اعشار"
           >
-            <Printer className="w-4 h-4" />
-            اکسل
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>خروجی اکسل (.xlsx)</span>
           </button>
 
           {/* Checkbook Filter */}

@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { 
   LayoutDashboard, Users, Box, Calculator, 
   Settings, ChevronLeft, Circle, FileText,
   Search, Globe
 } from 'lucide-react';
+import { hasPagePermission } from '../../../utils/permissionUtils';
 
 interface SidebarProps {
   appState: any;
@@ -70,10 +71,24 @@ export default function Sidebar({ appState, isCollapsed, isDarkMode }: SidebarPr
       icon: <Settings className="w-[18px] h-[18px]" />,
       subItems: [
         { id: 'settings', label: 'تنظیمات کلی', action: () => setActiveTab('settings') },
+        { id: 'user_management', label: 'کاربران و سطوح دسترسی', action: () => setActiveTab('user_management') },
+        { id: 'system_logs', label: 'لاگ وقایع و فعالیت‌های کاربران', action: () => setActiveTab('system_logs') },
+        { id: 'database_logs', label: 'لاگ پایگاه داده', action: () => setActiveTab('database_logs') },
         { id: 'sync_manager', label: 'مدیریت همگام‌سازی', action: () => setActiveTab('sync_manager') }
       ]
     }
   ];
+
+  const filteredMenuItems = useMemo(() => {
+    return menuItems.map(item => {
+      if (item.subItems) {
+        const allowedSubs = item.subItems.filter(sub => hasPagePermission(user, sub.id));
+        return { ...item, subItems: allowedSubs };
+      }
+      const isAllowed = hasPagePermission(user, item.id === 'dashboard' ? 'financial_report' : item.id);
+      return isAllowed ? item : null;
+    }).filter(Boolean).filter(item => !item!.subItems || item!.subItems.length > 0);
+  }, [user]);
 
   const isActive = (item: any) => {
     if (activeTab === item.id) return true;
@@ -124,7 +139,7 @@ export default function Sidebar({ appState, isCollapsed, isDarkMode }: SidebarPr
         {/* Sidebar Menu */}
         <nav className="mt-2 px-2 pb-4">
           <ul className="flex flex-col gap-0.5">
-            {menuItems.map((item) => {
+            {filteredMenuItems.map((item: any) => {
               const active = isActive(item);
               const isOpen = openMenu === item.id || active;
               

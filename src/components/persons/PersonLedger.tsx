@@ -7,6 +7,8 @@ import { MessageSquare } from 'lucide-react';
 import html2pdf from "html2pdf.js";
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 import { safePrint } from '../../utils/printHelper';
+import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
+import { getActiveStoreSettings } from '../../utils/format';
 
 export default function PersonLedger(props: any) {
   const {
@@ -1284,11 +1286,66 @@ export default function PersonLedger(props: any) {
                           ) : (
 
                             <div className="bg-white rounded-2xl border border-gray-100 shadow-sm overflow-hidden print:overflow-visible">
-                              <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex items-center justify-between">
-                                <h3 className="font-extrabold text-gray-800 flex items-center gap-2">
+                              <div className="bg-gray-50/50 px-6 py-4 border-b border-gray-100 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                                <h3 className="font-extrabold text-gray-800 flex items-center gap-2 text-sm sm:text-base">
                                   <List className="w-5 h-5 text-violet-500" />
                                   ریز و گردش جزئیات حساب معین (کارت حساب اشخاص)
                                 </h3>
+
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    try {
+                                      const activeSettings = storeSettings || getActiveStoreSettings();
+                                      const curr = activeSettings?.currency || "تومان";
+                                      const filteredEntries = ledgerEntries.filter((entry) => {
+                                        if (ledgerTab === "transactions" || ledgerTab === "detailed") return true;
+                                        if (ledgerTab === "items") return entry.entryType === "invoice";
+                                        if (ledgerTab === "checks") return entry.entryType === "issued_check" || entry.entryType === "received_check";
+                                        return true;
+                                      });
+
+                                      const excelRows = filteredEntries.map((entry, idx) => {
+                                        const isDeb = entry.runningBalance > 0;
+                                        const isCred = entry.runningBalance < 0;
+                                        const statusLabel = isDeb ? "بدهکار به ما" : isCred ? "بستانکار از ما" : "تسویه / بی‌حساب";
+
+                                        return {
+                                          "ردیف": idx + 1,
+                                          "تاریخ": getLedgerDateOnly(entry.date),
+                                          "نوع رویداد": entry.type || "-",
+                                          "شماره سند/فاکتور": entry.number || entry.invoiceNumber || "-",
+                                          "شرح رویداد مالی": entry.description || "-",
+                                          [`بدهکار / افزایش تعهد (${curr})`]: formatDecimalForExcel(entry.debit || 0, activeSettings),
+                                          [`بستانکار / کاهش تعهد (${curr})`]: formatDecimalForExcel(entry.credit || 0, activeSettings),
+                                          [`مانده نهایی (${curr})`]: formatDecimalForExcel(Math.abs(entry.runningBalance || 0), activeSettings),
+                                          "تشخیص وضعیت": statusLabel
+                                        };
+                                      });
+
+                                      const pName = selectedPerson ? (selectedPerson.name || selectedPerson.code || "شخص") : "شخص";
+                                      const tabTitle = ledgerTab === "items" ? "_فاکتورها" : ledgerTab === "checks" ? "_چک‌ها" : "_گردش_کامل";
+                                      const filename = `کارت_حساب_${pName.replace(/\s+/g, '_')}${tabTitle}_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+                                      exportToExcel({
+                                        filename,
+                                        sheetName: "کارت حساب معین",
+                                        data: excelRows,
+                                        storeSettings: activeSettings
+                                      });
+
+                                      if (showNotification) showNotification('خروجی اکسل گردش حساب شخص با موفقیت دانلود شد', 'success');
+                                    } catch (err) {
+                                      console.error("Error exporting ledger to excel:", err);
+                                      if (showNotification) showNotification('خطا در صدور فایل اکسل گردش حساب', 'error');
+                                    }
+                                  }}
+                                  className="flex items-center gap-1.5 px-3.5 py-1.5 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all font-bold text-xs shadow-2xs cursor-pointer self-start sm:self-auto"
+                                  title="خروجی فایل اکسل از جدول گردش حساب با رعایت فرمت اعشار"
+                                >
+                                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>خروجی اکسل (.xlsx)</span>
+                                </button>
                               </div>
 
                               <div className="overflow-x-auto print:overflow-visible">

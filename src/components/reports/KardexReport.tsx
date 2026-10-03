@@ -49,7 +49,8 @@ import {
   getUnitRatioDirection,
   formatUnitConversionFormula
 } from "../../utils/unitConversion";
-import { toPersianDigits, addCommas, formatDateDisplay, numToPersianWords } from "../../utils/format";
+import { toPersianDigits, addCommas, formatDateDisplay, numToPersianWords, getActiveStoreSettings } from "../../utils/format";
+import { exportToExcel, formatDecimalForExcel } from "../../utils/exportUtils";
 import { globalDateFormatter } from "../../utils/dateFormatter";
 import { calculateAllWarehouseStocks } from "../../utils/stockLogic";
 import { compareKardexTransactions, parseDocDateToTimestamp } from "../../utils/kardexSort";
@@ -618,51 +619,42 @@ export default function KardexReport() {
     return productSummaryMap[selectedProduct.id?.toString()] || null;
   }, [selectedProduct, warehouses, invoices]);
 
-  // Export to CSV
-  const handleExportCSV = () => {
+  // Export to Excel (.xlsx)
+  const handleExportExcel = () => {
     if (!selectedProduct || ledgerRows.length === 0) return;
 
-    const headers = [
-      'ردیف',
-      'تاریخ',
-      'زمان',
-      'نوع سند',
-      'شماره سند',
-      'انبار',
-      'طرف حساب',
-      'شرح',
-      `وارده (${selectedProduct.unit || 'واحد'})`,
-      `صادره (${selectedProduct.unit || 'واحد'})`,
-      `مانده لحظه‌ای (${selectedProduct.unit || 'واحد'})`,
-      'فی واحد (تومان)',
-      'مبلغ کل (تومان)'
-    ];
+    try {
+      const activeSettings = settings || getActiveStoreSettings();
+      const curr = activeSettings?.currency || 'تومان';
+      const unit = selectedProduct.unit || 'عدد';
 
-    const rows = ledgerRows.map(r => [
-      formatDigits(r.rowNumber),
-      `"${formatDigits(r.date)}"`,
-      `"${formatDigits(r.time || '')}"`,
-      `"${getDocumentTypeLabel(r.documentType)}"`,
-      `"${formatDigits(r.documentNumber)}"`,
-      `"${r.warehouseName}"`,
-      `"${r.personName || '-'}"`,
-      `"${(r.description || '').replace(/"/g, '""')}"`,
-      r.type === 'in' ? formatNumFa(r.quantity) : 0,
-      r.type === 'out' ? formatNumFa(r.quantity) : 0,
-      formatNumFa(r.balanceAfter),
-      formatCurFa(r.unitPrice),
-      formatCurFa(r.totalPrice)
-    ]);
+      const excelRows = ledgerRows.map(r => ({
+        'ردیف': r.rowNumber,
+        'تاریخ': r.date,
+        'زمان': r.time || '-',
+        'نوع سند': getDocumentTypeLabel(r.documentType),
+        'شماره سند': r.documentNumber || '-',
+        'انبار': r.warehouseName,
+        'طرف حساب': r.personName || '-',
+        'شرح': r.description || '-',
+        [`وارده (${unit})`]: r.type === 'in' ? formatDecimalForExcel(r.quantity, activeSettings) : 0,
+        [`صادره (${unit})`]: r.type === 'out' ? formatDecimalForExcel(r.quantity, activeSettings) : 0,
+        [`مانده نهایی (${unit})`]: formatDecimalForExcel(r.balanceAfter, activeSettings),
+        [`فی واحد (${curr})`]: formatDecimalForExcel(r.unitPrice, activeSettings),
+        [`مبلغ کل (${curr})`]: formatDecimalForExcel(r.totalPrice, activeSettings)
+      }));
 
-    const csvContent = '\uFEFF' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
-    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
-    const url = URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.setAttribute('href', url);
-    link.setAttribute('download', `kardex_${selectedProduct.code || selectedProduct.name}_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}.csv`);
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+      const fileName = `کاردکس_${selectedProduct.code || selectedProduct.name}_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+      exportToExcel({
+        filename: fileName,
+        sheetName: 'کاردکس کالا',
+        data: excelRows,
+        storeSettings: activeSettings
+      });
+    } catch (e) {
+      console.error(e);
+    }
   };
 
   const handlePrint = () => {
@@ -759,12 +751,13 @@ export default function KardexReport() {
           </button>
 
           <button
-            onClick={handleExportCSV}
+            onClick={handleExportExcel}
             disabled={!selectedProduct || ledgerRows.length === 0}
             className="flex items-center gap-1.5 px-3.5 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl transition-all font-bold shadow-2xs text-xs disabled:opacity-50 cursor-pointer"
+            title="خروجی فایل اکسل از کاردکس کالا با رعایت فرمت اعشار"
           >
-            <Download className="w-3.5 h-3.5" />
-            خروجی اکسل (CSV)
+            <Download className="w-3.5 h-3.5 text-emerald-600" />
+            خروجی اکسل (.xlsx)
           </button>
 
           <button

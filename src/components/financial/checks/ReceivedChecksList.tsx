@@ -7,14 +7,62 @@ import { PieChart, Pie, Cell, Tooltip, Legend, ResponsiveContainer } from 'recha
 import { 
   CreditCard, Plus, Edit2, Trash2, CheckCircle, Clock, X, Save, 
   ArrowDownLeft, BookOpen, ArrowUpRight, Calendar, Building2, HelpCircle, AlertTriangle, Search, TrendingUp, DollarSign, Percent, BarChart as BarChartIcon, ChevronDown, Printer, History, Activity, User, Send
-, ArrowLeft} from 'lucide-react';
+, ArrowLeft, Download} from 'lucide-react';
 import DatePickerModule, { Calendar as RMCalendar } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
+import { exportToExcel, formatDecimalForExcel } from "../../../utils/exportUtils";
 
 export function ReceivedChecksList({ showNotification, receivedChecks, persons, checkbooks, accounts, receivedSearchQuery, setReceivedSearchQuery, receivedCheckStatusFilter, setReceivedCheckStatusFilter, receivedSortBy, setReceivedSortBy, receivedSortDir, setReceivedSortDir, filteredReceivedChecks, totalReceivedAmount, cashedReceivedAmount, inHandReceivedAmount, bouncedReceivedAmount, setViewingCheck, setUpdatingCheckId, setUpdatingCheckType, setStatusVal, setIsStatusModalOpen, setIsHistoryModalOpen, setHistoryCheck, setHistoryData, handleDeleteReceivedCheck, formatDateDisplay, storeSettings, sendNotification, getCheckHistoryLogs, onEditReceiptByCheck, receivedPage, setReceivedPage, totalReceivedPages }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const navigate = useNavigate();
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'received': return 'موجود در صندوق';
+      case 'deposited': return 'واگذار شده به بانک/اشخاص';
+      case 'cashed': return 'وصول و نقد شده';
+      case 'bounced': return 'برگشت خورده';
+      case 'returned': return 'عودت به مشتری';
+      default: return 'در جریان';
+    }
+  };
+
+  const handleExportExcel = () => {
+    try {
+      const curr = storeSettings?.currency || 'تومان';
+      const excelRows = filteredReceivedChecks.map((c: any, idx: number) => {
+        const payer = persons.find((p: any) => p.id?.toString() === c.payerId?.toString());
+        return {
+          'ردیف': idx + 1,
+          'شماره چک': c.checkNumber || '-',
+          'بانک صادرکننده': c.bankName || '-',
+          'شعبه': c.branchName || '-',
+          'پرداخت‌کننده (طرف حساب)': payer?.name || c.payerName || c.payerId || 'ناشناس',
+          [`مبلغ (${curr})`]: formatDecimalForExcel(c.amount || 0, storeSettings),
+          'تاریخ دریافت': formatDateDisplay(c.receiveDate, storeSettings?.calendarType),
+          'تاریخ سررسید': formatDateDisplay(c.dueDate, storeSettings?.calendarType),
+          'وضعیت': getStatusLabel(c.status),
+          'شماره سند/رسید': c.receiptNumber || '-',
+          'شرح و توضیحات': c.description || '-'
+        };
+      });
+
+      const filename = `چک‌های_دریافتی_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+      exportToExcel({
+        filename,
+        sheetName: 'چک‌های دریافتی',
+        data: excelRows,
+        storeSettings
+      });
+
+      if (showNotification) showNotification('خروجی اکسل چک‌های دریافتی با موفقیت دانلود شد', 'success');
+    } catch (e) {
+      console.error(e);
+      if (showNotification) showNotification('خطا در دریافت خروجی اکسل', 'error');
+    }
+  };
+
   return (
     <>
       {/* SUBTAB 3: RECEIVED CHECKS */}
@@ -107,6 +155,16 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
                 </div>
 
                 <button 
+                  type="button"
+                  onClick={handleExportExcel}
+                  className="px-3.5 py-2 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl text-xs font-bold transition-all shadow-2xs flex items-center gap-1.5 cursor-pointer"
+                  title="خروجی اکسل از لیست چک‌های دریافتی با رعایت فرمت اعشار"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>خروجی اکسل (.xlsx)</span>
+                </button>
+
+                <button 
                   onClick={() => navigate('/receive_check_form')}
                   className="px-3.5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-all shadow-xs flex items-center gap-1.5"
                   title="ثبت برگه چک دریافتی در فرم مجزا"
@@ -155,8 +213,7 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
                   <tbody className="divide-y divide-gray-50 bg-white">
                     {filteredReceivedChecks.map(c => {
                       const payer = persons.find(p => p.id?.toString() === c.payerId?.toString());
-                      const [selectedIds, setSelectedIds] = useState<string[]>([]);
-  return (
+                      return (
                         <React.Fragment key={c.id}>
 <tr className="hover:bg-gray-50/50 transition-colors">
                           <td className="px-4 py-3.5">

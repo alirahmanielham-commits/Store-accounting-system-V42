@@ -1,6 +1,8 @@
 import React from "react";
 import { motion } from "framer-motion";
-import { CreditCard, Plus, CheckCircle, Database, Edit2, Trash2 } from "lucide-react";
+import { CreditCard, Plus, CheckCircle, Database, Edit2, Trash2, Download } from "lucide-react";
+import { exportToExcel, formatDecimalForExcel } from "../../utils/exportUtils";
+import { getActiveStoreSettings } from "../../utils/format";
 
 export default function AccountsManager(props: any) {
   const {
@@ -23,6 +25,33 @@ export default function AccountsManager(props: any) {
     storeSettings
   } = props;
 
+  const handleExportExcel = () => {
+    try {
+      const activeSettings = storeSettings || getActiveStoreSettings();
+      const curr = activeSettings?.currency || "تومان";
+      const excelRows = (accounts || []).map((acc: any, idx: number) => ({
+        "ردیف": idx + 1,
+        "نام بانک": acc.bankName || "",
+        "صاحب حساب": acc.accountHolder || "-",
+        "شماره حساب": acc.accountNumber || "-",
+        "شماره کارت": acc.cardNumber || "-",
+        "شماره شبا": acc.shebaNumber || "-",
+        "شعبه": acc.branchName || "-",
+        [`موجودی (${curr})`]: formatDecimalForExcel(acc.balance || 0, activeSettings)
+      }));
+
+      const filename = `حساب‌های_بانکی_${new Date().toLocaleDateString("fa-IR").replace(/\//g, "-")}`;
+      exportToExcel({
+        filename,
+        sheetName: "حساب‌های بانکی",
+        data: excelRows,
+        storeSettings: activeSettings
+      });
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <motion.div
                     initial={{ opacity: 0, y: 10 }}
@@ -39,16 +68,27 @@ export default function AccountsManager(props: any) {
                           فهرست و نظارت بر موجودی و گردش شبای درگاه‌های بانکی
                         </p>
                       </div>
-                      <button
-                        onClick={() => {
-                          setEditingAccountId(null);
-                          setIsAccountModalOpen(true);
-                        }}
-                        className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-2 transition-colors text-sm font-medium"
-                      >
-                        <Plus className="w-4 h-4" />
-                        ثبت حساب جدید
-                      </button>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={handleExportExcel}
+                          className="px-3.5 py-2 bg-white hover:bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-1.5 transition-colors text-sm font-bold border border-emerald-300 shadow-2xs cursor-pointer"
+                          title="خروجی فایل اکسل از لیست حساب‌های بانکی با رعایت فرمت اعشار"
+                        >
+                          <Download className="w-4 h-4 text-emerald-600" />
+                          <span>خروجی اکسل</span>
+                        </button>
+                        <button
+                          onClick={() => {
+                            setEditingAccountId(null);
+                            setIsAccountModalOpen(true);
+                          }}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-2 transition-colors text-sm font-medium"
+                        >
+                          <Plus className="w-4 h-4" />
+                          ثبت حساب جدید
+                        </button>
+                      </div>
                     </div>
 
                     {successMsg && (

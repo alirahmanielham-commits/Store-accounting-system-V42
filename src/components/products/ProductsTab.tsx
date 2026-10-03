@@ -4,6 +4,8 @@ import * as lucide from 'lucide-react';
 import { Menu, CloudOff } from 'lucide-react';
 import { addProduct, updateProduct, deleteProduct,  } from '../../services/dataService';
 import FastBarcodeScanner from '../modals/BarcodeScannerModal';
+import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
+import { getActiveStoreSettings } from '../../utils/format';
 
 export default function ProductsTab(props: any) {
   const {
@@ -58,6 +60,59 @@ export default function ProductsTab(props: any) {
   } = lucide;
 
   const [openDropdownId, setOpenDropdownId] = useState<string | number | null>(null);
+
+  const handleExportFilteredProductsExcel = () => {
+    try {
+      const activeSettings = storeSettings || getActiveStoreSettings();
+      const curr = activeSettings?.currency || "تومان";
+      
+      const filtered = (products || []).filter((p: any) => {
+        const matchString = (
+          (p.name || '') + " " + (p.code || "") + " " + (p.barcode || "") + " " + (p.description || "")
+        ).toLowerCase();
+        const matchesSearch = matchString.includes((productSearchTerm || "").toLowerCase());
+        const matchesCat = selectedProductCategory === "all" || p.categoryId?.toString() === selectedProductCategory.toString();
+        return matchesSearch && matchesCat;
+      });
+
+      const excelRows = filtered.map((p: any, idx: number) => {
+        const catName = (productCategories || categories)?.find((c: any) => c.id?.toString() === p.categoryId?.toString())?.name || "بدون دسته‌بندی";
+        const currentStock = calculateProductCurrentStock ? calculateProductCurrentStock(p.id) : (p.currentStock ?? 0);
+        return {
+          "ردیف": idx + 1,
+          "نام کالا / خدمات": p.name || "",
+          "کد کالا": p.code || "-",
+          "بارکد": p.barcode || "-",
+          "نوع": p.type === "service" ? "خدمات" : "کالا",
+          "دسته‌بندی": catName,
+          [`قیمت خرید (${curr})`]: formatDecimalForExcel(p.buyPrice || 0, activeSettings),
+          [`قیمت فروش (${curr})`]: formatDecimalForExcel(p.sellPrice || 0, activeSettings),
+          "موجودی فعلی": formatDecimalForExcel(currentStock, activeSettings),
+          "حداقل موجودی (نقطه سفارش)": formatDecimalForExcel(p.minStockLevel || 0, activeSettings),
+          "واحد اصلی": p.unit || "عدد",
+          "واحد فرعی": p.subUnit || "-",
+          "ضریب تبدیل": p.unitRatio ? formatDecimalForExcel(p.unitRatio, activeSettings) : "-",
+          "مکان در انبار": p.location || "-",
+          "توضیحات": p.description || ""
+        };
+      });
+
+      const catTitle = selectedProductCategory !== 'all' ? `_گروه_${(productCategories || categories)?.find((c: any) => c.id?.toString() === selectedProductCategory.toString())?.name || ''}` : '';
+      const filename = `فهرست_کالاها_و_خدمات${catTitle}_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+      exportToExcel({
+        filename,
+        sheetName: "کالاها و خدمات",
+        data: excelRows,
+        storeSettings: activeSettings
+      });
+
+      if (showNotification) showNotification('خروجی اکسل کالاها با موفقیت دریافت شد.', 'success');
+    } catch (err) {
+      console.error("Error exporting products to excel:", err);
+      if (showNotification) showNotification('خطا در صدور فایل اکسل کالاها', 'error');
+    }
+  };
 
   useEffect(() => {
     const handleClickOutside = () => {
@@ -213,6 +268,16 @@ export default function ProductsTab(props: any) {
                         </div>
 
                           
+                        <button
+                          type="button"
+                          onClick={handleExportFilteredProductsExcel}
+                          className="px-3.5 py-2 bg-white hover:bg-emerald-50 text-emerald-700 rounded-xl flex items-center gap-1.5 transition-colors text-xs sm:text-sm font-bold border border-emerald-300 shadow-2xs cursor-pointer"
+                          title="خروجی فایل اکسل از لیست کالاها با رعایت تنظیمات اعشار"
+                        >
+                          <Download className="w-4 h-4 text-emerald-600" />
+                          <span>خروجی اکسل (.xlsx)</span>
+                        </button>
+
                         <button
                           onClick={() => {
                             setEditingProductId(null);

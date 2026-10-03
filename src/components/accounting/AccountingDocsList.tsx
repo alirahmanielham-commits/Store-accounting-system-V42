@@ -1,9 +1,10 @@
-import { formatDateDisplay, toPersianDigits, convertToGregorian } from '../../utils/format';
+import { formatDateDisplay, toPersianDigits, convertToGregorian, formatNumber } from '../../utils/format';
 import React, { useState, useEffect } from 'react';
 import { motion } from 'motion/react';
-import { FileText, Plus, Search, Eye, Edit2, Trash2 } from 'lucide-react';
+import { FileText, Plus, Search, Eye, Edit2, Trash2, Download } from 'lucide-react';
 import { getAccountingDocuments, getLedgerAccounts, getStoreSettings, deleteAccountingDocument } from '../../services/dataService';
 import { AccountingDocument, LedgerAccount, CompanySettings } from '../../types';
+import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import CustomDatePicker from "../ui/CustomDatePicker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -74,6 +75,58 @@ export default function AccountingDocsList({ onNavigateToCreate, onNavigateToVie
     return matchSearch && matchFromDate && matchToDate && matchSourceType && matchAccount;
   });
 
+  const getSourceTypeLabel = (st?: string) => {
+    switch (st) {
+      case 'opening_balance': return 'افتتاحیه';
+      case 'invoice_sale': return 'فاکتور فروش';
+      case 'invoice_purchase': return 'فاکتور خرید';
+      case 'receipt': return 'دریافت نقدی/بانک';
+      case 'payment': return 'پرداخت نقدی/بانک';
+      case 'issued_check': return 'چک پرداختی';
+      case 'received_check': return 'چک دریافتی';
+      case 'loan': return 'وام دریافتی';
+      case 'installment': return 'پرداخت قسط';
+      case 'manual': return 'سند دستی';
+      default: return st || 'سند دستی';
+    }
+  };
+
+  const handleExportExcel = () => {
+    try {
+      const curr = storeSettings?.currency || 'تومان';
+      const excelRows = filteredDocs.map((d, idx) => {
+        const totalDebit = (d.items || []).reduce((sum, item) => sum + (Number(item.debit) || 0), 0);
+        const totalCredit = (d.items || []).reduce((sum, item) => sum + (Number(item.credit) || 0), 0);
+        return {
+          'ردیف': idx + 1,
+          'شماره سند': d.documentNumber || '-',
+          'تاریخ': formatDateDisplay(d.date, storeSettings?.calendarType),
+          'نوع سند': getSourceTypeLabel(d.sourceType),
+          'شرح سند': d.description || '-',
+          'تعداد آرتیکل‌ها': d.items?.length || 0,
+          [`جمع بدهکار (${curr})`]: formatDecimalForExcel(totalDebit, storeSettings),
+          [`جمع بستانکار (${curr})`]: formatDecimalForExcel(totalCredit, storeSettings),
+          'وضعیت تراز': Math.abs(totalDebit - totalCredit) < 0.001 ? 'تراز' : 'ناهمخوان',
+          'وضعیت سند': d.status === 'draft' ? 'پیش‌نویس' : 'ثبت قطعی'
+        };
+      });
+
+      const filename = `اسناد_حسابداری_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}`;
+
+      exportToExcel({
+        filename,
+        sheetName: 'اسناد حسابداری',
+        data: excelRows,
+        storeSettings
+      });
+
+      if (showNotification) showNotification('خروجی اکسل اسناد حسابداری با موفقیت دانلود شد', 'success');
+    } catch (e) {
+      console.error(e);
+      if (showNotification) showNotification('خطا در دریافت خروجی اکسل', 'error');
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
@@ -87,9 +140,21 @@ export default function AccountingDocsList({ onNavigateToCreate, onNavigateToVie
           </div>
         </div>
 
-        <button onClick={onNavigateToCreate} className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition w-full sm:w-auto justify-center shadow-lg shadow-indigo-200">
-          <Plus className="w-5 h-5" /> صدور سند دستی
-        </button>
+        <div className="flex items-center gap-2 w-full sm:w-auto">
+          <button
+            type="button"
+            onClick={handleExportExcel}
+            className="flex items-center justify-center gap-1.5 px-4 py-2.5 bg-white border border-emerald-300 text-emerald-700 hover:bg-emerald-50 rounded-xl transition font-bold text-xs sm:text-sm shadow-2xs cursor-pointer w-full sm:w-auto"
+            title="خروجی فایل اکسل از اسناد حسابداری با رعایت فرمت اعشار"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            <span>خروجی اکسل (.xlsx)</span>
+          </button>
+
+          <button onClick={onNavigateToCreate} className="bg-indigo-600 text-white px-4 py-2.5 rounded-xl font-bold flex items-center gap-2 hover:bg-indigo-700 transition w-full sm:w-auto justify-center shadow-lg shadow-indigo-200 text-xs sm:text-sm whitespace-nowrap">
+            <Plus className="w-4 h-4" /> صدور سند دستی
+          </button>
+        </div>
       </div>
 
       <div className="bg-white rounded-2xl border border-slate-200 p-4 flex flex-col gap-4 shadow-sm">

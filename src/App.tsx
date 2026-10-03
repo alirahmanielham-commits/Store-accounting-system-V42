@@ -270,6 +270,8 @@ const SyncManager = React.lazy(() => import('./components/admin/SyncManager'));
 const MobileRestrictedMenu = React.lazy(() => import('./components/MobileRestrictedMenu'));
 const MobileRestrictedAccess = React.lazy(() => import('./components/mobile/MobileRestrictedAccess'));
 import { MOBILE_ALLOWED_TABS } from './components/MobileRestrictedMenu';
+import { hasPagePermission } from './utils/permissionUtils';
+import AccessRestricted from './components/common/AccessRestricted';
 const MinimalMobilePersonModal = React.lazy(() => import('./components/modals/MinimalMobilePersonModal'));
 
 const WarehouseManager = React.lazy(() => import('./components/warehouses/WarehouseManager'));
@@ -1798,8 +1800,11 @@ if (requiresInitSetup && user) {
           ) : storeSettings?.theme === "persian_admin_lte" ? (
              <AdminLTELayout appState={appState}>
                 <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
-                    {/* We will let AdminLTELayout render its own routing if needed, but since we are extracting, we can just call renderTabContent() for now */}
-                    {appRoutes}
+                    {user && activeTab !== "welcome_page" && !hasPagePermission(user, activeTab) ? (
+                      <AccessRestricted activeTab={activeTab} user={user} onGoHome={() => setActiveTab("welcome_page")} />
+                    ) : (
+                      appRoutes
+                    )}
                 </Suspense>
              </AdminLTELayout>
           ) : (
@@ -2702,6 +2707,8 @@ if (requiresInitSetup && user) {
                     <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
                     {isMobileScreen && !MOBILE_ALLOWED_TABS.has(activeTab) ? (
                       <MobileRestrictedAccess currentTab={activeTab} setActiveTab={setActiveTab} />
+                    ) : user && activeTab !== "welcome_page" && !hasPagePermission(user, activeTab) ? (
+                      <AccessRestricted activeTab={activeTab} user={user} onGoHome={() => setActiveTab("welcome_page")} />
                     ) : (
                       appRoutes
                     )}

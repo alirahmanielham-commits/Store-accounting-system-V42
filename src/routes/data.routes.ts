@@ -175,6 +175,363 @@ const DEFAULT_DOC_PREFIXES: Record<string, string> = {
   sale_return: "RTN-S-",
   purchase_return: "RTN-P-",
 };
+
+// --- AUDIT LOGGING SERVER HELPERS ---
+function parseUserAgentServer(uaString: string = ''): { browser: string; os: string; device: string } {
+  let browser = 'مرورگر وب';
+  let os = 'نامشخص';
+  let device = 'رایانه (Desktop)';
+
+  if (!uaString) return { browser, os, device };
+
+  if (/mobile/i.test(uaString)) device = 'تلفن همراه (Mobile)';
+  else if (/tablet|ipad/i.test(uaString)) device = 'تبلت (Tablet)';
+
+  if (/windows nt 10.0/i.test(uaString)) os = 'ویندوز ۱۰ / ۱۱';
+  else if (/windows nt 6.3/i.test(uaString)) os = 'ویندوز ۸.۱';
+  else if (/windows nt 6.1/i.test(uaString)) os = 'ویندوز ۷';
+  else if (/windows/i.test(uaString)) os = 'ویندوز';
+  else if (/macintosh|mac os x/i.test(uaString)) os = 'مک (macOS)';
+  else if (/android/i.test(uaString)) os = 'اندروید';
+  else if (/iphone|ipad|ipod/i.test(uaString)) os = 'آی‌او‌اس (iOS)';
+  else if (/linux/i.test(uaString)) os = 'لینوکس';
+
+  if (/edg\//i.test(uaString)) {
+    const m = uaString.match(/edg\/([\d.]+)/i);
+    browser = `مایکروسافت اج ${m ? m[1].split('.')[0] : ''}`;
+  } else if (/opr\/|opera\//i.test(uaString)) {
+    browser = 'اپرا';
+  } else if (/chrome\//i.test(uaString) && !/chromium/i.test(uaString)) {
+    const m = uaString.match(/chrome\/([\d.]+)/i);
+    browser = `گوگل کروم ${m ? m[1].split('.')[0] : ''}`;
+  } else if (/firefox\//i.test(uaString)) {
+    const m = uaString.match(/firefox\/([\d.]+)/i);
+    browser = `موزیلا فایرفاکس ${m ? m[1].split('.')[0] : ''}`;
+  } else if (/safari\//i.test(uaString) && !/chrome/i.test(uaString)) {
+    const m = uaString.match(/version\/([\d.]+)/i);
+    browser = `سافاری اپل ${m ? m[1].split('.')[0] : ''}`;
+  }
+
+  return { browser, os, device };
+}
+
+function extractRequestUser(req: any) {
+  let userId = 'system';
+  let username = 'system';
+  let userName = 'سیستم';
+  let userRole = 'admin';
+
+  if (req.user) {
+    userId = req.user.id || req.user.username || 'system';
+    username = req.user.username || 'system';
+    userName = req.user.name || req.user.username || 'کاربر سیستم';
+    userRole = req.user.role || 'user';
+    return { userId, username, userName, userRole };
+  }
+
+  const authHeader = req.headers?.authorization;
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    try {
+      const token = authHeader.split(' ')[1];
+      const decoded: any = jwt.verify(token, process.env.JWT_SECRET || 'super-secret-jwt-key-2024');
+      if (decoded) {
+        userId = decoded.id || decoded.username || 'system';
+        username = decoded.username || 'system';
+        userName = decoded.name || decoded.username || 'کاربر سیستم';
+        userRole = decoded.role || 'user';
+        return { userId, username, userName, userRole };
+      }
+    } catch (_) {}
+  }
+
+  if (req.cookies && (req.cookies.refreshToken || req.cookies.accessToken)) {
+    try {
+      const token = req.cookies.accessToken || req.cookies.refreshToken;
+      const secret = req.cookies.accessToken ? (process.env.JWT_SECRET || 'super-secret-jwt-key-2024') : (process.env.JWT_REFRESH_SECRET || 'super-secret-jwt-refresh-key-2024');
+      const decoded: any = jwt.verify(token, secret);
+      if (decoded) {
+        userId = decoded.id || decoded.username || 'system';
+        username = decoded.username || 'system';
+        userName = decoded.name || decoded.username || 'کاربر سیستم';
+        userRole = decoded.role || 'user';
+        return { userId, username, userName, userRole };
+      }
+    } catch (_) {}
+  }
+
+  const userInfoHeader = req.headers?.['x-user-info'];
+  if (userInfoHeader && typeof userInfoHeader === 'string') {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(userInfoHeader));
+      if (parsed && (parsed.username || parsed.name)) {
+        userId = parsed.id || parsed.username || userId;
+        username = parsed.username || username;
+        userName = parsed.name || parsed.username || userName;
+        userRole = parsed.role || userRole;
+      }
+    } catch (_) {}
+  }
+
+  return { userId, username, userName, userRole };
+}
+
+function extractClientInfo(req: any) {
+  const ua = (req.headers && req.headers['user-agent']) || '';
+  const parsed = parseUserAgentServer(ua);
+  const ip = (req.headers && (req.headers['x-forwarded-for'] || req.headers['x-real-ip'])) || req.socket?.remoteAddress || req.ip || '127.0.0.1';
+  const cleanIp = Array.isArray(ip) ? ip[0] : String(ip).split(',')[0].trim();
+  return { ...parsed, ip: cleanIp, userAgent: ua };
+}
+
+function getEntityPersianName(key: string): string {
+  const map: Record<string, string> = {
+    'invoices': 'فاکتور',
+    'sales_invoices': 'فاکتور فروش',
+    'purchase_invoices': 'فاکتور خرید',
+    'sale_returns': 'برگشت از فروش',
+    'purchase_returns': 'برگشت از خرید',
+    'warehouse_receipts': 'رسید انبار',
+    'warehouse_remittances': 'حواله انبار',
+    'products': 'کالا و خدمات',
+    'persons': 'طرف‌حساب / شخص',
+    'transactions': 'تراکنش مالی',
+    'receipt_transactions': 'رسید دریافت وجه',
+    'payment_transactions': 'رسید پرداخت وجه',
+    'accounts': 'حساب بانکی',
+    'cashboxes': 'صندوق نقدی',
+    'received_checks': 'چک صیادی دریافتی',
+    'issued_checks': 'چک پرداختی',
+    'checkbooks': 'دسته‌چک',
+    'accounting_documents': 'سند حسابداری دوبل',
+    'loans': 'پرونده وام',
+    'installments': 'قسط وام',
+    'users': 'حساب کاربری',
+    'settings': 'تنظیمات سیستم',
+    'financial_years': 'سال مالی',
+    'warehouses': 'انبار',
+    'product_categories': 'دسته‌بندی کالا',
+    'person_groups': 'گروه‌بندی اشخاص',
+    'person_opening_balances': 'سند افتتاحیه شخص'
+  };
+  return map[key] || key;
+}
+
+function generateActionDescription(action: string, key: string, item: any): string {
+  const entity = getEntityPersianName(key);
+  const title = item?.name || item?.title || item?.invoiceNumber || item?.code || item?.sayadNumber || item?.accountingCode || item?.id || '';
+
+  if (action === 'CREATE') {
+    return title ? `ثبت ${entity} جدید با عنوان/شماره «${title}»` : `ثبت رکورد جدید در ${entity}`;
+  }
+  if (action === 'UPDATE') {
+    return title ? `ویرایش اطلاعات ${entity} «${title}»` : `ویرایش اطلاعات در ${entity}`;
+  }
+  if (action === 'DELETE') {
+    return title ? `حذف ${entity} «${title}»` : `حذف رکورد از ${entity}`;
+  }
+  return `${action} در ${entity}`;
+}
+
+function createDiffSummaryServer(oldItem: any, newItem: any): string {
+  if (!oldItem || !newItem || typeof oldItem !== 'object' || typeof newItem !== 'object') return '';
+  const changes: string[] = [];
+  const ignored = new Set(['updatedAt', 'createdAt', '_t', 'id']);
+  const allKeys = Array.from(new Set([...Object.keys(oldItem), ...Object.keys(newItem)]));
+
+  for (const k of allKeys) {
+    if (ignored.has(k)) continue;
+    if (JSON.stringify(oldItem[k]) !== JSON.stringify(newItem[k])) {
+      changes.push(k);
+    }
+  }
+  if (changes.length === 0) return 'بدون تغییر داده‌های اصلی';
+  return `تغییر در فیلدهای: ${changes.slice(0, 5).join(', ')}${changes.length > 5 ? ' و...' : ''}`;
+}
+
+async function dispatchAdminNotificationIfSensitive(logEntry: any) {
+  if (!logEntry || typeof logEntry !== 'object') return;
+  try {
+    const action = String(logEntry.action || '').toUpperCase();
+    const entity = String(logEntry.entityType || '').toLowerCase();
+    const details = String(logEntry.details || '');
+    const actorName = logEntry.userName || logEntry.username || 'کاربر سیستم';
+    const actorUsername = logEntry.username || 'system';
+    const ip = logEntry.ip || '127.0.0.1';
+
+    let isSensitive = false;
+    let title = '';
+    let message = '';
+    let severity = 'warning';
+
+    // 1. Invoice Deletions (Critical)
+    if (action === 'DELETE' && (['invoices', 'sales_invoices', 'purchase_invoices', 'sale_returns', 'purchase_returns'].includes(entity) || details.includes('فاکتور'))) {
+      isSensitive = true;
+      severity = 'critical';
+      title = 'هشدار امنیتی: حذف فاکتور در سیستم';
+      message = `یک فاکتور توسط کاربر «${actorName}» (@${actorUsername}) حذف شد.\nشرح: ${details}\nآدرس IP: ${ip}`;
+    }
+    // 2. Settings & Financial Configuration Changes
+    else if (['settings', 'financial_years', 'tax_settings', 'company_profile'].includes(entity) || action === 'SETTINGS_CHANGE' || details.includes('تنظیمات')) {
+      isSensitive = true;
+      severity = 'warning';
+      title = 'هشدار مدیریتی: تغییر در تنظیمات مالی یا سیستم';
+      message = `تنظیمات مالی یا پیکربندی سیستم توسط کاربر «${actorName}» (@${actorUsername}) تغییر یافت.\nشرح: ${details}\nآدرس IP: ${ip}`;
+    }
+    // 3. Financial Transactions & Accounting Documents Deletion
+    else if (action === 'DELETE' && ['transactions', 'receipt_transactions', 'payment_transactions', 'accounting_documents', 'accounts', 'cashboxes'].includes(entity)) {
+      isSensitive = true;
+      severity = 'critical';
+      title = 'هشدار مالی: حذف سند حسابداری یا تراکنش';
+      message = `سند یا تراکنش مالی توسط کاربر «${actorName}» (@${actorUsername}) حذف گردید.\nشرح: ${details}\nآدرس IP: ${ip}`;
+    }
+    // 4. Check deletions
+    else if (action === 'DELETE' && ['received_checks', 'issued_checks', 'checkbooks'].includes(entity)) {
+      isSensitive = true;
+      severity = 'critical';
+      title = 'هشدار صیادی: حذف چک از سیستم';
+      message = `چک صیادی توسط کاربر «${actorName}» (@${actorUsername}) حذف شد.\nشرح: ${details}\nآدرس IP: ${ip}`;
+    }
+    // 5. User & Access Level Changes
+    else if (entity === 'users') {
+      if (action === 'DELETE') {
+        isSensitive = true;
+        severity = 'critical';
+        title = 'هشدار امنیتی: حذف حساب کاربری';
+        message = `کاربر «${details}» توسط «${actorName}» (@${actorUsername}) حذف شد.\nآدرس IP: ${ip}`;
+      } else if (action === 'STATUS_CHANGE' || action === 'UPDATE') {
+        isSensitive = true;
+        severity = 'warning';
+        title = 'هشدار امنیتی: تغییر در سطوح دسترسی کاربران';
+        message = `اطلاعات یا سطوح دسترسی کاربر توسط «${actorName}» (@${actorUsername}) ویرایش گردید.\nشرح: ${details}`;
+      }
+    }
+    // 6. Warehouse & Product deletions
+    else if (action === 'DELETE' && ['products', 'warehouses', 'warehouse_receipts', 'warehouse_remittances'].includes(entity)) {
+      isSensitive = true;
+      severity = 'warning';
+      title = 'هشدار انبار: حذف کالا یا حواله/رسید انبار';
+      message = `سند انبار یا کالا توسط کاربر «${actorName}» (@${actorUsername}) حذف شد.\nشرح: ${details}`;
+    }
+
+    if (!isSensitive) return;
+
+    let notifs = (await getDbData('notifications')) || [];
+    if (!Array.isArray(notifs)) notifs = [];
+
+    const newNotification = {
+      id: 'notif_' + Math.random().toString(36).substring(2, 12),
+      userId: 'admin',
+      targetRole: 'admin',
+      title,
+      message,
+      type: severity,
+      read: false,
+      createdAt: new Date().toISOString(),
+      metadata: {
+        logId: logEntry.id,
+        action: logEntry.action,
+        entityType: logEntry.entityType,
+        entityId: logEntry.entityId,
+        actorUsername,
+        actorName,
+        ip,
+        timestamp: logEntry.timestamp || Date.now()
+      }
+    };
+
+    notifs.unshift(newNotification);
+    if (notifs.length > 500) notifs.length = 500;
+    await setDbData('notifications', notifs);
+  } catch (err) {
+    console.error('Error dispatching admin notification for sensitive activity:', err);
+  }
+}
+
+// Dedicated System Logs Endpoints
+router.get('/api/system_logs', async (req, res) => {
+  try {
+    let logs = (await getDbData('system_logs')) || [];
+    if (!Array.isArray(logs)) logs = [];
+
+    // Sort descending by timestamp
+    logs.sort((a: any, b: any) => (b.timestamp || 0) - (a.timestamp || 0));
+
+    const { action, entityType, userId, search, limit } = req.query;
+
+    if (action && action !== 'ALL') {
+      logs = logs.filter((l: any) => l.action && l.action.startsWith(action as string));
+    }
+    if (entityType && entityType !== 'ALL') {
+      logs = logs.filter((l: any) => l.entityType === entityType);
+    }
+    if (userId && userId !== 'ALL') {
+      logs = logs.filter((l: any) => String(l.userId) === String(userId) || l.username === userId);
+    }
+    if (search) {
+      const q = String(search).toLowerCase();
+      logs = logs.filter((l: any) => 
+        (l.details && l.details.toLowerCase().includes(q)) ||
+        (l.username && l.username.toLowerCase().includes(q)) ||
+        (l.userName && l.userName.toLowerCase().includes(q)) ||
+        (l.entityType && l.entityType.toLowerCase().includes(q)) ||
+        (l.ip && l.ip.includes(q)) ||
+        (l.browser && l.browser.toLowerCase().includes(q)) ||
+        (l.diffSummary && l.diffSummary.toLowerCase().includes(q))
+      );
+    }
+
+    const maxLimit = limit ? Math.min(parseInt(limit as string, 10), 2000) : 1000;
+    res.json(logs.slice(0, maxLimit));
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/system_logs', async (req, res) => {
+  try {
+    const logEntry = req.body;
+    if (!logEntry || typeof logEntry !== 'object') {
+      return res.status(400).json({ error: 'Invalid log payload' });
+    }
+
+    const userInfo = extractRequestUser(req);
+    const clientInfo = extractClientInfo(req);
+    const timestamp = logEntry.timestamp || Date.now();
+
+    const fullLog = {
+      id: logEntry.id || Math.random().toString(36).substring(2, 15),
+      timestamp,
+      action: logEntry.action || 'CUSTOM',
+      userId: logEntry.userId || userInfo.userId,
+      username: logEntry.username || userInfo.username,
+      userName: logEntry.userName || userInfo.userName,
+      userRole: logEntry.userRole || userInfo.userRole,
+      details: logEntry.details || 'انجام عملیات در سیستم',
+      entityType: logEntry.entityType || 'system',
+      entityId: logEntry.entityId || null,
+      changes: logEntry.changes || null,
+      diffSummary: logEntry.diffSummary || null,
+      oldData: logEntry.oldData || null,
+      newData: logEntry.newData || null,
+      ip: logEntry.ip || clientInfo.ip,
+      browser: logEntry.browser || clientInfo.browser,
+      os: logEntry.os || clientInfo.os,
+      device: logEntry.device || clientInfo.device,
+      userAgent: logEntry.userAgent || clientInfo.userAgent,
+    };
+
+    let sysLogs = (await getDbData('system_logs')) || [];
+    if (!Array.isArray(sysLogs)) sysLogs = [];
+    sysLogs.unshift(fullLog);
+    if (sysLogs.length > 3000) sysLogs.length = 3000;
+
+    await setDbData('system_logs', sysLogs);
+    dispatchAdminNotificationIfSensitive(fullLog).catch(e => console.error(e));
+    res.json({ success: true, log: fullLog });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
 router.post('/api/data/users', async (req, res, next) => {
     try {
       const users = req.body;
@@ -228,6 +585,8 @@ router.post('/api/data/batch', async (req, res) => {
       const results: any[] = [];
       const sysLogs = (await getDbData('system_logs')) || [];
       const timestamp = Date.now();
+      const userInfo = extractRequestUser(req);
+      const clientInfo = extractClientInfo(req);
       
       for (const key of Array.from(keys)) {
          let data = (await getDbData(key)) || [];
@@ -243,17 +602,57 @@ router.post('/api/data/batch', async (req, res) => {
                    data.push(op.data);
                }
                results.push({ id: op.data.id, status: 'appended' });
-               sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'CREATE', userId: 'system', details: 'ایجاد رکورد گروهی', entityType: key, entityId: op.data.id, timestamp });
+               sysLogs.unshift({ 
+                 id: Math.random().toString(36).substring(2, 15), 
+                 action: 'CREATE', 
+                 userId: userInfo.userId, 
+                 username: userInfo.username,
+                 userName: userInfo.userName,
+                 userRole: userInfo.userRole,
+                 details: generateActionDescription('CREATE', key, op.data), 
+                 entityType: key, 
+                 entityId: op.data.id, 
+                 newData: op.data,
+                 changes: JSON.stringify(op.data),
+                 ip: clientInfo.ip,
+                 browser: clientInfo.browser,
+                 os: clientInfo.os,
+                 device: clientInfo.device,
+                 userAgent: clientInfo.userAgent,
+                 timestamp 
+               });
             } else if (op.type === 'update') {
                const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
                if (idx !== -1) {
+                  const oldItem = data[idx];
                   data[idx] = { ...data[idx], ...op.data };
                   results.push({ id: op.id, status: 'updated' });
-                  sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'UPDATE', userId: 'system', details: 'ویرایش رکورد گروهی', entityType: key, entityId: op.id, timestamp });
+                  sysLogs.unshift({ 
+                    id: Math.random().toString(36).substring(2, 15), 
+                    action: 'UPDATE', 
+                    userId: userInfo.userId, 
+                    username: userInfo.username,
+                    userName: userInfo.userName,
+                    userRole: userInfo.userRole,
+                    details: generateActionDescription('UPDATE', key, op.data), 
+                    entityType: key, 
+                    entityId: op.id, 
+                    diffSummary: createDiffSummaryServer(oldItem, data[idx]),
+                    oldData: oldItem,
+                    newData: data[idx],
+                    changes: JSON.stringify({ old: oldItem, new: data[idx] }),
+                    ip: clientInfo.ip,
+                    browser: clientInfo.browser,
+                    os: clientInfo.os,
+                    device: clientInfo.device,
+                    userAgent: clientInfo.userAgent,
+                    timestamp 
+                  });
                }
             } else if (op.type === 'delete') {
                const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
                if (idx !== -1) {
+                  const oldItem = data[idx];
                   if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
                      data[idx].deleted_at = new Date().toISOString();
                      data[idx].isDeleted = true;
@@ -261,7 +660,25 @@ router.post('/api/data/batch', async (req, res) => {
                      data.splice(idx, 1);
                   }
                   results.push({ id: op.id, status: 'deleted' });
-                  sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'DELETE', userId: 'system', details: 'حذف رکورد گروهی', entityType: key, entityId: op.id, timestamp });
+                  sysLogs.unshift({ 
+                    id: Math.random().toString(36).substring(2, 15), 
+                    action: 'DELETE', 
+                    userId: userInfo.userId, 
+                    username: userInfo.username,
+                    userName: userInfo.userName,
+                    userRole: userInfo.userRole,
+                    details: generateActionDescription('DELETE', key, oldItem), 
+                    entityType: key, 
+                    entityId: op.id, 
+                    oldData: oldItem,
+                    changes: JSON.stringify(oldItem),
+                    ip: clientInfo.ip,
+                    browser: clientInfo.browser,
+                    os: clientInfo.os,
+                    device: clientInfo.device,
+                    userAgent: clientInfo.userAgent,
+                    timestamp 
+                  });
                }
             }
          }
@@ -269,6 +686,10 @@ router.post('/api/data/batch', async (req, res) => {
       }
       
       await setDbData('system_logs', sysLogs);
+      // Notify admin for any sensitive operations in this batch
+      for (const opLog of sysLogs.slice(0, operations.length)) {
+        dispatchAdminNotificationIfSensitive(opLog).catch(e => console.error(e));
+      }
       res.json({ success: true, results });
     } catch(err: any) {
       res.status(500).json({ error: err.message });
@@ -439,9 +860,36 @@ router.post('/api/data/:key/append', async (req, res) => {
         try {
           const sysLogs = (await getDbData('system_logs')) || [];
           const timestamp = Date.now();
-          sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'CREATE', userId: 'system', details: 'ایجاد رکورد جدید', entityType: key, entityId: newItem.id, changes: JSON.stringify(newItem), timestamp });
+          const userInfo = extractRequestUser(req);
+          const clientInfo = extractClientInfo(req);
+          const entityTitle = getEntityPersianName(key);
+          const itemTitle = newItem.name || newItem.title || newItem.invoiceNumber || newItem.code || newItem.id || '';
+          const details = `ثبت جدید در ${entityTitle}${itemTitle ? ` («${itemTitle}»)` : ''}`;
+
+          const log = {
+            id: Math.random().toString(36).substring(2, 15),
+            timestamp,
+            action: 'CREATE',
+            userId: userInfo.userId,
+            username: userInfo.username,
+            userName: userInfo.userName,
+            userRole: userInfo.userRole,
+            details,
+            entityType: key,
+            entityId: newItem.id,
+            changes: JSON.stringify(newItem),
+            diffSummary: `ثبت رکورد جدید در ${entityTitle}`,
+            browser: clientInfo.browser,
+            os: clientInfo.os,
+            device: clientInfo.device,
+            ip: clientInfo.ip,
+            userAgent: clientInfo.userAgent
+          };
+
+          sysLogs.unshift(log);
+          if (sysLogs.length > 3000) sysLogs.length = 3000;
+
           if (isPgActive() && getActivePgPool()) {
-             const log = sysLogs[sysLogs.length - 1];
              await syncTableSchema(getActivePgPool(), 'system_logs', log);
              const keys = Object.keys(log);
              const vals = Object.values(log).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
@@ -624,9 +1072,36 @@ router.put('/api/data/:key/:id', async (req, res) => {
         try {
           const sysLogs = (await getDbData('system_logs')) || [];
           const timestamp = Date.now();
-          sysLogs.push({ id: Math.random().toString(36).substring(2, 15), action: 'UPDATE', userId: 'system', details: 'ویرایش رکورد', entityType: key, entityId: id, changes: JSON.stringify(updatedItem), timestamp });
+          const userInfo = extractRequestUser(req);
+          const clientInfo = extractClientInfo(req);
+          const entityTitle = getEntityPersianName(key);
+          const itemTitle = mergedItem.name || mergedItem.title || mergedItem.invoiceNumber || mergedItem.code || mergedItem.id || id;
+          const details = `ویرایش رکورد در ${entityTitle}${itemTitle ? ` («${itemTitle}»)` : ''}`;
+
+          const log = {
+            id: Math.random().toString(36).substring(2, 15),
+            timestamp,
+            action: 'UPDATE',
+            userId: userInfo.userId,
+            username: userInfo.username,
+            userName: userInfo.userName,
+            userRole: userInfo.userRole,
+            details,
+            entityType: key,
+            entityId: id,
+            changes: JSON.stringify(updatedItem),
+            diffSummary: `ویرایش اطلاعات در ${entityTitle}`,
+            browser: clientInfo.browser,
+            os: clientInfo.os,
+            device: clientInfo.device,
+            ip: clientInfo.ip,
+            userAgent: clientInfo.userAgent
+          };
+
+          sysLogs.unshift(log);
+          if (sysLogs.length > 3000) sysLogs.length = 3000;
+
           if (isPgActive() && getActivePgPool()) {
-             const log = sysLogs[sysLogs.length - 1];
              await syncTableSchema(getActivePgPool(), 'system_logs', log);
              const keys = Object.keys(log);
              const vals = Object.values(log).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
@@ -680,30 +1155,36 @@ router.post('/api/data/:key', async (req, res) => {
             const newMap = new Map();
             data.forEach(item => { if (item && item.id) newMap.set(String(item.id), item); });
 
+            const userInfo = extractRequestUser(req);
+            const clientInfo = extractClientInfo(req);
+            const entityTitle = getEntityPersianName(key);
             const logs = [];
             const timestamp = Date.now();
-            let userId = 'system';
-            
-            // Extract token if any
-            if (req.cookies && req.cookies.refreshToken) {
-               try {
-                 const decoded = jwt.verify(req.cookies.refreshToken, process.env.JWT_REFRESH_SECRET || 'super-secret-jwt-refresh-key-2024') as any;
-                 if (decoded && decoded.username) userId = decoded.username;
-               } catch(e) { /* ignore expired token */ }
-            } else if (req.headers.authorization) {
-               try {
-                 const token = req.headers.authorization.split(' ')[1];
-                 const decoded = jwt.verify(token, process.env.JWT_SECRET || 'super-secret-jwt-key-2024') as any;
-                 if (decoded && decoded.username) userId = decoded.username;
-               } catch(e) { /* ignore expired token */ }
-            }
-
             const generateId = () => Math.random().toString(36).substring(2, 15);
 
             // Find Added and Updated
             newMap.forEach((newItem, id) => {
+               const itemTitle = newItem.name || newItem.title || newItem.invoiceNumber || newItem.code || newItem.id || '';
                if (!oldMap.has(id)) {
-                  logs.push({ id: generateId(), action: 'CREATE', userId, details: 'ایجاد رکورد جدید', entityType: key, entityId: id, changes: JSON.stringify(newItem), timestamp });
+                  logs.push({
+                    id: generateId(),
+                    action: 'CREATE',
+                    userId: userInfo.userId,
+                    username: userInfo.username,
+                    userName: userInfo.userName,
+                    userRole: userInfo.userRole,
+                    details: `ثبت جدید در ${entityTitle}${itemTitle ? ` («${itemTitle}»)` : ''}`,
+                    entityType: key,
+                    entityId: id,
+                    changes: JSON.stringify(newItem),
+                    diffSummary: `ثبت رکورد جدید در ${entityTitle}`,
+                    browser: clientInfo.browser,
+                    os: clientInfo.os,
+                    device: clientInfo.device,
+                    ip: clientInfo.ip,
+                    userAgent: clientInfo.userAgent,
+                    timestamp
+                  });
                } else {
                   const oldItem = oldMap.get(id);
                   const changes: any = {};
@@ -717,7 +1198,25 @@ router.post('/api/data/:key', async (req, res) => {
                      }
                   }
                   if (hasChanges) {
-                     logs.push({ id: generateId(), action: 'UPDATE', userId, details: 'ویرایش رکورد', entityType: key, entityId: id, changes: JSON.stringify(changes), timestamp });
+                     logs.push({
+                       id: generateId(),
+                       action: 'UPDATE',
+                       userId: userInfo.userId,
+                       username: userInfo.username,
+                       userName: userInfo.userName,
+                       userRole: userInfo.userRole,
+                       details: `ویرایش رکورد در ${entityTitle}${itemTitle ? ` («${itemTitle}»)` : ''}`,
+                       entityType: key,
+                       entityId: id,
+                       changes: JSON.stringify(changes),
+                       diffSummary: `ویرایش فیلدها در ${entityTitle}`,
+                       browser: clientInfo.browser,
+                       os: clientInfo.os,
+                       device: clientInfo.device,
+                       ip: clientInfo.ip,
+                       userAgent: clientInfo.userAgent,
+                       timestamp
+                     });
                   }
                }
             });
@@ -725,13 +1224,34 @@ router.post('/api/data/:key', async (req, res) => {
             // Find Deleted
             oldMap.forEach((oldItem, id) => {
                if (!newMap.has(id)) {
-                  logs.push({ id: generateId(), action: 'DELETE', userId, details: 'حذف رکورد', entityType: key, entityId: id, changes: JSON.stringify(oldItem), timestamp });
+                  const itemTitle = oldItem.name || oldItem.title || oldItem.invoiceNumber || oldItem.code || oldItem.id || '';
+                  logs.push({
+                    id: generateId(),
+                    action: 'DELETE',
+                    userId: userInfo.userId,
+                    username: userInfo.username,
+                    userName: userInfo.userName,
+                    userRole: userInfo.userRole,
+                    details: `حذف رکورد از ${entityTitle}${itemTitle ? ` («${itemTitle}»)` : ''}`,
+                    entityType: key,
+                    entityId: id,
+                    changes: JSON.stringify(oldItem),
+                    diffSummary: `حذف رکورد از ${entityTitle}`,
+                    browser: clientInfo.browser,
+                    os: clientInfo.os,
+                    device: clientInfo.device,
+                    ip: clientInfo.ip,
+                    userAgent: clientInfo.userAgent,
+                    timestamp
+                  });
                }
             });
 
             if (logs.length > 0) {
-               const sysLogs = (await getDbData('system_logs')) || [];
-               sysLogs.push(...logs);
+               let sysLogs = (await getDbData('system_logs')) || [];
+               if (!Array.isArray(sysLogs)) sysLogs = [];
+               sysLogs.unshift(...logs);
+               if (sysLogs.length > 3000) sysLogs.length = 3000;
                await setDbData('system_logs', sysLogs);
             }
          }

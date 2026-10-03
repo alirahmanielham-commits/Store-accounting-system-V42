@@ -63,6 +63,7 @@ import { convertQuantityToBaseUnit, getUnitRatioDirection } from '../../utils/un
 import { safePrint } from '../../utils/printHelper';
 
 import { formatNumber, getActiveStoreSettings } from '../../utils/format';
+import { formatDecimalForExcel } from '../../utils/exportUtils';
 
 interface SalesReportProps {
   showNotification?: (type: 'success' | 'error' | 'info', message: string) => void;
@@ -831,6 +832,8 @@ export default function SalesReport(props: SalesReportProps) {
   // Export to Excel (.xlsx)
   const exportToExcel = () => {
     try {
+      const activeSettings = storeSettings || getActiveStoreSettings();
+      const curr = activeSettings?.currency || currency || 'تومان';
       const wb = XLSX.utils.book_new();
 
       // Sheet 1: Invoices Profit & Loss
@@ -841,15 +844,16 @@ export default function SalesReport(props: SalesReportProps) {
         'نوع سند': inv.isReturn ? 'برگشت از فروش' : 'فاکتور فروش',
         'مشتری / طرف حساب': inv.customerName,
         'تعداد اقلام': inv.itemsCount,
-        'فروش ناخالص (تومان)': Math.round(inv.grossSales),
-        'تخفیف (تومان)': Math.round(inv.totalDiscounts),
-        'فروش خالص (تومان)': Math.round(inv.netSales),
-        'بهای تمام شده (تومان)': Math.round(inv.totalCost),
-        'سود ناخالص (تومان)': Math.round(inv.grossProfit),
+        [`فروش ناخالص (${curr})`]: formatDecimalForExcel(inv.grossSales, activeSettings),
+        [`تخفیف (${curr})`]: formatDecimalForExcel(inv.totalDiscounts, activeSettings),
+        [`فروش خالص (${curr})`]: formatDecimalForExcel(inv.netSales, activeSettings),
+        [`بهای تمام شده (${curr})`]: formatDecimalForExcel(inv.totalCost, activeSettings),
+        [`سود ناخالص (${curr})`]: formatDecimalForExcel(inv.grossProfit, activeSettings),
         'درصد سود (%)': Number(inv.profitMarginPercent.toFixed(1)),
         'وضعیت': inv.isProfitable ? 'سودده' : (inv.isLoss ? 'زیان‌ده' : 'سربه‌سر')
       }));
       const wsInvoices = XLSX.utils.json_to_sheet(invoicesData);
+      if (!wsInvoices['!dir']) wsInvoices['!dir'] = 'rtl';
       XLSX.utils.book_append_sheet(wb, wsInvoices, 'سود و زیان فاکتورها');
 
       // Sheet 2: Daily Summary
@@ -857,14 +861,15 @@ export default function SalesReport(props: SalesReportProps) {
         'ردیف': idx + 1,
         'تاریخ': d.jalaliDay,
         'تعداد فاکتور': d.invoicesCount,
-        'فروش ناخالص (تومان)': Math.round(d.grossSales),
-        'تخفیفات (تومان)': Math.round(d.discounts),
-        'فروش خالص (تومان)': Math.round(d.netSales),
-        'بهای تمام شده (تومان)': Math.round(d.cost),
-        'سود خالص روزانه (تومان)': Math.round(d.profit),
+        [`فروش ناخالص (${curr})`]: formatDecimalForExcel(d.grossSales, activeSettings),
+        [`تخفیفات (${curr})`]: formatDecimalForExcel(d.discounts, activeSettings),
+        [`فروش خالص (${curr})`]: formatDecimalForExcel(d.netSales, activeSettings),
+        [`بهای تمام شده (${curr})`]: formatDecimalForExcel(d.cost, activeSettings),
+        [`سود خالص روزانه (${curr})`]: formatDecimalForExcel(d.profit, activeSettings),
         'درصد سود (%)': Number(d.marginPercent.toFixed(1))
       }));
       const wsDaily = XLSX.utils.json_to_sheet(dailyData);
+      if (!wsDaily['!dir']) wsDaily['!dir'] = 'rtl';
       XLSX.utils.book_append_sheet(wb, wsDaily, 'گزارش روزانه');
 
       // Sheet 3: Monthly Summary
@@ -873,13 +878,14 @@ export default function SalesReport(props: SalesReportProps) {
         'ماه': m.jalaliMonthName,
         'تعداد فاکتور': m.invoicesCount,
         'روزهای کاری': m.workingDaysCount,
-        'فروش خالص (تومان)': Math.round(m.netSales),
-        'بهای تمام شده (تومان)': Math.round(m.cost),
-        'سود خالص ماهانه (تومان)': Math.round(m.profit),
+        [`فروش خالص (${curr})`]: formatDecimalForExcel(m.netSales, activeSettings),
+        [`بهای تمام شده (${curr})`]: formatDecimalForExcel(m.cost, activeSettings),
+        [`سود خالص ماهانه (${curr})`]: formatDecimalForExcel(m.profit, activeSettings),
         'درصد سود (%)': Number(m.marginPercent.toFixed(1)),
-        'میانگین سود روزانه (تومان)': Math.round(m.avgDailyProfit)
+        [`میانگین سود روزانه (${curr})`]: formatDecimalForExcel(m.avgDailyProfit, activeSettings)
       }));
       const wsMonthly = XLSX.utils.json_to_sheet(monthlyData);
+      if (!wsMonthly['!dir']) wsMonthly['!dir'] = 'rtl';
       XLSX.utils.book_append_sheet(wb, wsMonthly, 'گزارش ماهانه');
 
       // Sheet 4: Products Profitability
@@ -889,17 +895,18 @@ export default function SalesReport(props: SalesReportProps) {
         'دسته‌بندی': p.category,
         'تعداد فروش': p.quantitySold,
         'واحد': p.unit,
-        'درآمد فروش (تومان)': Math.round(p.grossRevenue),
-        'بهای تمام شده (تومان)': Math.round(p.totalCost),
-        'سود خالص (تومان)': Math.round(p.netProfit),
+        [`درآمد فروش (${curr})`]: formatDecimalForExcel(p.grossRevenue, activeSettings),
+        [`بهای تمام شده (${curr})`]: formatDecimalForExcel(p.totalCost, activeSettings),
+        [`سود خالص (${curr})`]: formatDecimalForExcel(p.netProfit, activeSettings),
         'حاشیه سود (%)': Number(p.marginPercent.toFixed(1)),
         'سهم از کل سود (%)': Number(p.profitShare.toFixed(1))
       }));
       const wsProducts = XLSX.utils.json_to_sheet(productData);
+      if (!wsProducts['!dir']) wsProducts['!dir'] = 'rtl';
       XLSX.utils.book_append_sheet(wb, wsProducts, 'سودآوری کالاها');
 
-      XLSX.writeFile(wb, `Sales_Profit_Loss_Report_${new Date().toISOString().split('T')[0]}.xlsx`);
-      if (showNotification) showNotification('success', 'فایل اکسل گزارش با موفقیت ایجاد و دانلود شد');
+      XLSX.writeFile(wb, `گزارش_جامع_فروش_سود_زیان_${new Date().toLocaleDateString('fa-IR').replace(/\//g, '-')}.xlsx`);
+      if (showNotification) showNotification('success', 'فایل اکسل گزارش با رعایت تنظیمات اعشار با موفقیت دانلود شد');
     } catch (e) {
       console.error(e);
       if (showNotification) showNotification('error', 'خطا در خروجی فایل اکسل');

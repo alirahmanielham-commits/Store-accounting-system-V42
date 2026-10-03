@@ -14,6 +14,7 @@ import {
   Flame,
 } from "lucide-react";
 import { getFilteredSidebarGroups, SidebarGroup, SidebarItem } from "../utils/sidebarData";
+import { hasPagePermission } from "../utils/permissionUtils";
 
 interface SidebarNavigationProps {
   mode: "sidebar" | "horizontal";
@@ -144,8 +145,8 @@ export default function SidebarNavigation({
             item.label.toLowerCase().includes(searchLower) ||
             (item.shortLabel && item.shortLabel.toLowerCase().includes(searchLower)) ||
             (item.description && item.description.toLowerCase().includes(searchLower));
-          const matchesRole = !user || item.roles.includes(user.role);
-          return matchesSearch && matchesRole;
+          const matchesPermission = hasPagePermission(user, item.id);
+          return matchesSearch && matchesPermission;
         });
         return {
           ...group,
@@ -226,7 +227,7 @@ export default function SidebarNavigation({
               </span>
             </div>
             <div className="flex items-center gap-1.5 flex-wrap">
-              {recentTabs.slice(0, 4).map((tId) => {
+              {recentTabs.filter(tId => hasPagePermission(user, tId)).slice(0, 4).map((tId) => {
                 const itm = allItemsMap.get(tId);
                 if (!itm) return null;
                 const isActive = activeTab === tId;
@@ -395,7 +396,7 @@ export default function SidebarNavigation({
       >
         {filteredSidebarGroups.map((group, groupIdx) => {
           const visibleItems = group.items.filter(
-            (item) => !user || item.roles.includes(user.role)
+            (item) => hasPagePermission(user, item.id)
           );
           if (visibleItems.length === 0) return null;
           const isActiveGroup = group.items.some((i) => i.id === activeTab);
