@@ -537,6 +537,15 @@ export const allSidebarGroups: SidebarGroup[] = [
         badgeColor: "blue",
       },
       {
+        id: "due_reminders",
+        label: "یادآور سررسید و معوقات چک",
+        shortLabel: "یادآور سررسید",
+        icon: <Bell className="w-4 h-4 text-amber-500" />,
+        roles: ["admin", "accountant", "manager", "viewer"],
+        badge: "هشدار",
+        badgeColor: "amber",
+      },
+      {
         id: "receive_check_form",
         label: "ثبت برگه چک دریافتی جدید",
         shortLabel: "دریافت چک",

@@ -1051,6 +1051,36 @@ export default function App() {
                           storeSettings={storeSettings}
                           setViewingCheck={setViewingCheck} />
                       </motion.div>} />
+<Route path="/due_reminders" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="h-full"
+                      >
+                        <CheckManagement
+                          activeTab="due_reminders"
+                          onEditReceiptByCheck={handleEditReceiptByCheck}
+                          showNotification={showNotification}
+                          currentUser={user?.name || "کاربر سیستم"}
+                        
+                          sendNotification={sendNotification}
+                          storeSettings={storeSettings}
+                          setViewingCheck={setViewingCheck} />
+                      </motion.div>} />
+<Route path="/check_due_reminders" element={<motion.div
+                        initial={{ opacity: 0, y: 10 }}
+                        animate={{ opacity: 1, y: 0 }}
+                        className="h-full"
+                      >
+                        <CheckManagement
+                          activeTab="due_reminders"
+                          onEditReceiptByCheck={handleEditReceiptByCheck}
+                          showNotification={showNotification}
+                          currentUser={user?.name || "کاربر سیستم"}
+                        
+                          sendNotification={sendNotification}
+                          storeSettings={storeSettings}
+                          setViewingCheck={setViewingCheck} />
+                      </motion.div>} />
 
 <Route path="/loan/:id" element={<LoanCardPage showNotification={showNotification} userRole={user?.role} formatCurrency={formatCurrency} storeSettings={storeSettings} />} />
 <Route path="/loans_dashboard" element={<LoansManager activeTab="dashboard" showNotification={showNotification} persons={persons} accounts={accounts} loans={loans} setLoans={setLoans} installments={installments} setInstallments={setInstallments} currentUser={user?.name || "کاربر سیستم"} userRole={user?.role} setAccounts={setAccounts} transactions={transactions} setTransactions={setTransactions} storeSettings={storeSettings} />} />

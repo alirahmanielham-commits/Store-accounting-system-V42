@@ -16,12 +16,13 @@ import { ReceivedChecksList } from './checks/ReceivedChecksList';
 import { CheckCalendar } from './checks/CheckCalendar';
 import { CheckModals } from './checks/CheckModals';
 import CheckbooksManager from './CheckbooksManager';
-import { Printer, X, BarChart as BarChartIcon, BookOpen, Send, ArrowDownLeft, Calendar, List, Kanban } from 'lucide-react';
+import { CheckDueReminderPanel } from './checks/CheckDueReminderPanel';
+import { Printer, X, BarChart as BarChartIcon, BookOpen, Send, ArrowDownLeft, ArrowUpRight, Calendar, List, Kanban, Bell } from 'lucide-react';
 import DateObject from "react-date-object";
 import persian from "react-date-object/calendars/persian";
 import { formatDateDisplay } from '../../utils/format';
 
-export default function CheckManagement({ showNotification, activeTab = 'checkbooks', onDataChange, currentUser = 'کاربر سیستم', sendNotification, storeSettings, setViewingCheck, onEditReceiptByCheck }: { showNotification?: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void, activeTab?: 'checkbooks' | 'issued_checks' | 'received_checks' | 'check_calendar' | 'check_charts' | 'check_panel', onDataChange?: () => void, currentUser?: string, sendNotification?: any, storeSettings?: any, setViewingCheck?: any, onEditReceiptByCheck?: any }) {
+export default function CheckManagement({ showNotification, activeTab = 'checkbooks', onDataChange, currentUser = 'کاربر سیستم', sendNotification, storeSettings, setViewingCheck, onEditReceiptByCheck }: { showNotification?: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void, activeTab?: 'checkbooks' | 'issued_checks' | 'received_checks' | 'check_calendar' | 'check_charts' | 'check_panel' | 'due_reminders', onDataChange?: () => void, currentUser?: string, sendNotification?: any, storeSettings?: any, setViewingCheck?: any, onEditReceiptByCheck?: any }) {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const notify = (msg: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
@@ -33,7 +34,7 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
   };
 
   const [viewMode, setViewMode] = React.useState<'list' | 'kanban'>('list');
-  const [activeSubTab, setActiveSubTab] = React.useState<'checkbooks' | 'issued_checks' | 'received_checks' | 'check_calendar' | 'check_charts' | 'check_panel'>(
+  const [activeSubTab, setActiveSubTab] = React.useState<'checkbooks' | 'issued_checks' | 'received_checks' | 'check_calendar' | 'check_charts' | 'check_panel' | 'due_reminders'>(
     (activeTab === 'check_panel' || !activeTab) ? 'check_charts' : activeTab as any
   );
 
@@ -176,10 +177,21 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
     return (receivedChecks || []).filter(c => c.status === 'bounced' || c.status === 'bounced_assigned').reduce((sum, c) => sum + (Number(c.amount) || 0), 0);
   }, [receivedChecks]);
 
+  const overdueCount = useMemo(() => {
+    let count = 0;
+    const isSettled = (s: string) => ['cashed', 'cancelled', 'returned'].includes((s || '').toLowerCase());
+    (issuedChecks || []).forEach((c: any) => {
+      if (!isSettled(c.status) && c.dueDate && getDaysRemaining(c.dueDate) < 0) count++;
+    });
+    (receivedChecks || []).forEach((c: any) => {
+      if (!isSettled(c.status) && c.dueDate && getDaysRemaining(c.dueDate) < 0) count++;
+    });
+    return count;
+  }, [issuedChecks, receivedChecks]);
 
   return (
     <div className="bg-slate-50 min-h-screen p-4 pb-24 md:p-6 text-right" dir="rtl">
-      {/* Header and navigation removed for brevity, it's just tabs */}
+      {/* Header and navigation */}
       <div className="max-w-7xl mx-auto">
         <div className="flex flex-col md:flex-row items-start md:items-center justify-between mb-6 gap-4">
           <div>
@@ -188,7 +200,7 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
               مدیریت یکپارچه چک و بانک
             </h1>
             <p className="text-sm text-slate-500 mt-1 font-medium">
-              {activeSubTab === 'checkbooks' ? 'تعریف و نظارت بر دسته‌چک‌های بانکی اختصاصی' : activeSubTab === 'issued_checks' ? 'نظارت بر وضعیت برگه‌های چک پرداخت شده به حساب مشتریان و تامین‌کنندگان' : activeSubTab === 'check_calendar' ? 'نظارت تصویری بر تاریخ‌های سررسید چک‌ها بوسیله تقویم ماهانه' : activeSubTab === 'check_charts' ? 'گزارش‌گیری و نمایش بصری وضعیت و گردش چک‌های پرداختی و دریافتی' : 'مدیریت وضعیت وصول و اقلام چک‌های دریافت شده از اشخاص'}
+              {activeSubTab === 'checkbooks' ? 'تعریف و نظارت بر دسته‌چک‌های بانکی اختصاصی' : activeSubTab === 'issued_checks' ? 'نظارت بر وضعیت برگه‌های چک پرداخت شده به حساب مشتریان و تامین‌کنندگان' : activeSubTab === 'due_reminders' ? 'پنل هوشمند یادآوری، هشدار و مدیریت سررسید چک‌ها و معوقات' : activeSubTab === 'check_calendar' ? 'نظارت تصویری بر تاریخ‌های سررسید چک‌ها بوسیله تقویم ماهانه' : activeSubTab === 'check_charts' ? 'گزارش‌گیری و نمایش بصری وضعیت و گردش چک‌های پرداختی و دریافتی' : 'مدیریت وضعیت وصول و اقلام چک‌های دریافت شده از اشخاص'}
             </p>
           </div>
         </div>
@@ -196,24 +208,35 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
         <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4 mb-6 print:hidden">
           <div className="bg-white p-2 rounded-xl border border-gray-100 shadow-sm flex overflow-x-auto gap-2 custom-scrollbar max-w-full">
           {[
-            { id: 'check_charts', label: 'داشبورد', icon: <BarChartIcon className="w-4 h-4" /> },
-            
-            
+            { id: 'check_charts', label: 'داشبورد و تحلیل‌ها', icon: <BarChartIcon className="w-4 h-4" /> },
+            {
+              id: 'due_reminders',
+              label: 'یادآور سررسید و معوقات',
+              icon: <Bell className="w-4 h-4 text-amber-500" />,
+              badge: overdueCount > 0 ? `${toPersianDigits(overdueCount)} معوق` : undefined,
+              badgeClass: 'bg-rose-500 text-white animate-pulse'
+            },
             { id: 'received_checks', label: 'چک‌های دریافتی', icon: <ArrowDownLeft className="w-4 h-4" /> },
+            { id: 'issued_checks', label: 'چک‌های پرداختی', icon: <ArrowUpRight className="w-4 h-4" /> },
             { id: 'check_calendar', label: 'تقویم سررسید', icon: <Calendar className="w-4 h-4" /> },
             { id: 'pending_approvals', label: 'در انتظار تأیید', icon: <ShieldCheck className="w-4 h-4" /> }
           ].map(tab => (
             <button
               key={tab.id}
               onClick={() => setActiveSubTab(tab.id as any)}
-              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap ${
+              className={`flex items-center gap-2 px-4 py-2.5 rounded-lg text-sm font-bold transition-all whitespace-nowrap cursor-pointer ${
                 activeSubTab === tab.id 
-                ? 'bg-indigo-50 text-indigo-700 shadow-sm' 
+                ? 'bg-indigo-50 text-indigo-700 shadow-xs' 
                 : 'text-slate-600 hover:bg-slate-50 hover:text-slate-900'
               }`}
             >
               {tab.icon}
-              {tab.label}
+              <span>{tab.label}</span>
+              {tab.badge && (
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-black ${tab.badgeClass || 'bg-slate-200 text-slate-800'}`}>
+                  {tab.badge}
+                </span>
+              )}
             </button>
           ))}
         </div>
@@ -235,7 +258,8 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
             issuedChecks={issuedChecks} 
             receivedChecks={receivedChecks} 
             formatCurrency={(v) => Number(v).toLocaleString()}
-             storeSettings={storeSettings}
+            storeSettings={storeSettings}
+            onNavigateToReminders={() => setActiveSubTab('due_reminders')}
           />
           
           {activeSubTab === 'issued_checks' && viewMode === 'list' && (
@@ -333,6 +357,26 @@ export default function CheckManagement({ showNotification, activeTab = 'checkbo
               storeSettings={storeSettings}
               selectedCalendarDate={selectedCalendarDate} setSelectedCalendarDate={setSelectedCalendarDate}
               normalizeDate={normalizeDate} getSelectedRange={getSelectedRange} setViewingCheck={setViewingCheck}
+            />
+          )}
+          {activeSubTab === 'due_reminders' && (
+            <CheckDueReminderPanel
+              issuedChecks={issuedChecks}
+              receivedChecks={receivedChecks}
+              persons={persons}
+              accounts={accounts}
+              checkbooks={checkbooks}
+              storeSettings={storeSettings}
+              showNotification={notify}
+              sendNotification={sendNotification}
+              setViewingCheck={setViewingCheck}
+              onStatusChange={(checkId, type, newStatus) => {
+                form.setUpdatingCheckId(checkId);
+                form.setUpdatingCheckType(type);
+                form.setStatusVal(newStatus);
+                form.setIsStatusModalOpen(true);
+              }}
+              onEditReceiptByCheck={onEditReceiptByCheck}
             />
           )}
           {activeSubTab === 'check_charts' && (

@@ -28,6 +28,7 @@ import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { BarChart, Bar, XAxis, YAxis, Tooltip, ResponsiveContainer, Legend, Cell, CartesianGrid } from 'recharts';
 import { DashboardPersonalNotesWidget } from "../notes/DashboardPersonalNotesWidget";
+import { CheckStatusAnalyticsReport } from "../financial/checks/CheckStatusAnalyticsReport";
 
 function toPersianDigits(str: string | number) {
   if (str === null || str === undefined) return "";
@@ -65,7 +66,7 @@ const WIDGET_TYPES = [
   { id: 'receivable_checks', title: 'چک‌های دریافتی', defaultWidth: 'col-span-1 md:col-span-2 lg:col-span-2' },
   { id: 'debtors', title: 'لیست اشخاص بدهکار', defaultWidth: 'col-span-1 md:col-span-2 lg:col-span-1' },
   { id: 'creditors', title: 'بستانکاران', defaultWidth: 'col-span-1 md:col-span-2 lg:col-span-1' },
-  { id: 'checks_chart', title: 'نمودار چک‌ها', defaultWidth: 'col-span-1 md:col-span-2 lg:col-span-4' },
+  { id: 'checks_chart', title: 'گزارش تحلیلی وضعیت چک‌ها (پاس شده، برگشتی، در جریان)', defaultWidth: 'col-span-1 md:col-span-2 lg:col-span-4' },
   { id: 'personal_notes', title: 'یادداشت‌های شخصی', defaultWidth: 'col-span-1 md:col-span-2 lg:col-span-4' }
 ];
 
@@ -173,21 +174,58 @@ export default function FinancialDashboard({
           return n >= startNormAlert && n <= endNormAlert;
         });
         const totalUpcoming = upcomingIssued.length + upcomingReceived.length;
-        if (totalUpcoming === 0) return <div className="text-gray-400 p-4 text-center text-sm font-bold">هشدار سررسید فعالی وجود ندارد.</div>;
+
+        const overdueIssued = (issuedChecks || []).filter((c: any) => {
+          if (["cashed", "bounced", "cancelled"].includes(c.status)) return false;
+          const n = normalizeDateStr(c.dueDate);
+          return n > 0 && n < startNormAlert;
+        });
+        const overdueReceived = (receivedChecks || []).filter((c: any) => {
+          if (["cashed", "deposited", "bounced", "returned"].includes(c.status)) return false;
+          const n = normalizeDateStr(c.dueDate);
+          return n > 0 && n < startNormAlert;
+        });
+        const totalOverdue = overdueIssued.length + overdueReceived.length;
+
+        if (totalUpcoming === 0 && totalOverdue === 0) {
+          return <div className="text-gray-400 p-4 text-center text-sm font-bold">هشدار سررسید فعالی وجود ندارد.</div>;
+        }
+
         return (
-          <div onClick={() => setActiveTab("check_calendar")} className="bg-amber-50 rounded-2xl p-4 flex items-center justify-between cursor-pointer hover:bg-amber-100 transition-colors h-full">
+          <div
+            onClick={() => setActiveTab("check_panel")}
+            className={`rounded-2xl p-4 flex items-center justify-between cursor-pointer transition-colors h-full ${
+              totalOverdue > 0 ? 'bg-rose-50 hover:bg-rose-100/90 border border-rose-200/80' : 'bg-amber-50 hover:bg-amber-100 border border-amber-200/80'
+            }`}
+          >
             <div className="flex items-center gap-4">
-              <div className="bg-amber-100 p-2.5 rounded-xl text-amber-600"><AlertCircle className="w-6 h-6 animate-pulse" /></div>
+              <div className={`p-2.5 rounded-xl ${totalOverdue > 0 ? 'bg-rose-100 text-rose-600' : 'bg-amber-100 text-amber-600'}`}>
+                <AlertCircle className="w-6 h-6 animate-pulse" />
+              </div>
               <div>
-                <h4 className="text-amber-900 font-extrabold text-sm flex items-center gap-2">
-                  هشدار سررسید چک‌ها (تا ۳ روز آینده) <span className="bg-amber-200 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold">{toPersianDigits(totalUpcoming)} مورد</span>
+                <h4 className={`font-extrabold text-sm flex items-center gap-2 ${totalOverdue > 0 ? 'text-rose-950' : 'text-amber-900'}`}>
+                  {totalOverdue > 0 ? 'هشدار چک‌های معوق و در شرف سررسید' : 'هشدار سررسید چک‌ها (تا ۳ روز آینده)'}
+                  {totalOverdue > 0 && (
+                    <span className="bg-rose-200 text-rose-800 text-[10px] px-2 py-0.5 rounded-full font-black animate-pulse">
+                      {toPersianDigits(totalOverdue)} معوق
+                    </span>
+                  )}
+                  {totalUpcoming > 0 && (
+                    <span className="bg-amber-200 text-amber-800 text-[10px] px-2 py-0.5 rounded-full font-bold">
+                      {toPersianDigits(totalUpcoming)} نزدیک
+                    </span>
+                  )}
                 </h4>
-                <p className="text-amber-700 text-xs font-semibold mt-1">
-                  شما {toPersianDigits(totalUpcoming)} چک در ۳ روز آینده دارای سررسید دارید. برای مشاهده تقویم سررسید کلیک کنید.
+                <p className={`text-xs font-semibold mt-1 ${totalOverdue > 0 ? 'text-rose-700' : 'text-amber-700'}`}>
+                  {totalOverdue > 0
+                    ? `شما ${toPersianDigits(totalOverdue)} فقره چک سررسید شده و پاس نشده دارید! برای مدیریت و مشاهده یادآور سررسید کلیک کنید.`
+                    : `شما ${toPersianDigits(totalUpcoming)} چک در ۳ روز آینده دارای سررسید دارید. برای مشاهده و اقدام کلیک کنید.`}
                 </p>
               </div>
             </div>
-            <div className="text-amber-500 bg-amber-100/50 p-2 rounded-xl"><Calendar className="w-5 h-5" /></div>
+            <div className={`p-2 rounded-xl ${totalOverdue > 0 ? 'text-rose-500 bg-rose-100/70' : 'text-amber-500 bg-amber-100/50'}`}>
+              <Calendar className="w-5 h-5" />
+            </div>
           </div>
         );
       }
@@ -446,38 +484,18 @@ export default function FinancialDashboard({
         );
       }
       case 'checks_chart': {
-        const allC = [
-          ...(receivedChecks || []).map((c: any) => ({ ...c, type: "receive", isPending: c.status === 'received' || c.status === 'deposited' || !c.status })),
-          ...(issuedChecks || []).map((c: any) => ({ ...c, type: "issue", isPending: c.status === 'issued' || !c.status })),
-        ];
-        const monthMap = new Map();
-        allC.forEach((c) => {
-          const m = c.dueDate?.substring(0, 7) || "نامشخص";
-          if (!monthMap.has(m)) monthMap.set(m, { month: m, receivePending: 0, receiveCashed: 0, issuePending: 0, issueCashed: 0 });
-          const d = monthMap.get(m);
-          if (c.type === "receive") c.isPending ? (d.receivePending += c.amount || 0) : (d.receiveCashed += c.amount || 0);
-          else c.isPending ? (d.issuePending += c.amount || 0) : (d.issueCashed += c.amount || 0);
-        });
-        const data = Array.from(monthMap.values()).sort((a, b) => a.month.localeCompare(b.month));
         return (
-          <div className="bg-white rounded-2xl p-6 h-full flex flex-col">
-            <h3 className="text-base font-extrabold text-gray-900 border-b border-gray-100 pb-3 mb-4 flex items-center gap-2"><BarChart3 className="w-5 h-5 text-indigo-500" /> آمار چک‌ها</h3>
-            <div className="h-72 w-full mt-4" dir="ltr">
-              <ResponsiveContainer width="100%" height="100%">
-                <BarChart data={data} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
-                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#f1f5f9" />
-                  <XAxis dataKey="month" tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} />
-                  <YAxis tickFormatter={(val) => formatNumber(val)} tick={{ fontSize: 10, fill: "#64748b" }} tickLine={false} axisLine={false} />
-                  <Tooltip formatter={(val: number) => [formatNumber(val), ""]} contentStyle={{ borderRadius: "12px", border: "none", boxShadow: "0 4px 6px -1px rgb(0 0 0 / 0.1)" }} />
-                  <Legend wrapperStyle={{ fontSize: "11px", paddingTop: "20px" }} />
-                  <Bar dataKey="receivePending" name="دریافتی (سررسید نشده)" stackId="a" fill="#10b981" radius={[0, 0, 4, 4]} />
-                  <Bar dataKey="receiveCashed" name="دریافتی (وصول شده)" stackId="a" fill="#6ee7b7" radius={[4, 4, 0, 0]} />
-                  <Bar dataKey="issuePending" name="پرداختی (سررسید نشده)" stackId="b" fill="#f43f5e" radius={[0, 0, 4, 4]} />
-                  <Bar dataKey="issueCashed" name="پرداختی (پاس شده)" stackId="b" fill="#fda4af" radius={[4, 4, 0, 0]} />
-                </BarChart>
-              </ResponsiveContainer>
-            </div>
-          </div>
+          <CheckStatusAnalyticsReport
+            issuedChecks={issuedChecks}
+            receivedChecks={receivedChecks}
+            storeSettings={storeSettings}
+            formatNumber={formatNumber}
+            toPersianDigits={toPersianDigits}
+            persons={persons}
+            onViewCheck={() => {
+              setActiveTab("check_panel");
+            }}
+          />
         );
       }
       case 'personal_notes': {

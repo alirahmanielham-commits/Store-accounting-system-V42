@@ -11,6 +11,7 @@ import persian_fa from "react-date-object/locales/persian_fa";
 
 import { CashFlowForecast } from './CashFlowForecast';
 import { CheckAgingReport } from './CheckAgingReport';
+import { CheckStatusAnalyticsReport } from './CheckStatusAnalyticsReport';
 
 export function CheckDashboard({ 
   totalIssuedAmount, cashedIssuedAmount, pendingIssuedAmount, bouncedIssuedAmount, 
@@ -209,6 +210,12 @@ export function CheckDashboard({
               </div>
             </div>
           
+          <CheckStatusAnalyticsReport
+            issuedChecks={issuedChecks}
+            receivedChecks={receivedChecks}
+            storeSettings={storeSettings}
+          />
+
           <CheckAgingReport issuedChecks={issuedChecks} receivedChecks={receivedChecks} storeSettings={storeSettings} />
           
           <CashFlowForecast issuedChecks={issuedChecks} receivedChecks={receivedChecks} accounts={accounts} storeSettings={storeSettings} />
