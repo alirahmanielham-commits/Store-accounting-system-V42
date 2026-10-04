@@ -270,13 +270,27 @@ export default function KeyboardReceiptPage({
       const resourceId = resourceType === 'bank' ? selectedAccount.id : selectedCashbox.id;
       const personName = selectedPerson.name || 'طرف‌حساب';
 
+      // Precise Persian date conversion without day rollback
+      let convertedDate = '';
+      try {
+        const cleanDate = dateStr.trim().replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString());
+        const dObj = new DateObject({ date: cleanDate, format: 'YYYY/MM/DD', calendar: persian, locale: persian_fa });
+        const now = new Date();
+        dObj.setHour(now.getHours() || 12);
+        dObj.setMinute(now.getMinutes() || 0);
+        dObj.setSecond(now.getSeconds() || 0);
+        convertedDate = dObj.toDate().toISOString();
+      } catch {
+        convertedDate = convertToGregorian(dateStr);
+      }
+
       const payload: any = {
         type: receiptType,
         method: 'cash',
         personId: selectedPerson.id,
         personName,
         amount: parsedAmount,
-        date: convertToGregorian(dateStr) || new Date().toISOString().split('T')[0],
+        date: convertedDate || new Date().toISOString(),
         rawDate: dateStr,
         displayDate: dateStr,
         description: noteStr || (receiptType === 'receive' ? `دریافت وجه از ${personName}` : `پرداخت وجه به ${personName}`),

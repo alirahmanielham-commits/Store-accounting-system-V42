@@ -326,6 +326,12 @@ export function convertToGregorian(dateInput: string | Date | number | any): str
             }
           }
           const d = new DateObject({ date: normalizedSlash, format, calendar: persian, locale: persian_fa });
+          if (!normalizedSlash.includes(':')) {
+            // Set noon (12:00:00) so timezone conversions in UTC+ zones (like Iran UTC+3:30) never shift across day boundary
+            d.setHour(12);
+            d.setMinute(0);
+            d.setSecond(0);
+          }
           const jsDate = d.toDate();
           if (!isNaN(jsDate.getTime())) {
             return jsDate.toISOString();
