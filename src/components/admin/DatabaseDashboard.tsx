@@ -2,10 +2,10 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Database, RefreshCw, UploadCloud, HardDrive, Download, 
-  Trash2, Shield, Calendar, Settings, FileText, CheckCircle, 
+  Trash2, Shield, Calendar, Settings, FileText, CheckCircle, CheckCircle2,
   AlertTriangle, XCircle, Search, Save, FolderOpen, Mail, Key,
   Upload, Check, Play, Clock, Server, Eye, ToggleLeft, ToggleRight,
-  Info, Lock, AlertCircle, X
+  Info, Lock, AlertCircle, X, LogIn
 } from 'lucide-react';
 
 interface DatabaseDashboardProps {
@@ -54,14 +54,23 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
           retention: data.retention || 5,
           cron: data.cron || '0 2 * * *'
         }));
-        if (data.path || data.storageType) {
-          setStorageConfig(prev => ({ 
-            ...prev, 
-            localPath: data.path || '', 
-            type: data.storageType || 'local', 
-            cloudProvider: data.remoteProvider || 's3', cloudAuthUrl: data.cloudAuthUrl || prev.cloudAuthUrl, cloudUser: data.cloudUser || prev.cloudUser, cloudPass: data.cloudPass || prev.cloudPass 
-          }));
-        }
+        setStorageConfig(prev => ({ 
+          ...prev, 
+          localPath: data.path !== undefined ? data.path : prev.localPath, 
+          type: data.storageType || prev.type, 
+          cloudProvider: data.cloudProvider || data.remoteProvider || prev.cloudProvider,
+          autoCloudSync: data.autoCloudSync !== undefined ? data.autoCloudSync : true,
+          cloudAuthUrl: data.cloudAuthUrl || prev.cloudAuthUrl, 
+          cloudUser: data.cloudUser || prev.cloudUser, 
+          cloudPass: data.cloudPass || prev.cloudPass,
+          cloudBucket: data.cloudBucket || prev.cloudBucket,
+          gdriveToken: data.gdriveToken || prev.gdriveToken,
+          gdriveFolder: data.gdriveFolder || prev.gdriveFolder,
+          gdriveUser: data.gdriveUser || prev.gdriveUser,
+          onedriveToken: data.onedriveToken || prev.onedriveToken,
+          onedriveFolder: data.onedriveFolder || prev.onedriveFolder,
+          onedriveUser: data.onedriveUser || prev.onedriveUser
+        }));
       }
     } catch (e) {}
   };
@@ -77,18 +86,143 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     enabled: true,
     frequency: 'daily',
     time: '02:00',
-    retention: 5,
+    retention: 10,
     cron: '0 2 * * *'
   });
 
   const [storageConfig, setStorageConfig] = useState({
-    type: 'local',
-    localPath: 'D:/Backups/MyApp',
-    cloudProvider: 's3',
+    type: 'both',
+    localPath: '',
+    cloudProvider: 'gdrive',
+    autoCloudSync: true,
     cloudAuthUrl: 's3.example.com',
     cloudUser: '',
-    cloudPass: ''
+    cloudPass: '',
+    cloudBucket: 'taraz-backups',
+    gdriveToken: '',
+    gdriveFolder: 'Taraz_Backups',
+    gdriveUser: '',
+    onedriveToken: '',
+    onedriveFolder: 'Taraz_Backups',
+    onedriveUser: ''
   });
+
+  const [cloudBackups, setCloudBackups] = useState<any[]>([]);
+  const [loadingCloudBackups, setLoadingCloudBackups] = useState(false);
+  const [isTestingCloud, setIsTestingCloud] = useState(false);
+  const [cloudTestResult, setCloudTestResult] = useState<{ success: boolean; message: string; user?: string } | null>(null);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [isUploadingToCloud, setIsUploadingToCloud] = useState<string | null>(null);
+
+  const loadCloudBackups = async () => {
+    setLoadingCloudBackups(true);
+    try {
+      const res = await fetch('/api/db/cloud/backups');
+      const data = await res.json();
+      setCloudBackups(Array.isArray(data) ? data : []);
+    } catch(e) {
+      console.error('Failed to load cloud backups', e);
+    }
+    setLoadingCloudBackups(false);
+  };
+
+  const handleTestCloudConnection = async (customProvider?: string) => {
+    setIsTestingCloud(true);
+    setCloudTestResult(null);
+    const target = customProvider || storageConfig.cloudProvider;
+    try {
+      const res = await fetch('/api/db/cloud/test-connection', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          provider: target,
+          config: storageConfig
+        })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        setCloudTestResult({ success: false, message: data.error || 'خطا در ارتباط با فضای ابری' });
+        showNotification(data.error || 'خطا در برقراری ارتباط با فضای ابری', 'error');
+      } else {
+        setCloudTestResult({
+          success: true,
+          message: data.message,
+          user: data.user ? `${data.user} (${data.email || ''})` : undefined
+        });
+        showNotification(data.message, 'success');
+      }
+    } catch(err: any) {
+      setCloudTestResult({ success: false, message: err.message || 'خطای ارتباط با سرور' });
+      showNotification('خطا در تست اتصال ابری', 'error');
+    }
+    setIsTestingCloud(false);
+  };
+
+  const handleConnectGoogleDrive = async () => {
+    try {
+      const { googleSignIn } = await import('../../lib/driveAuth');
+      const result = await googleSignIn();
+      if (result?.accessToken) {
+        const updated = {
+          ...storageConfig,
+          cloudProvider: 'gdrive',
+          gdriveToken: result.accessToken,
+          gdriveUser: result.user.displayName || result.user.email || 'حساب گوگل'
+        };
+        setStorageConfig(updated);
+        await saveStorageSettings(updated);
+        showNotification(`حساب گوگل با موفقیت متصل شد`, 'success');
+        handleTestCloudConnection('gdrive');
+      }
+    } catch(e: any) {
+      showNotification('احراز هویت با Google ناموفق بود: ' + (e.message || ''), 'warning');
+    }
+  };
+
+  const handleCloudSyncNow = async () => {
+    setIsSyncingCloud(true);
+    try {
+      const res = await fetch('/api/db/cloud/sync-now', { method: 'POST' });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'خطای سرور');
+      showNotification('پشتیبان‌گیری انجام و در فضای ابری همگام‌سازی شد', 'success');
+      loadBackups();
+      loadCloudBackups();
+    } catch(e: any) {
+      showNotification('خطا در همگام‌سازی ابری: ' + e.message, 'error');
+    }
+    setIsSyncingCloud(false);
+  };
+
+  const handleUploadSpecificToCloud = async (filename: string) => {
+    setIsUploadingToCloud(filename);
+    try {
+      const res = await fetch('/api/db/cloud/upload-backup', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename })
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'خطا در آپلود');
+      showNotification(data.message || 'فایل در فضای ابری ذخیره شد', 'success');
+      loadCloudBackups();
+    } catch(e: any) {
+      showNotification('خطا در ارسال به فضای ابری: ' + e.message, 'error');
+    }
+    setIsUploadingToCloud(null);
+  };
+
+  const handleDeleteCloudBackup = async (filename: string) => {
+    if (!confirm(`آیا از حذف این نسخه از فضای ابری مطمئن هستید؟`)) return;
+    try {
+      const res = await fetch(`/api/db/cloud/backups/${encodeURIComponent(filename)}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Delete failed');
+      showNotification('نسخه از لیست ابری حذف شد', 'success');
+      loadCloudBackups();
+    } catch(e: any) {
+      showNotification('خطا در حذف نسخه ابری: ' + e.message, 'error');
+    }
+  };
 
   const [securityConfig, setSecurityConfig] = useState({
     encrypt: true,
@@ -322,16 +456,33 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     }
   };
 
-  const saveStorageSettings = async () => {
+  const saveStorageSettings = async (customConfig?: any) => {
+    const toSave = customConfig || storageConfig;
     try {
       await fetch('/api/db/backup-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ path: storageConfig.localPath, storageType: storageConfig.type, remoteProvider: storageConfig.cloudProvider, cloudAuthUrl: storageConfig.cloudAuthUrl, cloudUser: storageConfig.cloudUser, cloudPass: storageConfig.cloudPass })
+        body: JSON.stringify({ 
+          path: toSave.localPath, 
+          storageType: toSave.type, 
+          remoteProvider: toSave.cloudProvider,
+          cloudProvider: toSave.cloudProvider,
+          autoCloudSync: toSave.autoCloudSync,
+          cloudAuthUrl: toSave.cloudAuthUrl, 
+          cloudUser: toSave.cloudUser, 
+          cloudPass: toSave.cloudPass,
+          cloudBucket: toSave.cloudBucket,
+          gdriveToken: toSave.gdriveToken,
+          gdriveFolder: toSave.gdriveFolder,
+          gdriveUser: toSave.gdriveUser,
+          onedriveToken: toSave.onedriveToken,
+          onedriveFolder: toSave.onedriveFolder,
+          onedriveUser: toSave.onedriveUser
+        })
       });
-      showNotification('مسیر ذخیره‌سازی ذخیره شد', 'success');
+      showNotification('تنظیمات مسیر و فضای ذخیره‌سازی با موفقیت ذخیره شد', 'success');
     } catch (e) {
-      showNotification('خطا در ذخیره مسیر', 'error');
+      showNotification('خطا در ذخیره تنظیمات', 'error');
     }
   };
   
@@ -357,6 +508,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     { id: 'health', label: 'سلامت و فضا', icon: Server },
     { id: 'manual', label: 'بک‌آپ دستی', icon: Play },
     { id: 'schedule', label: 'زمان‌بندی', icon: Calendar },
+    { id: 'cloud', label: 'پشتیبان ابری (گوگل درایو / وان‌درایو)', icon: UploadCloud },
     { id: 'storage', label: 'مسیر ذخیره‌سازی', icon: HardDrive },
     { id: 'restore', label: 'بازیابی', icon: RefreshCw },
     { id: 'security', label: 'امنیت و اعلان', icon: Shield },
@@ -764,6 +916,547 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                 </div>
               )}
 
+              {/* --- 2.5. Cloud Backup (Google Drive, OneDrive, S3) --- */}
+              {activeTab === 'cloud' && (
+                <div className="space-y-8">
+                  {/* Top Cloud Banner */}
+                  <div className="flex flex-col lg:flex-row gap-6 items-start lg:items-center justify-between pb-6 border-b border-slate-100">
+                    <div>
+                      <h3 className="text-lg font-black text-slate-800 flex items-center gap-2">
+                        <UploadCloud className="w-5 h-5 text-indigo-600" />
+                        پشتیبان‌گیری خودکار در فضای ابری (Google Drive / OneDrive / S3)
+                      </h3>
+                      <p className="text-sm text-slate-500 font-medium mt-1">
+                        ذخیره امن داده‌ها در فضای ابری، بازیابی سریع در مواقع اضطراری و پیشگیری از نابودی داده‌ها.
+                      </p>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-3">
+                      {/* Auto-Sync Toggle */}
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = { ...storageConfig, autoCloudSync: !storageConfig.autoCloudSync };
+                          setStorageConfig(updated);
+                          saveStorageSettings(updated);
+                        }}
+                        className={`px-4 py-2.5 rounded-xl font-bold text-xs flex items-center gap-2 border transition-all cursor-pointer ${
+                          storageConfig.autoCloudSync
+                            ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                            : 'bg-slate-50 text-slate-600 border-slate-200'
+                        }`}
+                      >
+                        {storageConfig.autoCloudSync ? (
+                          <>
+                            <CheckCircle2 className="w-4 h-4 text-emerald-600" />
+                            <span>همگام‌سازی خودکار: فعال</span>
+                          </>
+                        ) : (
+                          <>
+                            <AlertCircle className="w-4 h-4 text-slate-400" />
+                            <span>همگام‌سازی خودکار: غیرفعال</span>
+                          </>
+                        )}
+                      </button>
+
+                      {/* Sync Now Button */}
+                      <button
+                        type="button"
+                        disabled={isSyncingCloud}
+                        onClick={handleCloudSyncNow}
+                        className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 disabled:opacity-60 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-md shadow-indigo-200 transition-all cursor-pointer"
+                      >
+                        {isSyncingCloud ? (
+                          <>
+                            <RefreshCw className="w-4 h-4 animate-spin" />
+                            <span>در حال پشتیبان‌گیری و ارسال...</span>
+                          </>
+                        ) : (
+                          <>
+                            <UploadCloud className="w-4 h-4" />
+                            <span>پشتیبان‌گیری فوری و ذخیره در ابر</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Provider Selector Cards */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Google Drive Card */}
+                    <div
+                      onClick={() => {
+                        const updated = { ...storageConfig, cloudProvider: 'gdrive' };
+                        setStorageConfig(updated);
+                        saveStorageSettings(updated);
+                      }}
+                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                        storageConfig.cloudProvider === 'gdrive'
+                          ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100'
+                          : 'border-slate-200 hover:border-indigo-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center font-bold">
+                          GD
+                        </div>
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                          storageConfig.gdriveToken
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {storageConfig.gdriveToken ? 'متصل شده' : 'نیازمند اتصال'}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-slate-900">Google Drive</h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        ذخیره مستقیم در حساب شخصی یا سازمانی گوگل درایو
+                      </p>
+                    </div>
+
+                    {/* Microsoft OneDrive Card */}
+                    <div
+                      onClick={() => {
+                        const updated = { ...storageConfig, cloudProvider: 'onedrive' };
+                        setStorageConfig(updated);
+                        saveStorageSettings(updated);
+                      }}
+                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                        storageConfig.cloudProvider === 'onedrive'
+                          ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100'
+                          : 'border-slate-200 hover:border-indigo-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center font-bold">
+                          OD
+                        </div>
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                          storageConfig.onedriveToken
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {storageConfig.onedriveToken ? 'متصل شده' : 'نیازمند تنظیم'}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-slate-900">Microsoft OneDrive</h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        ذخیره در وان‌درایو مایکروسافت از طریق Microsoft Graph
+                      </p>
+                    </div>
+
+                    {/* S3 / ArvanCloud / Liara Card */}
+                    <div
+                      onClick={() => {
+                        const updated = { ...storageConfig, cloudProvider: 's3' };
+                        setStorageConfig(updated);
+                        saveStorageSettings(updated);
+                      }}
+                      className={`p-5 rounded-2xl border-2 cursor-pointer transition-all ${
+                        storageConfig.cloudProvider === 's3'
+                          ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100'
+                          : 'border-slate-200 hover:border-indigo-200 bg-white'
+                      }`}
+                    >
+                      <div className="flex items-start justify-between mb-3">
+                        <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-600 flex items-center justify-center font-bold">
+                          S3
+                        </div>
+                        <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                          storageConfig.cloudAuthUrl && storageConfig.cloudUser
+                            ? 'bg-emerald-100 text-emerald-700'
+                            : 'bg-slate-100 text-slate-500'
+                        }`}>
+                          {storageConfig.cloudAuthUrl && storageConfig.cloudUser ? 'پیکربندی شده' : 'نیازمند مشخصات'}
+                        </span>
+                      </div>
+                      <h4 className="text-sm font-black text-slate-900">ابری S3 / آروان / لیارا</h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        فضای ذخیره‌سازی ابری شی‌گرا (Object Storage سازگار با S3)
+                      </p>
+                    </div>
+                  </div>
+
+                  {/* Provider Detailed Configuration Form */}
+                  <div className="bg-slate-50/70 border border-slate-200 rounded-2xl p-6 space-y-6">
+                    {/* Google Drive Configuration */}
+                    {storageConfig.cloudProvider === 'gdrive' && (
+                      <div className="space-y-5">
+                        <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 pb-4 border-b border-slate-200/80">
+                          <div>
+                            <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                              <span>تنظیمات و احراز هویت Google Drive</span>
+                              {storageConfig.gdriveToken && (
+                                <span className="text-[10px] bg-emerald-100 text-emerald-800 font-bold px-2 py-0.5 rounded-md">
+                                  متصل
+                                </span>
+                              )}
+                            </h4>
+                            <p className="text-xs text-slate-500 mt-0.5">
+                              {storageConfig.gdriveUser
+                                ? `حساب متصل: ${storageConfig.gdriveUser}`
+                                : 'برای ذخیره خودکار نسخه‌ها در گوگل درایو، با حساب گوگل وارد شوید.'}
+                            </p>
+                          </div>
+
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={handleConnectGoogleDrive}
+                              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-bold flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                            >
+                              <LogIn className="w-3.5 h-3.5" />
+                              <span>{storageConfig.gdriveToken ? 'تغییر / اتصال مجدد گوگل' : 'ورود با حساب گوگل (Drive)'}</span>
+                            </button>
+
+                            {storageConfig.gdriveToken && (
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const updated = { ...storageConfig, gdriveToken: '', gdriveUser: '' };
+                                  setStorageConfig(updated);
+                                  saveStorageSettings(updated);
+                                  showNotification('اتصال حساب گوگل درایو قطع شد.', 'info');
+                                }}
+                                className="px-3 py-2 bg-white hover:bg-rose-50 text-rose-600 border border-slate-200 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+                              >
+                                قطع اتصال
+                              </button>
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                              نام پوشه در Google Drive
+                            </label>
+                            <input
+                              type="text"
+                              value={storageConfig.gdriveFolder || 'Taraz_Backups'}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, gdriveFolder: e.target.value })}
+                              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="Taraz_Backups"
+                            />
+                            <p className="text-[11px] text-slate-400 mt-1">
+                              فایل‌های بک‌آپ به صورت خودکار داخل این پوشه در درایو قرار می‌گیرند.
+                            </p>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                              توکن دسترسی دستی (اختیاری برای سرورهای اختصاصی)
+                            </label>
+                            <input
+                              type="password"
+                              value={storageConfig.gdriveToken || ''}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, gdriveToken: e.target.value })}
+                              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="Bearer ya29.a0..."
+                              dir="ltr"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* OneDrive Configuration */}
+                    {storageConfig.cloudProvider === 'onedrive' && (
+                      <div className="space-y-5">
+                        <div className="pb-4 border-b border-slate-200/80">
+                          <h4 className="text-sm font-black text-slate-900">تنظیمات Microsoft OneDrive</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            اتصال به سرویس وان‌درایو مایکروسافت از طریق توکن Microsoft Graph
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                              توکن دسترسی Microsoft Graph API
+                            </label>
+                            <input
+                              type="password"
+                              value={storageConfig.onedriveToken || ''}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, onedriveToken: e.target.value })}
+                              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="eyJ0eXAiOiJKV1Qi..."
+                              dir="ltr"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                              مسیر پوشه در OneDrive
+                            </label>
+                            <input
+                              type="text"
+                              value={storageConfig.onedriveFolder || 'Taraz_Backups'}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, onedriveFolder: e.target.value })}
+                              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="Taraz_Backups"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* S3 Configuration */}
+                    {storageConfig.cloudProvider === 's3' && (
+                      <div className="space-y-5">
+                        <div className="pb-4 border-b border-slate-200/80">
+                          <h4 className="text-sm font-black text-slate-900">تنظیمات فضای ابری S3 / آروان‌کلاد / لیارا</h4>
+                          <p className="text-xs text-slate-500 mt-0.5">
+                            پشتیبان‌گیری در انواع سرویس‌های Object Storage منطبق بر استاندارد Amazon S3
+                          </p>
+                        </div>
+
+                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                              آدرس Endpoint (سرور S3)
+                            </label>
+                            <input
+                              type="text"
+                              value={storageConfig.cloudAuthUrl || ''}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, cloudAuthUrl: e.target.value })}
+                              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="s3.ir-thr-at1.arvanstorage.ir"
+                              dir="ltr"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                              نام باکت (Bucket Name)
+                            </label>
+                            <input
+                              type="text"
+                              value={storageConfig.cloudBucket || 'taraz-backups'}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, cloudBucket: e.target.value })}
+                              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="taraz-backups"
+                              dir="ltr"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                              کلید دسترسی (Access Key)
+                            </label>
+                            <input
+                              type="text"
+                              value={storageConfig.cloudUser || ''}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, cloudUser: e.target.value })}
+                              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="AKIA..."
+                              dir="ltr"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                              کلید محرمانه (Secret Key)
+                            </label>
+                            <input
+                              type="password"
+                              value={storageConfig.cloudPass || ''}
+                              onChange={(e) => setStorageConfig({ ...storageConfig, cloudPass: e.target.value })}
+                              className="w-full border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-800 bg-white focus:outline-none focus:border-indigo-500 font-mono"
+                              placeholder="••••••••••••••••••••"
+                              dir="ltr"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Test & Save Action Buttons */}
+                    <div className="flex flex-wrap items-center justify-between gap-3 pt-4 border-t border-slate-200">
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={isTestingCloud}
+                          onClick={() => handleTestCloudConnection()}
+                          className="px-4 py-2.5 bg-white hover:bg-slate-100 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-2 transition-colors cursor-pointer"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${isTestingCloud ? 'animate-spin' : ''}`} />
+                          <span>تست ارتباط و اعتبارسنجی اتصال</span>
+                        </button>
+
+                        {cloudTestResult && (
+                          <div className={`flex items-center gap-1.5 text-xs font-bold px-3 py-1.5 rounded-lg ${
+                            cloudTestResult.success
+                              ? 'bg-emerald-100 text-emerald-800'
+                              : 'bg-rose-100 text-rose-800'
+                          }`}>
+                            {cloudTestResult.success ? (
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                            ) : (
+                              <AlertCircle className="w-3.5 h-3.5" />
+                            )}
+                            <span>{cloudTestResult.message}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => saveStorageSettings()}
+                        className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black flex items-center gap-2 shadow-xs transition-colors cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" />
+                        <span>ذخیره تنظیمات ابری</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Cloud Backups Table */}
+                  <div className="space-y-4 pt-2">
+                    <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                      <div>
+                        <h4 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                          <FolderOpen className="w-4 h-4 text-indigo-600" />
+                          <span>فهرست نسخه‌های ذخیره‌شده در فضای ابری</span>
+                          <span className="text-xs bg-indigo-100 text-indigo-700 font-bold px-2 py-0.5 rounded-full">
+                            {cloudBackups.length} نسخه
+                          </span>
+                        </h4>
+                        <p className="text-xs text-slate-500 mt-0.5">
+                          مشاهده، دانلود یا بازیابی اطلاعات از فضای ابری
+                        </p>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={loadCloudBackups}
+                          className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-600 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                        >
+                          <RefreshCw className={`w-3.5 h-3.5 ${loadingCloudBackups ? 'animate-spin' : ''}`} />
+                          <span>بروزرسانی لیست</span>
+                        </button>
+                      </div>
+                    </div>
+
+                    {/* Table */}
+                    <div className="bg-white border border-slate-200 rounded-2xl overflow-hidden shadow-xs">
+                      <div className="overflow-x-auto">
+                        <table className="w-full text-sm text-right">
+                          <thead className="bg-slate-50 text-slate-600 font-bold text-xs border-b border-slate-200">
+                            <tr>
+                              <th className="py-3.5 px-4">سرویس‌دهنده</th>
+                              <th className="py-3.5 px-4">نام فایل</th>
+                              <th className="py-3.5 px-4">تاریخ و زمان</th>
+                              <th className="py-3.5 px-4">حجم</th>
+                              <th className="py-3.5 px-4 text-left">عملیات</th>
+                            </tr>
+                          </thead>
+                          <tbody className="divide-y divide-slate-100 text-xs">
+                            {cloudBackups.map((cb: any, idx: number) => {
+                              const d = new Date(cb.time);
+                              const dateStr = !isNaN(d.getTime())
+                                ? new Intl.DateTimeFormat('fa-IR').format(d) + ' ' + d.toLocaleTimeString('fa-IR')
+                                : '-';
+                              const sizeMb = cb.size ? (cb.size / 1024 / 1024).toFixed(2) + ' MB' : '-';
+                              
+                              let providerBadge = (
+                                <span className="bg-blue-100 text-blue-700 font-bold px-2 py-0.5 rounded-md">
+                                  Google Drive
+                                </span>
+                              );
+                              if (cb.provider === 'onedrive') {
+                                providerBadge = (
+                                  <span className="bg-sky-100 text-sky-700 font-bold px-2 py-0.5 rounded-md">
+                                    OneDrive
+                                  </span>
+                                );
+                              } else if (cb.provider === 's3') {
+                                providerBadge = (
+                                  <span className="bg-amber-100 text-amber-700 font-bold px-2 py-0.5 rounded-md">
+                                    S3 Cloud
+                                  </span>
+                                );
+                              }
+
+                              return (
+                                <tr key={cb.file || idx} className="hover:bg-slate-50/70 transition-colors">
+                                  <td className="py-3.5 px-4">{providerBadge}</td>
+                                  <td className="py-3.5 px-4 font-mono font-semibold text-slate-800" dir="ltr">
+                                    {cb.file}
+                                  </td>
+                                  <td className="py-3.5 px-4 font-semibold text-slate-600">{dateStr}</td>
+                                  <td className="py-3.5 px-4 font-semibold text-slate-600">{sizeMb}</td>
+                                  <td className="py-3.5 px-4 text-left">
+                                    <div className="flex items-center justify-end gap-1.5">
+                                      {cb.url && (
+                                        <a
+                                          href={cb.url}
+                                          target="_blank"
+                                          rel="noreferrer"
+                                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors inline-flex items-center gap-1 font-bold text-xs"
+                                          title="مشاهده یا دانلود از ابر"
+                                        >
+                                          <Download className="w-3.5 h-3.5" />
+                                          <span>دریافت</span>
+                                        </a>
+                                      )}
+                                      <button
+                                        type="button"
+                                        onClick={() => handleDeleteCloudBackup(cb.file)}
+                                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer"
+                                        title="حذف از فهرست ابری"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                  </td>
+                                </tr>
+                              );
+                            })}
+
+                            {cloudBackups.length === 0 && (
+                              <tr>
+                                <td colSpan={5} className="py-12 text-center text-slate-400">
+                                  <UploadCloud className="w-10 h-10 mx-auto text-slate-300 mb-2 stroke-1" />
+                                  <p className="font-bold text-sm text-slate-600">هنوز نسخه‌ای در فضای ابری ذخیره نشده است</p>
+                                  <p className="text-xs text-slate-400 mt-1">
+                                    با فشردن دکمه «پشتیبان‌گیری فوری و ذخیره در ابر» یا فعال‌سازی همگام‌سازی خودکار، نسخه‌ها در فضای ابری بارگذاری می‌شوند.
+                                  </p>
+                                </td>
+                              </tr>
+                            )}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+
+                    {/* Manual Push of Existing Local Backup */}
+                    {backups.length > 0 && (
+                      <div className="bg-slate-50 border border-slate-200 rounded-xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                        <div className="text-xs">
+                          <span className="font-bold text-slate-800">ارسال دستی یک نسخه محلی به فضای ابری: </span>
+                          <span className="text-slate-500">می‌توانید آخرین نسخه پشتیبان ایجاد شده روی سرور را همین حالا به ابر بفرستید.</span>
+                        </div>
+                        <button
+                          type="button"
+                          disabled={!!isUploadingToCloud}
+                          onClick={() => handleUploadSpecificToCloud(backups[0].file)}
+                          className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                        >
+                          {isUploadingToCloud ? (
+                            <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                          ) : (
+                            <Upload className="w-3.5 h-3.5" />
+                          )}
+                          <span>ارسال فایل «{backups[0].file}» به ابر</span>
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
+
               {/* --- 3. Storage Settings --- */}
               {activeTab === 'storage' && (
                 <div className="space-y-8 max-w-4xl">
@@ -777,26 +1470,71 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                     </p>
                   </div>
 
+                  {/* Mode Selector: Both, Local, Cloud */}
+                  <div className="bg-indigo-50/60 border border-indigo-100 rounded-2xl p-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
+                    <div>
+                      <h4 className="text-xs font-black text-indigo-900">شیوه نگهداری فایل‌های پشتیبان:</h4>
+                      <p className="text-[11px] text-indigo-700/80 mt-0.5">
+                        پیشنهاد سیستم: ذخیره همزمان محلی و ابری جهت حداکثر اطمینان از حفظ داده‌ها
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setStorageConfig({ ...storageConfig, type: 'both' })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          storageConfig.type === 'both'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        همزمان (محلی + ابری)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStorageConfig({ ...storageConfig, type: 'local' })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          storageConfig.type === 'local'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        فقط محلی
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setStorageConfig({ ...storageConfig, type: 'cloud' })}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          storageConfig.type === 'cloud'
+                            ? 'bg-indigo-600 text-white shadow-xs'
+                            : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
+                        }`}
+                      >
+                        فقط ابری
+                      </button>
+                    </div>
+                  </div>
+
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                      {/* Local Storage Card */}
                      <div 
-                        onClick={() => setStorageConfig({...storageConfig, type: 'local'})}
+                        onClick={() => setStorageConfig({...storageConfig, type: storageConfig.type === 'cloud' ? 'both' : storageConfig.type})}
                         className={`p-6 rounded-2xl border-2 cursor-pointer transition-all ${
-                          storageConfig.type === 'local' ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100/50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                          storageConfig.type === 'local' || storageConfig.type === 'both' ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100/50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
                         }`}
                      >
                         <div className="flex items-start justify-between mb-4">
-                          <Server className={`w-8 h-8 ${storageConfig.type === 'local' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${storageConfig.type === 'local' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                            {storageConfig.type === 'local' && <Check className="w-3 h-3 text-white" />}
+                          <Server className={`w-8 h-8 ${storageConfig.type === 'local' || storageConfig.type === 'both' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${storageConfig.type === 'local' || storageConfig.type === 'both' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {(storageConfig.type === 'local' || storageConfig.type === 'both') && <Check className="w-3 h-3 text-white" />}
                           </div>
                         </div>
                         <h4 className="text-base font-black text-slate-800 mb-1">سرور محلی (Local)</h4>
                         <p className="text-xs text-slate-500 font-medium mb-6">ذخیره روی هارد دیسک سرور فعلی</p>
                         
-                        <div className={`space-y-4 transition-all ${storageConfig.type === 'local' ? 'opacity-100' : 'opacity-40 pointer-events-none grayscale'}`} onClick={e => e.stopPropagation()}>
+                        <div className="space-y-4" onClick={e => e.stopPropagation()}>
                           <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-2">مسیر پوشه</label>
+                            <label className="block text-xs font-bold text-slate-700 mb-2">مسیر پوشه محلی</label>
                             <div className="flex gap-2">
                               <input 
                                 type="text"
@@ -804,81 +1542,53 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                                 value={storageConfig.localPath}
                                 onChange={e => setStorageConfig({...storageConfig, localPath: e.target.value})}
                                 className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-mono outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 text-left bg-white" 
+                                placeholder="/backups"
                               />
                               <button type="button" onClick={() => openPathPicker(storageConfig.localPath)} className="px-3 bg-white border border-slate-300 rounded-lg hover:bg-slate-100 transition-colors shadow-sm text-slate-600">
                                 <FolderOpen className="w-5 h-5" />
                               </button>
                             </div>
                           </div>
-                          <div className="bg-white p-3 rounded-lg border border-slate-200">
-                            <div className="flex justify-between items-center text-xs font-bold mb-2">
-                              <span className="text-slate-500 flex items-center gap-1"><HardDrive className="w-3 h-3" /> فضای آزاد دیسک</span>
-                              <span className="text-emerald-600">45.2 GB</span>
-                            </div>
-                            <div className="h-1.5 w-full bg-slate-100 rounded-full overflow-hidden">
-                              <div className="h-full bg-emerald-500 w-[40%]" />
-                            </div>
-                          </div>
                         </div>
                      </div>
 
-                     {/* Cloud Storage Card (Disabled) */}
+                     {/* Cloud Storage Card */}
                      <div 
-                        className="p-6 rounded-2xl border-2 border-slate-200 bg-slate-50 opacity-60 pointer-events-none relative"
+                        onClick={() => setStorageConfig({...storageConfig, type: storageConfig.type === 'local' ? 'both' : storageConfig.type})}
+                        className={`p-6 rounded-2xl border-2 cursor-pointer transition-all ${
+                          storageConfig.type === 'cloud' || storageConfig.type === 'both' ? 'border-indigo-600 bg-indigo-50/50 shadow-md shadow-indigo-100/50' : 'border-slate-200 hover:border-indigo-300 hover:bg-slate-50'
+                        }`}
                      >
-                        <div className="absolute top-4 left-4 bg-slate-200 text-slate-600 text-[10px] font-bold px-2 py-1 rounded-full">
-                           فاز بعدی
-                        </div>
                         <div className="flex items-start justify-between mb-4">
-                          <UploadCloud className={`w-8 h-8 ${storageConfig.type === 'cloud' ? 'text-indigo-600' : 'text-slate-400'}`} />
-                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${storageConfig.type === 'cloud' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
-                            {storageConfig.type === 'cloud' && <Check className="w-3 h-3 text-white" />}
+                          <UploadCloud className={`w-8 h-8 ${storageConfig.type === 'cloud' || storageConfig.type === 'both' ? 'text-indigo-600' : 'text-slate-400'}`} />
+                          <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${storageConfig.type === 'cloud' || storageConfig.type === 'both' ? 'border-indigo-600 bg-indigo-600' : 'border-slate-300'}`}>
+                            {(storageConfig.type === 'cloud' || storageConfig.type === 'both') && <Check className="w-3 h-3 text-white" />}
                           </div>
                         </div>
                         <h4 className="text-base font-black text-slate-800 mb-1">فضای ابری (Cloud)</h4>
-                        <p className="text-xs text-slate-500 font-medium mb-6">اتصال به فضاهای ذخیره‌سازی خارجی</p>
+                        <p className="text-xs text-slate-500 font-medium mb-4">اتصال به Google Drive، OneDrive یا S3</p>
                         
-                        <div className={`space-y-4 transition-all ${storageConfig.type === 'cloud' ? 'opacity-100' : 'opacity-40 pointer-events-none grayscale'}`} onClick={e => e.stopPropagation()}>
+                        <div className="space-y-4" onClick={e => e.stopPropagation()}>
                           <div>
-                            <label className="block text-xs font-bold text-slate-700 mb-2">ارائه‌دهنده سرویس</label>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">ارائه‌دهنده فعال ابری</label>
                             <select 
                               value={storageConfig.cloudProvider}
                               onChange={e => setStorageConfig({...storageConfig, cloudProvider: e.target.value})}
-                              className="w-full border border-slate-300 rounded-lg px-3 py-2.5 text-sm font-bold outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 bg-white"
+                              className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-bold outline-none focus:border-indigo-500 bg-white"
                             >
-                              <option value="s3">Amazon S3 Compatible</option>
-                              <option value="ftp">FTP / SFTP Server</option>
-                              <option value="gdrive">Google Drive</option>
+                              <option value="gdrive">گوگل درایو (Google Drive)</option>
+                              <option value="onedrive">مایکروسافت وان‌درایو (OneDrive)</option>
+                              <option value="s3">ابری سازگار با S3 (آروان / لیارا / AWS)</option>
                             </select>
                           </div>
-                          
-                          {storageConfig.cloudProvider !== 'gdrive' && (
-                            <div className="space-y-3">
-                              <input 
-                                type="text" placeholder="Server URL / Endpoint" dir="ltr"
-                                value={storageConfig.cloudAuthUrl}
-                                onChange={e => setStorageConfig({...storageConfig, cloudAuthUrl: e.target.value})}
-                                className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs font-mono outline-none focus:border-indigo-500 bg-white text-left" 
-                              />
-                              <div className="grid grid-cols-2 gap-2">
-                                <input 
-                                  type="text" placeholder="Username / Key" dir="ltr"
-                                  value={storageConfig.cloudUser}
-                                  onChange={e => setStorageConfig({...storageConfig, cloudUser: e.target.value})}
-                                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 bg-white text-left" 
-                                />
-                                <input 
-                                  type="password" placeholder="Password / Secret" dir="ltr"
-                                  value={storageConfig.cloudPass}
-                                  onChange={e => setStorageConfig({...storageConfig, cloudPass: e.target.value})}
-                                  className="w-full border border-slate-300 rounded-lg px-3 py-2 text-xs outline-none focus:border-indigo-500 bg-white text-left" 
-                                />
-                              </div>
-                            </div>
-                          )}
 
-                          <button className="w-full py-2.5 bg-slate-800 text-white rounded-lg text-sm font-bold shadow-md hover:bg-slate-900 transition-colors">
-                            {storageConfig.cloudProvider === 'gdrive' ? 'احراز هویت Google' : 'تست اتصال'}
+                          <button 
+                            type="button"
+                            onClick={() => setActiveTab('cloud')}
+                            className="w-full py-2 bg-indigo-600 text-white rounded-lg text-xs font-bold shadow-xs hover:bg-indigo-700 transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                          >
+                            <UploadCloud className="w-3.5 h-3.5" />
+                            <span>تنظیمات و مدیریت پیشرفته ابری</span>
                           </button>
                         </div>
                      </div>
@@ -886,8 +1596,8 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                   
                   <div className="pt-8 border-t border-slate-100 flex justify-end">
                     <button 
-                      onClick={saveStorageSettings}
-                      className="px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-lg shadow-slate-200"
+                      onClick={() => saveStorageSettings()}
+                      className="px-8 py-3 bg-slate-800 hover:bg-slate-900 text-white rounded-xl font-bold text-sm transition-colors flex items-center gap-2 shadow-lg shadow-slate-200 cursor-pointer"
                     >
                       <Save className="w-4 h-4" /> اعمال تنظیمات مسیر
                     </button>

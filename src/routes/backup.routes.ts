@@ -78,7 +78,30 @@ router.post('/api/db/logs', async (req, res) => {
 });
 
 
-  let backupConfig: any = { path: '', intervalHours: 4, storageType: 'local', remoteProvider: 's3', remoteConfig: {}, enabled: true, frequency: 'daily', time: '02:00', retention: 5, cron: '0 2 * * *', cloudAuthUrl: '', cloudUser: '', cloudPass: '' };
+  let backupConfig: any = { 
+    path: '', 
+    intervalHours: 4, 
+    storageType: 'both', 
+    remoteProvider: 'gdrive', 
+    cloudProvider: 'gdrive',
+    autoCloudSync: true,
+    remoteConfig: {}, 
+    enabled: true, 
+    frequency: 'daily', 
+    time: '02:00', 
+    retention: 10, 
+    cron: '0 2 * * *', 
+    cloudAuthUrl: '', 
+    cloudUser: '', 
+    cloudPass: '',
+    cloudBucket: 'taraz-backups',
+    gdriveToken: '',
+    gdriveFolder: 'Taraz_Backups',
+    gdriveUser: '',
+    onedriveToken: '',
+    onedriveFolder: 'Taraz_Backups',
+    onedriveUser: ''
+  };
   (async () => {
     try {
        const backupData = await getDbData('backupConfig');
@@ -87,6 +110,179 @@ router.post('/api/db/logs', async (req, res) => {
        }
     } catch(e) { }
   })();
+
+  const recordCloudBackup = async (entry: { file: string; provider: string; size: number; time: number; url?: string; id?: string }) => {
+    try {
+      let list: any[] = [];
+      const current = await getDbData('cloudBackups');
+      if (Array.isArray(current)) list = current;
+      list = [entry, ...list.filter((b: any) => b.file !== entry.file)];
+      if (list.length > 50) list = list.slice(0, 50);
+      await setDbData('cloudBackups', list);
+    } catch(e) {
+      console.error('Failed to record cloud backup', e);
+    }
+  };
+
+  const uploadToGoogleDrive = async (fileName: string, fileContent: string, config: any) => {
+    const token = config.gdriveToken;
+    if (!token) throw new Error('توکن دسترسی گوگل درایو یافت نشد. لطفاً ابتدا حساب گوگل خود را متصل فرمایید.');
+
+    const folderName = config.gdriveFolder || 'Taraz_Backups';
+    let folderId = '';
+    try {
+      const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(folderName)}'+and+mimeType='application/vnd.google-apps.folder'+and+trashed=false&fields=files(id,name)`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (searchRes.ok) {
+        const searchData = await searchRes.json();
+        if (searchData.files && searchData.files.length > 0) {
+          folderId = searchData.files[0].id;
+        }
+      }
+      if (!folderId) {
+        const createFolderRes = await fetch('https://www.googleapis.com/drive/v3/files', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            name: folderName,
+            mimeType: 'application/vnd.google-apps.folder'
+          })
+        });
+        if (createFolderRes.ok) {
+          const folderData = await createFolderRes.json();
+          folderId = folderData.id;
+        }
+      }
+    } catch(e) {
+      console.warn('Folder check in Google Drive:', e);
+    }
+
+    const boundary = '-------TarazBackup' + Date.now();
+    const metadata: any = {
+      name: fileName,
+      mimeType: 'application/json'
+    };
+    if (folderId) metadata.parents = [folderId];
+
+    const multipartBody = 
+      `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      JSON.stringify(metadata) + `\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: application/json\r\n\r\n` +
+      fileContent + `\r\n` +
+      `--${boundary}--`;
+
+    const uploadRes = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink,size', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': `multipart/related; boundary=${boundary}`
+      },
+      body: multipartBody
+    });
+
+    if (!uploadRes.ok) {
+      const errText = await uploadRes.text();
+      throw new Error(`Google Drive API error (${uploadRes.status}): ${errText}`);
+    }
+
+    const fileResult = await uploadRes.json();
+    await recordCloudBackup({
+      file: fileName,
+      provider: 'gdrive',
+      size: Buffer.byteLength(fileContent),
+      time: Date.now(),
+      url: fileResult.webViewLink || `https://drive.google.com/file/d/${fileResult.id}/view`,
+      id: fileResult.id
+    });
+    return fileResult;
+  };
+
+  const uploadToOneDrive = async (fileName: string, fileContent: string, config: any) => {
+    const token = config.onedriveToken;
+    if (!token) throw new Error('توکن دسترسی OneDrive یافت نشد. لطفاً ابتدا حساب مایکروسافت را متصل فرمایید.');
+
+    const folder = config.onedriveFolder || 'Taraz_Backups';
+    const uploadUrl = `https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURIComponent(folder)}/${encodeURIComponent(fileName)}:/content`;
+    
+    const res = await fetch(uploadUrl, {
+      method: 'PUT',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'Content-Type': 'application/json'
+      },
+      body: fileContent
+    });
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(`OneDrive API error (${res.status}): ${errText}`);
+    }
+
+    const data = await res.json();
+    await recordCloudBackup({
+      file: fileName,
+      provider: 'onedrive',
+      size: Buffer.byteLength(fileContent),
+      time: Date.now(),
+      url: data.webUrl,
+      id: data.id
+    });
+    return data;
+  };
+
+  const uploadToS3 = async (fileName: string, fileContent: string, config: any) => {
+    if (!config.cloudAuthUrl || !config.cloudUser || !config.cloudPass) {
+      throw new Error('مشخصات اتصال S3 (آدرس سرور، کلید دسترسی یا رمز) کامل نیست.');
+    }
+    const s3 = new S3Client({
+      region: config.region || 'default',
+      endpoint: config.cloudAuthUrl.startsWith('http') ? config.cloudAuthUrl : `https://${config.cloudAuthUrl}`,
+      credentials: {
+        accessKeyId: config.cloudUser,
+        secretAccessKey: config.cloudPass
+      }
+    });
+    const bucket = config.cloudBucket || 'taraz-backups';
+    await s3.send(new PutObjectCommand({
+      Bucket: bucket,
+      Key: fileName,
+      Body: fileContent,
+      ContentType: 'application/json'
+    }));
+    await recordCloudBackup({
+      file: fileName,
+      provider: 's3',
+      size: Buffer.byteLength(fileContent),
+      time: Date.now(),
+      url: `${config.cloudAuthUrl}/${bucket}/${fileName}`,
+      id: fileName
+    });
+  };
+
+  const dispatchCloudUpload = async (fileName: string, fileContent: string) => {
+    const provider = backupConfig.cloudProvider || backupConfig.remoteProvider || 'gdrive';
+    try {
+      if (provider === 'gdrive') {
+        await uploadToGoogleDrive(fileName, fileContent, backupConfig);
+        await appendDbLog('پشتیبان‌گیری ابری گوگل درایو', 'success', `فایل ${fileName} با موفقیت در Google Drive ذخیره شد.`);
+      } else if (provider === 'onedrive') {
+        await uploadToOneDrive(fileName, fileContent, backupConfig);
+        await appendDbLog('پشتیبان‌گیری ابری وان‌درایو', 'success', `فایل ${fileName} با موفقیت در OneDrive ذخیره شد.`);
+      } else if (provider === 's3') {
+        await uploadToS3(fileName, fileContent, backupConfig);
+        await appendDbLog('پشتیبان‌گیری ابری S3', 'success', `فایل ${fileName} با موفقیت در فضای ابری S3 ذخیره شد.`);
+      }
+    } catch(cloudErr: any) {
+      console.error('Cloud auto-upload error:', cloudErr);
+      await appendDbLog('پشتیبان‌گیری ابری', 'error', `خطا در ذخیره ابری (${provider}): ${cloudErr.message}`);
+    }
+  };
 
   const getBackupsDir = async () => {
      let pathConf = backupConfig.path;
@@ -118,30 +314,10 @@ const backupStore = async (storeId: string) => {
                 const fileContent = JSON.stringify(backupData);
                 await fsPromises.writeFile(filePath, fileContent);
                 
-                // Upload to S3 if enabled
-                if (backupConfig.storageType === 'cloud' || backupConfig.remoteProvider === 's3') {
-                    if (backupConfig.cloudAuthUrl && backupConfig.cloudUser && backupConfig.cloudPass) {
-                       try {
-                           const s3 = new S3Client({
-                              region: 'default',
-                              endpoint: backupConfig.cloudAuthUrl.startsWith('http') ? backupConfig.cloudAuthUrl : `https://${backupConfig.cloudAuthUrl}`,
-                              credentials: {
-                                 accessKeyId: backupConfig.cloudUser,
-                                 secretAccessKey: backupConfig.cloudPass
-                              }
-                           });
-                           await s3.send(new PutObjectCommand({
-                               Bucket: 'backups',
-                               Key: fileName,
-                               Body: fileContent,
-                               ContentType: 'application/json'
-                           }));
-                           await appendDbLog('بک‌آپ ابری', 'success', `آپلود موفق به ابری: ${fileName}`);
-                       } catch(s3Err) {
-                           console.error('S3 Upload Error:', s3Err);
-                           await appendDbLog('بک‌آپ ابری', 'error', `خطا در آپلود ابری: ${s3Err.message}`);
-                       }
-                    }
+                // Automatic Cloud Sync (Google Drive, OneDrive, or S3)
+                const shouldCloudSync = backupConfig.autoCloudSync || backupConfig.storageType === "cloud" || backupConfig.storageType === "both";
+                if (shouldCloudSync) {
+                    await dispatchCloudUpload(fileName, fileContent);
                 }
                 
                 await appendDbLog('بک‌آپ خودکار/دستی', 'success', `بک‌آپ با حجم ${Buffer.byteLength(fileContent)} بایت در مسیر ${filePath} ایجاد شد.`);
@@ -510,6 +686,129 @@ router.post('/api/db/explore-folders', async (req, res) => {
     res.json({ current: targetPath, parent: parent !== targetPath ? parent : null, folders });
   } catch (err) {
     res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/db/cloud/backups', async (req, res) => {
+  try {
+    const list = await getDbData('cloudBackups');
+    res.json(Array.isArray(list) ? list : []);
+  } catch(e: any) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/db/cloud/test-connection', async (req, res) => {
+  const { provider, config } = req.body;
+  const cfg = { ...backupConfig, ...(config || {}) };
+  const targetProvider = provider || cfg.cloudProvider || cfg.remoteProvider || 'gdrive';
+
+  try {
+    if (targetProvider === 'gdrive') {
+      const token = cfg.gdriveToken;
+      if (!token) return res.status(400).json({ success: false, error: 'توکن Google Drive تنظیم نشده است.' });
+      
+      const gRes = await fetch('https://www.googleapis.com/drive/v3/about?fields=user,storageQuota', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!gRes.ok) {
+        const text = await gRes.text();
+        return res.status(400).json({ success: false, error: `خطای گوگل: ${text}` });
+      }
+      const data = await gRes.json();
+      return res.json({
+        success: true,
+        provider: 'gdrive',
+        user: data.user?.displayName || data.user?.emailAddress || 'Google User',
+        email: data.user?.emailAddress,
+        quota: data.storageQuota,
+        message: 'اتصال به Google Drive با موفقیت تأیید شد.'
+      });
+    } else if (targetProvider === 'onedrive') {
+      const token = cfg.onedriveToken;
+      if (!token) return res.status(400).json({ success: false, error: 'توکن Microsoft OneDrive تنظیم نشده است.' });
+
+      const oRes = await fetch('https://graph.microsoft.com/v1.0/me/drive', {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!oRes.ok) {
+        const text = await oRes.text();
+        return res.status(400).json({ success: false, error: `خطای OneDrive: ${text}` });
+      }
+      const data = await oRes.json();
+      return res.json({
+        success: true,
+        provider: 'onedrive',
+        user: data.owner?.user?.displayName || 'Microsoft User',
+        quota: data.quota,
+        message: 'اتصال به Microsoft OneDrive با موفقیت تأیید شد.'
+      });
+    } else if (targetProvider === 's3') {
+      if (!cfg.cloudAuthUrl || !cfg.cloudUser || !cfg.cloudPass) {
+        return res.status(400).json({ success: false, error: 'مشخصات سرور S3 کامل نیست.' });
+      }
+      const s3 = new S3Client({
+        region: cfg.region || 'default',
+        endpoint: cfg.cloudAuthUrl.startsWith('http') ? cfg.cloudAuthUrl : `https://${cfg.cloudAuthUrl}`,
+        credentials: {
+          accessKeyId: cfg.cloudUser,
+          secretAccessKey: cfg.cloudPass
+        }
+      });
+      const bucket = cfg.cloudBucket || 'taraz-backups';
+      const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
+      await s3.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
+      return res.json({
+        success: true,
+        provider: 's3',
+        message: `اتصال به فضای ابری S3 (باکت ${bucket}) با موفقیت تأیید شد.`
+      });
+    }
+
+    res.status(400).json({ success: false, error: 'ارائه‌دهنده ابری نامعتبر است.' });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message || 'خطا در برقراری ارتباط' });
+  }
+});
+
+router.post('/api/db/cloud/upload-backup', async (req, res) => {
+  try {
+    const { filename } = req.body;
+    if (!filename) return res.status(400).json({ error: 'نام فایل الزامی است.' });
+    
+    const dir = path.resolve(await getBackupsDir());
+    const filePath = path.resolve(dir, filename);
+    if (!filePath.startsWith(dir)) return res.status(403).json({ error: 'مسیر غیرمجاز' });
+    
+    const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+    await dispatchCloudUpload(filename, fileContent);
+    
+    res.json({ success: true, message: `فایل ${filename} با موفقیت به فضای ابری ارسال گردید.` });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.post('/api/db/cloud/sync-now', async (req, res) => {
+  try {
+    await runBackupJob();
+    res.json({ success: true, message: 'پشتیبان‌گیری انجام و نسخه در فضای ابری همگام‌سازی شد.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.delete('/api/db/cloud/backups/:filename', async (req, res) => {
+  try {
+    const { filename } = req.params;
+    let list: any[] = [];
+    const current = await getDbData('cloudBackups');
+    if (Array.isArray(current)) list = current;
+    list = list.filter((b: any) => b.file !== filename);
+    await setDbData('cloudBackups', list);
+    res.json({ success: true });
+  } catch(e: any) {
+    res.status(500).json({ error: e.message });
   }
 });
 
