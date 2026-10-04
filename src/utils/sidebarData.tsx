@@ -52,6 +52,7 @@ import {
   Building2,
   Scale,
   Key,
+  Zap,
 } from "lucide-react";
 
 export interface SidebarItem {
@@ -446,6 +447,17 @@ export const allSidebarGroups: SidebarGroup[] = [
     icon: <CreditCard className="w-5 h-5" />,
     description: "رسیدهای دریافت، پرداخت، بانک‌ها، صندوق‌ها و انتقال وجه",
     items: [
+      {
+        id: "keyboard_receipt",
+        label: "ثبت سریع رسید با کیبورد (بدون ماوس)",
+        shortLabel: "ثبت سریع کیبوردی",
+        icon: <Zap className="w-4 h-4 text-amber-500 animate-pulse" />,
+        roles: ["admin", "accountant", "cashier", "manager"],
+        badge: "کیبورد",
+        badgeColor: "amber",
+        isQuickAction: true,
+        description: "ثبت مرحله‌ای دریافت و پرداخت با اعداد و بدون نیاز به ماوس",
+      },
       {
         id: "create_receive_receipt",
         label: "ثبت رسید دریافت وجه (نقد/بانک)",

@@ -14,6 +14,7 @@ import FastBarcodeScanner from '../components/common/FastBarcodeScanner';
 import PersonLedgerActionsDropdown from '../components/persons/PersonLedgerActionsDropdown';
 import ChangelogModal from '../components/ChangelogModal';
 import changelogData from '../data/changelog.json';
+import KeyboardReceiptPage from '../components/financial/KeyboardReceiptPage';
 import ReceiveReceiptModal from "../components/financial/ReceiveReceiptModal";
 import PayReceiptModal from "../components/financial/PayReceiptModal";
 import AccountsManager from "../components/accounts/AccountsManager";
@@ -6739,10 +6740,27 @@ const openPayslip = (tx: any) => {
 
 const renderTabContent = () => {
     switch (activeTab) {
-            case "create_receive_receipt":
+      case "keyboard_receipt":
+        return (
+          <KeyboardReceiptPage
+            persons={persons}
+            accounts={accounts}
+            cashboxes={cashboxes}
+            storeSettings={storeSettings}
+            transactions={transactions}
+            fetchTransactions={fetchTransactions}
+            fetchAccounts={fetchAccounts}
+            fetchCashboxes={fetchCashboxes}
+            calculatePersonBalance={calculatePersonBalance}
+            onClose={() => setRawActiveTab("list_receive_receipt")}
+            showNotification={showNotification}
+          />
+        );
+      case "create_receive_receipt":
         return (
           <ReceiveReceiptModal formatNumber={formatNumber}
             isOpen={true}
+            setActiveTab={setActiveTab}
             onClose={() => setRawActiveTab("list_receive_receipt")}
             receiptHasDraft={receiptHasDraft}
             restoreReceiptDraft={restoreReceiptDraft}
@@ -6798,6 +6816,7 @@ const renderTabContent = () => {
         return (
           <PayReceiptModal formatNumber={formatNumber}
             isOpen={true}
+            setActiveTab={setActiveTab}
             onClose={() => setRawActiveTab("list_pay_receipt")}
             receiptHasDraft={receiptHasDraft}
             restoreReceiptDraft={restoreReceiptDraft}

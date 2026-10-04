@@ -33,6 +33,7 @@ export default function MobileRestrictedAccess({
       gradient: "from-teal-600 to-emerald-600",
       tag: "خزانه‌داری",
       quickTabs: [
+        { id: "keyboard_receipt", label: "ثبت سریع کیبوردی" },
         { id: "create_receive_receipt", label: "ثبت دریافت وجه" },
         { id: "create_pay_receipt", label: "ثبت پرداخت وجه" },
       ],

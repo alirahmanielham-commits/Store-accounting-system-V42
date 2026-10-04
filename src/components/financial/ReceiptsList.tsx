@@ -12,7 +12,7 @@ import {
   DollarSign, RefreshCw, XCircle, Warehouse, TrendingUp, TrendingDown,
   RotateCcw, AlertCircle, Calendar as CalendarIcon, Tag, Wallet, Ban, Percent,
   ArrowUpDown, Filter, ChevronDown, Landmark, CreditCard, Receipt, ArrowDownLeft,
-  FileCheck, Coins
+  FileCheck, Coins, Zap
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import { convertToGregorian, formatDateDisplay, toPersianDigits, addCommas, formatNumber as formatNumberUtil, getActiveStoreSettings } from "../../utils/format";
@@ -365,6 +365,16 @@ export default function ReceiptsList(props: any) {
 
           {/* Action buttons */}
           <div className="flex flex-wrap items-center gap-2">
+            <button
+              onClick={() => setActiveTab?.("keyboard_receipt")}
+              className="px-4 py-2.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-slate-950 font-black rounded-xl text-xs transition-all shadow-md shadow-amber-500/20 flex items-center gap-2 cursor-pointer active:scale-95"
+              title="ثبت بسیار سریع رسید فقط با صفحه کلید و بدون نیاز به ماوس"
+            >
+              <Zap className="w-4 h-4 fill-slate-950 text-slate-950" />
+              <span>ثبت سریع کیبوردی (بدون ماوس)</span>
+              <kbd className="font-mono text-[10px] bg-amber-400/80 px-1.5 py-0.5 rounded border border-amber-600/30">سریع</kbd>
+            </button>
+
             <button
               onClick={() => setActiveTab?.(isReceive ? "create_receive_receipt" : "create_pay_receipt")}
               className={`px-4 py-2.5 ${

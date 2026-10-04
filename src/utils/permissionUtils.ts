@@ -109,6 +109,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     iconName: 'CreditCard',
     description: 'رسیدهای دریافت و پرداخت، حساب‌های بانکی و صندوق‌ها',
     items: [
+      { id: 'keyboard_receipt', label: 'ثبت سریع رسید با کیبورد (بدون ماوس)', defaultRoles: ['admin', 'manager', 'cashier', 'accountant'] },
       { id: 'create_receive_receipt', label: 'ثبت رسید دریافت وجه', defaultRoles: ['admin', 'manager', 'cashier', 'accountant'] },
       { id: 'list_receive_receipt', label: 'فهرست رسیدهای دریافت', defaultRoles: ['admin', 'manager', 'cashier', 'accountant'] },
       { id: 'create_pay_receipt', label: 'ثبت رسید پرداخت وجه', defaultRoles: ['admin', 'manager', 'accountant'] },

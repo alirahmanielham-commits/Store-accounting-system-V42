@@ -21,6 +21,7 @@ import {
   ArrowDownLeft,
   ArrowUpRight,
   Sparkles,
+  Zap,
 } from "lucide-react";
 
 export interface MobileRestrictedMenuProps {
@@ -57,6 +58,13 @@ export const MOBILE_CATEGORIES: MobileCategory[] = [
     color: "teal",
     activeColor: "bg-teal-600 text-white",
     subItems: [
+      {
+        id: "keyboard_receipt",
+        title: "ثبت سریع با کیبورد (بدون ماوس)",
+        icon: Zap,
+        badge: "کیبورد",
+        description: "ثبت سریع رسید دریافت و پرداخت بدون نیاز به ماوس",
+      },
       {
         id: "create_receive_receipt",
         title: "ثبت رسید دریافت وجه",

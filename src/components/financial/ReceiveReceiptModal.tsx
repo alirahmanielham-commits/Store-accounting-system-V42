@@ -22,7 +22,8 @@ import {
   Sparkles,
   ChevronDown,
   Layers,
-  Check
+  Check,
+  Zap
 } from "lucide-react";
 import Select from "react-select";
 import CurrencyInput from "../common/CurrencyInput";
@@ -261,6 +262,18 @@ export default function ReceiveReceiptModal(props: any) {
           </div>
 
           <div className="flex items-center gap-2.5">
+            {typeof props.setActiveTab === "function" && (
+              <button
+                type="button"
+                onClick={() => props.setActiveTab("keyboard_receipt")}
+                className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-slate-950 font-black rounded-xl text-xs flex items-center gap-1.5 shadow-sm transition-all cursor-pointer"
+                title="رفتن به حالت ثبت فوق‌سریع رسید با کیبورد و بدون ماوس"
+              >
+                <Zap className="w-3.5 h-3.5 fill-slate-950" />
+                <span className="hidden md:inline">ثبت سریع با کیبورد</span>
+                <span className="md:hidden">کیبورد</span>
+              </button>
+            )}
             <div className="hidden sm:flex flex-col text-left">
               <span className="text-[10px] font-bold text-slate-400">شماره رسید رسمی</span>
               <span className="text-xs font-mono font-black text-emerald-900">
