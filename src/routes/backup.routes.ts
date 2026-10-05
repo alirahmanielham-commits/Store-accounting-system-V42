@@ -32,7 +32,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { exec } from 'child_process';
+import { requireRole } from '../middleware/auth.middleware';
 import { validateData } from '../schemas/validation';
 import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
@@ -407,16 +407,16 @@ const setupBackupSchedule = () => {
 };
 setupBackupSchedule();
 
-router.post("/api/db/backups/create", async (req, res) => {
+router.post("/api/db/backups/create", requireRole(['admin']), async (req, res) => {
      try {
         await runBackupJob();
         res.json({ success: true });
-     } catch (err) {
+     } catch (err: any) {
         res.status(500).json({ error: err.message });
      }
   });
 
-router.post('/api/db/backup-config', async (req, res) => {
+router.post('/api/db/backup-config', requireRole(['admin']), async (req, res) => {
      backupConfig = { ...backupConfig, ...req.body };
      await setDbData('backupConfig', backupConfig);
      
@@ -443,14 +443,17 @@ router.get('/api/db/backups', async (req, res) => {
         }
         backupsList.sort((a,b) => b.time - a.time);
         res.json(backupsList);
-     } catch(e) {
+     } catch(e: any) {
         res.status(500).json({ error: e.message });
      }
   });
 
-router.post('/api/db/backups/restore/:filename', async (req, res) => {
+router.post('/api/db/backups/restore/:filename', requireRole(['admin']), async (req, res) => {
      try {
          const { filename } = req.params;
+         if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename) || filename.includes('..')) {
+           return res.status(400).json({ success: false, error: 'نام فایل پشتیبان نامعتبر است' });
+         }
          const dir = path.resolve(await getBackupsDir());
          const filePath = path.resolve(dir, filename);
          if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
@@ -482,34 +485,40 @@ router.post('/api/db/backups/restore/:filename', async (req, res) => {
          }
          await appendDbLog('بازیابی اطلاعات', 'success', `نسخه ${filename} با موفقیت بازیابی شد.`);
          res.json({ success: true });
-     } catch(e) {
+     } catch(e: any) {
          await appendDbLog('بازیابی اطلاعات', 'error', `خطا: ${e.message}`);
          console.error('Restore specific backup error:', e);
          res.status(500).json({ success: false, error: e.message });
      }
   });
 
-router.get('/api/db/backups/download/:filename', async (req, res) => {
+router.get('/api/db/backups/download/:filename', requireRole(['admin']), async (req, res) => {
      try {
          const { filename } = req.params;
+         if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename) || filename.includes('..')) {
+           return res.status(400).json({ error: 'نام فایل نامعتبر است' });
+         }
          const dir = path.resolve(await getBackupsDir());
          const filePath = path.resolve(dir, filename);
-         if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
+         if (!filePath.startsWith(dir)) return res.status(403).json({ error: 'مسیر غیرمجاز' });
          res.download(filePath);
-     } catch(e) {
+     } catch(e: any) {
          res.status(500).json({ error: e.message });
      }
   });
 
-  router.delete('/api/db/backups/:filename', async (req, res) => {
+  router.delete('/api/db/backups/:filename', requireRole(['admin']), async (req, res) => {
       try {
          const { filename } = req.params;
+         if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename) || filename.includes('..')) {
+           return res.status(400).json({ error: 'نام فایل نامعتبر است' });
+         }
          const dir = path.resolve(await getBackupsDir());
          const filePath = path.resolve(dir, filename);
-         if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
+         if (!filePath.startsWith(dir)) return res.status(403).json({ error: 'مسیر غیرمجاز' });
          await fsPromises.unlink(filePath);
          res.json({ success: true });
-      } catch(e) {
+      } catch(e: any) {
          res.status(500).json({ error: e.message });
       }
   });
@@ -651,40 +660,77 @@ router.get('/api/db/table-sizes', async (req, res) => {
 });
 
 
-router.post('/api/db/backups/upload', async (req, res) => {
+router.post('/api/db/backups/upload', requireRole(['admin']), async (req, res) => {
   try {
     const { filename, content } = req.body;
-    if (!filename || !content) return res.status(400).json({ error: 'Missing filename or content' });
+    if (!filename || !content) return res.status(400).json({ error: 'نام فایل و محتوا الزامی است.' });
+    
+    // Strict filename validation and path traversal prevention
+    const baseName = path.basename(filename);
+    const ext = path.extname(baseName).toLowerCase();
+    if (!['.json', '.sql'].includes(ext)) {
+      return res.status(400).json({ error: 'فرمت فایل مجاز نیست. فقط فایل‌های .json و .sql به عنوان فایل پشتیبان پذیرفته می‌شوند.' });
+    }
+
+    // Header & Format Validation: verify the uploaded file is indeed a valid backup
+    if (ext === '.json') {
+      try {
+        const parsed = JSON.parse(content);
+        if (typeof parsed !== 'object' || parsed === null) {
+          return res.status(400).json({ error: 'فرمت داده‌های فایل JSON پشتیبان نامعتبر است.' });
+        }
+      } catch (jsonErr: any) {
+        return res.status(400).json({ error: 'محتوای فایل JSON معتبر نبوده و قابل پردازش نیست.' });
+      }
+    } else if (ext === '.sql') {
+      const trimmed = content.trim();
+      const validSqlStart = /^(--|\/\*|CREATE|INSERT|SET|BEGIN|SELECT|DROP|ALTER)/i.test(trimmed);
+      const dangerousPatterns = /\b(exec\s+xp_|\\!|COPY\s+.*\s+PROGRAM|cmd\.exe|\/bin\/sh|\/bin\/bash)\b/i.test(trimmed);
+      if (!validSqlStart || dangerousPatterns) {
+        return res.status(400).json({ error: 'محتوای فایل SQL دارای خطای ساختاری یا دستورات اجرایی غیرمجاز است.' });
+      }
+    }
+
     const dir = await getBackupsDir();
     await fsPromises.mkdir(dir, { recursive: true });
-    const safeName = 'uploaded-' + Date.now() + '-' + path.basename(filename);
+    const cleanBase = baseName.replace(/[^a-zA-Z0-9_\-\.]/g, '_');
+    const safeName = 'uploaded-' + Date.now() + '-' + cleanBase;
     const filePath = path.join(dir, safeName);
     
-    // Convert base64 or raw text to file. If it's a JSON string, we just write it.
     await fsPromises.writeFile(filePath, content, 'utf-8');
     
-    await appendDbLog('آپلود بک‌آپ', 'success', `فایل ${filename} با موفقیت آپلود شد.`);
+    await appendDbLog('آپلود بک‌آپ', 'success', `فایل ${filename} با موفقیت آپلود و اعتبارسنجی شد.`);
     res.json({ success: true, file: safeName });
-  } catch (err) {
+  } catch (err: any) {
     await appendDbLog('آپلود بک‌آپ', 'error', `خطا در آپلود: ${err.message}`);
     res.status(500).json({ error: err.message });
   }
 });
 
-router.post('/api/db/explore-folders', async (req, res) => {
+router.post('/api/db/explore-folders', requireRole(['admin']), async (req, res) => {
   try {
-    let targetPath = req.body.path || process.cwd();
-    targetPath = path.resolve(targetPath);
+    const appRoot = path.resolve(process.cwd());
+    const backupsRoot = path.resolve(await getBackupsDir());
+    const allowedRoots = [appRoot, backupsRoot];
+
+    let targetPath = req.body.path ? path.resolve(req.body.path) : appRoot;
+    // Security check: block path traversal and direct OS filesystem exploration
+    const isAllowed = allowedRoots.some(allowed => targetPath.startsWith(allowed));
+    if (!isAllowed) {
+      targetPath = appRoot;
+    }
+
     try {
       await fsPromises.access(targetPath, fsPromises.constants.R_OK);
     } catch(e) {
-      targetPath = process.cwd();
+      targetPath = appRoot;
     }
     const items = await fsPromises.readdir(targetPath, { withFileTypes: true });
     const folders = items.filter(i => i.isDirectory()).map(i => i.name).sort();
     const parent = path.dirname(targetPath);
-    res.json({ current: targetPath, parent: parent !== targetPath ? parent : null, folders });
-  } catch (err) {
+    const parentAllowed = allowedRoots.some(allowed => parent.startsWith(allowed));
+    res.json({ current: targetPath, parent: parentAllowed && parent !== targetPath ? parent : null, folders });
+  } catch (err: any) {
     res.status(500).json({ error: err.message });
   }
 });
@@ -698,7 +744,7 @@ router.get('/api/db/cloud/backups', async (req, res) => {
   }
 });
 
-router.post('/api/db/cloud/test-connection', async (req, res) => {
+router.post('/api/db/cloud/test-connection', requireRole(['admin']), async (req, res) => {
   const { provider, config } = req.body;
   const cfg = { ...backupConfig, ...(config || {}) };
   const targetProvider = provider || cfg.cloudProvider || cfg.remoteProvider || 'gdrive';
@@ -771,10 +817,13 @@ router.post('/api/db/cloud/test-connection', async (req, res) => {
   }
 });
 
-router.post('/api/db/cloud/upload-backup', async (req, res) => {
+router.post('/api/db/cloud/upload-backup', requireRole(['admin']), async (req, res) => {
   try {
     const { filename } = req.body;
     if (!filename) return res.status(400).json({ error: 'نام فایل الزامی است.' });
+    if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename) || filename.includes('..')) {
+      return res.status(400).json({ error: 'نام فایل نامعتبر است.' });
+    }
     
     const dir = path.resolve(await getBackupsDir());
     const filePath = path.resolve(dir, filename);
@@ -789,7 +838,7 @@ router.post('/api/db/cloud/upload-backup', async (req, res) => {
   }
 });
 
-router.post('/api/db/cloud/sync-now', async (req, res) => {
+router.post('/api/db/cloud/sync-now', requireRole(['admin']), async (req, res) => {
   try {
     await runBackupJob();
     res.json({ success: true, message: 'پشتیبان‌گیری انجام و نسخه در فضای ابری همگام‌سازی شد.' });
@@ -798,7 +847,7 @@ router.post('/api/db/cloud/sync-now', async (req, res) => {
   }
 });
 
-router.delete('/api/db/cloud/backups/:filename', async (req, res) => {
+router.delete('/api/db/cloud/backups/:filename', requireRole(['admin']), async (req, res) => {
   try {
     const { filename } = req.params;
     let list: any[] = [];

@@ -123,7 +123,6 @@ import {
   toPersianDigits,
   formatDateDisplay, convertToGregorian, customPersonFilter,
 } from "./utils/format";
-import html2pdf from "html2pdf.js";
 import DateObject from "react-date-object";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";

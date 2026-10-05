@@ -58,6 +58,7 @@ import { getInvoices, getProducts, getPersons, getWarehouses, getStoreSettings }
 import { Product, Warehouse, Person, CompanySettings } from '../../types';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import { convertToGregorian, formatDateDisplay, toPersianDigits } from '../../utils/format';
+import { calculateAllProductsWAC } from '../../services/cogsService';
 import { convertQuantityToBaseUnit, getUnitRatioDirection } from '../../utils/unitConversion';
 
 import { safePrint } from '../../utils/printHelper';
@@ -233,40 +234,20 @@ export default function SalesReport(props: SalesReportProps) {
     }
   };
 
-  // Build product purchase price lookup table
-  // Fallbacks: product.purchasePrice -> purchase invoices latest purchase price -> 0
+  // Build product cost lookup table using Moving Weighted Average Cost (WAC) engine
   const productCostMap = useMemo(() => {
+    const wacSummaries = calculateAllProductsWAC(products, invoices);
     const costMap: Record<string, number> = {};
 
-    // 1. Initial product prices
-    (products || []).forEach(p => {
-      const pid = String(p.id);
-      const buyPrice = Number(p.purchasePrice || (p as any).buyPrice || 0);
-      costMap[pid] = buyPrice;
+    wacSummaries.forEach((summary, pid) => {
+      costMap[pid] = summary.weightedAverageCost;
     });
 
-    // 2. Scan purchase invoices to find purchase prices
-    const purchaseInvoices = (invoices || [])
-      .filter(i => (i.type === 'purchase' || i.type === 'warehouse_receipt') && !i.isDeleted && i.status !== 'voided')
-      .sort((a, b) => {
-        const timeA = new Date(convertToGregorian(a.date || a.createdAt || 0)).getTime();
-        const timeB = new Date(convertToGregorian(b.date || b.createdAt || 0)).getTime();
-        return timeA - timeB;
-      });
-
-    purchaseInvoices.forEach(inv => {
-      if (Array.isArray(inv.items)) {
-        inv.items.forEach((item: any) => {
-          const pid = String(item.productId || '');
-          if (!pid) return;
-          const unitPrice = Number(item.unitPrice ?? item.price ?? 0);
-          if (unitPrice > 0) {
-            // Overwrite with newer purchase price if product has 0, or keep track of latest
-            if (!costMap[pid] || costMap[pid] === 0) {
-              costMap[pid] = unitPrice;
-            }
-          }
-        });
+    // Fallback for any product not in wacSummaries
+    (products || []).forEach(p => {
+      const pid = String(p.id);
+      if (costMap[pid] === undefined || costMap[pid] === 0) {
+        costMap[pid] = Number(p.purchasePrice || (p as any).buyPrice || 0);
       }
     });
 

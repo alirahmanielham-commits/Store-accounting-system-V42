@@ -6,6 +6,10 @@ import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
 import cookieParser from 'cookie-parser';
+import helmet from 'helmet';
+import cors from 'cors';
+import rateLimit from 'express-rate-limit';
+import compression from 'compression';
 
 import { initDB } from './src/db/migration';
 import { startCronJobs } from './src/jobs/checkNotificationsJob';
@@ -53,6 +57,54 @@ async function startServer() {
   const PORT = 3000;
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
   
+  // 1. CORS Configuration
+  app.use(cors({
+    origin: true,
+    credentials: true,
+    methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+    allowedHeaders: ['Content-Type', 'Authorization', 'x-store-id', 'x-custom-origin']
+  }));
+
+  // 2. Helmet Web Security Headers (customized for AI Studio iframe & Vite SPA)
+  app.use(helmet({
+    contentSecurityPolicy: false,
+    frameguard: false,
+    crossOriginEmbedderPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" }
+  }));
+
+  // 3. Rate Limiting to prevent brute-force and DoS
+  const generalLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 1500,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'تعداد درخواست‌ها بیش از حد مجاز است. لطفاً چند دقیقه دیگر دوباره امتحان کنید.' },
+    skip: (req) => req.path === '/api/health' || !req.path.startsWith('/api/')
+  });
+
+  const authLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 20,
+    standardHeaders: true,
+    legacyHeaders: false,
+    message: { error: 'تعداد دفعات تلاش برای ورود بیش از حد مجاز است. لطفاً ۱۵ دقیقه دیگر دوباره تلاش فرمایید.' }
+  });
+
+  app.use('/api/', generalLimiter);
+  app.use('/api/auth/login', authLimiter);
+  app.use('/api/auth/verify-otp', authLimiter);
+
+  // 4. HTTP Response Compression (gzip / deflate)
+  app.use(compression({
+    level: 6,
+    threshold: 1024, // only compress responses > 1KB
+    filter: (req, res) => {
+      if (req.headers['x-no-compression']) return false;
+      return compression.filter(req, res);
+    }
+  }));
+
   app.use(express.json({ limit: '50mb' }));
   app.use(express.text({ limit: '500mb', type: ['text/*', 'application/sql', 'application/json'] }));
   app.use(cookieParser());

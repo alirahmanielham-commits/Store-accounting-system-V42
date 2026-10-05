@@ -767,8 +767,68 @@ export const getLedgerAccounts = async () => {
 
 export const saveLedgerAccounts = async (data: any[]) => saveLocalData('ledger_accounts', data);
 
+export const validateLedgerAccountCoding = (account: any, existingAccounts: any[]) => {
+  if (!account || !account.code || !String(account.code).trim()) {
+    throw new Error('کد حساب حسابداری الزامی است.');
+  }
+  if (!account.title || !String(account.title).trim()) {
+    throw new Error('عنوان حساب حسابداری الزامی است.');
+  }
+
+  const code = String(account.code).trim();
+  const type = account.type || 'subsidiary';
+
+  // 1. Uniqueness check
+  const duplicate = existingAccounts.find(a => 
+    String(a.code).trim() === code && String(a.id) !== String(account.id)
+  );
+  if (duplicate) {
+    throw new Error(`کد حساب «${code}» قبلاً برای «${duplicate.title}» تعریف شده است و تکراری می‌باشد.`);
+  }
+
+  // 2. Format & Length check according to Iranian standard coding
+  if (type === 'group') {
+    if (!/^\d{1}$/.test(code)) {
+      throw new Error(`کد گروه حساب باید ۱ رقمی باشد (مثلاً ۱ برای دارایی‌ها). کد وارد شده: ${code}`);
+    }
+  } else if (type === 'general') {
+    if (!/^\d{2}$/.test(code)) {
+      throw new Error(`کد حساب کل باید ۲ رقمی باشد (مثلاً ۱۱ برای موجودی نقد). کد وارد شده: ${code}`);
+    }
+    // Check parent group
+    if (account.parentId) {
+      const parent = existingAccounts.find(a => String(a.id) === String(account.parentId));
+      if (parent && String(parent.code) !== code.substring(0, 1)) {
+        throw new Error(`کد حساب کل (${code}) باید با کد گروه مادر (${parent.code}) آغاز شود.`);
+      }
+    }
+  } else if (type === 'subsidiary') {
+    if (!/^\d{4}$/.test(code)) {
+      throw new Error(`کد حساب معین باید ۴ رقمی باشد (مثلاً ۱۱۰۱ برای صندوق). کد وارد شده: ${code}`);
+    }
+    // Check parent general account
+    if (account.parentId) {
+      const parent = existingAccounts.find(a => String(a.id) === String(account.parentId));
+      if (parent && String(parent.code) !== code.substring(0, 2)) {
+        throw new Error(`کد حساب معین (${code}) باید با ۲ رقم اول کد حساب کل مادر (${parent.code}) آغاز گردد.`);
+      }
+    }
+  } else if (type === 'detailed') {
+    if (!/^\d{6,8}$/.test(code)) {
+      throw new Error(`کد حساب تفصیلی باید ۶ الی ۸ رقمی باشد. کد وارد شده: ${code}`);
+    }
+    if (account.parentId) {
+      const parent = existingAccounts.find(a => String(a.id) === String(account.parentId));
+      if (parent && !code.startsWith(String(parent.code))) {
+        throw new Error(`کد حساب تفصیلی (${code}) باید با کد حساب معین مادر (${parent.code}) شروع شود.`);
+      }
+    }
+  }
+};
+
 export const addLedgerAccount = async (la: any) => {
   const accs = await getLedgerAccounts();
+  validateLedgerAccountCoding(la, accs);
   const added = { ...la, id: la.id || generateId() };
   accs.push(added);
   await saveLedgerAccounts(accs);
@@ -779,15 +839,34 @@ export const updateLedgerAccount = async (id: string | number, updated: any) => 
   const accs = await getLedgerAccounts();
   const idx = accs.findIndex((x: any) => x.id?.toString() === id?.toString());
   if (idx > -1) {
-    accs[idx] = updated;
+    validateLedgerAccountCoding({ ...updated, id }, accs);
+    accs[idx] = { ...accs[idx], ...updated, id };
     await saveLedgerAccounts(accs);
-    return updated;
+    return accs[idx];
   }
   return null;
 };
 
 export const deleteLedgerAccount = async (id: string | number) => {
   const accs = await getLedgerAccounts();
+  const target = accs.find((x: any) => x.id?.toString() === id?.toString());
+  if (!target) return;
+
+  // 1. Check for child accounts
+  const hasChildren = accs.some((x: any) => String(x.parentId) === String(id));
+  if (hasChildren) {
+    throw new Error(`امکان حذف حساب «${target.title}» وجود ندارد زیرا دارای حساب‌های زیرمجموعه است. ابتدا زیرمجموعه‌ها را حذف یا منتقل نمایید.`);
+  }
+
+  // 2. Check for transactions/documents using this account
+  const docs = await getAccountingDocuments();
+  const isUsedInDocs = docs.some(d => 
+    (d.items || []).some((it: any) => String(it.ledgerAccountId) === String(id) || String(it.detailedAccountId) === String(id))
+  );
+  if (isUsedInDocs) {
+    throw new Error(`امکان حذف حساب «${target.title}» وجود ندارد زیرا در اسناد حسابداری ثبت‌شده دارای گردش مالی و آرتیکل است.`);
+  }
+
   const newAccs = accs.filter((x: any) => x.id?.toString() !== id?.toString());
   await saveLedgerAccounts(newAccs);
 };
@@ -906,6 +985,474 @@ export const deleteAccountingDocument = async (id: string | number) => {
     }
     await updateLocalData('accounting_documents', id, { ...docs[index], isDeleted: true });
   }
+};
+
+/**
+ * Creates an immutable Reversal Voucher (سند معکوس / اصلاحی) for a permanent or approved document
+ * Inverts all debit and credit articles and maintains historical audit trail.
+ */
+export const createReversalAccountingDocument = async (
+  docId: string | number,
+  reason?: string,
+  date?: string
+) => {
+  const docs = await getAccountingDocuments();
+  const orig = docs.find((d: any) => String(d.id) === String(docId));
+  if (!orig) {
+    throw new Error('سند حسابداری مورد نظر جهت صدور سند معکوس یافت نشد.');
+  }
+
+  if (orig.isReversed) {
+    throw new Error(`برای این سند قبلاً سند معکوس به شماره ${orig.reversalDocNumber || orig.reversalDocId || ''} صادر شده است.`);
+  }
+
+  if (!orig.items || !Array.isArray(orig.items) || orig.items.length === 0) {
+    throw new Error('سند مبدأ فاقد آرتیکل‌های معتبر جهت صدور سند معکوس است.');
+  }
+
+  const reversedDate = date || new Date().toISOString();
+  const reversalDesc = `سند معکوس بابت سند شماره ${orig.documentNumber || orig.id}${reason ? ` (${reason})` : ''} - ${orig.description || ''}`;
+
+  const reversedItems = orig.items.map((it: any) => ({
+    id: generateId(),
+    ledgerAccountId: it.ledgerAccountId,
+    detailedAccountId: it.detailedAccountId,
+    description: `معکوس: ${it.description || ''}`,
+    debit: Number(it.credit) || 0,
+    credit: Number(it.debit) || 0,
+    currency: it.currency || orig.currency || 'تومان'
+  }));
+
+  const newDoc = await addAccountingDocument({
+    date: reversedDate,
+    description: reversalDesc,
+    status: 'permanent',
+    isFinalized: true,
+    sourceType: 'reversal',
+    sourceId: String(orig.id),
+    reversedDocId: String(orig.id),
+    isAutoGenerated: true,
+    items: reversedItems,
+    currency: orig.currency || 'تومان'
+  });
+
+  // Mark original document as reversed
+  await updateLocalData('accounting_documents', orig.id, {
+    ...orig,
+    isReversed: true,
+    reversalDocId: newDoc.id,
+    reversalDocNumber: newDoc.documentNumber,
+    updatedAt: Date.now()
+  });
+
+  if (typeof addSystemLog !== 'undefined') {
+    await addSystemLog(
+      'CREATE_REVERSAL_VOUCHER',
+      `صدور سند معکوس شماره ${newDoc.documentNumber} بابت سند شماره ${orig.documentNumber || orig.id}`,
+      'AccountingDocument',
+      newDoc.id
+    );
+  }
+
+  return newDoc;
+};
+
+/**
+ * Reverses all accounting documents linked to a voided invoice
+ */
+export const reverseInvoiceAccounting = async (invoiceId: string | number, reason?: string) => {
+  const docs = await getAccountingDocuments();
+  const targetDocs = docs.filter((d: any) => 
+    (String(d.sourceId) === String(invoiceId) || d.sourceId === Number(invoiceId)) &&
+    !d.isDeleted &&
+    !d.isReversed &&
+    (d.sourceType?.includes('invoice') || d.type === 'invoice' || d.type === 'cogs')
+  );
+
+  const reversedDocs = [];
+  for (const d of targetDocs) {
+    try {
+      const rev = await createReversalAccountingDocument(d.id, reason || `ابطال فاکتور`);
+      reversedDocs.push(rev);
+    } catch (e) {
+      console.warn(`Could not reverse accounting document ${d.id}:`, e);
+    }
+  }
+  return reversedDocs;
+};
+
+/**
+ * Standard Fiscal Year Closing Wizard (ویزارد استاندارد بستن سال مالی)
+ * 1. Close temporary accounts (حساب‌های موقت سود و زیانی) to Income Summary (خلاصه سود و زیان)
+ * 2. Transfer Net Profit/Loss to Retained Earnings (سود/زیان انباشته)
+ * 3. Issue Closing Document (سند اختتامیه) for permanent balance sheet accounts
+ * 4. Mark fiscal year as closed
+ * 5. Optionally create next fiscal year and issue Opening Document (سند افتتاحیه)
+ */
+export const executeFiscalYearClosing = async (
+  yearId: string | number,
+  options?: {
+    createNextYear?: boolean;
+    nextYearName?: string;
+    nextYearStartDate?: string;
+    nextYearEndDate?: string;
+  }
+) => {
+  const years = await getLocalData<any[]>('financial_years', []);
+  const yearIdx = years.findIndex(y => String(y.id) === String(yearId));
+  if (yearIdx === -1) {
+    throw new Error('سال مالی مورد نظر یافت نشد.');
+  }
+
+  const currentYear = years[yearIdx];
+  if (currentYear.status === 'closed') {
+    throw new Error('این سال مالی قبلاً بسته شده است و امکان بستن مجدد آن وجود ندارد.');
+  }
+
+  const ledgerAccounts = await getLedgerAccounts();
+  const docs = await getAccountingDocuments();
+  const sysSettings = await getStoreSettings();
+  const currency = sysSettings?.currency || 'تومان';
+
+  const yearStart = new Date(currentYear.startDate).getTime();
+  const yearEnd = new Date(currentYear.endDate).getTime();
+  const closingDate = currentYear.endDate || new Date().toISOString();
+
+  // Find all approved/permanent documents in this fiscal year
+  const yearDocs = docs.filter(d => {
+    if (d.isDeleted) return false;
+    const docTime = new Date(d.date).getTime();
+    const isInRange = docTime >= yearStart && docTime <= yearEnd;
+    const isSameYearId = d.fiscalYearId && String(d.fiscalYearId) === String(yearId);
+    return (isInRange || isSameYearId) && (d.status === 'approved' || d.status === 'permanent');
+  });
+
+  // Calculate net balances for each ledger account during this year
+  const balances = new Map<string, { debit: number; credit: number; net: number }>();
+  yearDocs.forEach(d => {
+    (d.items || []).forEach((it: any) => {
+      const accId = String(it.ledgerAccountId || '');
+      if (!accId) return;
+      const b = balances.get(accId) || { debit: 0, credit: 0, net: 0 };
+      b.debit += Number(it.debit) || 0;
+      b.credit += Number(it.credit) || 0;
+      b.net = b.debit - b.credit; // positive = net debit, negative = net credit
+      balances.set(accId, b);
+    });
+  });
+
+  // Helper to ensure an account exists by code
+  const getOrCreateAccount = async (code: string, title: string, parentCode: string, type: string, nature: string) => {
+    let acc = ledgerAccounts.find(a => String(a.code) === code);
+    if (!acc) {
+      const parent = ledgerAccounts.find(a => String(a.code) === parentCode);
+      acc = {
+        id: generateId(),
+        code,
+        title,
+        type,
+        nature,
+        parentId: parent ? parent.id : null
+      };
+      await addLedgerAccount(acc);
+      ledgerAccounts.push(acc);
+    }
+    return acc;
+  };
+
+  // 1. Close Temporary Accounts (Income & Expenses: Codes starting with '4' and '5')
+  const summaryAccount = await getOrCreateAccount('3301', 'خلاصه سود و زیان', '31', 'subsidiary', 'credit');
+  const tempCloseItems: any[] = [];
+  let totalRevenueClosed = 0;
+  let totalExpenseClosed = 0;
+
+  balances.forEach((bal, accId) => {
+    const acc = ledgerAccounts.find(a => String(a.id) === accId);
+    if (!acc) return;
+    const code = String(acc.code || '');
+
+    // Income accounts (Group 4): Normal nature is Credit
+    if (code.startsWith('4')) {
+      const netCredit = bal.credit - bal.debit;
+      if (Math.abs(netCredit) > 0.001) {
+        tempCloseItems.push({
+          id: generateId(),
+          ledgerAccountId: acc.id,
+          description: `بستن حساب موقت درآمد: ${acc.title}`,
+          debit: netCredit > 0 ? netCredit : 0,
+          credit: netCredit < 0 ? Math.abs(netCredit) : 0,
+          currency
+        });
+        totalRevenueClosed += netCredit;
+      }
+    }
+
+    // Expense accounts (Group 5): Normal nature is Debit
+    if (code.startsWith('5')) {
+      const netDebit = bal.debit - bal.credit;
+      if (Math.abs(netDebit) > 0.001) {
+        tempCloseItems.push({
+          id: generateId(),
+          ledgerAccountId: acc.id,
+          description: `بستن حساب موقت هزینه: ${acc.title}`,
+          debit: netDebit < 0 ? Math.abs(netDebit) : 0,
+          credit: netDebit > 0 ? netDebit : 0,
+          currency
+        });
+        totalExpenseClosed += netDebit;
+      }
+    }
+  });
+
+  const netIncome = totalRevenueClosed - totalExpenseClosed;
+
+  let tempCloseDoc = null;
+  if (tempCloseItems.length > 0) {
+    // Balance to Income Summary
+    if (netIncome > 0) {
+      // Net Profit: Credit Income Summary
+      tempCloseItems.push({
+        id: generateId(),
+        ledgerAccountId: summaryAccount.id,
+        description: `انتقال سود ویژه دوره مالی به خلاصه سود و زیان (${currentYear.name})`,
+        debit: 0,
+        credit: netIncome,
+        currency
+      });
+    } else if (netIncome < 0) {
+      // Net Loss: Debit Income Summary
+      tempCloseItems.push({
+        id: generateId(),
+        ledgerAccountId: summaryAccount.id,
+        description: `انتقال زیان ویژه دوره مالی به خلاصه سود و زیان (${currentYear.name})`,
+        debit: Math.abs(netIncome),
+        credit: 0,
+        currency
+      });
+    }
+
+    tempCloseDoc = await addAccountingDocument({
+      date: closingDate,
+      description: `سند بستن حساب‌های موقت (سود و زیانی) سال مالی ${currentYear.name}`,
+      status: 'permanent',
+      isFinalized: true,
+      type: 'closing_temporary',
+      sourceType: 'fiscal_year_close_temp',
+      sourceId: String(yearId),
+      fiscalYearId: String(yearId),
+      isAutoGenerated: true,
+      items: tempCloseItems,
+      currency
+    });
+  }
+
+  // 2. Transfer Net Profit/Loss from Income Summary to Retained Earnings (سود/زیان انباشته)
+  let transferDoc = null;
+  if (Math.abs(netIncome) > 0.001) {
+    const retainedEarningsAccount = await getOrCreateAccount('3201', 'سود (زیان) انباشته', '31', 'subsidiary', 'credit');
+    const transferItems = [];
+
+    if (netIncome > 0) {
+      transferItems.push({
+        id: generateId(),
+        ledgerAccountId: summaryAccount.id,
+        description: `بستن حساب خلاصه سود و زیان بابت انتقال سود خالص دوره (${currentYear.name})`,
+        debit: netIncome,
+        credit: 0,
+        currency
+      });
+      transferItems.push({
+        id: generateId(),
+        ledgerAccountId: retainedEarningsAccount.id,
+        description: `انتقال سود خالص سال مالی ${currentYear.name} به حساب سود (زیان) انباشته`,
+        debit: 0,
+        credit: netIncome,
+        currency
+      });
+    } else {
+      transferItems.push({
+        id: generateId(),
+        ledgerAccountId: retainedEarningsAccount.id,
+        description: `انتقال زیان سال مالی ${currentYear.name} به حساب سود (زیان) انباشته`,
+        debit: Math.abs(netIncome),
+        credit: 0,
+        currency
+      });
+      transferItems.push({
+        id: generateId(),
+        ledgerAccountId: summaryAccount.id,
+        description: `بستن حساب خلاصه سود و زیان بابت انتقال زیان دوره (${currentYear.name})`,
+        debit: 0,
+        credit: Math.abs(netIncome),
+        currency
+      });
+    }
+
+    transferDoc = await addAccountingDocument({
+      date: closingDate,
+      description: `سند انتقال سود (زیان) ویژه سال مالی ${currentYear.name} به سود (زیان) انباشته`,
+      status: 'permanent',
+      isFinalized: true,
+      type: 'transfer_profit_loss',
+      sourceType: 'fiscal_year_transfer_pl',
+      sourceId: String(yearId),
+      fiscalYearId: String(yearId),
+      isAutoGenerated: true,
+      items: transferItems,
+      currency
+    });
+  }
+
+  // 3. Issue Closing Voucher (سند اختتامیه) for Permanent Accounts (1: Assets, 2: Liabilities, 3: Equity)
+  // Re-read documents including tempCloseDoc and transferDoc to calculate permanent balances
+  const allFinalDocs = await getAccountingDocuments();
+  const finalYearDocs = allFinalDocs.filter(d => {
+    if (d.isDeleted) return false;
+    const docTime = new Date(d.date).getTime();
+    return (docTime >= yearStart && docTime <= yearEnd) || (d.fiscalYearId && String(d.fiscalYearId) === String(yearId));
+  });
+
+  const permanentBalances = new Map<string, { debit: number; credit: number }>();
+  finalYearDocs.forEach(d => {
+    (d.items || []).forEach((it: any) => {
+      const accId = String(it.ledgerAccountId || '');
+      const acc = ledgerAccounts.find(a => String(a.id) === accId);
+      if (!acc) return;
+      const code = String(acc.code || '');
+      // Only permanent balance-sheet accounts (Groups 1, 2, 3)
+      if (code.startsWith('1') || code.startsWith('2') || code.startsWith('3')) {
+        const b = permanentBalances.get(accId) || { debit: 0, credit: 0 };
+        b.debit += Number(it.debit) || 0;
+        b.credit += Number(it.credit) || 0;
+        permanentBalances.set(accId, b);
+      }
+    });
+  });
+
+  const closingItems: any[] = [];
+  const openingItemsForNextYear: any[] = [];
+
+  permanentBalances.forEach((bal, accId) => {
+    const acc = ledgerAccounts.find(a => String(a.id) === accId);
+    if (!acc) return;
+    const net = bal.debit - bal.credit; // positive = net debit, negative = net credit
+    if (Math.abs(net) < 0.001) return;
+
+    if (net > 0) {
+      // In Closing Voucher: credit debit balances to zero them
+      closingItems.push({
+        id: generateId(),
+        ledgerAccountId: acc.id,
+        description: `اختتامیه: صفر کردن مانده بدهکار حساب ${acc.title}`,
+        debit: 0,
+        credit: net,
+        currency
+      });
+      // In Next Year Opening Voucher: debit to reinstate opening asset balance
+      openingItemsForNextYear.push({
+        id: generateId(),
+        ledgerAccountId: acc.id,
+        description: `مانده افتتاحیه انتقال یافته از سال مالی قبل (${acc.title})`,
+        debit: net,
+        credit: 0,
+        currency
+      });
+    } else {
+      // In Closing Voucher: debit credit balances to zero them
+      const absCredit = Math.abs(net);
+      closingItems.push({
+        id: generateId(),
+        ledgerAccountId: acc.id,
+        description: `اختتامیه: صفر کردن مانده بستانکار حساب ${acc.title}`,
+        debit: absCredit,
+        credit: 0,
+        currency
+      });
+      // In Next Year Opening Voucher: credit to reinstate opening liability/equity balance
+      openingItemsForNextYear.push({
+        id: generateId(),
+        ledgerAccountId: acc.id,
+        description: `مانده افتتاحیه انتقال یافته از سال مالی قبل (${acc.title})`,
+        debit: 0,
+        credit: absCredit,
+        currency
+      });
+    }
+  });
+
+  let closingDoc = null;
+  if (closingItems.length > 0) {
+    closingDoc = await addAccountingDocument({
+      date: closingDate,
+      description: `سند اختتامیه سال مالی ${currentYear.name}`,
+      status: 'permanent',
+      isFinalized: true,
+      type: 'closing_permanent',
+      sourceType: 'fiscal_year_close_permanent',
+      sourceId: String(yearId),
+      fiscalYearId: String(yearId),
+      isAutoGenerated: true,
+      items: closingItems,
+      currency
+    });
+  }
+
+  // 4. Mark current year as closed
+  currentYear.status = 'closed';
+  currentYear.closedAt = Date.now();
+  currentYear.updatedAt = Date.now();
+  years[yearIdx] = currentYear;
+  await saveLocalData('financial_years', years);
+
+  // 5. Create Next Year and Issue Opening Document if requested
+  let nextYear = null;
+  let openingDoc = null;
+  if (options?.createNextYear && openingItemsForNextYear.length > 0) {
+    const nextStart = options.nextYearStartDate || new Date(yearEnd + 86400000).toISOString();
+    const nextEnd = options.nextYearEndDate || new Date(yearEnd + 365 * 86400000).toISOString();
+    const nextName = options.nextYearName || `سال مالی جدید (${new Date(nextStart).getFullYear()})`;
+
+    nextYear = {
+      id: generateId(),
+      name: nextName,
+      startDate: nextStart,
+      endDate: nextEnd,
+      status: 'active',
+      isDefault: true,
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    // Mark previous years as not default
+    years.forEach(y => { if (y.id !== nextYear.id) y.isDefault = false; });
+    years.push(nextYear);
+    await saveLocalData('financial_years', years);
+
+    openingDoc = await addAccountingDocument({
+      date: nextStart,
+      description: `سند افتتاحیه سال مالی ${nextName} (انتقال مانده‌ها از سال مالی ${currentYear.name})`,
+      status: 'permanent',
+      isFinalized: true,
+      type: 'opening',
+      sourceType: 'fiscal_year_opening',
+      sourceId: String(nextYear.id),
+      fiscalYearId: String(nextYear.id),
+      isAutoGenerated: true,
+      items: openingItemsForNextYear,
+      currency
+    });
+  }
+
+  return {
+    success: true,
+    closedYear: currentYear,
+    netIncome,
+    tempCloseDoc,
+    transferDoc,
+    closingDoc,
+    nextYear,
+    openingDoc
+  };
 };
 
 export const syncCheckAccountingDocument = async (checkType: 'issued' | 'received', check: any, previousCheck?: any) => {

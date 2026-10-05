@@ -13,7 +13,8 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { exec } from 'child_process';
+import { requireRole } from '../middleware/auth.middleware';
+import { decryptValue } from '../utils/crypto';
 import { validateData } from '../schemas/validation';
 import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
@@ -21,7 +22,7 @@ import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications
 import * as schema from '../db/schema';
 
 const router = Router();
-router.get('/api/databases', async (req, res) => {
+router.get('/api/databases', requireRole(['admin']), async (req, res) => {
     try {
       let dbsFromTable = [];
       try {
@@ -100,7 +101,7 @@ router.get('/api/databases', async (req, res) => {
     }
   });
 
-router.get('/api/databases/:id/test-connection', async (req, res) => {
+router.get('/api/databases/:id/test-connection', requireRole(['admin']), async (req, res) => {
     try {
       const { id } = req.params;
       
@@ -135,8 +136,9 @@ router.get('/api/databases/:id/test-connection', async (req, res) => {
           try {
               const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
               const config = JSON.parse(configRaw);
-              if (config.engine === 'postgres' && config.connectionString) {
-                  const url = new URL(config.connectionString);
+              const connectionString = decryptValue(config.connectionString);
+              if (config.engine === 'postgres' && connectionString) {
+                  const url = new URL(connectionString);
                   url.pathname = `/${business.db_name}`;
                   const pool = new Pool({ connectionString: url.toString() });
                   await pool.query('SELECT 1');
@@ -145,18 +147,18 @@ router.get('/api/databases/:id/test-connection', async (req, res) => {
               } else {
                   return res.status(500).json({ error: 'Postgres config missing' });
               }
-          } catch(e) {
+          } catch(e: any) {
               return res.status(500).json({ error: 'Connection failed: ' + e.message });
           }
       } else {
           return res.json({ success: true });
       }
-    } catch (e) {
+    } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-router.put('/api/databases/:id', async (req, res) => {
+router.put('/api/databases/:id', requireRole(['admin']), async (req, res) => {
     try {
       const { id } = req.params;
       const { name, db_type, db_host, db_port, db_name, db_user, db_password } = req.body;
@@ -207,7 +209,7 @@ router.put('/api/databases/:id', async (req, res) => {
     }
   });
 
-router.delete('/api/databases/:id', async (req, res) => {
+router.delete('/api/databases/:id', requireRole(['admin']), async (req, res) => {
     try {
       const { id } = req.params;
       if (id === 'default') return res.status(400).json({ error: 'Cannot delete default store' });
@@ -225,12 +227,12 @@ router.delete('/api/databases/:id', async (req, res) => {
       }
       try { await fsPromises.unlink(dbFile); } catch(e) { }
       res.json({ success: true });
-    } catch (e) {
+    } catch (e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
-router.post('/api/databases', async (req, res) => {
+router.post('/api/databases', requireRole(['admin']), async (req, res) => {
     try {
       const { name, calendarType } = req.body;
       const calType = calendarType || 'jalali';
@@ -242,12 +244,13 @@ router.post('/api/databases', async (req, res) => {
       try {
         const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
         const config = JSON.parse(configRaw);
-        if (config.engine === 'postgres' && config.connectionString) {
+        const connectionString = decryptValue(config.connectionString);
+        if (config.engine === 'postgres' && connectionString) {
           actualDbType = 'postgres';
           // Provision a new Postgres database for this business
           const dbNameForBusiness = `store_${id}`.replace(/[^a-zA-Z0-9_]/g, '');
           
-          const url = new URL(config.connectionString);
+          const url = new URL(connectionString);
           url.pathname = '/postgres';
           const client = new Client({ connectionString: url.toString() });
           await client.connect();

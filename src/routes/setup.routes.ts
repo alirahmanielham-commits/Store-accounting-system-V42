@@ -20,6 +20,8 @@ import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
 import * as schema from '../db/schema';
 
+import { requireRole } from '../middleware/auth.middleware';
+
 const router = Router();
 router.get('/api/setup/status', async (req, res) => {
     try {
@@ -53,8 +55,7 @@ router.get('/api/setup/status', async (req, res) => {
     }
   });
 
-router.get('/api/system/info', (req, res) => {
-    
+router.get('/api/system/info', requireRole(['admin']), (req, res) => {
     res.json({
       platform: os.platform(),
       arch: os.arch(),
@@ -66,10 +67,20 @@ router.get('/api/system/info', (req, res) => {
     });
   });
 
-router.post('/api/setup/admin', async (req, res) => {
+router.post('/api/setup/admin', async (req: any, res) => {
     try {
       const { username, password } = req.body;
-      const users = await getDbData('users') || [];
+      if (!username || !password) return res.status(400).json({ error: 'نام کاربری و کلمه عبور الزامی است.' });
+      const users = (await getDbData('users')) || [];
+
+      // If users already exist, only authenticated admin can update admin credentials
+      if (Array.isArray(users) && users.length > 0) {
+        const currentUserRole = req.user?.role;
+        if (currentUserRole !== 'admin') {
+          return res.status(403).json({ error: 'سیستم قبلاً راه‌اندازی شده است. تغییر مشخصات مدیر تنها با دسترسی مدیر سیستم امکان‌پذیر است.' });
+        }
+      }
+
       const hashed = await bcrypt.hash(password, 10);
       
       const adminIndex = users.findIndex((u: any) => u.role === 'admin' || u.username === username);
@@ -97,7 +108,7 @@ router.post('/api/setup/admin', async (req, res) => {
     }
   });
 
-router.post('/api/setup/company', async (req, res) => {
+router.post('/api/setup/company', requireRole(['admin']), async (req, res) => {
     try {
       const profileData = req.body;
       const existing = await getDbData('company_profile') || {};

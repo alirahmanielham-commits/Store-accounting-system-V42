@@ -4,6 +4,7 @@ import path from 'path';
 import fsPromises from 'fs/promises';
 import { Client, Pool } from 'pg';
 import { ensurePostgresTables } from './schema-sync';
+import { decryptValue } from '../utils/crypto';
 
 export const storeContext = new AsyncLocalStorage<string>();
 export const SQLITE_FILE = path.join(process.cwd(), 'database.sqlite');
@@ -36,8 +37,9 @@ export async function loadPgPoolForStore(storeId: string) {
             try {
                 const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
                 const config = JSON.parse(configRaw);
-                if (config.engine === 'postgres' && config.connectionString) {
-                    const pool = await connectPgDb(config.connectionString);
+                const connectionString = decryptValue(config.connectionString);
+                if (config.engine === 'postgres' && connectionString) {
+                    const pool = await connectPgDb(connectionString);
                     activePgPools['default'] = pool;
                     usePgMap['default'] = true;
                     return;
@@ -94,8 +96,9 @@ export async function loadPgPoolForStore(storeId: string) {
             if (business && business.db_type === 'postgres') {
                 const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
                 const config = JSON.parse(configRaw);
-                if (config.engine === 'postgres' && config.connectionString) {
-                    const url = new URL(config.connectionString);
+                const connectionString = decryptValue(config.connectionString);
+                if (config.engine === 'postgres' && connectionString) {
+                    const url = new URL(connectionString);
                     url.pathname = `/${business.db_name}`;
                     const pool = await connectPgDb(url.toString());
                     activePgPools[storeId] = pool;

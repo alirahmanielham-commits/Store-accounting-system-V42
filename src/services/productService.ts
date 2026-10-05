@@ -324,14 +324,18 @@ export const updateProductPriceHistory = async (id: string, updatedData: any) =>
 export const useGetProducts = () => {
   return useQuery({
     queryKey: ['products'],
-    queryFn: getProducts
+    queryFn: getProducts,
+    staleTime: 60 * 1000, // 60 seconds fresh window
+    gcTime: 5 * 60 * 1000,
   });
 };
 
 export const useGetProductCategories = () => {
   return useQuery({
     queryKey: ['product_categories'],
-    queryFn: getProductCategories
+    queryFn: getProductCategories,
+    staleTime: 60 * 1000, // 60 seconds fresh window
+    gcTime: 10 * 60 * 1000,
   });
 };
 

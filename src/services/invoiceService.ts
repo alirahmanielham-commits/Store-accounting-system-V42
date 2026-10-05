@@ -1,6 +1,6 @@
 import { checkFinancialYear, getStoreSettings } from './settingsService';
 import { mapTransactionTypeToTable, mapInvoiceTypeToTable } from './coreService';
-import { getLedgerAccounts, addLedgerAccount, addAccountingDocument, getAccountingDocuments, updateAccountingDocument, deleteAccountingDocument } from './accountingService';
+import { getLedgerAccounts, addLedgerAccount, addAccountingDocument, getAccountingDocuments, updateAccountingDocument, deleteAccountingDocument, createReversalAccountingDocument, reverseInvoiceAccounting } from './accountingService';
 import { syncProductLatestPrices, syncProductsLatestPrices } from './productService';
 import { recalculateAllWarehouseStocks } from './inventoryService';
 
@@ -1266,17 +1266,23 @@ export const voidInvoice = async (id: string | number) => {
         await syncProductsLatestPrices(Array.from(affectedProductsForVoid));
     }
 
-    // void related accounting docs
-    const accDocs = await getLocalData<any[]>('accounting_documents', []);
-    let accDocsChanged = false;
-    accDocs.forEach(d => {
+    // Issue Reversal Vouchers (سند معکوس / اصلاحی) for related approved/permanent accounting docs
+    const accDocs = await getAccountingDocuments();
+    for (const d of accDocs) {
        if (toVoidIds.has(d.sourceId) || toVoidIds.has(String(d.sourceId))) {
-          d.status = 'voided';
-          d.isDeleted = true; // also delete so it doesn't affect ledger
-          accDocsChanged = true;
+          if (d.status === 'approved' || d.status === 'permanent' || d.isFinalized) {
+             if (!d.isReversed) {
+                await createReversalAccountingDocument(
+                  d.id,
+                  `ابطال فاکتور شماره ${invoiceToVoid.invoiceNumber || invoiceToVoid.id}`
+                );
+             }
+          } else {
+             // Draft or unapproved docs can be marked voided
+             await updateLocalData('accounting_documents', d.id, { ...d, status: 'voided', isDeleted: true });
+          }
        }
-    });
-    if (accDocsChanged) await saveLocalData('accounting_documents', accDocs);
+    }
 
     await recalculateAllWarehouseStocks();
   }

@@ -23,8 +23,8 @@ export const authMiddleware = (req: any, res: any, next: any) => {
     let token = null;
     if (req.headers.authorization && req.headers.authorization.startsWith('Bearer ')) {
        token = req.headers.authorization.split(' ')[1];
-    } else if (req.cookies && req.cookies.refreshToken) {
-       token = req.cookies.refreshToken;
+    } else if (req.cookies && (req.cookies.accessToken || req.cookies.refreshToken)) {
+       token = req.cookies.accessToken || req.cookies.refreshToken;
     }
     
     if (!token) {
@@ -44,3 +44,33 @@ export const authMiddleware = (req: any, res: any, next: any) => {
        return res.status(401).json({ error: 'توکن نامعتبر یا منقضی شده است. لطفاً مجدداً وارد شوید.' });
     }
 };
+
+/**
+ * RBAC middleware: ensures the authenticated user has at least one of the required roles.
+ * 'admin' role always bypasses checks with full privileges.
+ */
+export const requireRole = (allowedRoles: string | string[]) => {
+  const roles = Array.isArray(allowedRoles) ? allowedRoles : [allowedRoles];
+  return (req: any, res: any, next: any) => {
+    if (!req.user) {
+      return res.status(401).json({ error: 'احراز هویت الزامی است. لطفاً ابتدا وارد سیستم شوید.' });
+    }
+    const userRole = req.user.role || 'user';
+    if (userRole === 'admin' || roles.includes(userRole)) {
+      return next();
+    }
+    return res.status(403).json({ 
+      error: 'دسترسی غیرمجاز. شما مجوز دسترسی به این بخش یا عملیات را ندارید.',
+      requiredRoles: roles,
+      currentRole: userRole 
+    });
+  };
+};
+
+export const requireAuth = (req: any, res: any, next: any) => {
+  if (!req.user) {
+    return res.status(401).json({ error: 'احراز هویت الزامی است. لطفاً وارد سیستم شوید.' });
+  }
+  next();
+};
+

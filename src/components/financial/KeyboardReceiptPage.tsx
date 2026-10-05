@@ -13,6 +13,9 @@ import num2persian from 'num2persian';
 import { addCommas, convertToGregorian, formatDateDisplay, toPersianDigits } from '../../utils/format';
 import { addTransaction } from '../../services/dataService';
 import ReceiptPrintModal from '../print/ReceiptPrintModal';
+import { useDirtyForm } from '../../hooks/useDirtyForm';
+import { UnsavedChangesPrompt } from '../common/UnsavedChangesPrompt';
+import { transactionReceiptFormSchema } from '../../schemas/validation';
 
 interface Props {
   persons?: any[];
@@ -132,6 +135,24 @@ export default function KeyboardReceiptPage({
   const [isPrintModalOpen, setIsPrintModalOpen] = useState(false);
   const [soundMuted, setSoundMuted] = useState(false);
   const [recentSavedList, setRecentSavedList] = useState<any[]>([]);
+
+  // Dirty Form Detection
+  const isDirty = useMemo(() => {
+    return Boolean((selectedPerson || Number(amountStr) > 0 || step > 1) && !savedReceipt);
+  }, [selectedPerson, amountStr, step, savedReceipt]);
+
+  const { showPrompt, guardNavigation, confirmDiscard, cancelDiscard } = useDirtyForm({
+    isDirty,
+    message: 'عملیات ثبت رسید مالی تکمیل نشده است. در صورت خروج اطلاعات از بین خواهد رفت.'
+  });
+
+  const handleSafeClose = () => {
+    if (onClose) {
+      guardNavigation(() => {
+        onClose();
+      });
+    }
+  };
 
   // Input Refs for autofocus
   const personInputRef = useRef<HTMLInputElement>(null);
@@ -300,6 +321,28 @@ export default function KeyboardReceiptPage({
         trackingNumber: trackingNumber || undefined
       };
 
+      const validationResult = transactionReceiptFormSchema.safeParse({
+        type: receiptType,
+        personId: selectedPerson.id,
+        amount: parsedAmount,
+        date: convertedDate || new Date().toISOString(),
+        resourceType,
+        resourceId,
+        trackingNumber: trackingNumber || undefined,
+        description: noteStr || undefined
+      });
+
+      if (!validationResult.success) {
+        const issues = (validationResult.error as any).issues || (validationResult.error as any).errors || [];
+        const errMsg = issues.map((err: any) => `• ${err.message}`).join('\n');
+        if (showNotification) {
+          showNotification(`خطا در اعتبارسنجی رسید مالی:\n${errMsg}`, 'error');
+        } else {
+          alert(`خطا در اعتبارسنجی رسید مالی:\n${errMsg}`);
+        }
+        return;
+      }
+
       const result = await addTransaction(payload);
       playSound('success', soundMuted);
       
@@ -361,7 +404,7 @@ export default function KeyboardReceiptPage({
       // F4: Back / Close
       if (key === 'F4') {
         e.preventDefault();
-        if (onClose) onClose();
+        handleSafeClose();
         return;
       }
 
@@ -384,9 +427,9 @@ export default function KeyboardReceiptPage({
           setReceiptType('pay');
           playSound('click', soundMuted);
           setStep(2);
-        } else if (key === 'Escape' && onClose) {
+        } else if (key === 'Escape') {
           e.preventDefault();
-          onClose();
+          handleSafeClose();
         }
         return;
       }
@@ -657,7 +700,7 @@ export default function KeyboardReceiptPage({
           {onClose && (
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleSafeClose}
               className="px-3 py-2 bg-white hover:bg-slate-50 text-slate-600 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer border border-slate-200"
               title="کلید میانبر F4: بازگشت به لیست"
             >
@@ -1422,7 +1465,7 @@ export default function KeyboardReceiptPage({
                     {onClose && (
                       <button
                         type="button"
-                        onClick={onClose}
+                        onClick={handleSafeClose}
                         className="px-5 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                       >
                         بازگشت به فهرست [کلید Esc]
@@ -1491,6 +1534,15 @@ export default function KeyboardReceiptPage({
           formatCurrency={(val) => addCommas(val) + ' ' + currency}
         />
       )}
+
+      {/* Dirty Form Exit Protection Modal */}
+      <UnsavedChangesPrompt
+        isOpen={showPrompt}
+        onStay={cancelDiscard}
+        onDiscard={confirmDiscard}
+        title="ثبت رسید مالی ناتمام"
+        description="اطلاعات وارد شده در این رسید مالی هنوز نهایی نشده‌اند. آیا از خروج اطمینان دارید؟"
+      />
     </div>
   );
 }

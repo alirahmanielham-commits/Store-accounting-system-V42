@@ -9,10 +9,13 @@ import persian_fa from 'react-date-object/locales/persian_fa';
 import {  
   History, CheckCircle, RefreshCw, Info, Save, Trash2, Plus, Minus, Copy, LayoutGrid,
   ShoppingCart, Building2, UserCircle, Hash, Percent,
-  Calendar, CreditCard, Banknote, FileText, Truck
+  Calendar, CreditCard, Banknote, FileText, Truck, ShieldCheck, Zap
 , UserPlus } from 'lucide-react';
 import FastItemEntryBar from './FastItemEntryBar';
 import BulkProductPickerModal from './BulkProductPickerModal';
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import { UnsavedChangesPrompt } from "../common/UnsavedChangesPrompt";
+import { purchaseInvoiceFormSchema } from "../../schemas/validation";
 // @ts-nocheck
 
       export default function PurchaseInvoiceCreate(props: any) {
@@ -111,6 +114,47 @@ import BulkProductPickerModal from './BulkProductPickerModal';
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [prevItemsLength, setPrevItemsLength] = useState((items || []).length);
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [purchaseLayoutMode, setPurchaseLayoutMode] = useState<'standard' | 'official'>('standard');
+
+  // Dirty Form Detection
+  const isDirty = useMemo(() => {
+    return (items || []).some((it: any) => it && (it.productId || Number(it.quantity) > 0));
+  }, [items]);
+
+  const { showPrompt, guardNavigation, confirmDiscard, cancelDiscard } = useDirtyForm({
+    isDirty,
+    message: 'فاکتور خرید دارای اقلام ثبت‌شده است. آیا از خروج بدون ذخیره مطمئنید؟'
+  });
+
+  const validatePurchase = (isDraft: boolean = false): boolean => {
+    const cleanItems = (items || []).filter((it: any) => it && it.productId);
+    if (!isDraft) {
+      const res = purchaseInvoiceFormSchema.safeParse({
+        invoiceNumber: invoiceNumber || 'AUTO',
+        date: date || new Date().toISOString(),
+        customerId: customerId,
+        sellerInvoiceNumber: sellerInvoiceNumber || undefined,
+        items: cleanItems,
+        warehouseId: invoiceWarehouseId,
+        paymentStatus: invoicePaymentStatus || 'unpaid',
+        paidAmount: invoicePaidAmount,
+        paymentAccountId: invoicePaymentAccountId
+      });
+      if (!res.success) {
+        const issues = (res.error as any).issues || (res.error as any).errors || [];
+        const errorMsg = issues.map((err: any) => `• ${err.message}`).join('\n');
+        alert(`خطا در اعتبارسنجی فاکتور خرید:\n${errorMsg}`);
+        return false;
+      }
+    } else {
+      if (cleanItems.length === 0) {
+        alert('حداقل یک قلم کالا برای پیش‌نویس لازم است.');
+        return false;
+      }
+    }
+    return true;
+  };
+
   useEffect(() => {
     if ((items || []).length > prevItemsLength) {
       itemsEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
@@ -123,11 +167,16 @@ import BulkProductPickerModal from './BulkProductPickerModal';
       if (e.key === "F4") {
         e.preventDefault();
         setIsBulkModalOpen(true);
+      } else if (e.key === "F2") {
+        e.preventDefault();
+        if (validatePurchase(false)) {
+          setIsPaymentModalOpen(true);
+        }
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
+  }, [items, customerId, invoiceNumber, date, invoicePaymentStatus, invoicePaidAmount, invoicePaymentAccountId]);
 
   return (
     <>
@@ -188,12 +237,42 @@ import BulkProductPickerModal from './BulkProductPickerModal';
 
             {/* Header Info */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border-2 border-emerald-50">
-              <h2 className="text-2xl font-black text-slate-800 mb-8 flex items-center gap-3">
-                <span className="bg-emerald-100/50 p-2.5 rounded-xl text-emerald-600">
-                  <Plus className="w-6 h-6" />
-                </span>
-                {invoiceTitle}
-              </h2>
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
+                  <span className="bg-emerald-100/50 p-2.5 rounded-xl text-emerald-600">
+                    <Plus className="w-6 h-6" />
+                  </span>
+                  {invoiceTitle}
+                </h2>
+
+                {/* Mode Selector: Standard Inventory vs Official Commercial */}
+                <div className="flex items-center gap-1.5 p-1.5 bg-slate-100 rounded-2xl border border-slate-200 self-start md:self-auto">
+                  <button
+                    type="button"
+                    onClick={() => setPurchaseLayoutMode('standard')}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      purchaseLayoutMode === 'standard'
+                        ? 'bg-white text-emerald-700 shadow-xs border border-slate-200/60'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <Zap className="w-3.5 h-3.5 text-amber-500" />
+                    ورود سریع کالا (تامین انبار)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setPurchaseLayoutMode('official')}
+                    className={`flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer ${
+                      purchaseLayoutMode === 'official'
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <ShieldCheck className="w-3.5 h-3.5" />
+                    فاکتور رسمی شرکتی (مالیاتی)
+                  </button>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
@@ -859,36 +938,48 @@ import BulkProductPickerModal from './BulkProductPickerModal';
                   </div>
                 </div>
               </div>
-              <div className="p-6 bg-emerald-50/20 border-t border-emerald-100 flex justify-end gap-3">
-                <button
-                  type="button"
-                  disabled={submitting || (items || []).length === 0 || !customerId}
-                  onClick={() => {
-                    if (
-                      confirm(
-                        "آیا از ذخیره این فاکتور خرید به عنوان پیش‌نویس اطمینان دارید؟",
-                      )
-                    ) {
-                      saveInvoiceData(null, true);
-                    }
-                  }}
-                  className="px-6 py-4 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm outline-none cursor-pointer"
-                >
-                  <FileText className="w-5 h-5" />
-                  ذخیره به عنوان پیش‌نویس
-                </button>
-                <button
-                  onClick={() => setIsPaymentModalOpen(true)}
-                  disabled={submitting || (items || []).length === 0 || !customerId}
-                  className="px-10 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-200 text-white rounded-2xl font-black flex items-center justify-center gap-3 transition-colors shadow-sm outline-none focus:ring-4 focus:ring-emerald-500/20 cursor-pointer"
-                >
-                  {submitting ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" />
-                  ) : (
-                    <Save className="w-6 h-6" />
-                  )}
-                  ثبت نهایی خرید
-                </button>
+              <div className="p-6 bg-emerald-50/20 border-t border-emerald-100 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs text-slate-500 font-bold hidden sm:flex items-center gap-3">
+                  <span className="bg-slate-100 px-2 py-1 rounded text-slate-600 font-mono">F2: ثبت خرید</span>
+                  <span className="bg-slate-100 px-2 py-1 rounded text-slate-600 font-mono">F4: افزودن دسته‌جمعی</span>
+                </div>
+                <div className="flex items-center gap-3 mr-auto">
+                  <button
+                    type="button"
+                    disabled={submitting || (items || []).length === 0 || !customerId}
+                    onClick={() => {
+                      if (!validatePurchase(true)) return;
+                      if (
+                        confirm(
+                          "آیا از ذخیره این فاکتور خرید به عنوان پیش‌نویس اطمینان دارید؟",
+                        )
+                      ) {
+                        saveInvoiceData(null, true);
+                      }
+                    }}
+                    className="px-6 py-4 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm outline-none cursor-pointer"
+                  >
+                    <FileText className="w-5 h-5" />
+                    ذخیره به عنوان پیش‌نویس
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (validatePurchase(false)) {
+                        setIsPaymentModalOpen(true);
+                      }
+                    }}
+                    disabled={submitting || (items || []).length === 0 || !customerId}
+                    className="px-10 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-200 text-white rounded-2xl font-black flex items-center justify-center gap-3 transition-colors shadow-sm outline-none focus:ring-4 focus:ring-emerald-500/20 cursor-pointer"
+                  >
+                    {submitting ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Save className="w-6 h-6" />
+                    )}
+                    ثبت نهایی خرید (F2)
+                  </button>
+                </div>
               </div>
             </div>
           </motion.div>
@@ -936,27 +1027,23 @@ import BulkProductPickerModal from './BulkProductPickerModal';
                           <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
                             <DollarSign className="w-4 h-4 text-emerald-500" /> مبلغ پرداختی
                           </label>
-                          <div className="relative">
-                            <input
-                              type="number"
-                              value={invoicePaidAmount}
-                              onChange={(e) => {
-                                setInvoicePaidAmount(Number(e.target.value));
-                                if (Number(e.target.value) >= calculateFinalTotal())
-                                  setInvoicePaymentStatus("paid");
-                                else if (Number(e.target.value) > 0)
-                                  setInvoicePaymentStatus("partial");
-                                else setInvoicePaymentStatus("unpaid");
-                              }}
-                              disabled={invoicePaymentStatus === "unpaid"}
-                              className="w-full p-3 border border-emerald-100 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono text-left font-bold text-slate-800 outline-none bg-emerald-50/20 disabled:opacity-50"
-                              dir="ltr"
-                              placeholder="0"
-                            />
-                            <div className="absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none text-slate-400 font-bold text-xs select-none">
-                              {invoiceCurrency}
-                            </div>
-                          </div>
+                          <CurrencyInput
+                            value={invoicePaidAmount}
+                            onChange={(e: any) => {
+                              const valNum = Number(e.target.value) || 0;
+                              setInvoicePaidAmount(valNum);
+                              if (valNum >= calculateFinalTotal())
+                                setInvoicePaymentStatus("paid");
+                              else if (valNum > 0)
+                                setInvoicePaymentStatus("partial");
+                              else setInvoicePaymentStatus("unpaid");
+                            }}
+                            disabled={invoicePaymentStatus === "unpaid"}
+                            className="w-full p-3 border border-emerald-100 rounded-xl focus:ring-2 focus:ring-emerald-500 font-mono text-left font-bold text-slate-800 outline-none bg-emerald-50/20 disabled:opacity-50"
+                            placeholder="0"
+                            currencyLabel={invoiceCurrency}
+                            showQuickChips={true}
+                          />
                         </div>
 
                         <div>
@@ -1031,6 +1118,14 @@ import BulkProductPickerModal from './BulkProductPickerModal';
               toPersianDigits={toPersianDigits}
             />
           )}
+
+          <UnsavedChangesPrompt
+            isOpen={showPrompt}
+            onStay={cancelDiscard}
+            onDiscard={confirmDiscard}
+            title="فاکتور خرید ذخیره‌نشده"
+            description="اقلامی در این فاکتور خرید وارد شده‌اند که هنوز ذخیره نشده‌اند. در صورت خروج اطلاعات از دست خواهد رفت. آیا مایل به خروج هستید؟"
+          />
     </>
   );
 }

@@ -3,7 +3,7 @@ import { Calendar as CalendarIcon, Save, Trash2, Edit2, AlertTriangle, Building2
 import { getFinancialYears, getStoreSettings, addFinancialYear, closeFinancialYear } from "../../services/dataService";
 import { formatDateDisplay } from "../../utils/format";
 import { motion, AnimatePresence } from "motion/react";
-const YearClosingChecklistModal = ({ isOpen, onClose }: any) => { return null; };
+import YearClosingChecklistModal from "./YearClosingChecklistModal";
 import DatePickerModule from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -96,10 +96,12 @@ export default function FinancialYearManager({ showNotification }: any) {
     }
   };
 
-  const handleCloseYear = async (id: string | number) => {
+  const handleCloseYear = async (id: string | number, result?: any) => {
     try {
-      await closeFinancialYear(id);
-      showNotification('سال مالی با موفقیت بسته شد. سیستم هم‌اکنون آماده تعریف سال مالی جدید است.', 'success');
+      const msg = result?.nextYear 
+        ? `سال مالی با موفقیت بسته شد و اسناد بستن حساب‌ها و سند افتتاحیه ${result.nextYear.name} با موفقیت صادر گردید.`
+        : 'سال مالی با موفقیت بسته شد و کلیه اسناد بستن حساب‌های موقت و اختتامیه صادر گردید.';
+      showNotification(msg, 'success');
       setConfirmCloseId(null);
       await loadData();
     } catch (err: any) {
@@ -373,9 +375,9 @@ export default function FinancialYearManager({ showNotification }: any) {
         isOpen={isChecklistOpen}
         onClose={() => setIsChecklistOpen(false)}
         year={selectedYearForClose}
-        onConfirm={(id: any) => {
+        onConfirm={(id: any, result?: any) => {
           setIsChecklistOpen(false);
-          handleCloseYear(id);
+          handleCloseYear(id, result);
         }}
       />
       </AnimatePresence>

@@ -9,4 +9,5 @@ export * from './productService';
 export * from './invoiceService';
 export * from './crmService';
 export * from './hrService';
+export * from './cogsService';
 

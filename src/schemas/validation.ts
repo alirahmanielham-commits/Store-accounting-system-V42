@@ -22,6 +22,102 @@ export const personSchema = z.object({
   isDeleted: z.boolean().optional(),
 }).passthrough();
 
+export const invoiceItemFormSchema = z.object({
+  productId: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
+    message: 'انتخاب کالا برای هر ردیف الزامی است.'
+  }),
+  quantity: z.preprocess(
+    val => (val === '' || val === null || val === undefined ? 0 : Number(val)),
+    z.number().positive('تعداد کالا باید بزرگتر از صفر باشد.')
+  ),
+  unitPrice: z.preprocess(
+    val => (val === '' || val === null || val === undefined ? 0 : Number(val)),
+    z.number().min(0, 'قیمت واحد کالا نمی‌تواند منفی باشد.')
+  ),
+  discountPercent: z.preprocess(
+    val => (val === '' || val === null || val === undefined ? 0 : Number(val)),
+    z.number().min(0, 'درصد تخفیف نمی‌تواند منفی باشد.').max(100, 'درصد تخفیف نمی‌تواند بیشتر از ۱۰۰ باشد.').optional()
+  ),
+  taxPercent: z.preprocess(
+    val => (val === '' || val === null || val === undefined ? 0 : Number(val)),
+    z.number().min(0, 'درصد مالیات نمی‌تواند منفی باشد.').max(100, 'درصد مالیات نمی‌تواند بیشتر از ۱۰۰ باشد.').optional()
+  )
+}).passthrough();
+
+export const saleInvoiceFormSchema = z.object({
+  invoiceNumber: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
+    message: 'شماره فاکتور الزامی است.'
+  }),
+  date: z.string().min(1, 'تاریخ صدور فاکتور الزامی است.'),
+  customerId: z.union([z.string(), z.number()]).optional().nullable(),
+  customerName: z.string().optional().nullable(),
+  nationalId: z.string().optional().nullable(),
+  economicCode: z.string().optional().nullable(),
+  postalCode: z.string().optional().nullable(),
+  invoiceType: z.string().default('sale'),
+  posFastMode: z.boolean().default(false),
+  items: z.array(invoiceItemFormSchema).min(1, 'فاکتور باید حداقل شامل یک قلم کالا باشد.'),
+  warehouseId: z.union([z.string(), z.number()]).optional().nullable(),
+  description: z.string().optional().nullable()
+}).passthrough();
+
+export const purchaseInvoiceFormSchema = z.object({
+  invoiceNumber: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
+    message: 'شماره فاکتور خرید الزامی است.'
+  }),
+  date: z.string().min(1, 'تاریخ فاکتور خرید الزامی است.'),
+  customerId: z.union([z.string(), z.number()]).refine(val => Boolean(val && String(val).trim()), {
+    message: 'انتخاب فروشنده / تامین‌کننده الزامی است.'
+  }),
+  sellerInvoiceNumber: z.string().optional().nullable(),
+  items: z.array(invoiceItemFormSchema).min(1, 'فاکتور خرید باید حداقل شامل یک قلم کالا باشد.'),
+  warehouseId: z.union([z.string(), z.number()]).optional().nullable(),
+  paymentStatus: z.enum(['paid', 'partial', 'unpaid']).default('unpaid'),
+  paidAmount: z.preprocess(
+    val => (val === '' || val === null || val === undefined ? 0 : Number(val)),
+    z.number().min(0, 'مبلغ پرداختی نمی‌تواند منفی باشد.')
+  ).optional(),
+  paymentAccountId: z.union([z.string(), z.number()]).optional().nullable(),
+  description: z.string().optional().nullable()
+}).passthrough();
+
+export const transactionReceiptFormSchema = z.object({
+  type: z.enum(['receive', 'pay'], { message: 'نوع عملیات (دریافت یا پرداخت) نامعتبر است.' }),
+  personId: z.union([z.string(), z.number()]).refine(val => Boolean(val && String(val).trim()), {
+    message: 'انتخاب طرف حساب برای ثبت رسید الزامی است.'
+  }),
+  amount: z.preprocess(
+    val => (val === '' || val === null || val === undefined ? 0 : Number(val)),
+    z.number().positive('مبلغ رسید مالی باید بزرگتر از صفر باشد.')
+  ),
+  date: z.string().min(1, 'تاریخ عملیات مالی الزامی است.'),
+  resourceType: z.enum(['bank', 'cashbox'], { message: 'منبع مالی باید حساب بانکی یا صندوق باشد.' }),
+  resourceId: z.union([z.string(), z.number()]).refine(val => Boolean(val && String(val).trim()), {
+    message: 'انتخاب حساب بانکی یا صندوق الزامی است.'
+  }),
+  trackingNumber: z.string().optional().nullable(),
+  description: z.string().optional().nullable()
+}).passthrough();
+
+export const accountingDocFormSchema = z.object({
+  date: z.string().min(1, 'تاریخ سند حسابداری الزامی است.'),
+  description: z.string().min(2, 'شرح سند حسابداری الزامی است.'),
+  items: z.array(z.object({
+    ledgerAccountId: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
+      message: 'انتخاب حساب برای کلیه آرتیکل‌ها الزامی است.'
+    }),
+    debit: z.coerce.number().min(0, 'مبلغ بدهکار نمی‌تواند منفی باشد.'),
+    credit: z.coerce.number().min(0, 'مبلغ بستانکار نمی‌تواند منفی باشد.'),
+    description: z.string().optional()
+  })).min(2, 'سند حسابداری باید حداقل شامل دو آرتیکل باشد.').refine(items => {
+    const totalDebit = items.reduce((sum, it) => sum + (Number(it.debit) || 0), 0);
+    const totalCredit = items.reduce((sum, it) => sum + (Number(it.credit) || 0), 0);
+    return Math.abs(totalDebit - totalCredit) < 0.001;
+  }, {
+    message: 'سند حسابداری تراز نیست (جمع بدهکار با جمع بستانکار برابر نیست).'
+  })
+}).passthrough();
+
 export const invoiceSchema = z.object({
   id: z.string().or(z.number()).optional(),
   type: z.string(),
@@ -48,6 +144,7 @@ export const schemas: Record<string, z.ZodTypeAny> = {
   sales_invoices: invoiceSchema,
   purchase_invoices: invoiceSchema,
   transactions: transactionSchema,
+  accounting_documents: accountingDocFormSchema,
 };
 
 export const validateData = (key: string, data: any) => {

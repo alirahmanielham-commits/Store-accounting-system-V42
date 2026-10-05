@@ -12,10 +12,13 @@ import {
     Activity, AlertTriangle, Info, HelpCircle, Bell, Clock, Tag, Bookmark, Star, Heart, ThumbsUp,
     ThumbsDown, Share2, Link, Copy, Paperclip, Mail, MessageCircle, MessageSquare, Send, AtSign,
     Globe, Award, Gift, Coffee
-, Calendar, CornerDownLeft, Sparkles, LayoutGrid} from "lucide-react";
+, Calendar, CornerDownLeft, Sparkles, LayoutGrid, Building2, Zap} from "lucide-react";
 import FastItemEntryBar from "./FastItemEntryBar";
 import BulkProductPickerModal from "./BulkProductPickerModal";
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
+import { useDirtyForm } from "../../hooks/useDirtyForm";
+import { UnsavedChangesPrompt } from "../common/UnsavedChangesPrompt";
+import { saleInvoiceFormSchema } from "../../schemas/validation";
 
 export default function SaleInvoiceCreate(props: any) {
   const {
@@ -107,23 +110,30 @@ export default function SaleInvoiceCreate(props: any) {
   const itemsEndRef = useRef<HTMLDivElement>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
   const [prevItemsLength, setPrevItemsLength] = useState((items || []).length);
+
+  // Layout modes: 'pos' (فروش سریع بارکدی) | 'official' (فاکتور رسمی شرکتی)
+  const [invoiceLayoutMode, setInvoiceLayoutMode] = useState<'pos' | 'official'>('pos');
+  const [buyerNationalId, setBuyerNationalId] = useState('');
+  const [buyerEconomicCode, setBuyerEconomicCode] = useState('');
+  const [buyerPostalCode, setBuyerPostalCode] = useState('');
+  const [paymentTerms, setPaymentTerms] = useState<'cash' | 'credit' | 'cheque'>('cash');
+
+  // Dirty Form Detection
+  const isDirty = useMemo(() => {
+    return (items || []).some((it: any) => it && (it.productId || Number(it.quantity) > 0));
+  }, [items]);
+
+  const { showPrompt, guardNavigation, confirmDiscard, cancelDiscard } = useDirtyForm({
+    isDirty,
+    message: 'فاکتور دارای اقلام ثبت‌شده است. آیا از خروج بدون ذخیره مطمئنید؟'
+  });
+
   useEffect(() => {
     if ((items || []).length > prevItemsLength) {
       itemsEndRef.current?.scrollIntoView({ behavior: "smooth", block: "nearest" });
     }
     setPrevItemsLength((items || []).length);
   }, [items]);
-
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "F4") {
-        e.preventDefault();
-        setIsBulkModalOpen(true);
-      }
-    };
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-  }, []);
 
   const isNegativeStockAllowed = Boolean(
     storeSettings?.allowNegativeStock === true ||
@@ -280,6 +290,81 @@ export default function SaleInvoiceCreate(props: any) {
     calculateProductCurrentStock,
   ]);
 
+  const handleTriggerSaveWithValidation = () => {
+    const cleanItems = (items || []).filter((it: any) => it && it.productId);
+    const validationResult = saleInvoiceFormSchema.safeParse({
+      invoiceNumber: invoiceNumber || 'AUTO',
+      date: date || new Date().toISOString(),
+      customerId: customerId || (invoiceLayoutMode === 'pos' ? 'retail_cash' : null),
+      items: cleanItems,
+      invoiceType,
+      posFastMode: invoiceLayoutMode === 'pos',
+      warehouseId: invoiceWarehouseId,
+      description: invoiceDescription,
+      nationalId: buyerNationalId,
+      economicCode: buyerEconomicCode,
+      postalCode: buyerPostalCode
+    });
+
+    if (!validationResult.success) {
+      const issues = (validationResult.error as any).issues || (validationResult.error as any).errors || [];
+      const errorMsg = issues.map((err: any) => `• ${err.message}`).join('\n');
+      if (typeof customAlert === 'function') {
+        customAlert(`خطا در اعتبارسنجی فرم فاکتور:\n${errorMsg}`);
+      } else {
+        alert(`خطا در اعتبارسنجی فرم فاکتور:\n${errorMsg}`);
+      }
+      return;
+    }
+
+    if (invoiceLayoutMode === 'official' && !customerId) {
+      if (typeof customAlert === 'function') {
+        customAlert('در حالت فاکتور رسمی، انتخاب مشتری / طرف حساب ثبت‌شده الزامی است.');
+      } else {
+        alert('در حالت فاکتور رسمی، انتخاب مشتری / طرف حساب ثبت‌شده الزامی است.');
+      }
+      return;
+    }
+
+    if (!isNegativeStockAllowed && Object.keys(rowStockErrors).length > 0) {
+      const firstErrKey = Object.keys(rowStockErrors)[0];
+      const firstErr = rowStockErrors[firstErrKey];
+      const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
+      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+      if (typeof customAlert === "function") {
+        customAlert(
+          `خطای کسری موجودی در ردیف ${firstErr.rowNumber}:\nتعداد وارد شده برای کالای «${firstErr.productName}» از موجودی انبار «${firstErr.warehouseName}» بیشتر است.\nردیف‌های دارای کسری با کادر قرمز رنگ مشخص شده‌اند.`
+        );
+      }
+      return;
+    }
+
+    if (!customerId && invoiceLayoutMode === 'pos' && Array.isArray(activePersonsOnly)) {
+      const cashPerson = activePersonsOnly.find((p: any) => 
+        p.name?.includes('نقدی') || p.name?.includes('متفرقه') || p.name?.includes('حضوری')
+      ) || activePersonsOnly[0];
+      if (cashPerson && setCustomerId) {
+        setCustomerId(cashPerson.id);
+      }
+    }
+
+    handleInvoicePreviewTrigger();
+  };
+
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === "F4") {
+        e.preventDefault();
+        setIsBulkModalOpen(true);
+      } else if (e.key === "F2") {
+        e.preventDefault();
+        handleTriggerSaveWithValidation();
+      }
+    };
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [items, customerId, invoiceNumber, date, rowStockErrors, isNegativeStockAllowed, invoiceLayoutMode]);
+
   return (
 <motion.div
             initial={{ opacity: 0, scale: 0.98 }}
@@ -338,7 +423,7 @@ export default function SaleInvoiceCreate(props: any) {
 
             {/* Header Info */}
             <div className="bg-white rounded-3xl p-6 shadow-sm border-2 border-indigo-50">
-              <div className="flex justify-between items-center mb-8 gap-4 border-b border-indigo-100 pb-5">
+              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-indigo-100 pb-5">
                 <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
                   <span className="bg-indigo-100/50 p-2.5 rounded-xl text-indigo-600">
                     <ShoppingCart className="w-6 h-6" />
@@ -346,27 +431,72 @@ export default function SaleInvoiceCreate(props: any) {
                   {invoiceTitle}
                 </h2>
 
-                <div className="flex items-center gap-2">
-                  <span className="text-xs font-bold text-gray-500">
-                    نوع فاکتور:
-                  </span>
-                  <select
-                    value={invoiceType}
-                    onChange={(e) => {
-                      setInvoiceType(e.target.value as any);
-                      if (e.target.value === "proforma") {
-                        setInvoiceTitle("پیش‌فاکتور (بدون کسر موجودی)");
-                      } else {
-                        setInvoiceTitle("فاکتور فروش کالا");
-                      }
-                    }}
-                    className="p-2 border border-gray-200 rounded-lg text-sm font-bold bg-white text-indigo-700 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
-                  >
-                    <option value="sale">فاکتور فروش (استاندارد)</option>
-                    <option value="proforma">صدور پیش‌فاکتور</option>
-                  </select>
+                <div className="flex flex-wrap items-center gap-3">
+                  {/* Segmented Mode Control */}
+                  <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceLayoutMode('pos')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                        invoiceLayoutMode === 'pos'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <ScanLine className="w-3.5 h-3.5" />
+                      <span>فروش سریع بارکدی (فروشگاهی)</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceLayoutMode('official')}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                        invoiceLayoutMode === 'official'
+                          ? 'bg-white text-indigo-700 shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
+                      }`}
+                    >
+                      <Building2 className="w-3.5 h-3.5" />
+                      <span>فاکتور رسمی شرکتی (تجاری)</span>
+                    </button>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-bold text-gray-500">
+                      نوع:
+                    </span>
+                    <select
+                      value={invoiceType}
+                      onChange={(e) => {
+                        setInvoiceType(e.target.value as any);
+                        if (e.target.value === "proforma") {
+                          setInvoiceTitle("پیش‌فاکتور (بدون کسر موجودی)");
+                        } else {
+                          setInvoiceTitle("فاکتور فروش کالا");
+                        }
+                      }}
+                      className="p-2 border border-gray-200 rounded-lg text-xs font-bold bg-white text-indigo-700 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
+                    >
+                      <option value="sale">فروش استاندارد</option>
+                      <option value="proforma">پیش‌فاکتور</option>
+                    </select>
+                  </div>
                 </div>
               </div>
+
+              {/* POS Keyboard Shortcut Banner */}
+              {invoiceLayoutMode === 'pos' && (
+                <div className="mb-6 p-3 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex flex-wrap items-center justify-between text-xs text-indigo-950 font-bold gap-3">
+                  <div className="flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-indigo-600 shrink-0" />
+                    <span>حالت فروش سریع بارکدی فعال است (ویژه دخل و سرعت عملکرد بالا)</span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-indigo-800">
+                    <span className="bg-white px-2 py-0.5 rounded-md border border-indigo-200 font-mono">F4: انتخاب گروهی</span>
+                    <span className="bg-white px-2 py-0.5 rounded-md border border-indigo-200 font-mono">F2: ثبت و تسویه</span>
+                    <span className="bg-white px-2 py-0.5 rounded-md border border-indigo-200 font-mono">Enter روی بارکد: ثبت خودکار</span>
+                  </div>
+                </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
@@ -556,6 +686,63 @@ export default function SaleInvoiceCreate(props: any) {
                   </select>
                 </div>
               </div>
+
+              {/* Official Commercial Invoice Details */}
+              {invoiceLayoutMode === 'official' && (
+                <div className="mt-6 pt-5 border-t border-indigo-100 bg-slate-50/70 p-4 rounded-2xl border border-slate-200 space-y-3">
+                  <div className="flex items-center gap-2 text-xs font-black text-slate-800">
+                    <Building2 className="w-4 h-4 text-indigo-600" />
+                    <span>مشخصات تکمیلی فاکتور رسمی تجاری (سازمان امور مالیاتی)</span>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-1">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">شناسه ملی / کد ملی خریدار</label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={buyerNationalId}
+                        onChange={(e) => setBuyerNationalId(e.target.value)}
+                        placeholder="۱۰ یا ۱۱ رقم..."
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">کد اقتصادی خریدار</label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={buyerEconomicCode}
+                        onChange={(e) => setBuyerEconomicCode(e.target.value)}
+                        placeholder="۱۲ رقم کد اقتصادی..."
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">کد پستی محل خریدار</label>
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={buyerPostalCode}
+                        onChange={(e) => setBuyerPostalCode(e.target.value)}
+                        placeholder="کد پستی ۱۰ رقمی..."
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1">شرایط تسویه رسمی</label>
+                      <select
+                        value={paymentTerms}
+                        onChange={(e: any) => setPaymentTerms(e.target.value)}
+                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      >
+                        <option value="cash">نقدی (کارتخوان / نقد)</option>
+                        <option value="credit">اعتباری / نسیه رسمی</option>
+                        <option value="cheque">چک صیادی مدت‌دار</option>
+                      </select>
+                    </div>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Items List */}
@@ -1272,63 +1459,63 @@ export default function SaleInvoiceCreate(props: any) {
                   )}
                 </div>
               </div>
-              <div className="p-6 bg-indigo-50/20 border-t border-indigo-100 flex justify-end gap-3">
-                <button
-                  type="button"
-                  disabled={submitting || (items || []).length === 0 || !customerId}
-                  onClick={() => {
-                    if (!isNegativeStockAllowed && Object.keys(rowStockErrors).length > 0) {
-                      const firstErrKey = Object.keys(rowStockErrors)[0];
-                      const firstErr = rowStockErrors[firstErrKey];
-                      const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
-                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      if (typeof customAlert === "function") {
-                        customAlert(
-                          `خطای کسری موجودی در ردیف ${firstErr.rowNumber}:\nتعداد وارد شده برای کالای «${firstErr.productName}» از موجودی انبار «${firstErr.warehouseName}» بیشتر است.\nردیف‌های دارای کسری با کادر قرمز رنگ مشخص شده‌اند.`
-                        );
-                      }
-                      return;
-                    }
-                    if (
-                      confirm(
-                        "آیا از ذخیره این فاکتور به عنوان پیش‌نویس اطمینان دارید؟",
-                      )
-                    ) {
-                      saveInvoiceData(null, true);
-                    }
-                  }}
-                  className="px-6 py-4 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm outline-none cursor-pointer"
-                >
-                  <FileText className="w-5 h-5" />
-                  ذخیره به عنوان پیش‌نویس
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (!isNegativeStockAllowed && Object.keys(rowStockErrors).length > 0) {
-                      const firstErrKey = Object.keys(rowStockErrors)[0];
-                      const firstErr = rowStockErrors[firstErrKey];
-                      const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
-                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                      if (typeof customAlert === "function") {
-                        customAlert(
-                          `خطای کسری موجودی در ردیف ${firstErr.rowNumber}:\nتعداد وارد شده برای کالای «${firstErr.productName}» از موجودی انبار «${firstErr.warehouseName}» بیشتر است.\nردیف‌های دارای کسری با کادر قرمز رنگ مشخص شده‌اند.`
-                        );
-                      }
-                      return;
-                    }
-                    handleInvoicePreviewTrigger();
-                  }}
-                  disabled={submitting || (items || []).length === 0 || !customerId}
-                  className="px-10 py-4 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-200 text-white rounded-2xl font-black flex items-center justify-center gap-3 transition-colors shadow-sm outline-none focus:ring-4 focus:ring-indigo-500/20 cursor-pointer"
-                >
-                  {submitting ? (
-                    <RefreshCw className="w-5 h-5 animate-spin" />
+              <div className="p-6 bg-indigo-50/20 border-t border-indigo-100 flex flex-wrap items-center justify-between gap-3">
+                <div className="text-xs text-slate-500 font-bold">
+                  {invoiceLayoutMode === 'pos' ? (
+                    <span className="flex items-center gap-1.5 text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
+                      <Zap className="w-4 h-4 text-indigo-600" />
+                      <span>کلید میانبر F2: پیش‌نمایش و ثبت نهایی سریع</span>
+                    </span>
                   ) : (
-                    <Save className="w-6 h-6" />
+                    <span>فاکتور رسمی تجاری - کلیه مشخصات مودی و خریدار در پیش‌نمایش چاپی لحاظ خواهد شد.</span>
                   )}
-                  پیش‌نمایش و ثبت فاکتور
-                </button>
+                </div>
+
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    disabled={submitting || (items || []).length === 0}
+                    onClick={() => {
+                      if (!isNegativeStockAllowed && Object.keys(rowStockErrors).length > 0) {
+                        const firstErrKey = Object.keys(rowStockErrors)[0];
+                        const firstErr = rowStockErrors[firstErrKey];
+                        const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
+                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                        if (typeof customAlert === "function") {
+                          customAlert(
+                            `خطای کسری موجودی در ردیف ${firstErr.rowNumber}:\nتعداد وارد شده برای کالای «${firstErr.productName}» از موجودی انبار «${firstErr.warehouseName}» بیشتر است.\nردیف‌های دارای کسری با کادر قرمز رنگ مشخص شده‌اند.`
+                          );
+                        }
+                        return;
+                      }
+                      if (
+                        confirm(
+                          "آیا از ذخیره این فاکتور به عنوان پیش‌نویس اطمینان دارید؟",
+                        )
+                      ) {
+                        saveInvoiceData(null, true);
+                      }
+                    }}
+                    className="px-6 py-3.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm outline-none cursor-pointer text-sm"
+                  >
+                    <FileText className="w-4 h-4" />
+                    ذخیره به عنوان پیش‌نویس
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTriggerSaveWithValidation}
+                    disabled={submitting || (items || []).length === 0 || (!customerId && invoiceLayoutMode === 'official')}
+                    className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-200 text-white rounded-2xl font-black flex items-center justify-center gap-2.5 transition-colors shadow-sm outline-none focus:ring-4 focus:ring-indigo-500/20 cursor-pointer text-sm"
+                  >
+                    {submitting ? (
+                      <RefreshCw className="w-5 h-5 animate-spin" />
+                    ) : (
+                      <Save className="w-5 h-5" />
+                    )}
+                    پیش‌نمایش و ثبت فاکتور
+                  </button>
+                </div>
               </div>
             </div>
 
@@ -1356,6 +1543,13 @@ export default function SaleInvoiceCreate(props: any) {
                 toPersianDigits={toPersianDigits}
               />
             )}
+
+            {/* Unsaved Changes Prompt */}
+            <UnsavedChangesPrompt
+              isOpen={showPrompt}
+              onStay={cancelDiscard}
+              onDiscard={confirmDiscard}
+            />
           </motion.div>
   );
 }

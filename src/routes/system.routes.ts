@@ -22,6 +22,8 @@ import * as schema from '../db/schema';
 import { convertPriceToBaseUnit, convertQuantityToBaseUnit, getUnitRatioDirection } from '../utils/unitConversion';
 import { calculateAllWarehouseStocks } from '../utils/stockLogic';
 import { compareKardexTransactions } from '../utils/kardexSort';
+import { encryptValue, decryptValue, maskConnectionString } from '../utils/crypto';
+import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
 router.post('/api/db/recalculate-stocks', async (req, res) => {
@@ -88,7 +90,25 @@ router.get('/api/kardex/:productId?', async (req, res) => {
   try {
     const { productId } = req.params;
     const { warehouseId } = req.query;
-    let list = (await getDbData('kardex')) || (await getDbData('InventoryTransactions')) || [];
+    let list = (await getDbData('inventory_transactions')) || (await getDbData('kardex')) || (await getDbData('InventoryTransactions')) || [];
+    if (productId) {
+      list = list.filter((item: any) => String(item.productId) === String(productId));
+    }
+    if (warehouseId && warehouseId !== 'all') {
+      list = list.filter((item: any) => String(item.warehouseId) === String(warehouseId));
+    }
+    list.sort(compareKardexTransactions);
+    res.json({ success: true, data: list });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+router.get('/api/inventory-transactions/:productId?', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { warehouseId } = req.query;
+    let list = (await getDbData('inventory_transactions')) || (await getDbData('kardex')) || (await getDbData('InventoryTransactions')) || [];
     if (productId) {
       list = list.filter((item: any) => String(item.productId) === String(productId));
     }
@@ -114,13 +134,29 @@ router.post('/api/sys/dirs', async (req, res) => {
     }
   });
 
+router.get('/api/db/config', async (req, res) => {
+    try {
+      const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8').catch(() => null);
+      if (!configRaw) return res.json({ engine: 'sqlite' });
+      const config = JSON.parse(configRaw);
+      const connStr = decryptValue(config.connectionString);
+      res.json({
+        engine: config.engine,
+        connectionString: maskConnectionString(connStr),
+        isConfigured: Boolean(config.engine === 'postgres' && connStr)
+      });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
 router.post('/api/db/config', async (req, res) => {
     try {
       const { connectionString, dbName, engine } = req.body;
 
       if (engine === 'sqlite' || connectionString === 'sqlite') {
          const config = { engine: 'sqlite' };
-         await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify(config));
+         await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify(config, null, 2));
          activePgPools['default'] = null;
          usePgMap['default'] = false;
          return res.json({ success: true });
@@ -153,8 +189,10 @@ router.post('/api/db/config', async (req, res) => {
       await finalClient.query('SELECT NOW()');
       await finalClient.end();
 
-      const config = { engine: 'postgres', connectionString: finalConnectionString };
-      await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify(config));
+      // Save encrypted connection string using symmetric key
+      const encryptedConnStr = encryptValue(finalConnectionString);
+      const config = { engine: 'postgres', connectionString: encryptedConnStr };
+      await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify(config, null, 2));
       
       // Try to re-init DB with new connection
       activePgPools['default'] = await connectPgDb(finalConnectionString);

@@ -13,7 +13,7 @@ import path from 'path';
 import bcrypt from 'bcryptjs';
 import jwt from 'jsonwebtoken';
 import { z } from 'zod';
-import { exec } from 'child_process';
+import { requireRole } from '../middleware/auth.middleware';
 import { validateData } from '../schemas/validation';
 import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
@@ -274,19 +274,7 @@ function extractRequestUser(req: any) {
     } catch (_) {}
   }
 
-  const userInfoHeader = req.headers?.['x-user-info'];
-  if (userInfoHeader && typeof userInfoHeader === 'string') {
-    try {
-      const parsed = JSON.parse(decodeURIComponent(userInfoHeader));
-      if (parsed && (parsed.username || parsed.name)) {
-        userId = parsed.id || parsed.username || userId;
-        username = parsed.username || username;
-        userName = parsed.name || parsed.username || userName;
-        userRole = parsed.role || userRole;
-      }
-    } catch (_) {}
-  }
-
+  // Note: Client headers like x-user-info are explicitly ignored to prevent spoofing and privilege escalation
   return { userId, username, userName, userRole };
 }
 
@@ -296,6 +284,22 @@ function extractClientInfo(req: any) {
   const ip = (req.headers && (req.headers['x-forwarded-for'] || req.headers['x-real-ip'])) || req.socket?.remoteAddress || req.ip || '127.0.0.1';
   const cleanIp = Array.isArray(ip) ? ip[0] : String(ip).split(',')[0].trim();
   return { ...parsed, ip: cleanIp, userAgent: ua };
+}
+
+export function checkDataModificationPermission(key: string, userRole: string): { allowed: boolean; message?: string } {
+  if (userRole === 'admin') return { allowed: true };
+  if (userRole === 'viewer' || userRole === 'guest') {
+    return { allowed: false, message: 'کاربران با نقش بیننده یا مهمان اجازه تغییر و ثبت داده‌ها را ندارند.' };
+  }
+  if (['users', 'roles', 'permissions', 'company_profile', 'db_config', 'database_logs'].includes(key)) {
+    return { allowed: false, message: 'فقط مدیر سیستم (admin) مجاز به ویرایش این بخش است.' };
+  }
+  if (['accounting_documents', 'fiscal_years', 'financial_years', 'ledger_accounts'].includes(key)) {
+    if (!['admin', 'accountant'].includes(userRole)) {
+      return { allowed: false, message: 'تنها مدیر سیستم و حسابدار مجاز به ثبت یا تغییر اسناد مالی و کدینگ حسابداری هستند.' };
+    }
+  }
+  return { allowed: true };
 }
 
 function getEntityPersianName(key: string): string {
@@ -552,7 +556,7 @@ router.post('/api/system_logs', async (req, res) => {
     res.status(500).json({ error: err.message });
   }
 });
-router.post('/api/data/users', async (req, res, next) => {
+router.post('/api/data/users', requireRole(['admin']), async (req, res, next) => {
     try {
       const users = req.body;
       if (Array.isArray(users)) {
@@ -564,27 +568,72 @@ router.post('/api/data/users', async (req, res, next) => {
       }
       req.body = users;
       next();
-    } catch(e) {
+    } catch(e: any) {
       res.status(500).json({ error: e.message });
     }
   });
 
 router.get('/api/data/:key', async (req, res) => {
     const { key } = req.params;
-    const { limit, offset } = req.query;
+    const { limit, offset, search, sortBy, sortOrder, paginated } = req.query;
     try {
+      // 1. Intelligent HTTP caching for base reference tables
+      if (['product_categories', 'warehouses', 'store_settings', 'company_profile', 'person_roles', 'person_groups'].includes(key)) {
+        res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
+      } else {
+        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+      }
+
       let data = await getDbData(key);
       
-      // Pagination for large collections
-      if (Array.isArray(data) && ['invoices', 'transactions', 'system_logs'].includes(key)) {
-        if (limit) {
-          const limitNum = parseInt(limit as string, 10);
-          const offsetNum = parseInt(offset as string, 10) || 0;
-          
-          // Sort by createdAt descending (if available) or reverse array
-          data = data.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
-          data = data.slice(offsetNum, offsetNum + limitNum);
+      // If collection is an array and filtering/pagination is requested
+      if (Array.isArray(data)) {
+        let items = [...data];
+
+        // Search filtering
+        if (search && typeof search === 'string' && search.trim()) {
+          const q = search.trim().toLowerCase();
+          items = items.filter((item: any) => {
+            if (!item) return false;
+            return Object.values(item).some(val => 
+              typeof val === 'string' && val.toLowerCase().includes(q)
+            );
+          });
         }
+
+        // Sorting
+        if (sortBy && typeof sortBy === 'string') {
+          const isAsc = sortOrder === 'asc';
+          items.sort((a, b) => {
+            const valA = a[sortBy];
+            const valB = b[sortBy];
+            if (valA === valB) return 0;
+            if (valA === undefined || valA === null) return 1;
+            if (valB === undefined || valB === null) return -1;
+            return isAsc ? (valA > valB ? 1 : -1) : (valA < valB ? 1 : -1);
+          });
+        } else if (['invoices', 'transactions', 'system_logs', 'accounting_documents', 'inventory_transactions'].includes(key)) {
+          // Default sorting by createdAt / date descending
+          items.sort((a, b) => (b.createdAt || b.date || 0) - (a.createdAt || a.date || 0));
+        }
+
+        const total = items.length;
+
+        // Pagination
+        if (limit !== undefined || paginated === 'true') {
+          const limitNum = Math.max(1, parseInt(limit as string, 10) || 50);
+          const offsetNum = Math.max(0, parseInt(offset as string, 10) || 0);
+          const pagedItems = items.slice(offsetNum, offsetNum + limitNum);
+          return res.json({
+            data: pagedItems,
+            total,
+            limit: limitNum,
+            offset: offsetNum,
+            hasMore: offsetNum + limitNum < total
+          });
+        }
+
+        return res.json(items);
       }
       
       res.json(data);
@@ -600,12 +649,35 @@ router.post('/api/data/batch', async (req, res) => {
     }
     
     try {
+      const userInfo = extractRequestUser(req);
+      // Validate permissions for all targets in batch
+      for (const op of operations) {
+        if (op && op.key) {
+          const perm = checkDataModificationPermission(op.key, userInfo.userRole);
+          if (!perm.allowed) {
+            return res.status(403).json({ error: perm.message, key: op.key });
+          }
+
+          // Immutability: Permanent/Finalized accounting documents cannot be modified or deleted via batch
+          if (op.key === 'accounting_documents' && (op.type === 'update' || op.type === 'delete')) {
+            const currentDocs = (await getDbData('accounting_documents')) || [];
+            const targetId = String(op.id || op.data?.id);
+            const targetDoc = currentDocs.find((d: any) => String(d.id) === targetId);
+            if (targetDoc && (targetDoc.status === 'permanent' || targetDoc.status === 'finalized' || targetDoc.isFinalized)) {
+              return res.status(403).json({
+                error: `امکان تغییر یا حذف سند حسابداری قطعی‌شده شماره ${targetDoc.documentNumber || targetDoc.id} وجود ندارد. طبق استانداردهای مالی باید سند معکوس / اصلاحی صادر گردد.`,
+                code: 'DOCUMENT_IMMUTABLE'
+              });
+            }
+          }
+        }
+      }
+
       // Group operations by key
       const keys = new Set(operations.map((op: any) => op.key));
       const results: any[] = [];
       const sysLogs = (await getDbData('system_logs')) || [];
       const timestamp = Date.now();
-      const userInfo = extractRequestUser(req);
       const clientInfo = extractClientInfo(req);
 
       if (isPgActive() && getActivePgPool()) {
@@ -794,6 +866,11 @@ router.post('/api/data/batch', async (req, res) => {
 router.post('/api/data/:key/append', async (req, res) => {
     const { key } = req.params;
     const newItem = req.body;
+    const userInfo = extractRequestUser(req);
+    const perm = checkDataModificationPermission(key, userInfo.userRole);
+    if (!perm.allowed) {
+      return res.status(403).json({ error: perm.message });
+    }
     
     // Zod Validation
     const validationResult = validateData(key, newItem);
@@ -918,38 +995,50 @@ router.post('/api/data/:key/append', async (req, res) => {
         }
       }
       
+      if (newItem.version === undefined) newItem.version = 1;
+      newItem.createdAt = newItem.createdAt || new Date().toISOString();
+      newItem.updatedAt = newItem.updatedAt || new Date().toISOString();
+
       if (isPgActive() && getActivePgPool()) {
          if (!KNOWN_TABLES.includes(key)) return res.status(400).json({ error: 'Unknown table' });
-         await getActivePgPool().query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
-         let finalItem = { ...newItem };
-         let related = null;
-         if (['invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes', 'accounting_documents', 'stocktakings'].includes(key)) {
-             const rel = await handleRelations(key, finalItem);
-             finalItem = rel.strippedData;
-             related = rel;
-         }
+         const client = await getActivePgPool().connect();
+         try {
+           await client.query('BEGIN');
+           await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
+           let finalItem = { ...newItem };
+           let related = null;
+           if (['invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes', 'accounting_documents', 'stocktakings'].includes(key)) {
+               const rel = await handleRelations(key, finalItem);
+               finalItem = rel.strippedData;
+               related = rel;
+           }
 
-         await syncTableSchema(getActivePgPool(), key, finalItem);
-         const keys = Object.keys(finalItem);
-         const vals = Object.values(finalItem).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
-         const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
-         const colNames = keys.map(k => `"${k}"`).join(', ');
-         await getActivePgPool().query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
-         
-         if (related && related.childTable) {
-             const fId = finalItem.id;
-             try {
-                const col = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
-                await getActivePgPool().query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
-             } catch(e) { }
-             for (const it of related.items) {
-                 await syncTableSchema(getActivePgPool(), related.childTable, it);
-                 const itKeys = Object.keys(it);
-                 const itVals = Object.values(it).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
-                 const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-                 const itColNames = itKeys.map(k => `"${k}"`).join(', ');
-                 await getActivePgPool().query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
-             }
+           await syncTableSchema(client, key, finalItem);
+           const keys = Object.keys(finalItem);
+           const vals = Object.values(finalItem).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+           const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
+           const colNames = keys.map(k => `"${k}"`).join(', ');
+           await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
+           
+           if (related && related.childTable) {
+               const fId = finalItem.id;
+               const col = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
+               await client.query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
+               for (const it of related.items) {
+                   await syncTableSchema(client, related.childTable, it);
+                   const itKeys = Object.keys(it);
+                   const itVals = Object.values(it).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                   const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+                   const itColNames = itKeys.map(k => `"${k}"`).join(', ');
+                   await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+               }
+           }
+           await client.query('COMMIT');
+         } catch (txErr) {
+           await client.query('ROLLBACK');
+           throw txErr;
+         } finally {
+           client.release();
          }
       } else {
          let data = (await getDbData(key));
@@ -1033,6 +1122,11 @@ router.post('/api/data/:key/append', async (req, res) => {
 router.put('/api/data/:key/:id', async (req, res) => {
     const { key, id } = req.params;
     const updatedItem = req.body;
+    const userInfo = extractRequestUser(req);
+    const perm = checkDataModificationPermission(key, userInfo.userRole);
+    if (!perm.allowed) {
+      return res.status(403).json({ error: perm.message });
+    }
     let releaseServerLock: (() => void) | null = null;
     try {
       if (INVOICE_TABLE_KEYS.includes(key)) {
@@ -1049,7 +1143,28 @@ router.put('/api/data/:key/:id', async (req, res) => {
          }
          
          const oldItem = data[index];
-         const newItem = { ...oldItem, ...updatedItem, id }; // ensure id is preserved
+         if (key === 'accounting_documents' && oldItem) {
+           if (oldItem.status === 'permanent' || oldItem.status === 'finalized' || oldItem.isFinalized) {
+             if (releaseServerLock) releaseServerLock();
+             return res.status(403).json({
+               error: `امکان ویرایش مستقیم سند حسابداری قطعی‌شده شماره ${oldItem.documentNumber || oldItem.id} وجود ندارد. طبق استانداردهای حسابداری، هرگونه تغییر باید از طریق صدور «سند معکوس / اصلاحی» ثبت گردد.`,
+               code: 'DOCUMENT_IMMUTABLE'
+             });
+           }
+         }
+         if (req.body && req.body.version !== undefined && oldItem.version !== undefined) {
+           if (Number(req.body.version) !== Number(oldItem.version)) {
+             if (releaseServerLock) releaseServerLock();
+             return res.status(409).json({
+               error: 'خطای تداخل همزمانی (Race Condition): این سند توسط کاربر یا فرآیند دیگری ویرایش شده است. لطفاً صفحه را تازه‌سازی نمایید.',
+               code: 'CONCURRENCY_CONFLICT',
+               currentVersion: oldItem.version,
+               sentVersion: req.body.version
+             });
+           }
+         }
+         const nextVersion = (Number(oldItem.version) || 0) + 1;
+         const newItem = { ...oldItem, ...updatedItem, id, version: nextVersion, updatedAt: new Date().toISOString() }; // ensure id is preserved
          mergedItem = newItem;
 
          const stockCheck = await validateSalesInvoiceStock({ ...mergedItem, _originTable: key }, releaseServerLock);
@@ -1098,27 +1213,37 @@ router.put('/api/data/:key/:id', async (req, res) => {
              related = rel;
          }
 
-         await syncTableSchema(getActivePgPool(), key, finalItem);
-         const keys = Object.keys(finalItem);
-         const vals = Object.values(finalItem).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
-         const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
-         const colNames = keys.map(k => `"${k}"`).join(', ');
-         await getActivePgPool().query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
-         
-         if (related && related.childTable) {
-             const fId = finalItem.id;
-             try {
-                const col = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
-                await getActivePgPool().query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
-             } catch(e) { }
-             for (const it of related.items) {
-                 await syncTableSchema(getActivePgPool(), related.childTable, it);
-                 const itKeys = Object.keys(it);
-                 const itVals = Object.values(it).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
-                 const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-                 const itColNames = itKeys.map(k => `"${k}"`).join(', ');
-                 await getActivePgPool().query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
-             }
+         const client = await getActivePgPool().connect();
+         try {
+           await client.query('BEGIN');
+           await syncTableSchema(client, key, finalItem);
+           const keys = Object.keys(finalItem);
+           const vals = Object.values(finalItem).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+           const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
+           const colNames = keys.map(k => `"${k}"`).join(', ');
+           await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
+           
+           if (related && related.childTable) {
+               const fId = finalItem.id;
+               try {
+                  const col = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
+                  await client.query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
+               } catch(e) { }
+               for (const it of related.items) {
+                   await syncTableSchema(client, related.childTable, it);
+                   const itKeys = Object.keys(it);
+                   const itVals = Object.values(it).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                   const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+                   const itColNames = itKeys.map(k => `"${k}"`).join(', ');
+                   await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+               }
+           }
+           await client.query('COMMIT');
+         } catch (txErr) {
+           await client.query('ROLLBACK');
+           throw txErr;
+         } finally {
+           client.release();
          }
       } else {
          const data = (await getDbData(key)) || [];
@@ -1127,7 +1252,28 @@ router.put('/api/data/:key/:id', async (req, res) => {
            if (index !== -1) {
              
              const oldItem = data[index];
-             const newItem = { ...oldItem, ...updatedItem };
+             if (key === 'accounting_documents' && oldItem) {
+               if (oldItem.status === 'permanent' || oldItem.status === 'finalized' || oldItem.isFinalized) {
+                 if (releaseServerLock) releaseServerLock();
+                 return res.status(403).json({
+                   error: `امکان ویرایش مستقیم سند حسابداری قطعی‌شده شماره ${oldItem.documentNumber || oldItem.id} وجود ندارد. طبق استانداردهای حسابداری، هرگونه تغییر باید از طریق صدور «سند معکوس / اصلاحی» ثبت گردد.`,
+                   code: 'DOCUMENT_IMMUTABLE'
+                 });
+               }
+             }
+             if (req.body && req.body.version !== undefined && oldItem.version !== undefined) {
+               if (Number(req.body.version) !== Number(oldItem.version)) {
+                 if (releaseServerLock) releaseServerLock();
+                 return res.status(409).json({
+                   error: 'خطای تداخل همزمانی (Race Condition): این سند توسط کاربر یا فرآیند دیگری ویرایش شده است. لطفاً صفحه را تازه‌سازی نمایید.',
+                   code: 'CONCURRENCY_CONFLICT',
+                   currentVersion: oldItem.version,
+                   sentVersion: req.body.version
+                 });
+               }
+             }
+             const nextVersion = (Number(oldItem.version) || 0) + 1;
+             const newItem = { ...oldItem, ...updatedItem, id, version: nextVersion, updatedAt: new Date().toISOString() };
              mergedItem = newItem;
 
              const stockCheck = await validateSalesInvoiceStock({ ...mergedItem, _originTable: key }, releaseServerLock);
@@ -1246,6 +1392,11 @@ router.put('/api/data/:key/:id', async (req, res) => {
 router.post('/api/data/:key', async (req, res) => {
     const { key } = req.params;
     const data = req.body;
+    const userInfo = extractRequestUser(req);
+    const perm = checkDataModificationPermission(key, userInfo.userRole);
+    if (!perm.allowed) {
+      return res.status(403).json({ error: perm.message });
+    }
 
     // Zod Validation
     if (key !== 'system_logs') {
@@ -1397,10 +1548,85 @@ router.post('/api/data/:key', async (req, res) => {
         triggerServerStockSync().catch(err => console.error('Error during post-bulk stock sync:', err));
       }
       res.json({ success: true });
-    } catch (err) {
+    } catch (err: any) {
       res.status(500).json({ error: err.message });
     }
   });
 
+router.delete('/api/data/:key/:id', async (req, res) => {
+    const { key, id } = req.params;
+    const userInfo = extractRequestUser(req);
+    const perm = checkDataModificationPermission(key, userInfo.userRole);
+    if (!perm.allowed) {
+      return res.status(403).json({ error: perm.message });
+    }
+
+    try {
+      const data = (await getDbData(key)) || [];
+      const itemToDelete = Array.isArray(data) ? data.find((x: any) => String(x.id) === String(id)) : null;
+
+      if (key === 'accounting_documents' && itemToDelete) {
+        if (itemToDelete.status === 'permanent' || itemToDelete.status === 'finalized' || itemToDelete.isFinalized) {
+          return res.status(403).json({
+            error: `امکان حذف فیزیکی سند حسابداری قطعی‌شده شماره ${itemToDelete.documentNumber || itemToDelete.id} وجود ندارد. جهت ابطال، باید «سند معکوس / اصلاحی» صادر گردد.`,
+            code: 'DOCUMENT_IMMUTABLE'
+          });
+        }
+      }
+
+      if (isPgActive() && getActivePgPool()) {
+        if (!KNOWN_TABLES.includes(key)) return res.status(400).json({ error: 'Unknown table' });
+        await getActivePgPool().query(`DELETE FROM "${key}" WHERE id = $1`, [String(id)]);
+      } else {
+        const filtered = Array.isArray(data) ? data.filter((x: any) => String(x.id) !== String(id)) : [];
+        await setDbData(key, filtered);
+      }
+
+      // Audit log the deletion
+      (async () => {
+        try {
+          if (itemToDelete) {
+            const clientInfo = extractClientInfo(req);
+            const entityTitle = getEntityPersianName(key);
+            const itemTitle = itemToDelete.name || itemToDelete.title || itemToDelete.invoiceNumber || itemToDelete.code || itemToDelete.id || id;
+            const log = {
+              id: Math.random().toString(36).substring(2, 15),
+              timestamp: Date.now(),
+              action: 'DELETE',
+              userId: userInfo.userId,
+              username: userInfo.username,
+              userName: userInfo.userName,
+              userRole: userInfo.userRole,
+              details: `حذف رکورد از ${entityTitle}${itemTitle ? ` («${itemTitle}»)` : ''}`,
+              entityType: key,
+              entityId: id,
+              changes: JSON.stringify(itemToDelete),
+              diffSummary: `حذف رکورد از ${entityTitle}`,
+              browser: clientInfo.browser,
+              os: clientInfo.os,
+              device: clientInfo.device,
+              ip: clientInfo.ip,
+              userAgent: clientInfo.userAgent
+            };
+            const sysLogs = (await getDbData('system_logs')) || [];
+            sysLogs.unshift(log);
+            if (sysLogs.length > 3000) sysLogs.length = 3000;
+            await setDbData('system_logs', sysLogs);
+            dispatchAdminNotificationIfSensitive(log).catch(e => console.error(e));
+          }
+        } catch (logErr) {
+          console.error('Audit log deletion error:', logErr);
+        }
+      })();
+
+      if (INVOICE_TABLE_KEYS.includes(key)) {
+        triggerServerStockSync().catch(err => console.error('Error during post-delete stock sync:', err));
+      }
+
+      res.json({ success: true, id });
+    } catch (err: any) {
+      res.status(500).json({ error: err.message });
+    }
+  });
 
 export default router;

@@ -140,12 +140,12 @@ export const getInventoryTransactions = async (productId?: string | number, ware
       }
     }
     if (history.length === 0) {
-      history = (await getLocalData<any[]>('kardex', [])) || (await getLocalData<any[]>('InventoryTransactions', [])) || [];
+      history = (await getLocalData<any[]>('inventory_transactions', [])) || (await getLocalData<any[]>('kardex', [])) || (await getLocalData<any[]>('InventoryTransactions', [])) || [];
     }
 
     if (history.length === 0) {
       await recalculateAllWarehouseStocks();
-      history = (await getLocalData<any[]>('kardex', [])) || (await getLocalData<any[]>('InventoryTransactions', [])) || [];
+      history = (await getLocalData<any[]>('inventory_transactions', [])) || (await getLocalData<any[]>('kardex', [])) || (await getLocalData<any[]>('InventoryTransactions', [])) || [];
     }
 
     let filtered = history;

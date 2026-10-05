@@ -5,7 +5,8 @@ import {
   Filter, ArrowUpDown, ChevronDown, ChevronUp, ChevronRight, CheckCircle2,
   AlertCircle, RefreshCw, X, Calendar, DollarSign, Layers, BookOpen,
   Receipt, ShoppingCart, User, Landmark, Wallet, Check, Sparkles,
-  SlidersHorizontal, ArrowRight, ArrowDownLeft, ArrowUpRight, Scale, Info
+  SlidersHorizontal, ArrowRight, ArrowDownLeft, ArrowUpRight, Scale, Info,
+  RotateCcw, Lock
 } from 'lucide-react';
 import DateObjectModule from "react-date-object";
 const DateObject = (DateObjectModule as any).default || DateObjectModule;
@@ -18,7 +19,8 @@ import {
   formatDateDisplay, toPersianDigits, convertToGregorian, formatNumber, addCommas
 } from '../../utils/format';
 import {
-  getAccountingDocuments, getLedgerAccounts, getPersons, getStoreSettings, deleteAccountingDocument
+  getAccountingDocuments, getLedgerAccounts, getPersons, getStoreSettings, deleteAccountingDocument,
+  createReversalAccountingDocument
 } from '../../services/dataService';
 import { AccountingDocument, LedgerAccount } from '../../types';
 import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
@@ -543,6 +545,26 @@ export default function AccountingDocsList({
       } catch (err: any) {
         if (showNotification) showNotification(err.message || 'خطا در حذف سند.', 'error');
       }
+    }
+  };
+
+  // Reversal document handler (صدور سند معکوس / اصلاحی)
+  const handleReverseDocument = async (doc: any) => {
+    if (doc.isReversed) {
+      if (showNotification) showNotification(`برای این سند قبلاً سند معکوس شماره ${doc.reversalDocNumber || doc.reversalDocId || ''} صادر شده است.`, 'warning');
+      return;
+    }
+    const confirmed = window.confirm(`آیا از صدور «سند معکوس / اصلاحی» برای سند شماره ${doc.documentNumber || doc.id} اطمینان دارید؟ تمامی آرتیکل‌های بدهکار و بستانکار معکوس خواهند شد.`);
+    if (!confirmed) return;
+
+    try {
+      const rev = await createReversalAccountingDocument(doc.id, 'اصلاح / ابطال حساب');
+      if (showNotification) {
+        showNotification(`سند معکوس شماره ${rev.documentNumber} با موفقیت صادر گردید.`, 'success');
+      }
+      loadData();
+    } catch (err: any) {
+      if (showNotification) showNotification(err.message || 'خطا در صدور سند معکوس.', 'error');
     }
   };
 
@@ -1233,9 +1255,29 @@ export default function AccountingDocsList({
                                 <span>ناهمخوان</span>
                               </span>
                             )}
-                            {doc.status === 'draft' && (
-                              <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                            {doc.status === 'draft' ? (
+                              <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 font-bold">
                                 پیش‌نویس
+                              </span>
+                            ) : (doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized) ? (
+                              <span className="inline-flex items-center gap-0.5 text-[10px] text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded border border-blue-200 font-bold">
+                                <Lock className="w-2.5 h-2.5" />
+                                <span>دائم (قطعی)</span>
+                              </span>
+                            ) : (
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200 font-bold">
+                                تایید شده
+                              </span>
+                            )}
+
+                            {(doc as any).isReversed && (
+                              <span className="text-[9px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-bold">
+                                معکوس شده
+                              </span>
+                            )}
+                            {doc.sourceType === 'reversal' && (
+                              <span className="text-[9px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 font-bold">
+                                سند معکوس
                               </span>
                             )}
                           </div>
@@ -1261,12 +1303,40 @@ export default function AccountingDocsList({
                               </button>
                             )}
 
+                            {/* Reversal Voucher Button for approved/permanent documents */}
+                            {(doc.status === 'approved' || doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized) && (
+                              <button
+                                type="button"
+                                onClick={() => handleReverseDocument(doc)}
+                                disabled={(doc as any).isReversed}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  (doc as any).isReversed
+                                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed'
+                                    : 'bg-emerald-50 hover:bg-emerald-100 text-emerald-700 cursor-pointer'
+                                }`}
+                                title={(doc as any).isReversed ? `سند معکوس شماره ${(doc as any).reversalDocNumber || ''} قبلاً صادر شده است` : 'صدور سند معکوس / اصلاحی (ابطال استاندارد)'}
+                              >
+                                <RotateCcw className="w-4 h-4" />
+                              </button>
+                            )}
+
                             {onNavigateToEdit && (
                               <button
                                 type="button"
-                                onClick={() => onNavigateToEdit(doc)}
-                                className="p-1.5 bg-amber-50 hover:bg-amber-100 text-amber-700 rounded-lg transition-colors cursor-pointer"
-                                title="ویرایش سند حسابداری"
+                                onClick={() => {
+                                  if (doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized) {
+                                    if (showNotification) showNotification('اسناد قطعی‌شده تغییرناپذیر هستند. جهت اصلاح، لطفاً «سند معکوس» صادر نمایید.', 'warning');
+                                    return;
+                                  }
+                                  onNavigateToEdit(doc);
+                                }}
+                                disabled={doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  (doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized)
+                                    ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                                    : 'bg-amber-50 hover:bg-amber-100 text-amber-700 cursor-pointer'
+                                }`}
+                                title={(doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized) ? 'سند قطعی‌شده است و امکان ویرایش مستقیم ندارد' : 'ویرایش سند حسابداری'}
                               >
                                 <Edit2 className="w-4 h-4" />
                               </button>
@@ -1274,9 +1344,20 @@ export default function AccountingDocsList({
 
                             <button
                               type="button"
-                              onClick={() => handleDelete(doc.id)}
-                              className="p-1.5 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg transition-colors cursor-pointer"
-                              title="حذف سند"
+                              onClick={() => {
+                                if (doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized) {
+                                  if (showNotification) showNotification('امکان حذف فیزیکی اسناد قطعی‌شده وجود ندارد. جهت ابطال، از دکمه «سند معکوس» استفاده کنید.', 'warning');
+                                  return;
+                                }
+                                handleDelete(doc.id);
+                              }}
+                              disabled={doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized}
+                              className={`p-1.5 rounded-lg transition-colors ${
+                                (doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized)
+                                  ? 'bg-slate-100 text-slate-300 cursor-not-allowed'
+                                  : 'bg-rose-50 hover:bg-rose-100 text-rose-700 cursor-pointer'
+                              }`}
+                              title={(doc.status === 'permanent' || doc.status === 'finalized' || (doc as any).isFinalized) ? 'سند قطعی‌شده غیرقابل حذف است' : 'حذف سند'}
                             >
                               <Trash2 className="w-4 h-4" />
                             </button>

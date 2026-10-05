@@ -62,8 +62,9 @@ export default function AccountLedgerReport({ showNotification, onNavigateToDoc 
     const toTime = toDate ? new Date(toDate).getTime() : Infinity;
     
     docs.forEach(doc => {
-      // Only include approved documents in the ledger report
-      if (doc.status !== 'approved') return;
+      // Only include approved and permanent/finalized documents in the ledger report
+      const isDocFinal = doc.status === 'approved' || doc.status === 'permanent' || doc.status === 'finalized' || doc.isFinalized;
+      if (!isDocFinal || doc.isDeleted) return;
       
       const docDate = new Date(doc.date).getTime();
       const isBefore = docDate < fromTime;
