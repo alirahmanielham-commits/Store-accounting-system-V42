@@ -72,7 +72,15 @@ const fetchAllSystemDocsForServer = async (): Promise<any[]> => {
   return Array.from(docsMap.values());
 };
 
+let isSyncingStock = false;
+let syncStockPending = false;
+
 const triggerServerStockSync = async () => {
+  if (isSyncingStock) {
+    syncStockPending = true;
+    return;
+  }
+  isSyncingStock = true;
   try {
     const products = (await getDbData('products')) || [];
     const warehouses = (await getDbData('warehouses')) || [];
@@ -88,6 +96,12 @@ const triggerServerStockSync = async () => {
     await setDbData('inventory_transactions', historyList);
   } catch (e) {
     console.error('Error during server stock sync:', e);
+  } finally {
+    isSyncingStock = false;
+    if (syncStockPending) {
+      syncStockPending = false;
+      setTimeout(() => triggerServerStockSync(), 250);
+    }
   }
 };
 
@@ -146,7 +160,8 @@ const isNegativeStockAllowedOnServer = async (doc?: any): Promise<boolean> => {
 
 const validateSalesInvoiceStock = async (doc: any, releaseLock?: (() => void) | null) => {
   const docType = doc.type || (doc._originTable && TABLE_DOC_TYPES[doc._originTable]) || 'sale';
-  if (docType === 'sale' && !doc.isDraft && doc.status !== 'draft' && doc.status !== 'voided' && !doc.isDeleted) {
+  const outboundDocTypes = ['sale', 'warehouse_remittance', 'waste'];
+  if (outboundDocTypes.includes(docType) && !doc.isDraft && doc.status !== 'draft' && doc.status !== 'voided' && !doc.isDeleted) {
     const isNegativeAllowed = await isNegativeStockAllowedOnServer(doc);
     if (isNegativeAllowed) {
       return { valid: true };
@@ -592,102 +607,174 @@ router.post('/api/data/batch', async (req, res) => {
       const timestamp = Date.now();
       const userInfo = extractRequestUser(req);
       const clientInfo = extractClientInfo(req);
-      
-      for (const key of Array.from(keys)) {
-         let data = (await getDbData(key)) || [];
-         if (!Array.isArray(data)) continue;
-         
-         const keyOps = operations.filter((op: any) => op.key === key);
-         for (const op of keyOps) {
-            if (op.type === 'append') {
-               const idx = data.findIndex((x: any) => String(x.id) === String(op.data.id));
-               if (idx !== -1) {
-                   data[idx] = { ...data[idx], ...op.data };
-               } else {
-                   data.push(op.data);
-               }
-               results.push({ id: op.data.id, status: 'appended' });
-               sysLogs.unshift({ 
-                 id: Math.random().toString(36).substring(2, 15), 
-                 action: 'CREATE', 
-                 userId: userInfo.userId, 
-                 username: userInfo.username,
-                 userName: userInfo.userName,
-                 userRole: userInfo.userRole,
-                 details: generateActionDescription('CREATE', key, op.data), 
-                 entityType: key, 
-                 entityId: op.data.id, 
-                 newData: op.data,
-                 changes: JSON.stringify(op.data),
-                 ip: clientInfo.ip,
-                 browser: clientInfo.browser,
-                 os: clientInfo.os,
-                 device: clientInfo.device,
-                 userAgent: clientInfo.userAgent,
-                 timestamp 
-               });
-            } else if (op.type === 'update') {
-               const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
-               if (idx !== -1) {
-                  const oldItem = data[idx];
-                  data[idx] = { ...data[idx], ...op.data };
-                  results.push({ id: op.id, status: 'updated' });
-                  sysLogs.unshift({ 
-                    id: Math.random().toString(36).substring(2, 15), 
-                    action: 'UPDATE', 
-                    userId: userInfo.userId, 
-                    username: userInfo.username,
-                    userName: userInfo.userName,
-                    userRole: userInfo.userRole,
-                    details: generateActionDescription('UPDATE', key, op.data), 
-                    entityType: key, 
-                    entityId: op.id, 
-                    diffSummary: createDiffSummaryServer(oldItem, data[idx]),
-                    oldData: oldItem,
-                    newData: data[idx],
-                    changes: JSON.stringify({ old: oldItem, new: data[idx] }),
-                    ip: clientInfo.ip,
-                    browser: clientInfo.browser,
-                    os: clientInfo.os,
-                    device: clientInfo.device,
-                    userAgent: clientInfo.userAgent,
-                    timestamp 
-                  });
-               }
-            } else if (op.type === 'delete') {
-               const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
-               if (idx !== -1) {
-                  const oldItem = data[idx];
-                  if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
-                     data[idx].deleted_at = new Date().toISOString();
-                     data[idx].isDeleted = true;
-                  } else {
-                     data.splice(idx, 1);
+
+      if (isPgActive() && getActivePgPool()) {
+        const client = await getActivePgPool().connect();
+        try {
+          await client.query('BEGIN');
+          for (const key of Array.from(keys)) {
+            if (!KNOWN_TABLES.includes(key)) continue;
+            await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
+            let data = (await getDbData(key)) || [];
+            if (!Array.isArray(data)) continue;
+
+            const keyOps = operations.filter((op: any) => op.key === key);
+            for (const op of keyOps) {
+              if (op.type === 'append') {
+                const item = { ...op.data };
+                if (item.version === undefined) item.version = 1;
+                item.createdAt = item.createdAt || new Date().toISOString();
+                item.updatedAt = item.updatedAt || new Date().toISOString();
+
+                await syncTableSchema(client, key, item);
+                const itemKeys = Object.keys(item);
+                const itemVals = Object.values(item).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                const placeholders = itemKeys.map((_, i) => `$${i + 1}`).join(', ');
+                const colNames = itemKeys.map(k => `"${k}"`).join(', ');
+                await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
+                results.push({ id: item.id, status: 'appended' });
+              } else if (op.type === 'update') {
+                const existing = data.find((x: any) => String(x.id) === String(op.id));
+                if (existing) {
+                  // Optimistic Locking Check
+                  if (op.version !== undefined && existing.version !== undefined && Number(op.version) !== Number(existing.version)) {
+                    throw new Error(`CONCURRENCY_CONFLICT: سند ${op.id} در جدول ${key} همزمان تغییر یافته است.`);
                   }
-                  results.push({ id: op.id, status: 'deleted' });
-                  sysLogs.unshift({ 
-                    id: Math.random().toString(36).substring(2, 15), 
-                    action: 'DELETE', 
-                    userId: userInfo.userId, 
-                    username: userInfo.username,
-                    userName: userInfo.userName,
-                    userRole: userInfo.userRole,
-                    details: generateActionDescription('DELETE', key, oldItem), 
-                    entityType: key, 
-                    entityId: op.id, 
-                    oldData: oldItem,
-                    changes: JSON.stringify(oldItem),
-                    ip: clientInfo.ip,
-                    browser: clientInfo.browser,
-                    os: clientInfo.os,
-                    device: clientInfo.device,
-                    userAgent: clientInfo.userAgent,
-                    timestamp 
-                  });
-               }
+                  const updatedItem = { ...existing, ...op.data, id: op.id };
+                  updatedItem.version = ((Number(existing.version) || 0) + 1);
+                  updatedItem.updatedAt = new Date().toISOString();
+
+                  await syncTableSchema(client, key, updatedItem);
+                  const itemKeys = Object.keys(updatedItem);
+                  const itemVals = Object.values(updatedItem).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                  const placeholders = itemKeys.map((_, i) => `$${i + 1}`).join(', ');
+                  const colNames = itemKeys.map(k => `"${k}"`).join(', ');
+                  await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
+                  results.push({ id: op.id, status: 'updated' });
+                }
+              } else if (op.type === 'delete') {
+                if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
+                  await client.query(`UPDATE "${key}" SET deleted_at = NOW(), "isDeleted" = true WHERE id = $1`, [op.id]);
+                } else {
+                  await client.query(`DELETE FROM "${key}" WHERE id = $1`, [op.id]);
+                }
+                results.push({ id: op.id, status: 'deleted' });
+              }
             }
-         }
-         await setDbData(key, data);
+          }
+          await client.query('COMMIT');
+        } catch (pgErr) {
+          await client.query('ROLLBACK');
+          throw pgErr;
+        } finally {
+          client.release();
+        }
+      } else {
+        for (const key of Array.from(keys)) {
+           let data = (await getDbData(key)) || [];
+           if (!Array.isArray(data)) continue;
+           
+           const keyOps = operations.filter((op: any) => op.key === key);
+           for (const op of keyOps) {
+              if (op.type === 'append') {
+                 const item = { ...op.data };
+                 if (item.version === undefined) item.version = 1;
+                 item.createdAt = item.createdAt || new Date().toISOString();
+                 item.updatedAt = item.updatedAt || new Date().toISOString();
+
+                 const idx = data.findIndex((x: any) => String(x.id) === String(item.id));
+                 if (idx !== -1) {
+                     data[idx] = { ...data[idx], ...item };
+                 } else {
+                     data.push(item);
+                 }
+                 results.push({ id: item.id, status: 'appended' });
+                 sysLogs.unshift({ 
+                   id: Math.random().toString(36).substring(2, 15), 
+                   action: 'CREATE', 
+                   userId: userInfo.userId, 
+                   username: userInfo.username,
+                   userName: userInfo.userName,
+                   userRole: userInfo.userRole,
+                   details: generateActionDescription('CREATE', key, item), 
+                   entityType: key, 
+                   entityId: item.id, 
+                   newData: item,
+                   changes: JSON.stringify(item),
+                   ip: clientInfo.ip,
+                   browser: clientInfo.browser,
+                   os: clientInfo.os,
+                   device: clientInfo.device,
+                   userAgent: clientInfo.userAgent,
+                   timestamp 
+                 });
+              } else if (op.type === 'update') {
+                 const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
+                 if (idx !== -1) {
+                    const oldItem = data[idx];
+                    if (op.version !== undefined && oldItem.version !== undefined && Number(op.version) !== Number(oldItem.version)) {
+                      return res.status(409).json({ error: 'CONCURRENCY_CONFLICT', message: `سند ${op.id} همزمان ویرایش شده است.` });
+                    }
+                    const nextVersion = ((Number(oldItem.version) || 0) + 1);
+                    data[idx] = { ...data[idx], ...op.data, version: nextVersion, updatedAt: new Date().toISOString() };
+                    results.push({ id: op.id, status: 'updated' });
+                    sysLogs.unshift({ 
+                      id: Math.random().toString(36).substring(2, 15), 
+                      action: 'UPDATE', 
+                      userId: userInfo.userId, 
+                      username: userInfo.username,
+                      userName: userInfo.userName,
+                      userRole: userInfo.userRole,
+                      details: generateActionDescription('UPDATE', key, op.data), 
+                      entityType: key, 
+                      entityId: op.id, 
+                      diffSummary: createDiffSummaryServer(oldItem, data[idx]),
+                      oldData: oldItem,
+                      newData: data[idx],
+                      changes: JSON.stringify({ old: oldItem, new: data[idx] }),
+                      ip: clientInfo.ip,
+                      browser: clientInfo.browser,
+                      os: clientInfo.os,
+                      device: clientInfo.device,
+                      userAgent: clientInfo.userAgent,
+                      timestamp 
+                    });
+                 }
+              } else if (op.type === 'delete') {
+                 const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
+                 if (idx !== -1) {
+                    const oldItem = data[idx];
+                    if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
+                       data[idx].deleted_at = new Date().toISOString();
+                       data[idx].isDeleted = true;
+                    } else {
+                       data.splice(idx, 1);
+                    }
+                    results.push({ id: op.id, status: 'deleted' });
+                    sysLogs.unshift({ 
+                      id: Math.random().toString(36).substring(2, 15), 
+                      action: 'DELETE', 
+                      userId: userInfo.userId, 
+                      username: userInfo.username,
+                      userName: userInfo.userName,
+                      userRole: userInfo.userRole,
+                      details: generateActionDescription('DELETE', key, oldItem), 
+                      entityType: key, 
+                      entityId: op.id, 
+                      oldData: oldItem,
+                      changes: JSON.stringify(oldItem),
+                      ip: clientInfo.ip,
+                      browser: clientInfo.browser,
+                      os: clientInfo.os,
+                      device: clientInfo.device,
+                      userAgent: clientInfo.userAgent,
+                      timestamp 
+                    });
+                 }
+              }
+           }
+           await setDbData(key, data);
+        }
       }
       
       await setDbData('system_logs', sysLogs);
@@ -697,6 +784,9 @@ router.post('/api/data/batch', async (req, res) => {
       }
       res.json({ success: true, results });
     } catch(err: any) {
+      if (err.message && err.message.includes('CONCURRENCY_CONFLICT')) {
+        return res.status(409).json({ error: err.message });
+      }
       res.status(500).json({ error: err.message });
     }
   });
@@ -789,7 +879,22 @@ router.post('/api/data/:key/append', async (req, res) => {
 
       if (!newItem.id) newItem.id = Math.random().toString(36).substring(2, 15);
 
-      // Concurrency Stock Availability Check for Sales Invoices:
+      // Validation for Double-Entry Accounting Documents
+      if (key === 'accounting_documents') {
+        const items = newItem.items;
+        if (!items || !Array.isArray(items) || items.length < 2) {
+          if (releaseServerLock) releaseServerLock();
+          return res.status(400).json({ error: 'سند حسابداری باید حداقل شامل دو آرتیکل (یک بدهکار و یک بستانکار) باشد.' });
+        }
+        const totalDebit = items.reduce((sum: number, it: any) => sum + (Number(it.debit) || 0), 0);
+        const totalCredit = items.reduce((sum: number, it: any) => sum + (Number(it.credit) || 0), 0);
+        if (Math.abs(totalDebit - totalCredit) > 0.001) {
+          if (releaseServerLock) releaseServerLock();
+          return res.status(400).json({ error: `سند حسابداری تراز نیست. جمع بدهکار (${totalDebit.toLocaleString()}) با جمع بستانکار (${totalCredit.toLocaleString()}) مغایرت دارد.` });
+        }
+      }
+
+      // Concurrency Stock Availability Check for Sales Invoices and Outbound Documents
       // Prevents race conditions where available stock is oversold (Available = Physical - Reserved)
       const docType = newItem.type || TABLE_DOC_TYPES[key] || 'sale';
       if (docType === 'sale' && !newItem.isDraft && newItem.status !== 'draft' && newItem.status !== 'voided' && !newItem.isDeleted) {
@@ -1147,6 +1252,22 @@ router.post('/api/data/:key', async (req, res) => {
       const validationResult = validateData(key, data);
       if (!validationResult.success) {
         return res.status(400).json({ error: 'Validation failed', details: (validationResult as any).error?.errors });
+      }
+    }
+
+    // Validation for Double-Entry Accounting Documents
+    if (key === 'accounting_documents' && Array.isArray(data)) {
+      for (const doc of data) {
+        if (doc && doc.items && Array.isArray(doc.items)) {
+          if (doc.items.length < 2) {
+            return res.status(400).json({ error: `سند حسابداری ${doc.documentNumber || ''} باید حداقل شامل دو آرتیکل (یک بدهکار و یک بستانکار) باشد.` });
+          }
+          const totalDebit = doc.items.reduce((sum: number, it: any) => sum + (Number(it.debit) || 0), 0);
+          const totalCredit = doc.items.reduce((sum: number, it: any) => sum + (Number(it.credit) || 0), 0);
+          if (Math.abs(totalDebit - totalCredit) > 0.001) {
+            return res.status(400).json({ error: `سند حسابداری ${doc.documentNumber || ''} تراز نیست. جمع بدهکار (${totalDebit.toLocaleString()}) با جمع بستانکار (${totalCredit.toLocaleString()}) مغایرت دارد.` });
+          }
+        }
       }
     }
 

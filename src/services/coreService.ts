@@ -128,6 +128,12 @@ export const getLocalData = async <T>(key: string, defaultValue: T, queryParams:
     });
     if (!res.ok) {
       if (res.status === 401) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth_unauthorized', { detail: { key } }));
+        }
+        if (cache[key]) {
+          return cache[key].data;
+        }
         return defaultValue;
       }
       throw new Error('Network response was not ok');
@@ -148,6 +154,9 @@ export const getLocalData = async <T>(key: string, defaultValue: T, queryParams:
     console.error(`Error reading ${key} from API`, error);
     if (CACHEABLE_KEYS.includes(key) && cache[key]) {
        return cache[key].data;
+    }
+    if (FINANCIAL_KEYS.has(key)) {
+       throw error;
     }
     return defaultValue;
   }
@@ -175,8 +184,18 @@ export const saveLocalData = async <T>(key: string, data: T, retries = 3): Promi
       body: JSON.stringify(processedData)
     });
     if (!res.ok) {
-      if (res.status === 401) return;
-      throw new Error('Network response was not ok');
+      if (res.status === 401) {
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('auth_unauthorized', { detail: { key } }));
+        }
+        throw new Error('نشست کاربری شما منقضی شده است. اطلاعات ذخیره نشد.');
+      }
+      let errText = 'خطا در ذخیره‌سازی داده‌ها در سرور';
+      try {
+        const errJson = await res.json();
+        errText = errJson.error || errJson.message || errText;
+      } catch (_) {}
+      throw new Error(errText);
     }
     invalidateCache(key);
     if (!isAppDataChangedSuspended && typeof window !== 'undefined') {
@@ -188,6 +207,7 @@ export const saveLocalData = async <T>(key: string, data: T, retries = 3): Promi
       return saveLocalData(key, data, retries - 1);
     }
     console.error(`Error saving ${key} to API`, error);
+    throw error;
   }
 };
 
@@ -199,7 +219,12 @@ export const updateLocalData = async <T>(key: string, id: string | number, data:
     body: JSON.stringify(processedData)
   });
   if (!res.ok) {
-    if (res.status === 401) return data as T;
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth_unauthorized', { detail: { key } }));
+      }
+      throw new Error('نشست کاربری شما منقضی شده است. ویرایش انجام نشد.');
+    }
     let errText = 'Network response was not ok';
     try {
        const err = await res.json();
@@ -223,7 +248,12 @@ export const appendLocalData = async <T>(key: string, data: T): Promise<T> => {
     body: JSON.stringify(processedData)
   });
   if (!res.ok) {
-    if (res.status === 401) return data as T;
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth_unauthorized', { detail: { key } }));
+      }
+      throw new Error('نشست کاربری شما منقضی شده است. ثبت جدید انجام نشد.');
+    }
     let errText = 'Network response was not ok';
     try {
       const errJson = await res.json();

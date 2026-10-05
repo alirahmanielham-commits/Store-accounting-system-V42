@@ -28,13 +28,19 @@ export const legacyStore = pgTable('store', {
 
 // --- Domain Tables ---
 
+export const productCategories = pgTable('product_categories', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  name: varchar('name', { length: 255 }).notNull(),
+  parentId: varchar('parent_id', { length: 50 }),
+});
+
 export const products = pgTable('products', {
   id: varchar('id', { length: 50 }).primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   code: varchar('code', { length: 50 }),
   type: varchar('type', { length: 50 }).default('product'), // product, service, raw_material
   barcode: varchar('barcode', { length: 255 }),
-  categoryId: varchar('category_id', { length: 50 }),
+  categoryId: varchar('category_id', { length: 50 }).references(() => productCategories.id, { onDelete: 'restrict' }),
   buyPrice: numeric('buy_price'),
   sellPrice: numeric('sell_price'),
   wholesalePrice: numeric('wholesale_price'),
@@ -43,21 +49,21 @@ export const products = pgTable('products', {
   status: varchar('status', { length: 50 }).default('active'),
   description: text('description'),
   imageUrl: text('image_url'),
+  version: integer('version').default(1),
   createdAt: timestamp('created_at').defaultNow(),
   updatedAt: timestamp('updated_at').defaultNow(),
-});
-
-export const productCategories = pgTable('product_categories', {
-  id: varchar('id', { length: 50 }).primaryKey(),
-  name: varchar('name', { length: 255 }).notNull(),
-  parentId: varchar('parent_id', { length: 50 }),
-});
+}, (table) => ({
+  codeIdx: index('idx_products_code').on(table.code),
+  barcodeIdx: index('idx_products_barcode').on(table.barcode),
+  categoryIdx: index('idx_products_category_id').on(table.categoryId),
+  createdAtIdx: index('idx_products_created_at').on(table.createdAt),
+}));
 
 export const persons = pgTable('persons', {
+  id: varchar('id', { length: 50 }).primaryKey(),
   personType: varchar('person_type', { length: 50 }).default('individual'),
   taxNumber: varchar('tax_number', { length: 50 }),
   registrationNumber: varchar('registration_number', { length: 50 }),
-  id: varchar('id', { length: 50 }).primaryKey(),
   name: varchar('name', { length: 255 }).notNull(),
   role: varchar('role', { length: 50 }),
   phone: varchar('phone', { length: 50 }),
@@ -67,16 +73,38 @@ export const persons = pgTable('persons', {
   status: varchar('status', { length: 50 }).default('active'),
   address: text('address'),
   description: text('description'),
+  version: integer('version').default(1),
   createdAt: timestamp('created_at').defaultNow(),
-});
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  nameIdx: index('idx_persons_name').on(table.name),
+  phoneIdx: index('idx_persons_phone').on(table.phone),
+  nationalIdIdx: index('idx_persons_national_id').on(table.nationalId),
+  economicCodeIdx: index('idx_persons_economic_code').on(table.economicCode),
+  createdAtIdx: index('idx_persons_created_at').on(table.createdAt),
+}));
+
+export const warehouses = pgTable('warehouses', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  title: varchar('title', { length: 255 }).notNull(),
+  manager: varchar('manager', { length: 255 }),
+  address: text('address'),
+  status: varchar('status', { length: 50 }).default('active'),
+  version: integer('version').default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  titleIdx: index('idx_warehouses_title').on(table.title),
+  createdAtIdx: index('idx_warehouses_created_at').on(table.createdAt),
+}));
 
 export const invoices = pgTable('invoices', {
   id: varchar('id', { length: 50 }).primaryKey(),
   invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
   type: varchar('type', { length: 50 }).notNull(), // sell, buy, return_sell, return_buy, waste
   date: varchar('date', { length: 50 }).notNull(),
-  personId: varchar('person_id', { length: 50 }),
-  warehouseId: varchar('warehouse_id', { length: 50 }),
+  personId: varchar('person_id', { length: 50 }).references(() => persons.id, { onDelete: 'restrict' }),
+  warehouseId: varchar('warehouse_id', { length: 50 }).references(() => warehouses.id, { onDelete: 'restrict' }),
   totalAmount: numeric('total_amount').default('0'),
   discount: numeric('discount').default('0'),
   tax: numeric('tax').default('0'),
@@ -84,20 +112,33 @@ export const invoices = pgTable('invoices', {
   paidAmount: numeric('paid_amount').default('0'),
   status: varchar('status', { length: 50 }).default('draft'),
   description: text('description'),
+  version: integer('version').default(1),
   createdAt: timestamp('created_at').defaultNow(),
-});
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  invoiceNumberIdx: index('idx_invoices_number').on(table.invoiceNumber),
+  dateIdx: index('idx_invoices_date').on(table.date),
+  personIdx: index('idx_invoices_person_id').on(table.personId),
+  warehouseIdx: index('idx_invoices_warehouse_id').on(table.warehouseId),
+  typeIdx: index('idx_invoices_type').on(table.type),
+  createdAtIdx: index('idx_invoices_created_at').on(table.createdAt),
+}));
 
 export const invoiceItems = pgTable('invoice_items', {
   id: varchar('id', { length: 50 }).primaryKey(),
-  invoiceId: varchar('invoice_id', { length: 50 }).notNull(),
-  productId: varchar('product_id', { length: 50 }).notNull(),
+  invoiceId: varchar('invoice_id', { length: 50 }).notNull().references(() => invoices.id, { onDelete: 'cascade' }),
+  productId: varchar('product_id', { length: 50 }).notNull().references(() => products.id, { onDelete: 'restrict' }),
   quantity: numeric('quantity').notNull(),
   unitPrice: numeric('unit_price').notNull(),
   totalPrice: numeric('total_price').notNull(),
   discount: numeric('discount').default('0'),
   tax: numeric('tax').default('0'),
   netPrice: numeric('net_price').notNull(),
-});
+  version: integer('version').default(1),
+}, (table) => ({
+  invoiceIdx: index('idx_invoice_items_invoice_id').on(table.invoiceId),
+  productIdx: index('idx_invoice_items_product_id').on(table.productId),
+}));
 
 export const transactions = pgTable('transactions', {
   id: varchar('id', { length: 50 }).primaryKey(),
@@ -106,11 +147,17 @@ export const transactions = pgTable('transactions', {
   date: varchar('date', { length: 50 }).notNull(),
   sourceAccountId: varchar('source_account_id', { length: 50 }),
   destinationAccountId: varchar('destination_account_id', { length: 50 }),
-  personId: varchar('person_id', { length: 50 }),
-  invoiceId: varchar('invoice_id', { length: 50 }),
+  personId: varchar('person_id', { length: 50 }).references(() => persons.id, { onDelete: 'set null' }),
+  invoiceId: varchar('invoice_id', { length: 50 }).references(() => invoices.id, { onDelete: 'set null' }),
   description: text('description'),
+  version: integer('version').default(1),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  dateIdx: index('idx_transactions_date').on(table.date),
+  personIdx: index('idx_transactions_person_id').on(table.personId),
+  invoiceIdx: index('idx_transactions_invoice_id').on(table.invoiceId),
+  createdAtIdx: index('idx_transactions_created_at').on(table.createdAt),
+}));
 
 export const accounts = pgTable('accounts', {
   id: varchar('id', { length: 50 }).primaryKey(),
@@ -130,74 +177,151 @@ export const cashboxes = pgTable('cashboxes', {
   createdAt: timestamp('created_at').defaultNow(),
 });
 
-export const warehouses = pgTable('warehouses', {
-  id: varchar('id', { length: 50 }).primaryKey(),
-  title: varchar('title', { length: 255 }).notNull(),
-  manager: varchar('manager', { length: 255 }),
-  address: text('address'),
-  status: varchar('status', { length: 50 }).default('active'),
-  createdAt: timestamp('created_at').defaultNow(),
-});
-
 export const warehouseStocks = pgTable('warehouse_stocks', {
   id: varchar('id', { length: 50 }).primaryKey(),
-  warehouseId: varchar('warehouse_id', { length: 50 }).notNull(),
-  productId: varchar('product_id', { length: 50 }).notNull(),
+  warehouseId: varchar('warehouse_id', { length: 50 }).notNull().references(() => warehouses.id, { onDelete: 'restrict' }),
+  productId: varchar('product_id', { length: 50 }).notNull().references(() => products.id, { onDelete: 'restrict' }),
   stock: numeric('stock').default('0'),
-});
+}, (table) => ({
+  whProdIdx: index('idx_warehouse_stocks_wh_prod').on(table.warehouseId, table.productId),
+}));
 
 export const warehouseReceipts = pgTable('warehouse_receipts', {
   id: varchar('id', { length: 50 }).primaryKey(),
   invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
   date: varchar('date', { length: 50 }).notNull(),
-  warehouseId: varchar('warehouse_id', { length: 50 }),
-  personId: varchar('person_id', { length: 50 }),
+  warehouseId: varchar('warehouse_id', { length: 50 }).references(() => warehouses.id, { onDelete: 'restrict' }),
+  personId: varchar('person_id', { length: 50 }).references(() => persons.id, { onDelete: 'restrict' }),
   sourceInvoiceId: varchar('source_invoice_id', { length: 50 }),
   sourceType: varchar('source_type', { length: 50 }),
   description: text('description'),
   status: varchar('status', { length: 50 }).default('approved'),
+  version: integer('version').default(1),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  numberIdx: index('idx_warehouse_receipts_number').on(table.invoiceNumber),
+  dateIdx: index('idx_warehouse_receipts_date').on(table.date),
+  whIdx: index('idx_warehouse_receipts_wh').on(table.warehouseId),
+  createdAtIdx: index('idx_warehouse_receipts_created_at').on(table.createdAt),
+}));
 
 export const warehouseReceiptItems = pgTable('warehouse_receipt_items', {
   id: varchar('id', { length: 50 }).primaryKey(),
-  invoiceId: varchar('invoice_id', { length: 50 }).notNull(),
-  productId: varchar('product_id', { length: 50 }).notNull(),
-  warehouseId: varchar('warehouse_id', { length: 50 }),
+  invoiceId: varchar('invoice_id', { length: 50 }).notNull().references(() => warehouseReceipts.id, { onDelete: 'cascade' }),
+  productId: varchar('product_id', { length: 50 }).notNull().references(() => products.id, { onDelete: 'restrict' }),
+  warehouseId: varchar('warehouse_id', { length: 50 }).references(() => warehouses.id, { onDelete: 'restrict' }),
   quantity: numeric('quantity').notNull(),
   unitPrice: numeric('unit_price').default('0'),
   isSecondaryUnit: boolean('is_secondary_unit').default(false),
   description: text('description'),
-});
+}, (table) => ({
+  invIdx: index('idx_wh_receipt_items_inv').on(table.invoiceId),
+  prodIdx: index('idx_wh_receipt_items_prod').on(table.productId),
+}));
 
 export const warehouseRemittances = pgTable('warehouse_remittances', {
   id: varchar('id', { length: 50 }).primaryKey(),
   invoiceNumber: varchar('invoice_number', { length: 50 }).notNull(),
   date: varchar('date', { length: 50 }).notNull(),
-  warehouseId: varchar('warehouse_id', { length: 50 }),
-  personId: varchar('person_id', { length: 50 }),
+  warehouseId: varchar('warehouse_id', { length: 50 }).references(() => warehouses.id, { onDelete: 'restrict' }),
+  personId: varchar('person_id', { length: 50 }).references(() => persons.id, { onDelete: 'restrict' }),
   sourceInvoiceId: varchar('source_invoice_id', { length: 50 }),
   sourceType: varchar('source_type', { length: 50 }),
   description: text('description'),
   status: varchar('status', { length: 50 }).default('approved'),
+  version: integer('version').default(1),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  numberIdx: index('idx_warehouse_remittances_number').on(table.invoiceNumber),
+  dateIdx: index('idx_warehouse_remittances_date').on(table.date),
+  whIdx: index('idx_warehouse_remittances_wh').on(table.warehouseId),
+  createdAtIdx: index('idx_warehouse_remittances_created_at').on(table.createdAt),
+}));
 
 export const warehouseRemittanceItems = pgTable('warehouse_remittance_items', {
   id: varchar('id', { length: 50 }).primaryKey(),
-  invoiceId: varchar('invoice_id', { length: 50 }).notNull(),
-  productId: varchar('product_id', { length: 50 }).notNull(),
-  warehouseId: varchar('warehouse_id', { length: 50 }),
+  invoiceId: varchar('invoice_id', { length: 50 }).notNull().references(() => warehouseRemittances.id, { onDelete: 'cascade' }),
+  productId: varchar('product_id', { length: 50 }).notNull().references(() => products.id, { onDelete: 'restrict' }),
+  warehouseId: varchar('warehouse_id', { length: 50 }).references(() => warehouses.id, { onDelete: 'restrict' }),
   quantity: numeric('quantity').notNull(),
   unitPrice: numeric('unit_price').default('0'),
   isSecondaryUnit: boolean('is_secondary_unit').default(false),
   description: text('description'),
-});
+}, (table) => ({
+  invIdx: index('idx_wh_remittance_items_inv').on(table.invoiceId),
+  prodIdx: index('idx_wh_remittance_items_prod').on(table.productId),
+}));
+
+// Standard Unified Inventory Transactions Table
+export const inventoryTransactions = pgTable('inventory_transactions', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  productId: varchar('product_id', { length: 50 }).notNull().references(() => products.id, { onDelete: 'restrict' }),
+  warehouseId: varchar('warehouse_id', { length: 50 }).references(() => warehouses.id, { onDelete: 'restrict' }),
+  date: varchar('date', { length: 50 }).notNull(),
+  time: varchar('time', { length: 20 }),
+  type: varchar('type', { length: 20 }).notNull(), // 'in' | 'out'
+  quantity: numeric('quantity').notNull(),
+  unitPrice: numeric('unit_price').default('0'),
+  totalPrice: numeric('total_price').default('0'),
+  balanceAfter: numeric('balance_after'),
+  stockBefore: numeric('stock_before'),
+  stockAfter: numeric('stock_after'),
+  documentType: varchar('document_type', { length: 50 }).notNull(),
+  documentId: varchar('document_id', { length: 50 }),
+  documentNumber: varchar('document_number', { length: 50 }),
+  personId: varchar('person_id', { length: 50 }).references(() => persons.id, { onDelete: 'set null' }),
+  personName: varchar('person_name', { length: 255 }),
+  description: text('description'),
+  timestamp: numeric('timestamp').default('0'),
+  createdAt: timestamp('created_at').defaultNow(),
+}, (table) => ({
+  prodIdx: index('idx_inv_tx_prod').on(table.productId),
+  whIdx: index('idx_inv_tx_wh').on(table.warehouseId),
+  dateIdx: index('idx_inv_tx_date').on(table.date),
+  docIdx: index('idx_inv_tx_doc').on(table.documentType, table.documentId),
+  createdAtIdx: index('idx_inv_tx_created_at').on(table.createdAt),
+}));
+
+// Standard Accounting Documents Tables
+export const accountingDocuments = pgTable('accounting_documents', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  documentNumber: integer('document_number').notNull(),
+  date: varchar('date', { length: 50 }).notNull(),
+  description: text('description'),
+  status: varchar('status', { length: 50 }).default('draft'), // draft, approved, permanent
+  sourceType: varchar('source_type', { length: 50 }), // manual, invoice_sale, invoice_purchase, receipt, payment, stocktaking
+  sourceId: varchar('source_id', { length: 50 }),
+  fiscalYearId: varchar('fiscal_year_id', { length: 50 }),
+  currency: varchar('currency', { length: 20 }),
+  version: integer('version').default(1),
+  createdAt: timestamp('created_at').defaultNow(),
+  updatedAt: timestamp('updated_at').defaultNow(),
+}, (table) => ({
+  docNumIdx: index('idx_acc_docs_num').on(table.documentNumber),
+  dateIdx: index('idx_acc_docs_date').on(table.date),
+  statusIdx: index('idx_acc_docs_status').on(table.status),
+  sourceIdx: index('idx_acc_docs_source').on(table.sourceType, table.sourceId),
+  createdAtIdx: index('idx_acc_docs_created_at').on(table.createdAt),
+}));
+
+export const accountingDocumentItems = pgTable('accounting_document_items', {
+  id: varchar('id', { length: 50 }).primaryKey(),
+  documentId: varchar('document_id', { length: 50 }).notNull().references(() => accountingDocuments.id, { onDelete: 'cascade' }),
+  ledgerAccountId: varchar('ledger_account_id', { length: 50 }).references(() => accounts.id, { onDelete: 'restrict' }),
+  detailedAccountId: varchar('detailed_account_id', { length: 50 }),
+  description: text('description'),
+  debit: numeric('debit').default('0'),
+  credit: numeric('credit').default('0'),
+  currency: varchar('currency', { length: 20 }),
+}, (table) => ({
+  docIdx: index('idx_acc_doc_items_doc').on(table.documentId),
+  ledgerIdx: index('idx_acc_doc_items_ledger').on(table.ledgerAccountId),
+}));
 
 export const kardex = pgTable('kardex', {
   id: varchar('id', { length: 50 }).primaryKey(),
-  productId: varchar('product_id', { length: 50 }).notNull(),
-  warehouseId: varchar('warehouse_id', { length: 50 }),
+  productId: varchar('product_id', { length: 50 }).notNull().references(() => products.id, { onDelete: 'restrict' }),
+  warehouseId: varchar('warehouse_id', { length: 50 }).references(() => warehouses.id, { onDelete: 'restrict' }),
   date: varchar('date', { length: 50 }).notNull(),
   type: varchar('type', { length: 20 }).notNull(), // 'in' | 'out'
   quantity: numeric('quantity').notNull(),
@@ -212,7 +336,12 @@ export const kardex = pgTable('kardex', {
   description: text('description'),
   timestamp: numeric('timestamp').default('0'),
   createdAt: timestamp('created_at').defaultNow(),
-});
+}, (table) => ({
+  prodIdx: index('idx_kardex_prod').on(table.productId),
+  whIdx: index('idx_kardex_wh').on(table.warehouseId),
+  dateIdx: index('idx_kardex_date').on(table.date),
+  docIdx: index('idx_kardex_doc').on(table.documentId),
+}));
 
 
 export const roles = pgTable('roles', {
@@ -435,6 +564,81 @@ export const smsAuditLogs = pgTable('sms_audit_logs', {
 });
 
 // --- Relations ---
+
+export const productsRelations = relations(products, ({ one, many }) => ({
+  category: one(productCategories, {
+    fields: [products.categoryId],
+    references: [productCategories.id],
+  }),
+  invoiceItems: many(invoiceItems),
+  inventoryTransactions: many(inventoryTransactions),
+}));
+
+export const personsRelations = relations(persons, ({ many }) => ({
+  invoices: many(invoices),
+  transactions: many(transactions),
+}));
+
+export const warehousesRelations = relations(warehouses, ({ many }) => ({
+  invoices: many(invoices),
+  stocks: many(warehouseStocks),
+  receipts: many(warehouseReceipts),
+  remittances: many(warehouseRemittances),
+  inventoryTransactions: many(inventoryTransactions),
+}));
+
+export const invoicesRelations = relations(invoices, ({ one, many }) => ({
+  person: one(persons, {
+    fields: [invoices.personId],
+    references: [persons.id],
+  }),
+  warehouse: one(warehouses, {
+    fields: [invoices.warehouseId],
+    references: [warehouses.id],
+  }),
+  items: many(invoiceItems),
+}));
+
+export const invoiceItemsRelations = relations(invoiceItems, ({ one }) => ({
+  invoice: one(invoices, {
+    fields: [invoiceItems.invoiceId],
+    references: [invoices.id],
+  }),
+  product: one(products, {
+    fields: [invoiceItems.productId],
+    references: [products.id],
+  }),
+}));
+
+export const accountingDocumentsRelations = relations(accountingDocuments, ({ many }) => ({
+  items: many(accountingDocumentItems),
+}));
+
+export const accountingDocumentItemsRelations = relations(accountingDocumentItems, ({ one }) => ({
+  document: one(accountingDocuments, {
+    fields: [accountingDocumentItems.documentId],
+    references: [accountingDocuments.id],
+  }),
+  ledgerAccount: one(accounts, {
+    fields: [accountingDocumentItems.ledgerAccountId],
+    references: [accounts.id],
+  }),
+}));
+
+export const inventoryTransactionsRelations = relations(inventoryTransactions, ({ one }) => ({
+  product: one(products, {
+    fields: [inventoryTransactions.productId],
+    references: [products.id],
+  }),
+  warehouse: one(warehouses, {
+    fields: [inventoryTransactions.warehouseId],
+    references: [warehouses.id],
+  }),
+  person: one(persons, {
+    fields: [inventoryTransactions.personId],
+    references: [persons.id],
+  }),
+}));
 
 export const smsProvidersRelations = relations(smsProviders, ({ many }) => ({
   settings: many(smsProviderSettings),

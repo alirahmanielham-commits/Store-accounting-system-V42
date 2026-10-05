@@ -465,9 +465,10 @@ export function validateStockAvailability({
     return { valid: true };
   }
 
-  // Only validate sales invoices
-  const docType = docToValidate.type || (docToValidate._originTable === 'sales_invoices' ? 'sale' : 'sale');
-  if (docType !== 'sale') return { valid: true };
+  // Validate outbound documents (sales invoices, warehouse remittances, and waste)
+  const docType = docToValidate.type || (docToValidate._originTable === 'warehouse_remittances' ? 'warehouse_remittance' : (docToValidate._originTable === 'wastes' ? 'waste' : 'sale'));
+  const outboundTypes = ['sale', 'warehouse_remittance', 'waste'];
+  if (!outboundTypes.includes(docType)) return { valid: true };
 
   const defaultWh = warehouses && warehouses.length > 0 ? String(warehouses[0].id) : 'unknown';
   const productMap = new Map<string, any>();
@@ -550,13 +551,19 @@ export function validateStockAvailability({
   const shortageDetails: any[] = [];
   Object.keys(requestedMap).forEach((key) => {
     const totalRequested = requestedMap[key];
-    const alreadyRemitted = alreadyRemittedMap[key] || 0;
-    // New reservation amount that must be satisfied by available stock
-    const netReservationNeeded = Math.max(0, totalRequested - alreadyRemitted);
+    let netNeeded = totalRequested;
+    let available = 0;
 
-    const available = stocksMap[key] ? stocksMap[key].availableStock : 0;
+    if (docType === 'sale') {
+      const alreadyRemitted = alreadyRemittedMap[key] || 0;
+      netNeeded = Math.max(0, totalRequested - alreadyRemitted);
+      available = stocksMap[key] ? stocksMap[key].availableStock : 0;
+    } else {
+      netNeeded = totalRequested;
+      available = stocksMap[key] ? stocksMap[key].physicalStock : 0;
+    }
 
-    if (netReservationNeeded > available + 0.0001) {
+    if (netNeeded > available + 0.0001) {
       const [pid, wid] = key.split('_');
       const prod = productMap.get(pid);
       const wh = warehouseMap.get(wid);
@@ -566,18 +573,18 @@ export function validateStockAvailability({
         warehouseId: wid,
         warehouseName: wh?.name || 'انبار پیش‌فرض',
         availableStock: available,
-        requestedQty: netReservationNeeded,
+        requestedQty: netNeeded,
       });
     }
   });
 
   if (shortageDetails.length > 0) {
     const errorMsgs = shortageDetails.map(
-      (s) => `موجودی آزاد «${s.productName}» در «${s.warehouseName}» ناکافی است (موجود آزاد: ${s.availableStock}، نیاز به رزرو: ${s.requestedQty})`
+      (s) => `موجودی «${s.productName}» در «${s.warehouseName}» ناکافی است (موجود: ${s.availableStock}، درخواستی: ${s.requestedQty})`
     );
     return {
       valid: false,
-      error: `کسری موجودی آزاد برای رزرو:\n${errorMsgs.join('\n')}`,
+      error: `کسری موجودی برای ثبت سند:\n${errorMsgs.join('\n')}`,
       details: shortageDetails,
     };
   }

@@ -174,7 +174,7 @@ router.post('/api/auth/login', async (req, res) => {
        console.log('OTP for ' + username + ' is: ' + otp);
        
        const tempToken = jwt.sign({ username }, JWT_SECRET, { expiresIn: '5m' });
-       return res.json({ requireOTP: true, tempToken, message: 'کد تایید ورود جهت تست (در کنسول هم چاپ شد): ' + otp }); 
+       return res.json({ requireOTP: true, tempToken, message: 'کد تایید ورود با موفقیت ارسال شد.' }); 
     } else {
        return finalizeLogin(res, user, req);
     }
@@ -183,7 +183,7 @@ router.post('/api/auth/login', async (req, res) => {
 router.post('/api/auth/verify-otp', async (req, res) => {
     const { tempToken, otp } = req.body;
     try {
-      const decoded = jwt.verify(tempToken || '', process.env.JWT_SECRET || 'default_secret') as any;
+      const decoded = jwt.verify(tempToken || '', JWT_SECRET) as any;
       const users = await getUsers();
       const user = users.find(u => u.username === (decoded as any).username);
       
@@ -207,7 +207,7 @@ router.post('/api/auth/refresh', async (req, res) => {
      if (!token) return res.status(401).json({ error: 'نیازمند ورود مجدد' });
      
      try {
-       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'default_secret') as any;
+       const decoded = jwt.verify(token, JWT_REFRESH_SECRET) as any;
        const users = await getUsers();
        const user = users.find(u => u.username === (decoded as any).username);
        if (!user || user.tokenVersion !== (decoded as any).tokenVersion) {

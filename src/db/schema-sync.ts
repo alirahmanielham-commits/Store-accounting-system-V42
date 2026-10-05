@@ -61,7 +61,7 @@ export async function ensurePostgresTables(poolOverride?: any) {
   if (p) {
     try {
       await p.query('GRANT ALL ON SCHEMA public TO public');
-    } catch (e) {
+    } catch (e: any) {
       console.warn('Could not grant schema privileges:', e.message);
     }
     for (const key of KNOWN_TABLES) {
@@ -71,6 +71,34 @@ export async function ensurePostgresTables(poolOverride?: any) {
         `);
       } catch (err: any) {
         console.error(`Error creating table ${key}:`, err.message);
+      }
+    }
+    // Create essential performance indexes
+    const essentialIndexes = [
+      'CREATE INDEX IF NOT EXISTS idx_invoices_date ON "invoices" ("date")',
+      'CREATE INDEX IF NOT EXISTS idx_invoices_person ON "invoices" ("personId")',
+      'CREATE INDEX IF NOT EXISTS idx_invoices_warehouse ON "invoices" ("warehouseId")',
+      'CREATE INDEX IF NOT EXISTS idx_invoices_num ON "invoices" ("invoiceNumber")',
+      'CREATE INDEX IF NOT EXISTS idx_invoices_type ON "invoices" ("type")',
+      'CREATE INDEX IF NOT EXISTS idx_invoice_items_inv ON "invoice_items" ("invoiceId")',
+      'CREATE INDEX IF NOT EXISTS idx_invoice_items_prod ON "invoice_items" ("productId")',
+      'CREATE INDEX IF NOT EXISTS idx_acc_docs_num ON "accounting_documents" ("documentNumber")',
+      'CREATE INDEX IF NOT EXISTS idx_acc_docs_date ON "accounting_documents" ("date")',
+      'CREATE INDEX IF NOT EXISTS idx_acc_doc_items_doc ON "accounting_document_items" ("documentId")',
+      'CREATE INDEX IF NOT EXISTS idx_inv_tx_prod ON "inventory_transactions" ("productId")',
+      'CREATE INDEX IF NOT EXISTS idx_inv_tx_wh ON "inventory_transactions" ("warehouseId")',
+      'CREATE INDEX IF NOT EXISTS idx_inv_tx_date ON "inventory_transactions" ("date")',
+      'CREATE INDEX IF NOT EXISTS idx_inv_tx_doc ON "inventory_transactions" ("documentId")',
+      'CREATE INDEX IF NOT EXISTS idx_persons_name ON "persons" ("name")',
+      'CREATE INDEX IF NOT EXISTS idx_persons_phone ON "persons" ("phone")',
+      'CREATE INDEX IF NOT EXISTS idx_products_code ON "products" ("code")',
+      'CREATE INDEX IF NOT EXISTS idx_products_barcode ON "products" ("barcode")',
+    ];
+    for (const idxQuery of essentialIndexes) {
+      try {
+        await p.query(idxQuery);
+      } catch (e: any) {
+        // column may not exist yet until table populated; ignore silently
       }
     }
   }
