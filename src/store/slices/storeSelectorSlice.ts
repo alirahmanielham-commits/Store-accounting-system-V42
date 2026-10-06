@@ -9,18 +9,33 @@ export interface StoreSelectorSlice {
   setIsStoreSelectionOpen: (isOpen: boolean) => void;
 }
 
+const getStoredStoreId = () => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      return localStorage.getItem("activeStoreId");
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
 export const createStoreSelectorSlice: StateCreator<StoreSelectorSlice> = (set) => ({
-  activeStoreId: localStorage.getItem("activeStoreId"),
+  activeStoreId: getStoredStoreId(),
   setActiveStoreId: (id) => {
-    if (id) {
-        localStorage.setItem("activeStoreId", id);
-    } else {
-        localStorage.removeItem("activeStoreId");
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        if (id) {
+          localStorage.setItem("activeStoreId", id);
+        } else {
+          localStorage.removeItem("activeStoreId");
+        }
+      } catch {}
     }
     set({ activeStoreId: id });
   },
   availableStores: [],
   setAvailableStores: (stores) => set({ availableStores: stores }),
-  isStoreSelectionOpen: !localStorage.getItem("activeStoreId"),
+  isStoreSelectionOpen: !getStoredStoreId(),
   setIsStoreSelectionOpen: (isOpen) => set({ isStoreSelectionOpen: isOpen }),
 });

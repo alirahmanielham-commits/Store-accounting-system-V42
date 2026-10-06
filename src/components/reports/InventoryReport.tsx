@@ -507,6 +507,15 @@ const InventoryReport: React.FC<InventoryReportProps> = ({
             <Download className="w-4 h-4 text-emerald-600" />
             خروجی اکسل (.xlsx)
           </button>
+          <a
+            href="/api/reports/export/inventory"
+            download
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 rounded-xl transition-all font-bold text-xs cursor-pointer"
+            title="دانلود مستقیم خروجی اکسل از سرور بدون افت کارایی مرورگر"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            دانلود مستقیم سرور
+          </a>
           <button onClick={fetchData} className="p-2.5 bg-white border border-gray-200 text-gray-600 rounded-xl hover:bg-gray-50 focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer">
             <RefreshCw className="w-5 h-5" />
           </button>

@@ -272,10 +272,10 @@ export const appendLocalData = async <T>(key: string, data: T): Promise<T> => {
 export const batchLocalData = async (operations: any[]): Promise<any> => {
   const processedOps = [];
   for (const op of operations) {
-    if (op.type !== 'delete') {
+    if (op && op.type !== 'delete') {
       const processedData = await ensureFiscalYearId(op.key, op.data);
       processedOps.push({ ...op, data: processedData });
-    } else {
+    } else if (op) {
       processedOps.push(op);
     }
   }
@@ -285,15 +285,27 @@ export const batchLocalData = async (operations: any[]): Promise<any> => {
     body: JSON.stringify({ operations: processedOps })
   });
   if (!res.ok) {
-    if (res.status === 401) return { success: false };
-    throw new Error('Network response was not ok');
+    if (res.status === 401) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('auth_unauthorized', { detail: { key: 'batch' } }));
+      }
+      throw new Error('نشست کاربری شما منقضی شده است. لطفا مجددا وارد شوید.');
+    }
+    let errText = 'خطا در ثبت گروهی داده‌ها';
+    try {
+      const errJson = await res.json();
+      errText = errJson.error || errJson.message || errText;
+    } catch (_) {}
+    throw new Error(errText);
   }
   operations.forEach(op => {
-    invalidateCache(op.key);
-    if (!isAppDataChangedSuspended && typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('app_data_changed', { detail: { key: op.key } }));
+    if (op && op.key) {
+      invalidateCache(op.key);
+      if (!isAppDataChangedSuspended && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('app_data_changed', { detail: { key: op.key } }));
+      }
     }
-});
+  });
   return await res.json();
 };
 

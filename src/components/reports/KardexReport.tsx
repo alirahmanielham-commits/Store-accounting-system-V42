@@ -1,4 +1,5 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import {
   Package,
   Search,
@@ -609,6 +610,25 @@ export default function KardexReport() {
     };
   }, [allRawTransactions, selectedProduct, selectedWarehouseId, startDate, endDate, selectedDocType, tableSearch]);
 
+  const tableContainerRef = useRef<HTMLDivElement>(null);
+  const shouldVirtualize = ledgerRows.length > 40;
+
+  const rowVirtualizer = useVirtualizer({
+    count: ledgerRows.length,
+    getScrollElement: () => tableContainerRef.current,
+    estimateSize: () => 52,
+    overscan: 10,
+    enabled: shouldVirtualize,
+  });
+
+  const virtualItems = shouldVirtualize ? rowVirtualizer.getVirtualItems() : [];
+  const totalVirtualSize = shouldVirtualize ? rowVirtualizer.getTotalSize() : 0;
+  const paddingTop = shouldVirtualize && virtualItems.length > 0 ? (virtualItems[0]?.start ?? 0) : 0;
+  const paddingBottom =
+    shouldVirtualize && virtualItems.length > 0
+      ? totalVirtualSize - (virtualItems[virtualItems.length - 1]?.end ?? totalVirtualSize)
+      : 0;
+
   const currentStockSummary = useMemo(() => {
     if (!selectedProduct) return null;
     const { productSummaryMap } = calculateAllWarehouseStocks({
@@ -619,7 +639,110 @@ export default function KardexReport() {
     return productSummaryMap[selectedProduct.id?.toString()] || null;
   }, [selectedProduct, warehouses, invoices]);
 
-  // Export to Excel (.xlsx)
+  const renderLedgerRow = (row: any) => {
+    const isInput = row.type === 'in';
+    const isInitialStock = row.documentType === 'initial_stock';
+
+    return (
+      <tr
+        key={row.id}
+        className={`transition-colors ${
+          isInitialStock
+            ? "bg-amber-50/30 hover:bg-amber-50/60"
+            : "hover:bg-indigo-50/30"
+        }`}
+      >
+        <td className="px-3 py-3 text-center text-slate-500 text-xs font-bold accounting-num">
+          {formatDigits(row.rowNumber)}
+        </td>
+        <td className="px-3 py-3 text-slate-700 whitespace-nowrap text-xs font-bold accounting-num">
+          <div>{formatDigits(row.date)}</div>
+          {row.time && <div className="text-[10px] text-slate-400">{formatDigits(row.time)}</div>}
+        </td>
+        <td className="px-3 py-3 whitespace-nowrap">
+          {getDocumentTypeBadge(row.documentType, row.type)}
+        </td>
+        <td className="px-3 py-3 font-bold text-indigo-700 whitespace-nowrap text-xs accounting-num">
+          {row.documentNumber && row.documentNumber !== '-' && row.documentNumber !== '---' ? (
+            <button
+              type="button"
+              onClick={() => handleOpenDocPreview(row)}
+              className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-indigo-700 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-200 hover:border-indigo-600 transition-all font-black text-xs group cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
+              title="مشاهده پیش‌نمایش و برگه رسید/حواله انبار"
+            >
+              <Eye className="w-3.5 h-3.5 text-indigo-500 group-hover:text-white transition-colors" />
+              <span>{formatDigits(row.documentNumber)}</span>
+            </button>
+          ) : (
+            <span className="text-slate-400">-</span>
+          )}
+        </td>
+        <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">
+          {row.warehouseName}
+        </td>
+        <td className="px-3 py-3 text-slate-800 font-medium truncate max-w-[140px]" title={row.personName}>
+          {row.personName || '---'}
+        </td>
+        <td className="px-4 py-3 text-slate-600 text-[11px] max-w-[240px] truncate font-medium" title={row.description}>
+          {row.description || '---'}
+        </td>
+
+        {/* Inbound Quantity */}
+        <td className="px-3 py-3 text-center font-black text-emerald-700 bg-emerald-50/30 accounting-num">
+          {isInput ? (
+            <div>
+              <div className="text-sm font-black">+{formatNumFa(row.quantity)}</div>
+              {row.isSecondaryUnit && row.originalQuantity && (
+                <div className="text-[10px] text-indigo-600 font-normal">
+                  معادل {formatNumFa(row.originalQuantity)} {row.selectedUnit || selectedProduct?.secondaryUnit}
+                </div>
+              )}
+            </div>
+          ) : '-'}
+        </td>
+
+        {/* Outbound Quantity */}
+        <td className="px-3 py-3 text-center font-black text-rose-700 bg-rose-50/30 accounting-num">
+          {!isInput ? (
+            <div>
+              <div className="text-sm font-black">-{formatNumFa(row.quantity)}</div>
+              {row.isSecondaryUnit && row.originalQuantity && (
+                <div className="text-[10px] text-indigo-600 font-normal">
+                  معادل {formatNumFa(row.originalQuantity)} {row.selectedUnit || selectedProduct?.secondaryUnit}
+                </div>
+              )}
+            </div>
+          ) : '-'}
+        </td>
+
+        {/* Running Balance */}
+        <td className="px-4 py-3 text-center font-black text-sm bg-indigo-50/90 text-indigo-950 border-x border-indigo-200 accounting-num">
+          <span className={row.balanceAfter !== undefined && row.balanceAfter < 0 ? 'text-rose-600' : 'text-indigo-950'}>
+            {formatNumFa(row.balanceAfter)}
+          </span>
+        </td>
+
+        {/* Unit Price */}
+        <td className="px-3 py-3 text-left text-slate-700 whitespace-nowrap accounting-num">
+          {row.unitPrice ? (
+            <div>
+              <div className="font-bold">{formatCurFa(row.unitPrice)}</div>
+              {row.isSecondaryUnit && row.originalUnitPrice && (
+                <div className="text-[10px] text-indigo-600">
+                  {formatCurFa(row.originalUnitPrice)} ({row.selectedUnit || selectedProduct?.secondaryUnit})
+                </div>
+              )}
+            </div>
+          ) : '---'}
+        </td>
+
+        {/* Total Price */}
+        <td className="px-3 py-3 text-left font-black text-slate-800 whitespace-nowrap accounting-num">
+          {row.totalPrice ? formatCurFa(row.totalPrice) : '---'}
+        </td>
+      </tr>
+    );
+  };
   const handleExportExcel = () => {
     if (!selectedProduct || ledgerRows.length === 0) return;
 
@@ -1165,9 +1288,9 @@ export default function KardexReport() {
             <p className="text-xs text-slate-400">می‌توانید فیلتر انبار یا تاریخ را تغییر دهید یا سند موجودی اول دوره را ثبت نمایید.</p>
           </div>
         ) : (
-          <div className="overflow-x-auto">
+          <div ref={tableContainerRef} className="overflow-x-auto max-h-[720px] overflow-y-auto custom-scrollbar">
             <table className="w-full text-right text-xs">
-              <thead className="bg-slate-100/90 text-slate-700 border-b border-slate-200 font-black">
+              <thead className="bg-slate-100/95 text-slate-700 border-b border-slate-200 font-black sticky top-0 z-20 shadow-xs backdrop-blur-xs">
                 <tr>
                   <th className="px-3 py-3.5 text-center whitespace-nowrap w-12">ردیف</th>
                   <th className="px-3 py-3.5 whitespace-nowrap">تاریخ و زمان</th>
@@ -1223,115 +1346,31 @@ export default function KardexReport() {
                   </tr>
                 )}
 
-                {/* Detailed Transactions */}
-                {ledgerRows.map((row) => {
-                  const isInput = row.type === 'in';
-                  const isInitialStock = row.documentType === 'initial_stock';
-
-                  return (
-                    <tr
-                      key={row.id}
-                      className={`transition-colors ${
-                        isInitialStock
-                          ? "bg-amber-50/30 hover:bg-amber-50/60"
-                          : "hover:bg-indigo-50/30"
-                      }`}
-                    >
-                      <td className="px-3 py-3 text-center text-slate-500 text-xs font-bold accounting-num">
-                        {formatDigits(row.rowNumber)}
-                      </td>
-                      <td className="px-3 py-3 text-slate-700 whitespace-nowrap text-xs font-bold accounting-num">
-                        <div>{formatDigits(row.date)}</div>
-                        {row.time && <div className="text-[10px] text-slate-400">{formatDigits(row.time)}</div>}
-                      </td>
-                      <td className="px-3 py-3 whitespace-nowrap">
-                        {getDocumentTypeBadge(row.documentType, row.type)}
-                      </td>
-                      <td className="px-3 py-3 font-bold text-indigo-700 whitespace-nowrap text-xs accounting-num">
-                        {row.documentNumber && row.documentNumber !== '-' && row.documentNumber !== '---' ? (
-                          <button
-                            type="button"
-                            onClick={() => handleOpenDocPreview(row)}
-                            className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-indigo-700 hover:text-white bg-indigo-50 hover:bg-indigo-600 border border-indigo-200 hover:border-indigo-600 transition-all font-black text-xs group cursor-pointer shadow-2xs hover:shadow-xs active:scale-95"
-                            title="مشاهده پیش‌نمایش و برگه رسید/حواله انبار"
-                          >
-                            <Eye className="w-3.5 h-3.5 text-indigo-500 group-hover:text-white transition-colors" />
-                            <span>{formatDigits(row.documentNumber)}</span>
-                          </button>
-                        ) : (
-                          <span className="text-slate-400">-</span>
-                        )}
-                      </td>
-                      <td className="px-3 py-3 font-bold text-slate-700 whitespace-nowrap">
-                        {row.warehouseName}
-                      </td>
-                      <td className="px-3 py-3 text-slate-800 font-medium truncate max-w-[140px]" title={row.personName}>
-                        {row.personName || '---'}
-                      </td>
-                      <td className="px-4 py-3 text-slate-600 text-[11px] max-w-[240px] truncate font-medium" title={row.description}>
-                        {row.description || '---'}
-                      </td>
-
-                      {/* Inbound Quantity */}
-                      <td className="px-3 py-3 text-center font-black text-emerald-700 bg-emerald-50/30 accounting-num">
-                        {isInput ? (
-                          <div>
-                            <div className="text-sm font-black">+{formatNumFa(row.quantity)}</div>
-                            {row.isSecondaryUnit && row.originalQuantity && (
-                              <div className="text-[10px] text-indigo-600 font-normal">
-                                معادل {formatNumFa(row.originalQuantity)} {row.selectedUnit || selectedProduct?.secondaryUnit}
-                              </div>
-                            )}
-                          </div>
-                        ) : '-'}
-                      </td>
-
-                      {/* Outbound Quantity */}
-                      <td className="px-3 py-3 text-center font-black text-rose-700 bg-rose-50/30 accounting-num">
-                        {!isInput ? (
-                          <div>
-                            <div className="text-sm font-black">-{formatNumFa(row.quantity)}</div>
-                            {row.isSecondaryUnit && row.originalQuantity && (
-                              <div className="text-[10px] text-indigo-600 font-normal">
-                                معادل {formatNumFa(row.originalQuantity)} {row.selectedUnit || selectedProduct?.secondaryUnit}
-                              </div>
-                            )}
-                          </div>
-                        ) : '-'}
-                      </td>
-
-                      {/* Running Balance */}
-                      <td className="px-4 py-3 text-center font-black text-sm bg-indigo-50/90 text-indigo-950 border-x border-indigo-200 accounting-num">
-                        <span className={row.balanceAfter !== undefined && row.balanceAfter < 0 ? 'text-rose-600' : 'text-indigo-950'}>
-                          {formatNumFa(row.balanceAfter)}
-                        </span>
-                      </td>
-
-                      {/* Unit Price */}
-                      <td className="px-3 py-3 text-left text-slate-700 whitespace-nowrap accounting-num">
-                        {row.unitPrice ? (
-                          <div>
-                            <div className="font-bold">{formatCurFa(row.unitPrice)}</div>
-                            {row.isSecondaryUnit && row.originalUnitPrice && (
-                              <div className="text-[10px] text-indigo-600">
-                                {formatCurFa(row.originalUnitPrice)} ({row.selectedUnit || selectedProduct?.secondaryUnit})
-                              </div>
-                            )}
-                          </div>
-                        ) : '---'}
-                      </td>
-
-                      {/* Total Price */}
-                      <td className="px-3 py-3 text-left font-black text-slate-800 whitespace-nowrap accounting-num">
-                        {row.totalPrice ? formatCurFa(row.totalPrice) : '---'}
-                      </td>
-                    </tr>
-                  );
-                })}
+                {/* Detailed Transactions - Virtualized when rows > 40 */}
+                {shouldVirtualize ? (
+                  <>
+                    {paddingTop > 0 && (
+                      <tr aria-hidden="true">
+                        <td colSpan={12} style={{ height: `${paddingTop}px`, padding: 0, border: 'none' }} />
+                      </tr>
+                    )}
+                    {virtualItems.map((virtualRow) => {
+                      const row = ledgerRows[virtualRow.index];
+                      return renderLedgerRow(row);
+                    })}
+                    {paddingBottom > 0 && (
+                      <tr aria-hidden="true">
+                        <td colSpan={12} style={{ height: `${paddingBottom}px`, padding: 0, border: 'none' }} />
+                      </tr>
+                    )}
+                  </>
+                ) : (
+                  ledgerRows.map((row) => renderLedgerRow(row))
+                )}
               </tbody>
 
               {/* Table Footer: Totals */}
-              <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-black text-slate-800">
+              <tfoot className="bg-slate-100 border-t-2 border-slate-300 font-black text-slate-800 sticky bottom-0 z-10 shadow-xs">
                 <tr>
                   <td colSpan={7} className="px-4 py-3.5 text-left text-xs font-bold text-slate-700">
                     جمع کل گردش دوره:

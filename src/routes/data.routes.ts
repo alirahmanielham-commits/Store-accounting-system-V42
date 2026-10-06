@@ -74,35 +74,47 @@ const fetchAllSystemDocsForServer = async (): Promise<any[]> => {
 
 let isSyncingStock = false;
 let syncStockPending = false;
+let syncStockDebounceTimer: NodeJS.Timeout | null = null;
 
 const triggerServerStockSync = async () => {
-  if (isSyncingStock) {
-    syncStockPending = true;
-    return;
+  if (syncStockDebounceTimer) {
+    clearTimeout(syncStockDebounceTimer);
   }
-  isSyncingStock = true;
-  try {
-    const products = (await getDbData('products')) || [];
-    const warehouses = (await getDbData('warehouses')) || [];
-    const allDocs = await fetchAllSystemDocsForServer();
-    const { stocksList, historyList } = calculateAllWarehouseStocks({
-      products,
-      warehouses,
-      allDocs,
-    });
-    await setDbData('warehouse_stocks', stocksList);
-    await setDbData('InventoryTransactions', historyList);
-    await setDbData('kardex', historyList);
-    await setDbData('inventory_transactions', historyList);
-  } catch (e) {
-    console.error('Error during server stock sync:', e);
-  } finally {
-    isSyncingStock = false;
-    if (syncStockPending) {
-      syncStockPending = false;
-      setTimeout(() => triggerServerStockSync(), 250);
-    }
-  }
+
+  return new Promise<void>((resolve) => {
+    syncStockDebounceTimer = setTimeout(async () => {
+      syncStockDebounceTimer = null;
+      if (isSyncingStock) {
+        syncStockPending = true;
+        resolve();
+        return;
+      }
+      isSyncingStock = true;
+      try {
+        const products = (await getDbData('products')) || [];
+        const warehouses = (await getDbData('warehouses')) || [];
+        const allDocs = await fetchAllSystemDocsForServer();
+        const { stocksList, historyList } = calculateAllWarehouseStocks({
+          products,
+          warehouses,
+          allDocs,
+        });
+        await setDbData('warehouse_stocks', stocksList);
+        await setDbData('InventoryTransactions', historyList);
+        await setDbData('kardex', historyList);
+        await setDbData('inventory_transactions', historyList);
+      } catch (e) {
+        console.error('Error during server stock sync:', e);
+      } finally {
+        isSyncingStock = false;
+        if (syncStockPending) {
+          syncStockPending = false;
+          setTimeout(() => triggerServerStockSync(), 200);
+        }
+        resolve();
+      }
+    }, 150);
+  });
 };
 
 const isNegativeStockAllowedOnServer = async (doc?: any): Promise<boolean> => {
@@ -230,7 +242,7 @@ function parseUserAgentServer(uaString: string = ''): { browser: string; os: str
   return { browser, os, device };
 }
 
-function extractRequestUser(req: any) {
+export function extractRequestUser(req: any) {
   let userId = 'system';
   let username = 'system';
   let userName = 'سیستم';
@@ -575,11 +587,11 @@ router.post('/api/data/users', requireRole(['admin']), async (req, res, next) =>
 
 router.get('/api/data/:key', async (req, res) => {
     const { key } = req.params;
-    const { limit, offset, search, sortBy, sortOrder, paginated } = req.query;
+    const { limit, offset, page, pageSize, search, sortBy, sortOrder, sortDir, paginated } = req.query;
     try {
       // 1. Intelligent HTTP caching for base reference tables
       if (['product_categories', 'warehouses', 'store_settings', 'company_profile', 'person_roles', 'person_groups'].includes(key)) {
-        res.setHeader('Cache-Control', 'public, max-age=30, stale-while-revalidate=60');
+        res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
       } else {
         res.setHeader('Cache-Control', 'no-cache, must-revalidate');
       }
@@ -602,8 +614,9 @@ router.get('/api/data/:key', async (req, res) => {
         }
 
         // Sorting
+        const activeSortDir = (sortOrder || sortDir || 'desc') === 'asc' ? 'asc' : 'desc';
         if (sortBy && typeof sortBy === 'string') {
-          const isAsc = sortOrder === 'asc';
+          const isAsc = activeSortDir === 'asc';
           items.sort((a, b) => {
             const valA = a[sortBy];
             const valB = b[sortBy];
@@ -620,13 +633,25 @@ router.get('/api/data/:key', async (req, res) => {
         const total = items.length;
 
         // Pagination
-        if (limit !== undefined || paginated === 'true') {
-          const limitNum = Math.max(1, parseInt(limit as string, 10) || 50);
-          const offsetNum = Math.max(0, parseInt(offset as string, 10) || 0);
+        const isPaginated = limit !== undefined || offset !== undefined || page !== undefined || pageSize !== undefined || paginated === 'true';
+        if (isPaginated) {
+          const limitNum = Math.max(1, parseInt((pageSize || limit) as string, 10) || 50);
+          const pageNum = parseInt(page as string, 10);
+          const offsetNum = !isNaN(pageNum) && pageNum > 0
+            ? (pageNum - 1) * limitNum
+            : Math.max(0, parseInt(offset as string, 10) || 0);
           const pagedItems = items.slice(offsetNum, offsetNum + limitNum);
+          const currentPage = !isNaN(pageNum) && pageNum > 0 ? pageNum : Math.floor(offsetNum / limitNum) + 1;
+          const totalPages = Math.ceil(total / limitNum);
+
           return res.json({
             data: pagedItems,
+            items: pagedItems,
             total,
+            totalCount: total,
+            page: currentPage,
+            pageSize: limitNum,
+            totalPages,
             limit: limitNum,
             offset: offsetNum,
             hasMore: offsetNum + limitNum < total
@@ -650,19 +675,21 @@ router.post('/api/data/batch', async (req, res) => {
     
     try {
       const userInfo = extractRequestUser(req);
-      // Validate permissions for all targets in batch
-      for (const op of operations) {
-        if (op && op.key) {
-          const perm = checkDataModificationPermission(op.key, userInfo.userRole);
-          if (!perm.allowed) {
-            return res.status(403).json({ error: perm.message, key: op.key });
-          }
+      const validOperations = operations.filter((op: any) => op && typeof op === 'object' && op.key);
 
-          // Immutability: Permanent/Finalized accounting documents cannot be modified or deleted via batch
-          if (op.key === 'accounting_documents' && (op.type === 'update' || op.type === 'delete')) {
-            const currentDocs = (await getDbData('accounting_documents')) || [];
-            const targetId = String(op.id || op.data?.id);
-            const targetDoc = currentDocs.find((d: any) => String(d.id) === targetId);
+      // Validate permissions for all targets in batch
+      for (const op of validOperations) {
+        const perm = checkDataModificationPermission(op.key, userInfo.userRole);
+        if (!perm.allowed) {
+          return res.status(403).json({ error: perm.message, key: op.key });
+        }
+
+        // Immutability: Permanent/Finalized accounting documents cannot be modified or deleted via batch
+        if (op.key === 'accounting_documents' && (op.type === 'update' || op.type === 'delete')) {
+          const currentDocs = (await getDbData('accounting_documents')) || [];
+          const targetId = String(op.id || op.data?.id || '');
+          if (targetId) {
+            const targetDoc = Array.isArray(currentDocs) ? currentDocs.find((d: any) => d && String(d.id) === targetId) : null;
             if (targetDoc && (targetDoc.status === 'permanent' || targetDoc.status === 'finalized' || targetDoc.isFinalized)) {
               return res.status(403).json({
                 error: `امکان تغییر یا حذف سند حسابداری قطعی‌شده شماره ${targetDoc.documentNumber || targetDoc.id} وجود ندارد. طبق استانداردهای مالی باید سند معکوس / اصلاحی صادر گردد.`,
@@ -674,7 +701,7 @@ router.post('/api/data/batch', async (req, res) => {
       }
 
       // Group operations by key
-      const keys = new Set(operations.map((op: any) => op.key));
+      const keys = new Set(validOperations.map((op: any) => op.key));
       const results: any[] = [];
       const sysLogs = (await getDbData('system_logs')) || [];
       const timestamp = Date.now();
@@ -688,12 +715,13 @@ router.post('/api/data/batch', async (req, res) => {
             if (!KNOWN_TABLES.includes(key)) continue;
             await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
             let data = (await getDbData(key)) || [];
-            if (!Array.isArray(data)) continue;
+            if (!Array.isArray(data)) data = [];
 
-            const keyOps = operations.filter((op: any) => op.key === key);
+            const keyOps = validOperations.filter((op: any) => op.key === key);
             for (const op of keyOps) {
               if (op.type === 'append') {
-                const item = { ...op.data };
+                const item = (op.data && typeof op.data === 'object') ? { ...op.data } : { data: op.data };
+                if (!item.id) item.id = Math.random().toString(36).substring(2, 15);
                 if (item.version === undefined) item.version = 1;
                 item.createdAt = item.createdAt || new Date().toISOString();
                 item.updatedAt = item.updatedAt || new Date().toISOString();
@@ -705,14 +733,36 @@ router.post('/api/data/batch', async (req, res) => {
                 const colNames = itemKeys.map(k => `"${k}"`).join(', ');
                 await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
                 results.push({ id: item.id, status: 'appended' });
+                sysLogs.unshift({
+                  id: Math.random().toString(36).substring(2, 15),
+                  action: 'CREATE',
+                  userId: userInfo.userId,
+                  username: userInfo.username,
+                  userName: userInfo.userName,
+                  userRole: userInfo.userRole,
+                  details: generateActionDescription('CREATE', key, item),
+                  entityType: key,
+                  entityId: item.id,
+                  oldData: null,
+                  newData: item,
+                  changes: JSON.stringify(item),
+                  diffSummary: `ثبت رکورد جدید در ${getEntityPersianName(key)}`,
+                  ip: clientInfo.ip,
+                  browser: clientInfo.browser,
+                  os: clientInfo.os,
+                  device: clientInfo.device,
+                  userAgent: clientInfo.userAgent,
+                  timestamp
+                });
               } else if (op.type === 'update') {
-                const existing = data.find((x: any) => String(x.id) === String(op.id));
+                const targetId = String(op.id || (op.data && op.data.id) || '');
+                const existing = targetId ? data.find((x: any) => x && String(x.id) === targetId) : null;
                 if (existing) {
                   // Optimistic Locking Check
                   if (op.version !== undefined && existing.version !== undefined && Number(op.version) !== Number(existing.version)) {
-                    throw new Error(`CONCURRENCY_CONFLICT: سند ${op.id} در جدول ${key} همزمان تغییر یافته است.`);
+                    throw new Error(`CONCURRENCY_CONFLICT: سند ${targetId} در جدول ${key} همزمان تغییر یافته است.`);
                   }
-                  const updatedItem = { ...existing, ...op.data, id: op.id };
+                  const updatedItem = { ...existing, ...(op.data || {}), id: targetId };
                   updatedItem.version = ((Number(existing.version) || 0) + 1);
                   updatedItem.updatedAt = new Date().toISOString();
 
@@ -722,15 +772,61 @@ router.post('/api/data/batch', async (req, res) => {
                   const placeholders = itemKeys.map((_, i) => `$${i + 1}`).join(', ');
                   const colNames = itemKeys.map(k => `"${k}"`).join(', ');
                   await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
-                  results.push({ id: op.id, status: 'updated' });
+                  results.push({ id: targetId, status: 'updated' });
+                  sysLogs.unshift({
+                    id: Math.random().toString(36).substring(2, 15),
+                    action: 'UPDATE',
+                    userId: userInfo.userId,
+                    username: userInfo.username,
+                    userName: userInfo.userName,
+                    userRole: userInfo.userRole,
+                    details: generateActionDescription('UPDATE', key, op.data),
+                    entityType: key,
+                    entityId: targetId,
+                    oldData: existing,
+                    newData: updatedItem,
+                    diffSummary: createDiffSummaryServer(existing, updatedItem),
+                    changes: JSON.stringify({ old: existing, new: updatedItem }),
+                    ip: clientInfo.ip,
+                    browser: clientInfo.browser,
+                    os: clientInfo.os,
+                    device: clientInfo.device,
+                    userAgent: clientInfo.userAgent,
+                    timestamp
+                  });
                 }
               } else if (op.type === 'delete') {
-                if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
-                  await client.query(`UPDATE "${key}" SET deleted_at = NOW(), "isDeleted" = true WHERE id = $1`, [op.id]);
-                } else {
-                  await client.query(`DELETE FROM "${key}" WHERE id = $1`, [op.id]);
+                const targetId = String(op.id || (op.data && op.data.id) || '');
+                if (targetId) {
+                  const existing = data.find((x: any) => x && String(x.id) === targetId);
+                  if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
+                    await client.query(`UPDATE "${key}" SET deleted_at = NOW(), "isDeleted" = true WHERE id = $1`, [targetId]);
+                  } else {
+                    await client.query(`DELETE FROM "${key}" WHERE id = $1`, [targetId]);
+                  }
+                  results.push({ id: targetId, status: 'deleted' });
+                  sysLogs.unshift({
+                    id: Math.random().toString(36).substring(2, 15),
+                    action: 'DELETE',
+                    userId: userInfo.userId,
+                    username: userInfo.username,
+                    userName: userInfo.userName,
+                    userRole: userInfo.userRole,
+                    details: generateActionDescription('DELETE', key, existing || { id: targetId }),
+                    entityType: key,
+                    entityId: targetId,
+                    oldData: existing || null,
+                    newData: null,
+                    changes: JSON.stringify(existing || { id: targetId }),
+                    diffSummary: `حذف رکورد از ${getEntityPersianName(key)}`,
+                    ip: clientInfo.ip,
+                    browser: clientInfo.browser,
+                    os: clientInfo.os,
+                    device: clientInfo.device,
+                    userAgent: clientInfo.userAgent,
+                    timestamp
+                  });
                 }
-                results.push({ id: op.id, status: 'deleted' });
               }
             }
           }
@@ -743,18 +839,21 @@ router.post('/api/data/batch', async (req, res) => {
         }
       } else {
         for (const key of Array.from(keys)) {
-           let data = (await getDbData(key)) || [];
-           if (!Array.isArray(data)) continue;
+           let data = (await getDbData(key));
+           if (!Array.isArray(data)) {
+             data = [];
+           }
            
-           const keyOps = operations.filter((op: any) => op.key === key);
+           const keyOps = validOperations.filter((op: any) => op.key === key);
            for (const op of keyOps) {
               if (op.type === 'append') {
-                 const item = { ...op.data };
+                 const item = (op.data && typeof op.data === 'object') ? { ...op.data } : { data: op.data };
+                 if (!item.id) item.id = Math.random().toString(36).substring(2, 15);
                  if (item.version === undefined) item.version = 1;
                  item.createdAt = item.createdAt || new Date().toISOString();
                  item.updatedAt = item.updatedAt || new Date().toISOString();
 
-                 const idx = data.findIndex((x: any) => String(x.id) === String(item.id));
+                 const idx = data.findIndex((x: any) => x && x.id !== undefined && String(x.id) === String(item.id));
                  if (idx !== -1) {
                      data[idx] = { ...data[idx], ...item };
                  } else {
@@ -781,67 +880,73 @@ router.post('/api/data/batch', async (req, res) => {
                    timestamp 
                  });
               } else if (op.type === 'update') {
-                 const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
-                 if (idx !== -1) {
-                    const oldItem = data[idx];
-                    if (op.version !== undefined && oldItem.version !== undefined && Number(op.version) !== Number(oldItem.version)) {
-                      return res.status(409).json({ error: 'CONCURRENCY_CONFLICT', message: `سند ${op.id} همزمان ویرایش شده است.` });
-                    }
-                    const nextVersion = ((Number(oldItem.version) || 0) + 1);
-                    data[idx] = { ...data[idx], ...op.data, version: nextVersion, updatedAt: new Date().toISOString() };
-                    results.push({ id: op.id, status: 'updated' });
-                    sysLogs.unshift({ 
-                      id: Math.random().toString(36).substring(2, 15), 
-                      action: 'UPDATE', 
-                      userId: userInfo.userId, 
-                      username: userInfo.username,
-                      userName: userInfo.userName,
-                      userRole: userInfo.userRole,
-                      details: generateActionDescription('UPDATE', key, op.data), 
-                      entityType: key, 
-                      entityId: op.id, 
-                      diffSummary: createDiffSummaryServer(oldItem, data[idx]),
-                      oldData: oldItem,
-                      newData: data[idx],
-                      changes: JSON.stringify({ old: oldItem, new: data[idx] }),
-                      ip: clientInfo.ip,
-                      browser: clientInfo.browser,
-                      os: clientInfo.os,
-                      device: clientInfo.device,
-                      userAgent: clientInfo.userAgent,
-                      timestamp 
-                    });
+                 const targetId = String(op.id || (op.data && op.data.id) || '');
+                 if (targetId) {
+                   const idx = data.findIndex((x: any) => x && x.id !== undefined && String(x.id) === targetId);
+                   if (idx !== -1) {
+                      const oldItem = data[idx];
+                      if (op.version !== undefined && oldItem.version !== undefined && Number(op.version) !== Number(oldItem.version)) {
+                        return res.status(409).json({ error: 'CONCURRENCY_CONFLICT', message: `سند ${targetId} همزمان ویرایش شده است.` });
+                      }
+                      const nextVersion = ((Number(oldItem.version) || 0) + 1);
+                      data[idx] = { ...data[idx], ...(op.data || {}), id: targetId, version: nextVersion, updatedAt: new Date().toISOString() };
+                      results.push({ id: targetId, status: 'updated' });
+                      sysLogs.unshift({ 
+                        id: Math.random().toString(36).substring(2, 15), 
+                        action: 'UPDATE', 
+                        userId: userInfo.userId, 
+                        username: userInfo.username, 
+                        userName: userInfo.userName, 
+                        userRole: userInfo.userRole, 
+                        details: generateActionDescription('UPDATE', key, op.data), 
+                        entityType: key, 
+                        entityId: targetId, 
+                        diffSummary: createDiffSummaryServer(oldItem, data[idx]), 
+                        oldData: oldItem, 
+                        newData: data[idx], 
+                        changes: JSON.stringify({ old: oldItem, new: data[idx] }), 
+                        ip: clientInfo.ip, 
+                        browser: clientInfo.browser, 
+                        os: clientInfo.os, 
+                        device: clientInfo.device, 
+                        userAgent: clientInfo.userAgent, 
+                        timestamp 
+                      });
+                   }
                  }
               } else if (op.type === 'delete') {
-                 const idx = data.findIndex((x: any) => String(x.id) === String(op.id));
-                 if (idx !== -1) {
-                    const oldItem = data[idx];
-                    if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
-                       data[idx].deleted_at = new Date().toISOString();
-                       data[idx].isDeleted = true;
-                    } else {
-                       data.splice(idx, 1);
-                    }
-                    results.push({ id: op.id, status: 'deleted' });
-                    sysLogs.unshift({ 
-                      id: Math.random().toString(36).substring(2, 15), 
-                      action: 'DELETE', 
-                      userId: userInfo.userId, 
-                      username: userInfo.username,
-                      userName: userInfo.userName,
-                      userRole: userInfo.userRole,
-                      details: generateActionDescription('DELETE', key, oldItem), 
-                      entityType: key, 
-                      entityId: op.id, 
-                      oldData: oldItem,
-                      changes: JSON.stringify(oldItem),
-                      ip: clientInfo.ip,
-                      browser: clientInfo.browser,
-                      os: clientInfo.os,
-                      device: clientInfo.device,
-                      userAgent: clientInfo.userAgent,
-                      timestamp 
-                    });
+                 const targetId = String(op.id || (op.data && op.data.id) || '');
+                 if (targetId) {
+                   const idx = data.findIndex((x: any) => x && x.id !== undefined && String(x.id) === targetId);
+                   if (idx !== -1) {
+                      const oldItem = data[idx];
+                      if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
+                         data[idx].deleted_at = new Date().toISOString();
+                         data[idx].isDeleted = true;
+                      } else {
+                         data.splice(idx, 1);
+                      }
+                      results.push({ id: targetId, status: 'deleted' });
+                      sysLogs.unshift({ 
+                        id: Math.random().toString(36).substring(2, 15), 
+                        action: 'DELETE', 
+                        userId: userInfo.userId, 
+                        username: userInfo.username, 
+                        userName: userInfo.userName, 
+                        userRole: userInfo.userRole, 
+                        details: generateActionDescription('DELETE', key, oldItem), 
+                        entityType: key, 
+                        entityId: targetId, 
+                        oldData: oldItem, 
+                        changes: JSON.stringify(oldItem), 
+                        ip: clientInfo.ip, 
+                        browser: clientInfo.browser, 
+                        os: clientInfo.os, 
+                        device: clientInfo.device, 
+                        userAgent: clientInfo.userAgent, 
+                        timestamp 
+                      });
+                   }
                  }
               }
            }
@@ -849,17 +954,22 @@ router.post('/api/data/batch', async (req, res) => {
         }
       }
       
-      await setDbData('system_logs', sysLogs);
-      // Notify admin for any sensitive operations in this batch
-      for (const opLog of sysLogs.slice(0, operations.length)) {
-        dispatchAdminNotificationIfSensitive(opLog).catch(e => console.error(e));
+      try {
+        await setDbData('system_logs', sysLogs);
+        // Notify admin for any sensitive operations in this batch
+        for (const opLog of sysLogs.slice(0, validOperations.length)) {
+          dispatchAdminNotificationIfSensitive(opLog).catch(e => console.error(e));
+        }
+      } catch (logErr) {
+        console.warn('System log save error in batch:', logErr);
       }
       res.json({ success: true, results });
     } catch(err: any) {
       if (err.message && err.message.includes('CONCURRENCY_CONFLICT')) {
         return res.status(409).json({ error: err.message });
       }
-      res.status(500).json({ error: err.message });
+      console.error('Error in POST /api/data/batch:', err);
+      res.status(500).json({ error: err.message || 'خطای غیرمنتظره در ثبت دسته ای اطلاعات' });
     }
   });
 
@@ -1077,6 +1187,8 @@ router.post('/api/data/:key/append', async (req, res) => {
             entityType: key,
             entityId: newItem.id,
             changes: JSON.stringify(newItem),
+            oldData: null,
+            newData: newItem,
             diffSummary: `ثبت رکورد جدید در ${entityTitle}`,
             browser: clientInfo.browser,
             os: clientInfo.os,
@@ -1133,6 +1245,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
         releaseServerLock = await acquireServerInvoiceLock();
       }
       let mergedItem = { ...updatedItem, id };
+      let capturedOldItem: any = null;
       if (isPgActive() && getActivePgPool()) {
          if (!KNOWN_TABLES.includes(key)) return res.status(400).json({ error: 'Unknown table' });
          
@@ -1143,6 +1256,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
          }
          
          const oldItem = data[index];
+         capturedOldItem = oldItem;
          if (key === 'accounting_documents' && oldItem) {
            if (oldItem.status === 'permanent' || oldItem.status === 'finalized' || oldItem.isFinalized) {
              if (releaseServerLock) releaseServerLock();
@@ -1250,8 +1364,8 @@ router.put('/api/data/:key/:id', async (req, res) => {
          if (Array.isArray(data)) {
            const index = data.findIndex((x: any) => String(x.id) === String(id));
            if (index !== -1) {
-             
              const oldItem = data[index];
+             capturedOldItem = oldItem;
              if (key === 'accounting_documents' && oldItem) {
                if (oldItem.status === 'permanent' || oldItem.status === 'finalized' || oldItem.isFinalized) {
                  if (releaseServerLock) releaseServerLock();
@@ -1347,7 +1461,9 @@ router.put('/api/data/:key/:id', async (req, res) => {
             entityType: key,
             entityId: id,
             changes: JSON.stringify(updatedItem),
-            diffSummary: `ویرایش اطلاعات در ${entityTitle}`,
+            oldData: capturedOldItem,
+            newData: mergedItem,
+            diffSummary: capturedOldItem ? createDiffSummaryServer(capturedOldItem, mergedItem) : `ویرایش اطلاعات در ${entityTitle}`,
             browser: clientInfo.browser,
             os: clientInfo.os,
             device: clientInfo.device,
@@ -1601,6 +1717,8 @@ router.delete('/api/data/:key/:id', async (req, res) => {
               entityType: key,
               entityId: id,
               changes: JSON.stringify(itemToDelete),
+              oldData: itemToDelete,
+              newData: null,
               diffSummary: `حذف رکورد از ${entityTitle}`,
               browser: clientInfo.browser,
               os: clientInfo.os,

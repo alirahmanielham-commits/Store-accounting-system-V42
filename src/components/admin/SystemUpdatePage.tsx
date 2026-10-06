@@ -367,3 +367,5 @@ export function SystemUpdatePage({ storeSettings, setActiveTab }: SystemUpdatePa
     </div>
   );
 }
+
+export default SystemUpdatePage;

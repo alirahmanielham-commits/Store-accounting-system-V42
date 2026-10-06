@@ -55,6 +55,10 @@ async function startServer() {
   }
   const app = express();
   const PORT = 3000;
+
+  // Trust Cloud Run / Reverse Proxy headers (X-Forwarded-For, Forwarded)
+  app.set('trust proxy', 1);
+
   app.get("/api/health", (req, res) => res.json({ status: "ok" }));
   
   // 1. CORS Configuration
@@ -79,6 +83,10 @@ async function startServer() {
     max: 1500,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: {
+      xForwardedForHeader: false,
+      forwardedHeader: false
+    },
     message: { error: 'تعداد درخواست‌ها بیش از حد مجاز است. لطفاً چند دقیقه دیگر دوباره امتحان کنید.' },
     skip: (req) => req.path === '/api/health' || !req.path.startsWith('/api/')
   });
@@ -88,6 +96,10 @@ async function startServer() {
     max: 20,
     standardHeaders: true,
     legacyHeaders: false,
+    validate: {
+      xForwardedForHeader: false,
+      forwardedHeader: false
+    },
     message: { error: 'تعداد دفعات تلاش برای ورود بیش از حد مجاز است. لطفاً ۱۵ دقیقه دیگر دوباره تلاش فرمایید.' }
   });
 

@@ -10,20 +10,41 @@ export interface AuthSlice {
   setAuthLoading: (loading: boolean) => void;
 }
 
+const getStoredAuthToken = () => {
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      return localStorage.getItem('access_token');
+    } catch {
+      return null;
+    }
+  }
+  return null;
+};
+
 export const createAuthSlice: StateCreator<AuthSlice> = (set) => ({
   authUser: null,
-  authToken: localStorage.getItem('access_token') || null,
+  authToken: getStoredAuthToken(),
   isAuthLoading: false,
 
   setAuthUser: (user, token) => {
-    if (token) {
-      localStorage.setItem('access_token', token);
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        if (token) {
+          localStorage.setItem('access_token', token);
+        } else {
+          localStorage.removeItem('access_token');
+        }
+      } catch {}
     }
     set({ authUser: user, authToken: token });
   },
 
   clearAuth: () => {
-    localStorage.removeItem('access_token');
+    if (typeof window !== 'undefined' && window.localStorage) {
+      try {
+        localStorage.removeItem('access_token');
+      } catch {}
+    }
     set({ authUser: null, authToken: null });
   },
 

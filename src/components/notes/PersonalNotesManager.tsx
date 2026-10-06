@@ -766,3 +766,5 @@ export function PersonalNotesManager({ storeSettings }: any) {
     </div>
   );
 }
+
+export default PersonalNotesManager;

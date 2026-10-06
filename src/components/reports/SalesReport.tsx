@@ -970,6 +970,16 @@ export default function SalesReport(props: SalesReportProps) {
               <Download className="w-4 h-4" />
               <span>خروجی اکسل (.xlsx)</span>
             </button>
+
+            <a
+              href="/api/reports/export/sales"
+              download
+              className="hidden sm:flex items-center gap-1.5 px-3.5 py-2.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 rounded-xl font-bold text-xs transition-all cursor-pointer"
+              title="دانلود مستقیم خروجی اکسل از سرور بدون افت کارایی مرورگر"
+            >
+              <Download className="w-4 h-4 text-emerald-600" />
+              <span>دانلود مستقیم سرور</span>
+            </a>
           </div>
         </div>
 

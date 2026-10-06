@@ -4,10 +4,10 @@ import SyncStatusModal from './components/common/SyncStatusModal';
 import { useSyncQueueLength } from './services/syncQueueService';
 import { CloudOff } from 'lucide-react';
 
-import { SystemUpdatePage } from "./components/admin/SystemUpdatePage";
-import { PersonalNotesManager } from "./components/notes/PersonalNotesManager";
 import changelogData from './data/changelog.json';
 import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
+const SystemUpdatePage = React.lazy(() => import('./components/admin/SystemUpdatePage'));
+const PersonalNotesManager = React.lazy(() => import('./components/notes/PersonalNotesManager'));
 import SidebarNavigation from "./components/SidebarNavigation";
 import Barcode from "react-barcode";
 import {
@@ -126,7 +126,7 @@ import {
 import DateObject from "react-date-object";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
-import LinkPerson from "./components/profile/LinkPerson";
+const LinkPerson = React.lazy(() => import("./components/profile/LinkPerson"));
 import Select from "react-select";
 import { useAuth } from "./context/AuthContext";
 import {
@@ -346,7 +346,6 @@ const AnalyticalDashboard = React.lazy(() => import('./components/reports/Analyt
 const FinancialDashboard = React.lazy(() => import('./components/reports/FinancialDashboard'));
 const AccountLedgerReport = React.lazy(() => import('./components/accounting/AccountLedgerReport'));
 const DebtsCreditsReport = React.lazy(() => import('./components/reports/DebtsCreditsReport'));
-import DebtorsShowcaseComponent from "./components/crm/DebtorsShowcase";
 const DebtorsShowcase = React.lazy(() => import('./components/crm/DebtorsShowcase'));
 const ScreensaverManager = React.lazy(() => import('./components/crm/ScreensaverManager'));
 const LoansManager = React.lazy(() => import('./components/loans/LoansManager'));

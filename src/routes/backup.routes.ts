@@ -38,6 +38,9 @@ import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
 import { db } from '../db';
 import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
 import * as schema from '../db/schema';
+import { encryptBackupData, decryptBackupData, isEncryptedBackup } from '../utils/backupCrypto';
+import { performDryRunAnalysis, createSafetySnapshot, saveSecondaryReplica } from '../services/backupEngine';
+import { extractRequestUser } from './data.routes';
 
 const router = Router();
 
@@ -311,16 +314,21 @@ const backupStore = async (storeId: string) => {
                 }
                 const fileName = `backup-${storeId}-${getFormattedBackupDate()}.json`;
                 const filePath = path.join(dir, fileName);
-                const fileContent = JSON.stringify(backupData);
-                await fsPromises.writeFile(filePath, fileContent);
                 
-                // Automatic Cloud Sync (Google Drive, OneDrive, or S3)
+                // Encrypt backup payload with AES-256-GCM authenticated encryption
+                const { jsonString } = encryptBackupData(backupData, storeId);
+                await fsPromises.writeFile(filePath, jsonString, 'utf-8');
+
+                // Dual-site local redundancy: Save secondary replica in backups/secondary-replica
+                await saveSecondaryReplica(fileName, jsonString).catch(e => console.warn('Secondary replica warning:', e));
+                
+                // Automatic Cloud Sync (Google Drive, OneDrive, or S3) with encrypted payload
                 const shouldCloudSync = backupConfig.autoCloudSync || backupConfig.storageType === "cloud" || backupConfig.storageType === "both";
                 if (shouldCloudSync) {
-                    await dispatchCloudUpload(fileName, fileContent);
+                    await dispatchCloudUpload(fileName, jsonString);
                 }
                 
-                await appendDbLog('بک‌آپ خودکار/دستی', 'success', `بک‌آپ با حجم ${Buffer.byteLength(fileContent)} بایت در مسیر ${filePath} ایجاد شد.`);
+                await appendDbLog('پشتیبان‌گیری رمزنگاری‌شده (AES-256-GCM)', 'success', `بک‌آپ امن با حجم ${Buffer.byteLength(jsonString)} بایت در مسیر ${filePath} و آرشیو ثانویه ایجاد شد.`);
                 
                 // keep only last N backups per store
                 const retentionCount = backupConfig.retention || 20;
@@ -438,8 +446,27 @@ router.get('/api/db/backups', async (req, res) => {
         const jsonFiles = files.filter(f => (f.startsWith('backup-') || f.startsWith('uploaded-')) && (f.endsWith('.json') || f.endsWith('.sql')));
         const backupsList = [];
         for (const file of jsonFiles) {
-           const stat = await fsPromises.stat(path.join(dir, file));
-           backupsList.push({ file, size: stat.size, time: stat.mtimeMs });
+           const fullPath = path.join(dir, file);
+           const stat = await fsPromises.stat(fullPath);
+           let isEncrypted = false;
+           if (file.endsWith('.json')) {
+             try {
+               const headBuffer = Buffer.alloc(384);
+               const fd = await fsPromises.open(fullPath, 'r');
+               const { bytesRead } = await fd.read(headBuffer, 0, 384, 0);
+               await fd.close();
+               const headStr = headBuffer.toString('utf8', 0, bytesRead);
+               isEncrypted = headStr.includes('taraz_backup_encrypted');
+             } catch (_) {}
+           }
+           backupsList.push({ 
+             file, 
+             size: stat.size, 
+             time: stat.mtimeMs,
+             isEncrypted,
+             encryption: isEncrypted ? 'AES-256-GCM' : 'None',
+             type: isEncrypted ? 'رمزنگاری‌شده (AES-256)' : 'عادی'
+           });
         }
         backupsList.sort((a,b) => b.time - a.time);
         res.json(backupsList);
@@ -448,6 +475,112 @@ router.get('/api/db/backups', async (req, res) => {
      }
   });
 
+// Alias for Roadmap specification
+router.get('/api/backup/list', requireRole(['admin']), async (req, res) => {
+   try {
+      const dir = await getBackupsDir();
+      await fsPromises.mkdir(dir, { recursive: true });
+      const files = await fsPromises.readdir(dir);
+      const jsonFiles = files.filter(f => (f.startsWith('backup-') || f.startsWith('uploaded-')) && (f.endsWith('.json') || f.endsWith('.sql')));
+      const backupsList = [];
+      for (const file of jsonFiles) {
+         const fullPath = path.join(dir, file);
+         const stat = await fsPromises.stat(fullPath);
+         let isEncrypted = false;
+         if (file.endsWith('.json')) {
+           try {
+             const headBuffer = Buffer.alloc(384);
+             const fd = await fsPromises.open(fullPath, 'r');
+             const { bytesRead } = await fd.read(headBuffer, 0, 384, 0);
+             await fd.close();
+             isEncrypted = headBuffer.toString('utf8', 0, bytesRead).includes('taraz_backup_encrypted');
+           } catch (_) {}
+         }
+         backupsList.push({ file, size: stat.size, time: stat.mtimeMs, isEncrypted, encryption: isEncrypted ? 'AES-256-GCM' : 'None' });
+      }
+      backupsList.sort((a,b) => b.time - a.time);
+      res.json(backupsList);
+   } catch(e: any) {
+      res.status(500).json({ error: e.message });
+   }
+});
+
+// Alias for Roadmap export specification
+router.post('/api/backup/export', requireRole(['admin']), async (req, res) => {
+  try {
+    await runBackupJob();
+    res.json({ success: true, message: 'نسخه پشتیبان رمزنگاری‌شده AES-256-GCM با موفقیت ایجاد شد.' });
+  } catch (err: any) {
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Dry-run preview endpoint for verifying schema compatibility and row diffs before restoring
+router.post('/api/db/backups/dry-run/:filename', requireRole(['admin']), async (req, res) => {
+    try {
+        const { filename } = req.params;
+        if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename) || filename.includes('..')) {
+          return res.status(400).json({ success: false, error: 'نام فایل نامعتبر است.' });
+        }
+        const dir = path.resolve(await getBackupsDir());
+        const filePath = path.resolve(dir, filename);
+        if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
+
+        const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+        const decryptResult = decryptBackupData(fileContent);
+        if (!decryptResult.success || !decryptResult.data) {
+          return res.status(400).json({
+            success: false,
+            error: decryptResult.error || 'رمزگشایی یا بازخوانی فایل پشتیبان ناموفق بود.'
+          });
+        }
+
+        const analysis = await performDryRunAnalysis(decryptResult.data, decryptResult.isEncrypted);
+        res.json({
+          success: true,
+          filename,
+          isEncrypted: decryptResult.isEncrypted,
+          ...analysis
+        });
+    } catch(err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+router.post('/api/backup/dry-run', requireRole(['admin']), async (req, res) => {
+    try {
+        const { content, filename } = req.body;
+        if (!content && !filename) {
+          return res.status(400).json({ success: false, error: 'محتوای فایل یا نام فایل الزامی است.' });
+        }
+
+        let fileContent = content;
+        if (!fileContent && filename) {
+          const dir = path.resolve(await getBackupsDir());
+          const filePath = path.resolve(dir, filename);
+          fileContent = await fsPromises.readFile(filePath, 'utf-8');
+        }
+
+        const decryptResult = decryptBackupData(fileContent);
+        if (!decryptResult.success || !decryptResult.data) {
+          return res.status(400).json({
+            success: false,
+            error: decryptResult.error || 'رمزگشایی فایل ناموفق بود.'
+          });
+        }
+
+        const analysis = await performDryRunAnalysis(decryptResult.data, decryptResult.isEncrypted);
+        res.json({
+          success: true,
+          isEncrypted: decryptResult.isEncrypted,
+          ...analysis
+        });
+    } catch (err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
+// Restore backup with automatic safety snapshot & decryption
 router.post('/api/db/backups/restore/:filename', requireRole(['admin']), async (req, res) => {
      try {
          const { filename } = req.params;
@@ -458,14 +591,24 @@ router.post('/api/db/backups/restore/:filename', requireRole(['admin']), async (
          const filePath = path.resolve(dir, filename);
          if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
          
+         const storeId = storeContext.getStore() || 'default';
+         
+         // 1. Take automatic safety snapshot of current database before any alteration
+         const safetySnapshot = await createSafetySnapshot(storeId);
+
          if (filename.endsWith('.sql') && isPgActive() && getActivePgPool()) {
              const fileContent = await fsPromises.readFile(filePath, 'utf-8');
-             // Split by statements or just execute the whole block if memory allows. 
-             // getActivePgPool().query handles multiple statements separated by ';'
              await getActivePgPool().query(fileContent);
          } else {
              const fileContent = await fsPromises.readFile(filePath, 'utf-8');
-             const backupData = JSON.parse(fileContent);
+             const decryptResult = decryptBackupData(fileContent);
+             if (!decryptResult.success || !decryptResult.data) {
+               return res.status(400).json({
+                 success: false,
+                 error: decryptResult.error || 'رمزگشایی یا اعتبارسنجی فایل پشتیبان ناموفق بود. داده‌های فعلی بدون تغییر باقی ماندند.'
+               });
+             }
+             const backupData = decryptResult.data;
              
              if (isPgActive() && getActivePgPool()) {
                for (const key of KNOWN_TABLES) {
@@ -478,29 +621,165 @@ router.post('/api/db/backups/restore/:filename', requireRole(['admin']), async (
              }
 
              for (const [key, value] of Object.entries(backupData)) {
-                 if (KNOWN_TABLES.includes(key)) {
+                 if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile') {
                     await setDbData(key, value);
                  }
              }
          }
-         await appendDbLog('بازیابی اطلاعات', 'success', `نسخه ${filename} با موفقیت بازیابی شد.`);
-         res.json({ success: true });
+         
+         const userInfo = extractRequestUser(req);
+         await appendDbLog('بازیابی اطلاعات', 'success', `نسخه ${filename} با موفقیت توسط کاربر «${userInfo.userName || userInfo.username}» بازیابی شد. نسخه ایمنی: ${safetySnapshot.fileName}`);
+         
+         // Record in system_logs
+         try {
+           const sysLogs = (await getDbData('system_logs')) || [];
+           sysLogs.unshift({
+             id: Math.random().toString(36).substring(2, 15),
+             timestamp: Date.now(),
+             action: 'RESTORE_BACKUP',
+             userId: userInfo.userId,
+             username: userInfo.username,
+             userName: userInfo.userName,
+             userRole: userInfo.userRole,
+             details: `بازیابی کامل اطلاعات از فایل پشتیبان «${filename}» با ایجاد خودکار نسخه ایمنی ${safetySnapshot.fileName}`,
+             entityType: 'backup',
+             entityId: filename,
+             changes: JSON.stringify({ restoredFile: filename, safetySnapshot: safetySnapshot.fileName })
+           });
+           if (sysLogs.length > 3000) sysLogs.length = 3000;
+           await setDbData('system_logs', sysLogs);
+         } catch (_) {}
+
+         res.json({ 
+           success: true, 
+           safetySnapshot: safetySnapshot.fileName,
+           message: `نسخه ${filename} با موفقیت بازیابی شد.` 
+         });
      } catch(e: any) {
-         await appendDbLog('بازیابی اطلاعات', 'error', `خطا: ${e.message}`);
+         await appendDbLog('بازیابی اطلاعات', 'error', `خطا در بازیابی: ${e.message}`);
          console.error('Restore specific backup error:', e);
          res.status(500).json({ success: false, error: e.message });
      }
   });
 
+// Alias for Roadmap import specification
+router.post('/api/backup/import', requireRole(['admin']), async (req, res) => {
+  try {
+    const { filename, content } = req.body;
+    let fileToRestore = filename;
+
+    if (content) {
+      const dir = await getBackupsDir();
+      await fsPromises.mkdir(dir, { recursive: true });
+      const safeName = `uploaded-${Date.now()}-${(filename || 'backup.json').replace(/[^a-zA-Z0-9_\-\.]/g, '_')}`;
+      await fsPromises.writeFile(path.join(dir, safeName), content, 'utf-8');
+      fileToRestore = safeName;
+    }
+
+    if (!fileToRestore) {
+      return res.status(400).json({ success: false, error: 'نام فایل پشتیبان یا محتوای آن الزامی است.' });
+    }
+
+    // Execute restore logic
+    const storeId = storeContext.getStore() || 'default';
+    const safetySnapshot = await createSafetySnapshot(storeId);
+
+    const dir = path.resolve(await getBackupsDir());
+    const filePath = path.resolve(dir, fileToRestore);
+    const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+    const decryptResult = decryptBackupData(fileContent);
+    if (!decryptResult.success || !decryptResult.data) {
+      return res.status(400).json({ success: false, error: decryptResult.error || 'رمزگشایی فایل ناموفق بود.' });
+    }
+
+    if (isPgActive() && getActivePgPool()) {
+      for (const key of KNOWN_TABLES) {
+        try { await getActivePgPool().query(`TRUNCATE TABLE "${key}" CASCADE`); } catch (e) {}
+      }
+    } else {
+      try { getDb().prepare('DELETE FROM store').run(); } catch(e) {}
+    }
+
+    for (const [key, value] of Object.entries(decryptResult.data)) {
+      if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile') {
+        await setDbData(key, value);
+      }
+    }
+
+    const userInfo = extractRequestUser(req);
+    await appendDbLog('بازیابی اطلاعات', 'success', `فایل ${fileToRestore} بازیابی شد.`);
+    res.json({ success: true, file: fileToRestore, safetySnapshot: safetySnapshot.fileName });
+  } catch (err: any) {
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
+
+// Revert to emergency safety snapshot
+router.post('/api/db/backups/revert-safety', requireRole(['admin']), async (req, res) => {
+    try {
+        const safetyDir = path.join(process.cwd(), 'backups', 'safety-snapshots');
+        const files = await fsPromises.readdir(safetyDir).catch(() => []);
+        const safetyFiles = files.filter(f => f.startsWith('safety-pre-restore-') && f.endsWith('.json'));
+        if (safetyFiles.length === 0) {
+          return res.status(404).json({ success: false, error: 'هیچ نسخه ایمنی اضطراری برای بازگشت یافت نشد.' });
+        }
+
+        const stats = await Promise.all(safetyFiles.map(async f => ({
+          file: f,
+          time: (await fsPromises.stat(path.join(safetyDir, f))).mtimeMs
+        })));
+        stats.sort((a,b) => b.time - a.time);
+        const latestSafety = stats[0].file;
+
+        const content = await fsPromises.readFile(path.join(safetyDir, latestSafety), 'utf-8');
+        const decrypted = decryptBackupData(content);
+        if (!decrypted.success || !decrypted.data) {
+          return res.status(500).json({ success: false, error: 'رمزگشایی نسخه ایمنی با خطا مواجه شد.' });
+        }
+
+        if (isPgActive() && getActivePgPool()) {
+          for (const key of KNOWN_TABLES) {
+            try { await getActivePgPool().query(`TRUNCATE TABLE "${key}" CASCADE`); } catch (e) {}
+          }
+        } else {
+          try { getDb().prepare('DELETE FROM store').run(); } catch(e) {}
+        }
+
+        for (const [key, value] of Object.entries(decrypted.data)) {
+          if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile') {
+            await setDbData(key, value);
+          }
+        }
+
+        const userInfo = extractRequestUser(req);
+        await appendDbLog('بازگشت اضطراری به نسخه ایمنی', 'success', `سیستم با موفقیت به آخرین نسخه ایمنی (${latestSafety}) بازگردانی شد.`);
+        res.json({ success: true, restoredFile: latestSafety, message: 'سیستم با موفقیت به نسخه ایمنی قبل از بازیابی بازگردانده شد.' });
+    } catch(err: any) {
+        res.status(500).json({ success: false, error: err.message });
+    }
+});
+
 router.get('/api/db/backups/download/:filename', requireRole(['admin']), async (req, res) => {
      try {
          const { filename } = req.params;
+         const { decrypt } = req.query;
          if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename) || filename.includes('..')) {
            return res.status(400).json({ error: 'نام فایل نامعتبر است' });
          }
          const dir = path.resolve(await getBackupsDir());
          const filePath = path.resolve(dir, filename);
          if (!filePath.startsWith(dir)) return res.status(403).json({ error: 'مسیر غیرمجاز' });
+
+         if (decrypt === 'true' && filename.endsWith('.json')) {
+           const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+           const dec = decryptBackupData(fileContent);
+           if (dec.success && dec.data) {
+             res.setHeader('Content-Type', 'application/json');
+             res.setHeader('Content-Disposition', `attachment; filename=decrypted-${filename}`);
+             return res.send(JSON.stringify(dec.data, null, 2));
+           }
+         }
+
          res.download(filePath);
      } catch(e: any) {
          res.status(500).json({ error: e.message });
@@ -556,7 +835,7 @@ router.get('/api/db/stats', async (req, res) => {
 router.get('/api/db/backup', async (req, res) => {
     try {
       const rows = await getAllDbData();
-      const backupData = {};
+      const backupData: any = {};
       for (const row of rows) {
         backupData[row.key] = row.value;
       }
@@ -565,8 +844,14 @@ router.get('/api/db/backup', async (req, res) => {
       const fileName = `backup-${storeId}-${getFormattedBackupDate()}.json`;
       res.setHeader('Content-Type', 'application/json');
       res.setHeader('Content-Disposition', `attachment; filename=${fileName}`);
-      res.send(JSON.stringify(backupData, null, 2));
-    } catch (err) {
+
+      if (req.query.decrypt === 'true') {
+        res.send(JSON.stringify(backupData, null, 2));
+      } else {
+        const { jsonString } = encryptBackupData(backupData, storeId);
+        res.send(jsonString);
+      }
+    } catch (err: any) {
       console.error(err);
       res.status(500).json({ error: err.message });
     }

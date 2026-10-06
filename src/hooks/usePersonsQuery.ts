@@ -21,6 +21,8 @@ export function usePersons() {
   return useQuery({
     queryKey: PERSONS_QUERY_KEY,
     queryFn: getPersons,
+    staleTime: 60 * 1000,
+    gcTime: 5 * 60 * 1000,
   });
 }
 
@@ -28,6 +30,8 @@ export function usePersonGroups() {
   return useQuery({
     queryKey: PERSON_GROUPS_QUERY_KEY,
     queryFn: getPersonGroups,
+    staleTime: 120 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 
@@ -35,6 +39,8 @@ export function usePersonRoles() {
   return useQuery({
     queryKey: PERSON_ROLES_QUERY_KEY,
     queryFn: getPersonRoles,
+    staleTime: 120 * 1000,
+    gcTime: 10 * 60 * 1000,
   });
 }
 

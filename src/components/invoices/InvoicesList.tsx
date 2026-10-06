@@ -1054,9 +1054,9 @@ export default function InvoicesList(props: any) {
           </div>
         </div>
 
-        <div className="overflow-x-auto">
+        <div className="overflow-x-auto max-h-[720px] overflow-y-auto custom-scrollbar">
           <table className="w-full text-sm text-right">
-            <thead className="bg-slate-50/90 text-slate-600 border-b border-slate-200 uppercase font-black text-xs">
+            <thead className="bg-slate-50/95 text-slate-600 border-b border-slate-200 uppercase font-black text-xs sticky top-0 z-10 backdrop-blur-xs shadow-xs">
               <tr>
                 <th className="p-4 whitespace-nowrap">شماره</th>
                 <th className="p-4 whitespace-nowrap">عنوان / شرح سند</th>

@@ -227,6 +227,15 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({
             <Download className="w-4 h-4 text-emerald-600" />
             خروجی اکسل (.xlsx)
           </button>
+          <a
+            href="/api/reports/export/balances"
+            download
+            className="hidden sm:flex items-center gap-1.5 px-3 py-2.5 bg-emerald-50 border border-emerald-200 text-emerald-800 hover:bg-emerald-100 rounded-xl transition-all font-bold text-xs cursor-pointer"
+            title="دانلود مستقیم خروجی اکسل از سرور بدون افت کارایی مرورگر"
+          >
+            <Download className="w-4 h-4 text-emerald-600" />
+            دانلود مستقیم سرور
+          </a>
           <button 
             onClick={() => setIsPrintModalOpen(true)}
             className="flex items-center gap-2 px-5 py-2.5 bg-white border border-gray-200 text-gray-700 rounded-xl hover:bg-gray-50 transition-all font-bold text-sm shadow-sm cursor-pointer"

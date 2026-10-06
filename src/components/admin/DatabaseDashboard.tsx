@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Database, RefreshCw, UploadCloud, HardDrive, Download, 
-  Trash2, Shield, Calendar, Settings, FileText, CheckCircle, CheckCircle2,
+  Trash2, Shield, ShieldCheck, Calendar, Settings, FileText, CheckCircle, CheckCircle2,
   AlertTriangle, XCircle, Search, Save, FolderOpen, Mail, Key,
   Upload, Check, Play, Clock, Server, Eye, ToggleLeft, ToggleRight,
   Info, Lock, AlertCircle, X, LogIn
@@ -30,7 +30,9 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
           date: new Intl.DateTimeFormat('fa-IR').format(d),
           time: d.toLocaleTimeString('fa-IR'),
           size: (b.size / 1024 / 1024).toFixed(2) + ' MB',
-          type: b.file.startsWith('uploaded-') ? 'آپلود شده' : 'کامل (Full)',
+          type: b.type || (b.isEncrypted ? 'رمزنگاری‌شده (AES-256)' : (b.file.startsWith('uploaded-') ? 'آپلود شده' : 'کامل (Full)')),
+          isEncrypted: b.isEncrypted,
+          encryption: b.encryption || (b.isEncrypted ? 'AES-256-GCM' : 'None'),
           status: 'success',
           file: b.file
         };
@@ -286,6 +288,62 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const [restoreProgress, setRestoreProgress] = useState(0);
 
   const [selectedBackupForRestore, setSelectedBackupForRestore] = useState<any>(null);
+  const [dryRunData, setDryRunData] = useState<any>(null);
+  const [isLoadingDryRun, setIsLoadingDryRun] = useState(false);
+  const [isRevertingSafety, setIsRevertingSafety] = useState(false);
+
+  const fetchDryRunPreview = async (filename: string, content?: string) => {
+    setIsLoadingDryRun(true);
+    setDryRunData(null);
+    try {
+      let res;
+      if (content) {
+        res = await fetch('/api/backup/dry-run', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filename, content })
+        });
+      } else {
+        res = await fetch(`/api/db/backups/dry-run/${encodeURIComponent(filename)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
+      if (res.ok) {
+        const data = await res.json();
+        setDryRunData(data);
+      } else {
+        const err = await res.json().catch(() => ({}));
+        setDryRunData({ warnings: [err.error || 'خطا در ارزیابی پیش‌نمایش فایل پشتیبان'] });
+      }
+    } catch (e: any) {
+      setDryRunData({ warnings: ['امکان دریافت پیش‌نمایش فایل پشتیبان وجود ندارد: ' + e.message] });
+    } finally {
+      setIsLoadingDryRun(false);
+    }
+  };
+
+  const handleRevertSafetySnapshot = async () => {
+    if (!window.confirm('آیا مطمئن هستید که می‌خواهید سیستم را به نسخه ایمنی اضطراری قبل از آخرین بازیابی بازگردانید؟')) {
+      return;
+    }
+    setIsRevertingSafety(true);
+    try {
+      const res = await fetch('/api/db/backups/revert-safety', { method: 'POST' });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        showNotification(data.message || 'سیستم با موفقیت به نسخه ایمنی بازگردانده شد.', 'success');
+        loadBackups();
+        setTimeout(() => window.location.reload(), 1500);
+      } else {
+        showNotification(data.error || 'خطا در بازگشت به نسخه ایمنی', 'error');
+      }
+    } catch (err: any) {
+      showNotification('خطا: ' + err.message, 'error');
+    } finally {
+      setIsRevertingSafety(false);
+    }
+  };
 
   const [isPathPickerOpen, setIsPathPickerOpen] = useState(false);
   const [pickerPath, setPickerPath] = useState('');
@@ -1619,7 +1677,16 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                       </p>
                     </div>
                     
-  <div>
+  <div className="flex flex-wrap gap-2 items-center">
+    <button 
+      onClick={handleRevertSafetySnapshot} 
+      disabled={isRevertingSafety}
+      title="در صورت بروز خطا یا نیاز به بازگشت، سیستم به آخرین نسخه ایمنی اضطراری قبل از بازیابی بازمی‌گردد"
+      className="px-4 py-2.5 bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 rounded-xl font-bold text-xs transition-all flex items-center gap-1.5 shadow-sm disabled:opacity-50"
+    >
+      <ShieldCheck className="w-4 h-4 text-amber-600" /> 
+      {isRevertingSafety ? 'در حال بازگشت...' : 'بازگشت به نسخه ایمنی اضطراری'}
+    </button>
     <input type="file" ref={fileInputRef} className="hidden" accept=".json,.sql" onChange={handleFileUpload} />
     <button onClick={() => fileInputRef.current?.click()} className="px-5 py-2.5 bg-white border-2 border-slate-200 hover:border-indigo-300 hover:bg-indigo-50 text-indigo-700 rounded-xl font-bold text-sm transition-all flex items-center gap-2 shadow-sm">
       <Upload className="w-4 h-4" /> آپلود فایل بک‌آپ خارجی
@@ -1636,6 +1703,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                             <th className="px-5 py-4">تاریخ و زمان</th>
                             <th className="px-5 py-4">حجم</th>
                             <th className="px-5 py-4">نوع بک‌آپ</th>
+                            <th className="px-5 py-4">امنیت</th>
                             <th className="px-5 py-4">وضعیت</th>
                             <th className="px-5 py-4 text-center">عملیات</th>
                           </tr>
@@ -1651,6 +1719,17 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                                 <span className="bg-slate-100 text-slate-600 px-2.5 py-1 rounded-md text-xs border border-slate-200">
                                   {b.type}
                                 </span>
+                              </td>
+                              <td className="px-5 py-4">
+                                {b.isEncrypted ? (
+                                  <span className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2 py-0.5 rounded-md">
+                                    <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> AES-256-GCM
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-xs font-medium text-slate-400 bg-slate-50 border border-slate-200 px-2 py-0.5 rounded-md">
+                                    عادی
+                                  </span>
+                                )}
                               </td>
                               <td className="px-5 py-4">
                                 {b.status === 'success' ? (
@@ -1674,6 +1753,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                                   onClick={() => {
                                     setSelectedBackupForRestore(b);
                                     setIsRestoreModalOpen(true);
+                                    fetchDryRunPreview(b.file);
                                   }}
                                   disabled={b.status !== 'success'}
                                   className="px-4 py-2 bg-slate-800 text-white hover:bg-rose-600 rounded-lg font-bold text-xs transition-colors disabled:opacity-50 disabled:cursor-not-allowed shadow-sm flex items-center gap-2"
@@ -1902,32 +1982,107 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
               initial={{ opacity: 0, scale: 0.95, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.95, y: 20 }}
-              className="bg-white rounded-3xl w-full max-w-md shadow-2xl overflow-hidden border border-slate-200"
+              className="bg-white rounded-3xl w-full max-w-2xl max-h-[90vh] shadow-2xl overflow-hidden border border-slate-200 flex flex-col"
             >
               {restoreState === 'confirm' && (
                 <>
-                  <div className="bg-rose-50 p-6 text-center border-b border-rose-100">
-                    <div className="w-16 h-16 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-4 border-4 border-white shadow-sm">
-                      <AlertCircle className="w-8 h-8 text-rose-600" />
+                  <div className="bg-rose-50 p-5 text-center border-b border-rose-100 flex-shrink-0">
+                    <div className="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-sm">
+                      <AlertCircle className="w-7 h-7 text-rose-600" />
                     </div>
-                    <h3 className="text-xl font-black text-rose-700 mb-2">هشدار بسیار مهم</h3>
-                    <p className="text-sm text-rose-600/80 font-bold">آیا از بازیابی این نسخه اطمینان دارید؟</p>
+                    <h3 className="text-xl font-black text-rose-700 mb-1">پیش‌نمایش و تأیید بازیابی اطلاعات (Restore)</h3>
+                    <p className="text-xs text-rose-600/90 font-bold">بررسی تفاوت‌ها و سازگاری ساختار قبل از جایگزینی داده‌ها</p>
                   </div>
                   
-                  <div className="p-6 space-y-4">
-                    <p className="text-sm font-medium text-slate-600 leading-relaxed text-center">
-                      عملیات بازیابی (Restore) غیرقابل بازگشت است. 
-                      <br />تمامی اطلاعات فعلی سیستم با اطلاعات موجود در فایل بک‌آپ زیر جایگزین خواهد شد:
-                    </p>
-                    
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 text-center">
-                      <div className="text-lg font-black text-slate-800" dir="ltr">{selectedBackupForRestore?.date} - {selectedBackupForRestore?.time}</div>
-                      <div className="text-xs font-bold text-slate-500 mt-1">حجم: {selectedBackupForRestore?.size} | نوع: {selectedBackupForRestore?.type}</div>
-                      {selectedBackupForRestore?.isUpload && (
-                        <div className="mt-2 text-xs font-bold text-indigo-600 bg-indigo-50 py-1 rounded">فایل بارگذاری شده: {selectedBackupForRestore?.rawFile?.name}</div>
-                      )}
+                  <div className="p-6 space-y-4 overflow-y-auto flex-1">
+                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <div className="text-base font-black text-slate-800" dir="ltr">{selectedBackupForRestore?.date} - {selectedBackupForRestore?.time}</div>
+                        <div className="text-xs font-bold text-slate-500 mt-1">حجم: {selectedBackupForRestore?.size} | نام فایل: {selectedBackupForRestore?.file}</div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        {selectedBackupForRestore?.isEncrypted ? (
+                          <span className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg">
+                            <ShieldCheck className="w-4 h-4 text-emerald-600" /> رمزنگاری‌شده AES-256-GCM
+                          </span>
+                        ) : (
+                          <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-lg">
+                            فرمت عادی
+                          </span>
+                        )}
+                      </div>
                     </div>
-                    <div className="pt-4 flex gap-3">
+
+                    {/* Dry-run Analysis section */}
+                    {isLoadingDryRun && (
+                      <div className="p-6 bg-indigo-50/50 border border-indigo-100 rounded-xl text-center space-y-2">
+                        <RefreshCw className="w-6 h-6 text-indigo-600 animate-spin mx-auto" />
+                        <p className="text-sm font-bold text-indigo-900">در حال آنالیز ساختار و سنجش تفاوت داده‌های فایل پشتیبان...</p>
+                      </div>
+                    )}
+
+                    {!isLoadingDryRun && dryRunData && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between text-xs font-bold bg-slate-100/70 p-3 rounded-xl border border-slate-200">
+                          <span className="text-slate-600">تعداد رکوردهای موجود در فایل پشتیبان: <strong className="text-slate-900 font-black">{dryRunData.totalBackupRecords?.toLocaleString('fa-IR')}</strong></span>
+                          <span className="text-slate-600">تعداد رکوردهای کنونی پایگاه داده: <strong className="text-slate-900 font-black">{dryRunData.totalCurrentRecords?.toLocaleString('fa-IR')}</strong></span>
+                        </div>
+
+                        {/* Warnings if any */}
+                        {dryRunData.warnings && dryRunData.warnings.length > 0 && (
+                          <div className="bg-amber-50 border border-amber-200 p-3 rounded-xl text-xs text-amber-800 space-y-1">
+                            <div className="font-black flex items-center gap-1 text-amber-900 mb-1">
+                              <AlertTriangle className="w-4 h-4 text-amber-600" /> هشدارهای سازگاری و کاهش داده:
+                            </div>
+                            {dryRunData.warnings.map((w: string, idx: number) => (
+                              <div key={idx} className="flex items-start gap-1">
+                                <span className="text-amber-500">•</span>
+                                <span>{w}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Comparison Table */}
+                        {dryRunData.comparison && dryRunData.comparison.length > 0 && (
+                          <div className="border border-slate-200 rounded-xl overflow-hidden">
+                            <div className="bg-slate-100/80 px-3 py-2 text-xs font-black text-slate-700 border-b border-slate-200 flex justify-between">
+                              <span>جدول و نوع داده</span>
+                              <span>تعداد در بک‌آپ / فعلی / تفاوت</span>
+                            </div>
+                            <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 text-xs">
+                              {dryRunData.comparison.map((c: any) => (
+                                <div key={c.table} className="px-3 py-2 flex items-center justify-between hover:bg-slate-50">
+                                  <div className="font-bold text-slate-700">
+                                    {c.label} <span className="text-[10px] text-slate-400 font-mono">({c.table})</span>
+                                  </div>
+                                  <div className="flex items-center gap-3">
+                                    <span className="text-slate-500 font-mono">{c.backupCount}</span>
+                                    <span className="text-slate-300">/</span>
+                                    <span className="text-slate-500 font-mono">{c.currentCount}</span>
+                                    <span className={`px-1.5 py-0.5 rounded font-mono font-bold text-[11px] ${
+                                      c.diff > 0 ? 'bg-emerald-100 text-emerald-800' : 
+                                      c.diff < 0 ? 'bg-rose-100 text-rose-800' : 'bg-slate-100 text-slate-600'
+                                    }`}>
+                                      {c.diff > 0 ? `+${c.diff}` : c.diff}
+                                    </span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+
+                        <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+                          <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                          <span>
+                            <strong>تضمین تاب‌آوری:</strong> یک نسخه ایمنی اضطراری (Safety Snapshot) به صورت کاملاً خودکار قبل از بازنویسی دیتابیس ایجاد می‌شود تا در صورت نیاز به سرعت بازگردانی شود.
+                          </span>
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="pt-2 flex gap-3 flex-shrink-0">
                       <button 
                         onClick={() => setIsRestoreModalOpen(false)}
                         className="flex-1 py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-colors"
@@ -1938,7 +2093,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                         onClick={executeRestore}
                         className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-rose-200 flex items-center justify-center gap-2"
                       >
-                        بله، بازیابی کن
+                        تأیید و اجرای بازیابی
                       </button>
                     </div>
                   </div>

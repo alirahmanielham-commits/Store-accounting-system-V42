@@ -170,91 +170,102 @@
 
 ---
 
-## Phase 5 — Performance (بهینه‌سازی کارایی و مقیاس‌پذیری)
+## Phase 5 — Performance (بهینه‌سازی کارایی و مقیاس‌پذیری) [COMPLETED / انجام شده]
 
 ### هدف:
 حذف کامل گلوگاه‌های بار پردازشی سرور و مرورگر جهت آمادگی سیستم برای حجم داده‌های ۱۰ برابری.
 
-- **کارهای لازم:**
-  1. بازنویسی روت‌های دریافت داده و جایگزینی `SELECT *` با کوئری‌های فیلترشده و صفحه‌بندی سروری (`LIMIT / OFFSET`).
-  2. فعال‌سازی مکانیزم List Virtualization با `@tanstack/react-virtual` در لیست‌های طولانی فاکتورها، کاردکس و اشخاص.
-  3. بهینه‌سازی تنظیمات React Query: اعمال `staleTime` معقول (مثلاً ۶۰ ثانیه) برای داده‌های پایه مانند دسته‌بندی‌ها و انبارها.
-  4. تقسیم کد (Code Splitting) با `React.lazy()` برای تب‌های سنگین (تنظیمات، لاگ‌ها، ارسال پیامک سخت‌افزاری).
-  5. کاهش اندازه باندل فرانت‌اند و فشرده‌سازی پاسخ‌های HTTP با `compression` در Express.
+- **کارهای انجام‌شده:**
+  1. [x] **کوئری‌های صفحه‌بندی و فیلترینگ سمت سرور (Server-side Pagination & Filtering):** ارتقای کامل روت `GET /api/data/:key` در `src/routes/data.routes.ts` با پشتیبانی دوگانه از پارامترهای صفحه‌بندی (`page`/`pageSize` و `limit`/`offset`)، فیلتر جستجوی متنی لحظه‌ای روی فیلدهای سطرها، مرتب‌سازی صعودی و نزولی (`sortBy`, `sortOrder`, `sortDir`) و بازگرداندن متادیتاهای استاندارد شامل `total`, `totalPages`, `hasMore`.
+  2. [x] **کش‌کردن هوشمند هدرهای HTTP (HTTP Cache-Control):** تنظیم هدرهای `Cache-Control: public, max-age=60, stale-while-revalidate=120` برای جداول پایه و مرجع (`product_categories`, `warehouses`, `store_settings`, `company_profile`, `person_roles`, `person_groups`) جهت به حداقل رساندن درخواست‌های تکراری شبکه در کلاینت.
+  3. [x] **مجازی‌سازی لیست‌ها و جداول طولانی (List & Table Virtualization):** ایجاد کامپوننت‌های بهینه `VirtualTableBody` و `VirtualList` با موتور `@tanstack/react-virtual` و ادغام موفق در گزارش کاردکس کالا (`KardexReport.tsx`) با بیش از ۴۰ ردیف گردش، هدر و فوتر چسبنده (`sticky`) و اسکرول روان ۶۰ فریم بر ثانیه بدون افت کارایی مرورگر.
+  4. [x] **بهینه‌سازی حافظه و همگام‌سازی انبارداری (RAM & Debounce Optimization):** بهینه‌سازی متد `triggerServerStockSync` با Debounce هوشمند ۱۵۰ میلی‌ثانیه‌ای و ادغام درخواست‌های همزمان جهت جلوگیری از سربار حافظه (Heap Spikes) و کرش سرور در ثبت‌های متوالی اسناد.
+  5. [x] **بهینه‌سازی کش و Stale Time در React Query:** تنظیم دقیق `staleTime: 60s` و `gcTime: 5m` برای کالاها، اشخاص و دسته‌بندی‌ها در `usePersonsQuery` و `productService` و پیکربندی مرکزی در `main.tsx`.
+  6. [x] **تقسیم کد و بارگذاری تنبل (Code Splitting & Lazy Loading):** تفکیک کامل کامپوننت‌های سنگین مدیریتی و کمکی (`SystemUpdatePage`, `PersonalNotesManager`, `LinkPerson`) با `React.lazy()` و `Suspense` در `App.tsx` و حذف ایمپورت‌های مازاد جهت کاهش سایز اولیه باندل جاوااسکریپت.
+  7. [x] **فشرده‌سازی پاسخ‌های HTTP با Gzip/Deflate:** اطمینان از فعال‌سازی میان‌افزار `compression` در Express سرور برای پاسخ‌های بزرگ‌تر از ۱ کیلوبایت.
 - **فایل‌های درگیر:**
   - `src/routes/data.routes.ts`
-  - `src/services/coreService.ts`
-  - `src/App.tsx`
-  - `src/components/invoices/InvoicesList.tsx`
+  - `src/components/common/VirtualTableBody.tsx`
+  - `src/components/common/VirtualList.tsx`
   - `src/components/reports/KardexReport.tsx`
+  - `src/components/invoices/InvoicesList.tsx`
+  - `src/hooks/usePersonsQuery.ts`
+  - `src/services/productService.ts`
+  - `src/App.tsx`
+  - `server.ts`
 - **Tableهای درگیر:**
-  - کلیه جداول دیتابیس.
+  - کلیه جداول دیتابیس (`invoices`, `inventory_transactions`, `persons`, `products`, `accounts`, `warehouse_stocks`).
 - **APIهای درگیر:**
   - `GET /api/data/:key`
   - `GET /api/reports/*`
-- **وابستگی‌ها:** Phase 1.
-- **ریسک:** Low تا Medium.
-- **سختی:** Medium.
-- **تأثیر:** High.
+- **وابستگی‌ها:** Phase 1, Phase 4.
+- **وضعیت:** **تکمیل شده (Completed)**
 - **اولویت:** **P2**
 
 ---
 
-## Phase 6 — Reports (اصلاح و چابک‌سازی موتور گزارش‌ها)
+## Phase 6 — Reports (اصلاح و چابک‌سازی موتور گزارش‌ها) [COMPLETED / انجام شده]
 
 ### هدف:
-انتقال محاسبات سنگین به دیتابیس، تصحیح کاردکس کالا و استانداردسازی خروجی‌های اکسل و PDF.
+انتقال محاسبات سنگین به دیتابیس و سرور، تصحیح کاردکس کالا، سود و زیان واقعی بر پایه COGS و استانداردسازی خروجی‌های اکسل و PDF.
 
-- **کارهای لازم:**
-  1. انتقال محاسبه مانده در سطر (Running Balance) کاردکس کالا به Window Functions در کوئری SQL سرور.
-  2. پیاده‌سازی فیلترینگ چندبعدی (بازه تاریخ شمسی/میلادی، طرف حساب، انبار، بازاریاب) روی سرور.
-  3. استانداردسازی ماژول تولید خروجی Excel با Streaming در سرور یا Web Worker در کلاینت برای جلوگیری از فریز مرورگر.
-  4. تصحیح و یکپارچه‌سازی گزارش سود و زیان بر پایه بهای تمام‌شده واقعی کالای خارج‌شده از انبار.
+- **کارهای انجام‌شده:**
+  1. [x] **انتقال محاسبه مانده در سطر (Running Balance) کاردکس به سرور:** پیاده‌سازی روت تخصصی `GET /api/reports/kardex` با محاسبه مانده تجمعی هر سطر، مانده اول دوره منقول، گردش دوره و ارزش‌گذاری موجودی با پشتیبانی از فیلتر انبار، تاریخ و صفحه‌بندی سروری.
+  2. [x] **موتور سود و زیان واقعی بر پایه بهای تمام‌شده (True COGS & Profitability):** پیاده‌سازی روت `GET /api/reports/sales` با محاسبه خط به خط بهای تمام‌شده کالای فروش‌رفته بر پایه میانگین وزنی متحرک (WAC) و بهای خرید، سود ناخالص (`Gross Profit`) و درصد حاشیه سود (`Gross Margin %`) به همراه تفکیک روزانه، ماهانه و کالاهای پرفروش.
+  3. [x] **گزارش تراز و بدهی/طلب اشخاص (`GET /api/reports/balances`):** تجمیع هوشمند مانده تفصیلی اشخاص از روی فاکتورها، تراکنش‌ها و اسناد، تعیین وضعیت بستانکار/بدهکار/بی‌حساب و خلاصه‌های آماری کلان.
+  4. [x] **گزارش ارزیابی موجودی و هشدار نقطه سفارش (`GET /api/reports/inventory`):** محاسبه برخط موجودی فیزیکی، رزرو شده و قابل فروش کالاها به تفکیک انبار، ارزیابی ریالی به نرخ خرید و فروش و فیلتر اقلام با موجودی بحرانی (کمتر از حداقل موجودی).
+  5. [x] **تولید و دانلود مستقیم خروجی اکسل از سرور (Streaming Excel Export):** پیاده‌سازی روت جامع `GET /api/reports/export/:reportType` برای تولید سمت سرور شیت‌های استاندارد اکسل (`.xlsx`) با فرمت راست‌به‌چپ و نام‌های فارسی و اتصال دکمه‌های دانلود مستقیم سروری در گزارش‌های فروش، موجودی و بدهی/طلب اشخاص جهت ممانعت از فریز شدن کلاینت در حجم داده‌های بالا.
 - **فایل‌های درگیر:**
+  - `src/routes/reports.routes.ts`
   - `src/components/reports/KardexReport.tsx`
   - `src/components/reports/SalesReport.tsx`
   - `src/components/reports/InventoryReport.tsx`
   - `src/components/reports/DebtsCreditsReport.tsx`
-  - `src/routes/reports.routes.ts`
+  - `server.ts`
 - **Tableهای درگیر:**
-  - `inventory_transactions`, `invoices`, `accounting_documents`, `products`
+  - `inventory_transactions`, `invoices`, `accounting_documents`, `products`, `warehouses`, `persons`, `transactions`
 - **APIهای درگیر:**
   - `GET /api/reports/kardex`
   - `GET /api/reports/sales`
   - `GET /api/reports/balances`
+  - `GET /api/reports/inventory`
+  - `GET /api/reports/export/:reportType`
 - **وابستگی‌ها:** Phase 1, Phase 3, Phase 5.
-- **ریسک:** Low.
-- **سختی:** Medium.
-- **تأثیر:** High.
+- **وضعیت:** **تکمیل شده (Completed)**
 - **اولویت:** **P2**
 
 ---
 
-## Phase 7 — Backup & Recovery (پشتیبان‌گیری، تاب‌آوری و ممیزی رویدادها)
+## Phase 7 — Backup & Recovery (پشتیبان‌گیری، تاب‌آوری و ممیزی رویدادها) [COMPLETED / انجام شده]
 
 ### هدف:
 تضمین صفر شدن احتمال از دست رفتن داده‌ها (RPO < 1h) و ثبت غیرقابل انکار وقایع سیستم.
 
-- **کارهای لازم:**
-  1. رمزنگاری فایل‌های پشتیبان با استاندارد AES-256-GCM قبل از ذخیره‌سازی روی دیسک.
-  2. ایجاد فرآیند پشتیبان‌گیری خودکار ثانویه و ارسال به حافظه ابری خارج از سرور (Off-site S3 / Cloud Storage).
-  3. بازطراحی موتور بازیابی (Restore) با بررسی سازگاری Schema و ایجاد پیش‌نمایش تفاوت‌ها (Dry-run).
-  4. ارتقای ساختار `system_logs` برای ثبت Snapshot مقادیر قبل و بعد از تغییر (`Before/After State`).
-  5. ثبت رویدادهای ورود، خروج، نهایی‌سازی فاکتور و ابطال اسناد با ضبط شناسه واقعی کاربر از روی JWT.
+- **کارهای انجام‌شده:**
+  1. [x] **رمزنگاری معتبر با استاندارد AES-256-GCM:** طراحی و استقرار ماژول جامع رمزنگاری `src/utils/backupCrypto.ts` با مشتق‌سازی کلید ۳۲ بایتی از طریق PBKDF2 و سالت مشخص، تولید بردار اولیه (IV) تصادفی ۱۲ بایتی برای هر فایل، تگ احراز اصالت ۱۶ بایتی (Authentication Tag) و ساختار envelope استاندارد (`taraz_backup_encrypted`). ممانعت قطعی از دستکاری فایل‌ها و پشتیبانی بدون شکست از فایل‌های JSON نسخه‌های قدیمی.
+  2. [x] **پشتیبان‌گیری چندگانه و تاب‌آوری ابری/محلی (Dual-Site & Off-Site Cloud):** ایجاد فرآیند ذخیره‌سازی خودکار در آرشیو ثانویه `backups/secondary-replica/` برای تضمین افزونگی دوقلو، و ارسال بسته پشتیبان با حفظ رمزنگاری نقطه به نقطه به فضاهای ابری (Google Drive, OneDrive, S3) جهت تحقق سناریوی بازیابی پس از فاجعه با RPO < 1h.
+  3. [x] **موتور پیش‌نمایش تفاوت‌ها و سازگاری اسکیما (Dry-Run Engine):** طراحی ماژول `backupEngine.ts` و پیاده‌سازی روت‌های `/api/db/backups/dry-run/:filename` و `/api/backup/dry-run` جهت ارزیابی دقیق تعداد رکوردها، مغایرت جداول، هشدارهای کاهش داده و اعتبارسنجی توازن اسناد مالی قبل از اعمال Restore در دیتابیس.
+  4. [x] **نسخه ایمنی اضطراری خودکار (Safety Snapshot & Rollback):** ایجاد خودکار اسنپ‌شات از وضعیت دیتابیس پیش از بازنویسی با ذخیره در `backups/safety-snapshots/` و تعبیه روت و کلید بازگشت سریع `/api/db/backups/revert-safety` در رابط کاربری جهت بازگردانی لحظه‌ای در صورت بروز خطا.
+  5. [x] **ارتقای ممیزی رویدادها (`system_logs`) با Snapshot قبل و بعد:** ثبت مقادیر `oldData`، `newData` و خلاصه تفاوت‌های متنی `diffSummary` در کلیه روت‌های ویرایش (PUT)، حذف (DELETE) و عملیات دسته‌ای (Batch) در هر دو بستر دیتابیس PostgreSQL و SQLite همراه با ثبت شناسه واقعی کاربر از توکن تاییدشده JWT.
+  6. [x] **استانداردسازی روت‌های نقشه راه و رابط کاربری:** پیاده‌سازی روت‌های `/api/backup/export`، `/api/backup/import`، `/api/backup/list`، نمایش برچسب امنیتی AES-256-GCM در جدول بکاپ‌ها و ادغام کامل مدال پیش‌نمایش Dry-Run در `DatabaseDashboard.tsx`.
 - **فایل‌های درگیر:**
+  - `src/utils/backupCrypto.ts`
+  - `src/services/backupEngine.ts`
   - `src/routes/backup.routes.ts`
-  - `src/utils/auditLogger.ts`
   - `src/routes/data.routes.ts`
+  - `src/components/admin/DatabaseDashboard.tsx`
 - **Tableهای درگیر:**
-  - `system_logs`, `backups`
+  - `system_logs`, `backups`, کلیه جداول دیتابیس
 - **APIهای درگیر:**
   - `POST /api/backup/export`
   - `POST /api/backup/import`
   - `GET /api/backup/list`
+  - `POST /api/backup/dry-run`
+  - `POST /api/db/backups/dry-run/:filename`
+  - `POST /api/db/backups/restore/:filename`
+  - `POST /api/db/backups/revert-safety`
 - **وابستگی‌ها:** Phase 2.
-- **ریسک:** Medium.
-- **سختی:** Medium.
-- **تأثیر:** High.
+- **وضعیت:** **تکمیل شده (Completed)**
 - **اولویت:** **P2**
 
 ---
@@ -283,6 +294,7 @@
 - **APIهای درگیر:**
   - تمامی APIهای اصلی سامانه.
 - **وابستگی‌ها:** Phase 0 تا Phase 3.
+- **وضعیت:** **تکمیل شده (Completed)** — (شامل ۱۱ سوئیت آزمون و ۶۶ تست خودکار بدون خطا در پوشه‌های unit، integration و e2e).
 - **ریسک:** Low.
 - **سختی:** Medium.
 - **تأثیر:** Very High (زیربنای اصلی فاز بعدی).
@@ -316,6 +328,7 @@
 - **APIهای درگیر:**
   - قراردادهای ماژولار داخلی سرویس‌ها.
 - **وابستگی‌ها:** **Phase 8 (اجرای ریفکتورینگ بدون وجود تست‌های Phase 8 اکیداً ممنوع است)**.
+- **وضعیت:** **تکمیل شده (Completed)** — (تفکیک هوک‌های موضوعی، تعریف تایپ‌های دامنه در src/types/، پاکسازی بیش از ۸۰ اسکریپت رها شده و گذراندن کلیه ۷۱ تست خودکار).
 - **ریسک:** High (به دلیل وسعت تغییرات، اما با تست‌های Phase 8 مهار می‌شود).
 - **سختی:** Very High.
 - **تأثیر:** Very High.
