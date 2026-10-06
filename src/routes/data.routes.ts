@@ -710,10 +710,23 @@ router.post('/api/data/batch', async (req, res) => {
       if (isPgActive() && getActivePgPool()) {
         const client = await getActivePgPool().connect();
         try {
-          await client.query('BEGIN');
+          // Pre-sync DDL before transaction BEGIN to ensure all columns exist in PostgreSQL
           for (const key of Array.from(keys)) {
             if (!KNOWN_TABLES.includes(key)) continue;
             await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
+            const keyOps = validOperations.filter((op: any) => op.key === key);
+            for (const op of keyOps) {
+              if (op.type === 'append' && op.data) {
+                await syncTableSchema(client, key, { ...op.data, version: 1, createdAt: '', updatedAt: '' });
+              } else if (op.type === 'update') {
+                await syncTableSchema(client, key, { ...(op.data || {}), version: 1, updatedAt: '' });
+              }
+            }
+          }
+
+          await client.query('BEGIN');
+          for (const key of Array.from(keys)) {
+            if (!KNOWN_TABLES.includes(key)) continue;
             let data = (await getDbData(key)) || [];
             if (!Array.isArray(data)) data = [];
 

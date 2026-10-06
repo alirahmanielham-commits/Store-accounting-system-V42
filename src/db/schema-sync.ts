@@ -32,7 +32,7 @@ export async function syncTableSchema(client: any, tableName: string, dataObj: a
     if (!knownCols) {
         knownCols = new Set();
         try {
-            const res = await client.query('SELECT column_name FROM information_schema.columns WHERE table_name = $1', [tableName]);
+            const res = await client.query("SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND (table_name = $1 OR table_name = lower($1))", [tableName]);
             for (const row of res.rows) knownCols.add(row.column_name);
         } catch (e) {}
         tableSchemas.set(tableName, knownCols);
@@ -48,10 +48,10 @@ export async function syncTableSchema(client: any, tableName: string, dataObj: a
             else if (typeof v === 'object') colType = 'JSONB';
             
             try {
-               console.log(`Adding column ${k} to ${tableName}`); await client.query(`ALTER TABLE "${tableName}" ADD COLUMN "${k}" ${colType}`);
+               await client.query(`ALTER TABLE "${tableName}" ADD COLUMN IF NOT EXISTS "${k}" ${colType}`);
                knownCols.add(k);
-            } catch (e) {
-               console.error(`Error adding column ${k} to ${tableName}`, e.message);
+            } catch (e: any) {
+               console.error(`Error adding column ${k} to ${tableName}:`, e?.message);
             }
         }
     }
@@ -67,10 +67,15 @@ export async function ensurePostgresTables(poolOverride?: any) {
     for (const key of KNOWN_TABLES) {
       try {
         await p.query(`
-          CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)
+          CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY);
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "version" DOUBLE PRECISION DEFAULT 1;
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "createdAt" TEXT;
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "updatedAt" TEXT;
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "isDeleted" BOOLEAN DEFAULT FALSE;
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP;
         `);
       } catch (err: any) {
-        console.error(`Error creating table ${key}:`, err.message);
+        console.error(`Error creating/updating table ${key}:`, err.message);
       }
     }
     // Create essential performance indexes

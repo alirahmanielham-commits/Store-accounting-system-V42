@@ -42,6 +42,7 @@ export async function loadPgPoolForStore(storeId: string) {
                     const pool = await connectPgDb(connectionString);
                     activePgPools['default'] = pool;
                     usePgMap['default'] = true;
+                    await ensurePostgresTables(pool);
                     return;
                 }
             } catch(e) { console.error('ERROR in loadPgPoolForStore default:', e); }
@@ -58,6 +59,7 @@ export async function loadPgPoolForStore(storeId: string) {
                     await pool.query('SELECT 1');
                     activePgPools['default'] = pool;
                     usePgMap['default'] = true;
+                    await ensurePostgresTables(pool);
                     return;
                 } catch(err) {
                     console.warn('Postgres connection via SQL_HOST failed, using local database storage:', (err as any)?.message);
@@ -67,6 +69,7 @@ export async function loadPgPoolForStore(storeId: string) {
                     const pool = await connectPgDb(process.env.DATABASE_URL);
                     activePgPools['default'] = pool;
                     usePgMap['default'] = true;
+                    await ensurePostgresTables(pool);
                     return;
                 } catch(err) {
                     console.warn('Postgres connection via DATABASE_URL failed, using local database storage:', (err as any)?.message);
