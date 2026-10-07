@@ -129,9 +129,31 @@ import { purchaseInvoiceFormSchema } from "../../schemas/validation";
   const validatePurchase = (isDraft: boolean = false): boolean => {
     const cleanItems = (items || []).filter((it: any) => it && it.productId);
     if (!isDraft) {
+      let dateStr = '';
+      if ((date as any) instanceof Date) {
+        dateStr = !isNaN((date as any).getTime()) ? (date as any).toISOString() : new Date().toISOString();
+      } else if (date && typeof (date as any).toDate === 'function') {
+        try {
+          const d = (date as any).toDate();
+          dateStr = d instanceof Date && !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+        } catch (_) {
+          dateStr = new Date().toISOString();
+        }
+      } else if (date && typeof (date as any).format === 'function') {
+        try {
+          dateStr = (date as any).format();
+        } catch (_) {
+          dateStr = new Date().toISOString();
+        }
+      } else if (date) {
+        dateStr = String(date).trim();
+      } else {
+        dateStr = new Date().toISOString();
+      }
+
       const res = purchaseInvoiceFormSchema.safeParse({
         invoiceNumber: invoiceNumber || 'AUTO',
-        date: date || new Date().toISOString(),
+        date: dateStr,
         customerId: customerId,
         sellerInvoiceNumber: sellerInvoiceNumber || undefined,
         items: cleanItems,

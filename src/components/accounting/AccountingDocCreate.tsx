@@ -120,8 +120,30 @@ export default function AccountingDocCreate({ showNotification, onBack, initialD
 
   const handleSave = async (status: 'draft' | 'approved') => {
     if (status === 'approved') {
+      let dateStr = '';
+      if ((date as any) instanceof Date) {
+        dateStr = !isNaN((date as any).getTime()) ? (date as any).toISOString() : new Date().toISOString();
+      } else if (date && typeof (date as any).toDate === 'function') {
+        try {
+          const d = (date as any).toDate();
+          dateStr = d instanceof Date && !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+        } catch (_) {
+          dateStr = new Date().toISOString();
+        }
+      } else if (date && typeof (date as any).format === 'function') {
+        try {
+          dateStr = (date as any).format();
+        } catch (_) {
+          dateStr = new Date().toISOString();
+        }
+      } else if (date) {
+        dateStr = String(date).trim();
+      } else {
+        dateStr = new Date().toISOString();
+      }
+
       const validationResult = accountingDocFormSchema.safeParse({
-        date: date || new Date().toISOString(),
+        date: dateStr,
         description: description.trim(),
         items: items.map(it => ({
           ledgerAccountId: it.ledgerAccountId,

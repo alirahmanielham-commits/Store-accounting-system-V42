@@ -44,11 +44,68 @@ export const invoiceItemFormSchema = z.object({
   )
 }).passthrough();
 
+export const flexibleDateSchema = (errorMessage = 'تاریخ الزامی است.') =>
+  z.preprocess((val: any) => {
+    if (val === null || val === undefined || val === '') return '';
+    if (val instanceof Date) {
+      return !isNaN(val.getTime()) ? val.toISOString() : '';
+    }
+    if (typeof val === 'object') {
+      if (typeof val.toDate === 'function') {
+        try {
+          const d = val.toDate();
+          if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString();
+        } catch (_) {}
+      }
+      if (typeof val.format === 'function') {
+        try {
+          return val.format();
+        } catch (_) {}
+      }
+      if (val.year && val.month && val.day) {
+        return `${val.year}/${String(val.month.number || val.month).padStart(2, '0')}/${String(val.day).padStart(2, '0')}`;
+      }
+    }
+    if (typeof val === 'number') {
+      const d = new Date(val);
+      return !isNaN(d.getTime()) ? d.toISOString() : String(val);
+    }
+    return String(val).trim();
+  }, z.string().min(1, errorMessage));
+
+export const flexibleOptionalDateSchema = z.preprocess((val: any) => {
+  if (val === null || val === undefined || val === '') return null;
+  if (val instanceof Date) {
+    return !isNaN(val.getTime()) ? val.toISOString() : null;
+  }
+  if (typeof val === 'object') {
+    if (typeof val.toDate === 'function') {
+      try {
+        const d = val.toDate();
+        if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString();
+      } catch (_) {}
+    }
+    if (typeof val.format === 'function') {
+      try {
+        return val.format();
+      } catch (_) {}
+    }
+    if (val.year && val.month && val.day) {
+      return `${val.year}/${String(val.month.number || val.month).padStart(2, '0')}/${String(val.day).padStart(2, '0')}`;
+    }
+  }
+  if (typeof val === 'number') {
+    const d = new Date(val);
+    return !isNaN(d.getTime()) ? d.toISOString() : String(val);
+  }
+  return String(val).trim();
+}, z.string().nullable().optional());
+
 export const saleInvoiceFormSchema = z.object({
   invoiceNumber: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
     message: 'شماره فاکتور الزامی است.'
   }),
-  date: z.string().min(1, 'تاریخ صدور فاکتور الزامی است.'),
+  date: flexibleDateSchema('تاریخ صدور فاکتور الزامی است.'),
   customerId: z.union([z.string(), z.number()]).optional().nullable(),
   customerName: z.string().optional().nullable(),
   nationalId: z.string().optional().nullable(),
@@ -65,7 +122,7 @@ export const purchaseInvoiceFormSchema = z.object({
   invoiceNumber: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
     message: 'شماره فاکتور خرید الزامی است.'
   }),
-  date: z.string().min(1, 'تاریخ فاکتور خرید الزامی است.'),
+  date: flexibleDateSchema('تاریخ فاکتور خرید الزامی است.'),
   customerId: z.union([z.string(), z.number()]).refine(val => Boolean(val && String(val).trim()), {
     message: 'انتخاب فروشنده / تامین‌کننده الزامی است.'
   }),
@@ -90,7 +147,7 @@ export const transactionReceiptFormSchema = z.object({
     val => (val === '' || val === null || val === undefined ? 0 : Number(val)),
     z.number().positive('مبلغ رسید مالی باید بزرگتر از صفر باشد.')
   ),
-  date: z.string().min(1, 'تاریخ عملیات مالی الزامی است.'),
+  date: flexibleDateSchema('تاریخ عملیات مالی الزامی است.'),
   resourceType: z.enum(['bank', 'cashbox'], { message: 'منبع مالی باید حساب بانکی یا صندوق باشد.' }),
   resourceId: z.union([z.string(), z.number()]).refine(val => Boolean(val && String(val).trim()), {
     message: 'انتخاب حساب بانکی یا صندوق الزامی است.'
@@ -100,7 +157,7 @@ export const transactionReceiptFormSchema = z.object({
 }).passthrough();
 
 export const accountingDocFormSchema = z.object({
-  date: z.string().min(1, 'تاریخ سند حسابداری الزامی است.'),
+  date: flexibleDateSchema('تاریخ سند حسابداری الزامی است.'),
   description: z.string().min(2, 'شرح سند حسابداری الزامی است.'),
   items: z.array(z.object({
     ledgerAccountId: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
@@ -121,7 +178,7 @@ export const accountingDocFormSchema = z.object({
 export const invoiceSchema = z.object({
   id: z.string().or(z.number()).optional(),
   type: z.string(),
-  date: z.string(),
+  date: flexibleDateSchema('تاریخ الزامی است.'),
   personId: z.string().or(z.number()).optional().nullable(),
   items: z.array(z.any()).optional(),
   totalPrice: z.union([z.number(), z.string()]).optional(),
@@ -132,7 +189,7 @@ export const invoiceSchema = z.object({
 export const transactionSchema = z.object({
   id: z.string().or(z.number()).optional(),
   type: z.string(),
-  date: z.string(),
+  date: flexibleDateSchema('تاریخ الزامی است.'),
   amount: z.union([z.number(), z.string()]),
   personId: z.string().or(z.number()).optional().nullable(),
 }).passthrough();
@@ -185,8 +242,8 @@ export const issuedCheckSchema = z.object({
   sayadId: z.preprocess(cleanSayadId, z.string().regex(/^\d{16}$/, "شناسه صیادی باید دقیقاً ۱۶ رقم باشد").nullable().optional()),
   reason: z.string().optional().nullable(),
   amount: z.preprocess(cleanDigitsAndCommas, z.number().min(0, "مبلغ چک نامعتبر است")),
-  issueDate: z.string().optional().nullable(),
-  dueDate: z.string().optional().nullable(),
+  issueDate: flexibleOptionalDateSchema,
+  dueDate: flexibleOptionalDateSchema,
   payeeId: z.string().or(z.number()).optional().nullable(),
   status: z.string().optional(),
 }).passthrough();
@@ -197,8 +254,8 @@ export const receivedCheckSchema = z.object({
   sayadId: z.preprocess(cleanSayadId, z.string().regex(/^\d{16}$/, "شناسه صیادی باید دقیقاً ۱۶ رقم باشد").nullable().optional()),
   reason: z.string().optional().nullable(),
   amount: z.preprocess(cleanDigitsAndCommas, z.number().min(0, "مبلغ چک نامعتبر است")),
-  receiveDate: z.string().optional().nullable(),
-  dueDate: z.string().optional().nullable(),
+  receiveDate: flexibleOptionalDateSchema,
+  dueDate: flexibleOptionalDateSchema,
   payerId: z.string().or(z.number()).optional().nullable(),
   status: z.string().optional(),
 }).passthrough();

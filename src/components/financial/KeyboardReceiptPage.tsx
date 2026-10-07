@@ -321,11 +321,28 @@ export default function KeyboardReceiptPage({
         trackingNumber: trackingNumber || undefined
       };
 
+      let dateStrNormalized = '';
+      const dRaw: any = convertedDate || dateStr;
+      if (dRaw instanceof Date) {
+        dateStrNormalized = !isNaN(dRaw.getTime()) ? dRaw.toISOString() : new Date().toISOString();
+      } else if (dRaw && typeof (dRaw as any).toDate === 'function') {
+        try {
+          const d = (dRaw as any).toDate();
+          dateStrNormalized = d instanceof Date && !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+        } catch (_) {
+          dateStrNormalized = new Date().toISOString();
+        }
+      } else if (dRaw) {
+        dateStrNormalized = String(dRaw).trim();
+      } else {
+        dateStrNormalized = new Date().toISOString();
+      }
+
       const validationResult = transactionReceiptFormSchema.safeParse({
         type: receiptType,
         personId: selectedPerson.id,
         amount: parsedAmount,
-        date: convertedDate || new Date().toISOString(),
+        date: dateStrNormalized,
         resourceType,
         resourceId,
         trackingNumber: trackingNumber || undefined,
