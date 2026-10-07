@@ -27,6 +27,11 @@ export const authMiddleware = (req: any, res: any, next: any) => {
        token = req.cookies.accessToken || req.cookies.refreshToken;
     }
     
+    // Allow public listing of businesses for WelcomePage preview when no token is present
+    if (!token && req.method === 'GET' && req.path === '/api/databases') {
+       return next();
+    }
+
     if (!token) {
        return res.status(401).json({ error: 'احراز هویت الزامی است. لطفاً وارد سیستم شوید.' });
     }
@@ -41,6 +46,9 @@ export const authMiddleware = (req: any, res: any, next: any) => {
        }
        next();
     } catch(e) {
+       if (req.method === 'GET' && req.path === '/api/databases') {
+          return next();
+       }
        return res.status(401).json({ error: 'توکن نامعتبر یا منقضی شده است. لطفاً مجدداً وارد شوید.' });
     }
 };

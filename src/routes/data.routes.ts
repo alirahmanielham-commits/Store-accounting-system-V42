@@ -483,6 +483,29 @@ async function dispatchAdminNotificationIfSensitive(logEntry: any) {
   }
 }
 
+export function preparePgItem(key: string, item: Record<string, any>) {
+  const colTypes = tableSchemas.get(key);
+  const itemKeys: string[] = [];
+  const itemVals: any[] = [];
+  for (const [k, rawVal] of Object.entries(item)) {
+    if (rawVal === undefined) continue;
+    itemKeys.push(k);
+    let val = rawVal;
+    if (val instanceof Date) {
+      val = val.toISOString();
+    } else if (val !== null && typeof val === 'object') {
+      val = JSON.stringify(val);
+    }
+    const colType = colTypes?.get(k);
+    const isNumCol = colType && ['double precision', 'real', 'numeric', 'integer', 'bigint', 'smallint'].includes(colType);
+    if (isNumCol && typeof val === 'string' && isNaN(Number(val))) {
+      val = null;
+    }
+    itemVals.push(val);
+  }
+  return { itemKeys, itemVals };
+}
+
 // Dedicated System Logs Endpoints
 router.get('/api/system_logs', async (req, res) => {
   try {
@@ -710,16 +733,23 @@ router.post('/api/data/batch', async (req, res) => {
       if (isPgActive() && getActivePgPool()) {
         const client = await getActivePgPool().connect();
         try {
-          // Pre-sync DDL before transaction BEGIN to ensure all columns exist in PostgreSQL
+          // Pre-sync DDL before transaction BEGIN to ensure all columns exist and types match in PostgreSQL
           for (const key of Array.from(keys)) {
             if (!KNOWN_TABLES.includes(key)) continue;
             await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
             const keyOps = validOperations.filter((op: any) => op.key === key);
+            let existingData: any[] | null = null;
             for (const op of keyOps) {
               if (op.type === 'append' && op.data) {
-                await syncTableSchema(client, key, { ...op.data, version: 1, createdAt: '', updatedAt: '' });
+                await syncTableSchema(client, key, { ...op.data, version: 1, createdAt: '', updatedAt: '', rawDate: '', displayDate: '' });
               } else if (op.type === 'update') {
-                await syncTableSchema(client, key, { ...(op.data || {}), version: 1, updatedAt: '' });
+                if (!existingData) {
+                  existingData = (await getDbData(key)) || [];
+                }
+                const targetId = String(op.id || (op.data && op.data.id) || '');
+                const existing = Array.isArray(existingData) ? existingData.find((x: any) => x && String(x.id) === targetId) : null;
+                const sampleUpdated = { ...(existing || {}), ...(op.data || {}), version: 1, createdAt: '', updatedAt: '', rawDate: '', displayDate: '' };
+                await syncTableSchema(client, key, sampleUpdated);
               }
             }
           }
@@ -740,8 +770,7 @@ router.post('/api/data/batch', async (req, res) => {
                 item.updatedAt = item.updatedAt || new Date().toISOString();
 
                 await syncTableSchema(client, key, item);
-                const itemKeys = Object.keys(item);
-                const itemVals = Object.values(item).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                const { itemKeys, itemVals } = preparePgItem(key, item);
                 const placeholders = itemKeys.map((_, i) => `$${i + 1}`).join(', ');
                 const colNames = itemKeys.map(k => `"${k}"`).join(', ');
                 await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
@@ -780,8 +809,7 @@ router.post('/api/data/batch', async (req, res) => {
                   updatedItem.updatedAt = new Date().toISOString();
 
                   await syncTableSchema(client, key, updatedItem);
-                  const itemKeys = Object.keys(updatedItem);
-                  const itemVals = Object.values(updatedItem).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                  const { itemKeys, itemVals } = preparePgItem(key, updatedItem);
                   const placeholders = itemKeys.map((_, i) => `$${i + 1}`).join(', ');
                   const colNames = itemKeys.map(k => `"${k}"`).join(', ');
                   await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
@@ -1126,8 +1154,10 @@ router.post('/api/data/:key/append', async (req, res) => {
          if (!KNOWN_TABLES.includes(key)) return res.status(400).json({ error: 'Unknown table' });
          const client = await getActivePgPool().connect();
          try {
-           await client.query('BEGIN');
            await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
+           await client.query(`ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "version" NUMERIC DEFAULT 1`);
+           await client.query(`ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "createdAt" TEXT`);
+           await client.query(`ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "updatedAt" TEXT`);
            let finalItem = { ...newItem };
            let related = null;
            if (['invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes', 'accounting_documents', 'stocktakings'].includes(key)) {
@@ -1137,8 +1167,19 @@ router.post('/api/data/:key/append', async (req, res) => {
            }
 
            await syncTableSchema(client, key, finalItem);
-           const keys = Object.keys(finalItem);
-           const vals = Object.values(finalItem).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+
+           if (related && related.childTable) {
+               await client.query(`CREATE TABLE IF NOT EXISTS "${related.childTable}" (id VARCHAR PRIMARY KEY)`);
+               await client.query(`ALTER TABLE "${related.childTable}" ADD COLUMN IF NOT EXISTS "version" NUMERIC DEFAULT 1`);
+               await client.query(`ALTER TABLE "${related.childTable}" ADD COLUMN IF NOT EXISTS "createdAt" TEXT`);
+               await client.query(`ALTER TABLE "${related.childTable}" ADD COLUMN IF NOT EXISTS "updatedAt" TEXT`);
+               for (const it of related.items) {
+                   await syncTableSchema(client, related.childTable, it);
+               }
+           }
+
+           await client.query('BEGIN');
+           const { itemKeys: keys, itemVals: vals } = preparePgItem(key, finalItem);
            const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
            const colNames = keys.map(k => `"${k}"`).join(', ');
            await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
@@ -1149,8 +1190,7 @@ router.post('/api/data/:key/append', async (req, res) => {
                await client.query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
                for (const it of related.items) {
                    await syncTableSchema(client, related.childTable, it);
-                   const itKeys = Object.keys(it);
-                   const itVals = Object.values(it).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                   const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, it);
                    const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
                    const itColNames = itKeys.map(k => `"${k}"`).join(', ');
                    await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
@@ -1215,8 +1255,7 @@ router.post('/api/data/:key/append', async (req, res) => {
 
           if (isPgActive() && getActivePgPool()) {
              await syncTableSchema(getActivePgPool(), 'system_logs', log);
-             const keys = Object.keys(log);
-             const vals = Object.values(log).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+             const { itemKeys: keys, itemVals: vals } = preparePgItem('system_logs', log);
              const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
              const colNames = keys.map(k => `"${k}"`).join(', ');
              await getActivePgPool().query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
@@ -1344,8 +1383,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
          try {
            await client.query('BEGIN');
            await syncTableSchema(client, key, finalItem);
-           const keys = Object.keys(finalItem);
-           const vals = Object.values(finalItem).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+           const { itemKeys: keys, itemVals: vals } = preparePgItem(key, finalItem);
            const placeholders = keys.map((_, idx) => `$${idx + 1}`).join(', ');
            const colNames = keys.map(k => `"${k}"`).join(', ');
            await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
@@ -1358,8 +1396,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
                } catch(e) { }
                for (const it of related.items) {
                    await syncTableSchema(client, related.childTable, it);
-                   const itKeys = Object.keys(it);
-                   const itVals = Object.values(it).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                   const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, it);
                    const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
                    const itColNames = itKeys.map(k => `"${k}"`).join(', ');
                    await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
@@ -1489,8 +1526,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
 
           if (isPgActive() && getActivePgPool()) {
              await syncTableSchema(getActivePgPool(), 'system_logs', log);
-             const keys = Object.keys(log);
-             const vals = Object.values(log).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+             const { itemKeys: keys, itemVals: vals } = preparePgItem('system_logs', log);
              const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
              const colNames = keys.map(k => `"${k}"`).join(', ');
              await getActivePgPool().query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);

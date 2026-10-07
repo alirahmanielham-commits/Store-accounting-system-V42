@@ -1,34 +1,44 @@
-import { getDb, isPgActive, getActivePgPool } from './connection';
-import { KNOWN_TABLES, tableSchemas, syncTableSchema } from './schema-sync';
+import { getDb, isPgActive, getActivePgPool, storeContext } from './connection';
+import { KNOWN_TABLES, tableSchemas, syncTableSchema, preparePgItem } from './schema-sync';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
 
-let cachedDbData: Record<string, any> | null = null;
-let saveDebounceTimer: NodeJS.Timeout | null = null;
+const cachedDbDataMap: Record<string, Record<string, any>> = {};
+const saveDebounceTimers: Record<string, NodeJS.Timeout> = {};
 
-async function getFileData(): Promise<Record<string, any>> {
-  if (cachedDbData) return cachedDbData;
-  const dbFile = path.join(process.cwd(), 'data.json');
-  try {
-    const raw = await fsPromises.readFile(dbFile, 'utf8');
-    cachedDbData = JSON.parse(raw);
-  } catch(e) {
-    cachedDbData = {};
+function getDbFilePath(storeId?: string): string {
+  const currentStore = storeId || storeContext.getStore() || 'default';
+  if (currentStore === 'default') {
+    return path.join(process.cwd(), 'data.json');
   }
-  return cachedDbData!;
+  return path.join(process.cwd(), `data_${currentStore.replace(/[^a-zA-Z0-9_-]/g, '')}.json`);
 }
 
-function scheduleFileSave() {
-  if (saveDebounceTimer) clearTimeout(saveDebounceTimer);
-  saveDebounceTimer = setTimeout(async () => {
-    saveDebounceTimer = null;
-    if (!cachedDbData) return;
+async function getFileData(storeId?: string): Promise<Record<string, any>> {
+  const currentStore = storeId || storeContext.getStore() || 'default';
+  if (cachedDbDataMap[currentStore]) return cachedDbDataMap[currentStore];
+  const dbFile = getDbFilePath(currentStore);
+  try {
+    const raw = await fsPromises.readFile(dbFile, 'utf8');
+    cachedDbDataMap[currentStore] = JSON.parse(raw);
+  } catch(e) {
+    cachedDbDataMap[currentStore] = {};
+  }
+  return cachedDbDataMap[currentStore]!;
+}
+
+function scheduleFileSave(storeId?: string) {
+  const currentStore = storeId || storeContext.getStore() || 'default';
+  if (saveDebounceTimers[currentStore]) clearTimeout(saveDebounceTimers[currentStore]);
+  saveDebounceTimers[currentStore] = setTimeout(async () => {
+    delete saveDebounceTimers[currentStore];
+    if (!cachedDbDataMap[currentStore]) return;
     try {
-      const dbFile = path.join(process.cwd(), 'data.json');
-      await fsPromises.writeFile(dbFile, JSON.stringify(cachedDbData, null, 2), 'utf8');
+      const dbFile = getDbFilePath(currentStore);
+      await fsPromises.writeFile(dbFile, JSON.stringify(cachedDbDataMap[currentStore], null, 2), 'utf8');
     } catch (err) {
-      console.error('Error writing data.json:', err);
+      console.error(`Error writing ${getDbFilePath(currentStore)}:`, err);
     }
   }, 100);
 }
@@ -109,12 +119,27 @@ export async function innerSetDbData(key: string, data: any) {
        } else {
            await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
            await client.query(`TRUNCATE TABLE "${key}"`);
+           const prepareKvItem = (itemObj: any) => {
+               const colTypes = tableSchemas.get(key);
+               const keys = Object.keys(itemObj);
+               const vals = keys.map(k => {
+                   let v = itemObj[k];
+                   if (v === undefined) return null;
+                   if (v instanceof Date) return v.toISOString();
+                   if (v !== null && typeof v === 'object') return JSON.stringify(v);
+                   const colType = colTypes?.get(k);
+                   const isNumCol = colType && ['double precision', 'real', 'numeric', 'integer', 'bigint', 'smallint'].includes(colType);
+                   if (isNumCol && typeof v === 'string' && isNaN(Number(v))) return null;
+                   return v;
+               });
+               return { keys, vals };
+           };
+
            if (key === 'backupConfig' || !Array.isArray(data)) {
                 if (data && typeof data === 'object') {
                     data.id = 'singleton';
                     await syncTableSchema(client, key, data);
-                    const keys = Object.keys(data);
-                    const vals = Object.values(data).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                    const { itemKeys: keys, itemVals: vals } = preparePgItem(key, data);
                     const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
                     const colNames = keys.map(k => `"${k}"`).join(', ');
                     await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
@@ -123,8 +148,7 @@ export async function innerSetDbData(key: string, data: any) {
                 for (const item of data) {
                    if (!item.id) item.id = Math.random().toString(36).substring(2, 15);
                    await syncTableSchema(client, key, item);
-                   const keys = Object.keys(item);
-                   const vals = Object.values(item).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
+                   const { itemKeys: keys, itemVals: vals } = preparePgItem(key, item);
                    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
                    const colNames = keys.map(k => `"${k}"`).join(', ');
                    await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
@@ -337,8 +361,7 @@ export async function getAllDbData() {
     return allData;
   } else {
     const fs = await import("fs");
-    const path = await import("path");
-    const dbFile = path.join(process.cwd(), 'data.json');
+    const dbFile = getDbFilePath();
     if (fs.existsSync(dbFile)) {
         try { 
             const dbData = JSON.parse(fs.readFileSync(dbFile, 'utf8')); 

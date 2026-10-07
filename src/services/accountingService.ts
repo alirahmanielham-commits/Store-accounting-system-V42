@@ -1,4 +1,5 @@
 import { checkFinancialYear, getActiveFinancialYear, getStoreSettings } from './settingsService';
+export { checkFinancialYear };
 import { formatDateDisplay } from '../utils/format';
 
 import { 

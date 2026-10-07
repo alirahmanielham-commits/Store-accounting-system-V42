@@ -113,10 +113,23 @@ const router = Router();
        username: user.username, 
        name: user.name, 
        role: user.role 
-     }, JWT_SECRET, { expiresIn: '15m' });
+     }, JWT_SECRET, { expiresIn: '7d' });
      const refreshToken = jwt.sign({ username: user.username, tokenVersion }, JWT_REFRESH_SECRET, { expiresIn: '7d' });
      
-     res.cookie('refreshToken', refreshToken, { httpOnly: true, secure: process.env.NODE_ENV === 'production', sameSite: 'strict', path: '/api/auth/refresh' });
+     res.cookie('accessToken', accessToken, { 
+       httpOnly: false, 
+       secure: process.env.NODE_ENV === 'production', 
+       sameSite: 'lax', 
+       path: '/',
+       maxAge: 7 * 24 * 60 * 60 * 1000 
+     });
+     res.cookie('refreshToken', refreshToken, { 
+       httpOnly: true, 
+       secure: process.env.NODE_ENV === 'production', 
+       sameSite: 'lax', 
+       path: '/',
+       maxAge: 7 * 24 * 60 * 60 * 1000 
+     });
      
      if (req) {
        logAuthToServer('LOGIN', user, req);
@@ -235,7 +248,9 @@ router.post('/api/auth/logout', (req, res) => {
         } catch (_) {}
       }
       logAuthToServer('LOGOUT', currentUser || {}, req, currentUser?.name ? `خروج کاربر «${currentUser.name}» از سیستم` : 'خروج کاربر از سیستم');
-      res.clearCookie('refreshToken');
+      res.clearCookie('accessToken', { path: '/' });
+      res.clearCookie('refreshToken', { path: '/' });
+      res.clearCookie('refreshToken', { path: '/api/auth/refresh' });
       res.json({ success: true });
   });
 

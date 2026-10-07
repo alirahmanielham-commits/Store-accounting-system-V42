@@ -91,9 +91,14 @@ export async function loadPgPoolForStore(storeId: string) {
                 const res = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [storeId]);
                 if (res.rows.length > 0) business = res.rows[0];
             } else {
-                const defaultDb = storeContext.run('default', () => getDb());
-                const stmt = defaultDb.prepare("SELECT * FROM businesses WHERE id = ?");
-                business = stmt.get(storeId);
+                try {
+                    const businessesFile = path.join(process.cwd(), 'businesses.json');
+                    const raw = await fsPromises.readFile(businessesFile, 'utf8');
+                    const list = JSON.parse(raw);
+                    if (Array.isArray(list)) {
+                        business = list.find((b: any) => b.id === storeId);
+                    }
+                } catch (_) {}
             }
             
             if (business && business.db_type === 'postgres') {

@@ -1,7 +1,8 @@
-import React, { useState, useMemo } from 'react';
-import { Database, Plus, Check, Loader2, Trash2, Edit2, X, Building2, Search, ArrowLeft, Shield, AlertTriangle } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { Database, Plus, Check, Loader2, Trash2, Edit2, X, Building2, Search, ArrowLeft, Shield, AlertTriangle, RefreshCw } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../modals/ConfirmModal';
+import { getAuthHeaders } from '../../services/coreService';
 
 export default function BusinessManager({ availableStores, setAvailableStores, onSelectStore, showNotification }: any) {
   const [newStoreName, setNewStoreName] = useState('');
@@ -25,12 +26,32 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
   const [editingStoreId, setEditingStoreId] = useState<string | null>(null);
   const [editName, setEditName] = useState('');
 
+  const fetchStores = async () => {
+    try {
+      const res = await fetch('/api/databases', {
+        headers: getAuthHeaders()
+      });
+      const data = await res.json();
+      if (data.success && Array.isArray(data.databases)) {
+        setAvailableStores(data.databases);
+      }
+    } catch (e) {
+      console.error('Failed to fetch businesses:', e);
+    }
+  };
+
+  useEffect(() => {
+    fetchStores();
+  }, []);
+
   const handleSelectStore = async (id: string, name: string) => {
     confirmAction(`آیا از ورود به کسب و کار «${name}» اطمینان دارید؟`, async () => {
       setLoading(id);
       setErrorMsg(null);
       try {
-        const res = await fetch(`/api/databases/${id}/test-connection`);
+        const res = await fetch(`/api/databases/${id}/test-connection`, {
+          headers: getAuthHeaders()
+        });
         const data = await res.json();
         if (data.success) {
             onSelectStore(id);
@@ -38,31 +59,45 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
             setErrorMsg(data.error || 'خطا در ارتباط با دیتابیس کسب و کار');
             setLoading(false);
         }
-    } catch(e: any) {
+      } catch(e: any) {
         setErrorMsg('خطا در ارتباط با سرور');
         setLoading(false);
-    }
+      }
     });
   };
 
   const handleCreate = async () => {
     if (!newStoreName.trim()) return;
     setCreating(true);
+    setErrorMsg(null);
     try {
       const res = await fetch('/api/databases', {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: newStoreName, calendarType: newCalendarType })
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ name: newStoreName.trim(), calendarType: newCalendarType })
       });
       const data = await res.json();
-      if (data.success) {
-        setAvailableStores([...availableStores, data.database]);
+      if (data.success && data.database) {
+        setAvailableStores((prev: any[]) => {
+          const list = Array.isArray(prev) ? prev : [];
+          if (!list.some(s => s.id === data.database.id)) {
+            return [...list, data.database];
+          }
+          return list;
+        });
         setNewStoreName('');
+        if (showNotification) {
+          showNotification('کسب و کار جدید با موفقیت ایجاد شد', 'success');
+        }
+        await fetchStores();
       } else {
         setErrorMsg(data.error || 'خطا در ایجاد کسب و کار');
       }
-    } catch (e) {
-      setErrorMsg('خطا در ارتباط با سرور');
+    } catch (e: any) {
+      setErrorMsg(e?.message || 'خطا در ارتباط با سرور');
     } finally {
       setCreating(false);
     }
@@ -70,12 +105,25 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
 
   const handleDelete = async (e: React.MouseEvent, id: string) => {
     e.stopPropagation();
+    if (id === 'default') {
+      setErrorMsg('کسب و کار اصلی قابل حذف نمی‌باشد.');
+      return;
+    }
     confirmAction('آیا از حذف این کسب و کار اطمینان دارید؟ تمام اطلاعات آن از بین خواهد رفت.', async () => {
       try {
-        const res = await fetch(`/api/databases/${id}`, { method: 'DELETE' });
+        const res = await fetch(`/api/databases/${id}`, { 
+          method: 'DELETE',
+          headers: getAuthHeaders()
+        });
         const data = await res.json();
         if (data.success) {
-          setAvailableStores(availableStores.filter((s: any) => s.id !== id));
+          setAvailableStores((prev: any[]) => Array.isArray(prev) ? prev.filter((s: any) => s.id !== id) : []);
+          if (showNotification) {
+            showNotification('کسب و کار با موفقیت حذف شد', 'info');
+          }
+          await fetchStores();
+        } else {
+          setErrorMsg(data.error || 'خطا در حذف کسب و کار');
         }
       } catch (e) {
         setErrorMsg('خطا در حذف کسب و کار');
@@ -89,13 +137,23 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
     try {
       const res = await fetch(`/api/databases/${id}`, {
         method: 'PUT',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ name: editName })
+        headers: { 
+          'Content-Type': 'application/json',
+          ...getAuthHeaders()
+        },
+        body: JSON.stringify({ name: editName.trim() })
       });
       const data = await res.json();
       if (data.success) {
-        setAvailableStores(availableStores.map((s: any) => s.id === id ? { ...s, name: editName } : s));
+        setAvailableStores((prev: any[]) => 
+          (Array.isArray(prev) ? prev : []).map((s: any) => s.id === id ? { ...s, name: editName.trim() } : s)
+        );
         setEditingStoreId(null);
+        if (showNotification) {
+          showNotification('نام کسب و کار با موفقیت بروزرسانی شد', 'success');
+        }
+      } else {
+        setErrorMsg(data.error || 'خطا در بروزرسانی نام کسب و کار');
       }
     } catch (e) {
        setErrorMsg('خطا در بروزرسانی نام کسب و کار');

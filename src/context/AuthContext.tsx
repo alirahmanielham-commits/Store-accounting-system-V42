@@ -129,18 +129,16 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     setUser(u);
     const now = Date.now();
     lastActivityRef.current = now;
-    // Mark session active in sessionStorage (cleared automatically when browser is closed)
+    // Mark session active in sessionStorage
     sessionStorage.setItem('taraz_session_active', '1');
     sessionStorage.setItem('auth_user', JSON.stringify(u));
     sessionStorage.setItem('taraz_last_activity', now.toString());
+    localStorage.setItem('auth_user', JSON.stringify(u));
     if (token) {
       sessionStorage.setItem('access_token', token);
+      localStorage.setItem('access_token', token);
       setAccessToken(token);
     }
-    // Clean up localStorage to ensure session cannot outlive browser closing
-    localStorage.removeItem('auth_user');
-    localStorage.removeItem('access_token');
-    localStorage.removeItem('taraz_session_active');
   };
 
   const handleSignOut = async () => {

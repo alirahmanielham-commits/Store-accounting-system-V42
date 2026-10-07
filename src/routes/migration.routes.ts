@@ -81,14 +81,29 @@ router.post('/api/migrate-postgres/table/:table', async (req, res) => {
       let migratedCount = 0;
       tableSchemas.clear();
 
+      const prepareMigItem = (itemObj: any) => {
+          const colTypes = tableSchemas.get(table);
+          const keys = Object.keys(itemObj);
+          const vals = keys.map(k => {
+              let v = itemObj[k];
+              if (v === undefined) return null;
+              if (v instanceof Date) return v.toISOString();
+              if (v !== null && typeof v === "object") return JSON.stringify(v);
+              const colType = colTypes?.get(k);
+              const isNumCol = colType && ["double precision", "real", "numeric", "integer", "bigint", "smallint"].includes(colType);
+              if (isNumCol && typeof v === "string" && isNaN(Number(v))) return null;
+              return v;
+          });
+          return { keys, vals };
+      };
+
       if (table === 'company_profile' || table === 'backupConfig' || !Array.isArray(data)) {
-          if (data && typeof data === 'object') {
-              data.id = 'singleton';
+          if (data && typeof data === "object") {
+              data.id = "singleton";
               await syncTableSchema(client, table, data);
-              const keys = Object.keys(data);
-              const vals = Object.values(data).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
-              const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-              const colNames = keys.map(k => `"${k}"`).join(', ');
+              const { keys, vals } = prepareMigItem(data);
+              const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
+              const colNames = keys.map(k => `"${k}"`).join(", ");
               await client.query(`INSERT INTO "${table}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO NOTHING`, vals);
               migratedCount = 1;
           }
@@ -96,10 +111,9 @@ router.post('/api/migrate-postgres/table/:table', async (req, res) => {
           for (const item of data) {
               if (!item.id) item.id = Math.random().toString(36).substring(2, 15);
               await syncTableSchema(client, table, item);
-              const keys = Object.keys(item);
-              const vals = Object.values(item).map(v => v === undefined ? null : (v !== null && typeof v === 'object') ? JSON.stringify(v) : v);
-              const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-              const colNames = keys.map(k => `"${k}"`).join(', ');
+              const { keys, vals } = prepareMigItem(item);
+              const placeholders = keys.map((_, i) => `$${i + 1}`).join(", ");
+              const colNames = keys.map(k => `"${k}"`).join(", ");
               await client.query(`INSERT INTO "${table}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO NOTHING`, vals);
               migratedCount++;
           }

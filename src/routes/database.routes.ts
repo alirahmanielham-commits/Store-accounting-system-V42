@@ -1,322 +1,362 @@
-
-import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
-import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
-import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
-import { migrateSqliteToPostgres } from '../db/migration';
-// import { loginSchema } from '../schemas/validation';
+import { usePgMap, activePgPools, storeContext, connectPgDb, getDb, DB_CONFIG_FILE } from '../db/connection';
 import { Client, Pool } from 'pg';
-import os from 'os';
-
 import { Router } from 'express';
+import fs from 'fs';
 import fsPromises from 'fs/promises';
 import path from 'path';
-import bcrypt from 'bcryptjs';
-import jwt from 'jsonwebtoken';
-import { z } from 'zod';
-import { requireRole } from '../middleware/auth.middleware';
+import { requireRole, requireAuth } from '../middleware/auth.middleware';
 import { decryptValue } from '../utils/crypto';
-import { validateData } from '../schemas/validation';
-import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
-import { db } from '../db';
-import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
-import * as schema from '../db/schema';
 
 const router = Router();
-router.get('/api/databases', requireRole(['admin']), async (req, res) => {
-    try {
-      let dbsFromTable = [];
-      try {
-        if (usePgMap['default'] && activePgPools['default']) {
-            await activePgPools['default'].query(`
-              CREATE TABLE IF NOT EXISTS businesses (
-                id VARCHAR PRIMARY KEY,
-                name VARCHAR NOT NULL,
-                db_type VARCHAR DEFAULT 'sqlite',
-                db_host VARCHAR,
-                db_port VARCHAR,
-                db_name VARCHAR,
-                db_user VARCHAR,
-                db_password VARCHAR
-              )
-            `);
-            const r = await activePgPools['default'].query("SELECT * FROM businesses");
-            dbsFromTable = r.rows;
-        } else { throw new Error("PostgreSQL not configured for default pool"); }
-      } catch (e) {}
+const BUSINESSES_FILE = path.join(process.cwd(), 'businesses.json');
 
-      
-      const mergedMap = new Map();
-
-      dbsFromTable.forEach(db => mergedMap.set(db.id, {
-         id: db.id, 
-         name: db.name, 
-         db_type: db.db_type, 
-         db_host: db.db_host, 
-         db_port: db.db_port, 
-         db_name: db.db_name,
-         db_user: db.db_user,
-         db_password: db.db_password
-      }));
-
-      // Ensure 'default' store is correctly represented
-      if (!mergedMap.has('default')) {
-          mergedMap.set('default', {
-              id: 'default',
-              name: 'کسب و کار اصلی',
-              db_type: usePgMap['default'] ? 'postgres' : 'sqlite'
-          });
-      } else {
-          const def = mergedMap.get('default');
-          if (usePgMap['default']) {
-              def.db_type = 'postgres';
-          }
-          
-          // Fetch actual storeName from default db if possible
-          try {
-             if (usePgMap['default'] && activePgPools['default']) {
-                 const res = await activePgPools['default'].query("SELECT value FROM local_data WHERE key = 'store_settings'");
-                 if (res.rows.length > 0 && res.rows[0].value) {
-                     const settings = JSON.parse(res.rows[0].value);
-                     if (settings.storeName) def.name = settings.storeName;
-                 }
-             } else {
-                 const defaultDb = storeContext.run('default', () => getDb());
-                 const res = defaultDb.prepare("SELECT value FROM local_data WHERE key = 'store_settings'").get();
-                 if (res && res.value) {
-                     const settings = JSON.parse(res.value);
-                     if (settings.storeName) def.name = settings.storeName;
-                 }
-             }
-          } catch(e) {}
-          
-          if (def.name === 'فروشگاه اصلی') {
-              def.name = 'کسب و کار اصلی';
-          }
-          mergedMap.set('default', def);
-      }
-
-      res.json({ success: true, databases: Array.from(mergedMap.values()) });
-    } catch (e) {
-      res.status(500).json({ error: e.message });
+async function getStoredBusinesses(): Promise<any[]> {
+  try {
+    if (fs.existsSync(BUSINESSES_FILE)) {
+      const raw = await fsPromises.readFile(BUSINESSES_FILE, 'utf8');
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed)) return parsed;
     }
-  });
+  } catch (e) {
+    console.warn('Error reading businesses.json:', e);
+  }
+  return [];
+}
 
-router.get('/api/databases/:id/test-connection', requireRole(['admin']), async (req, res) => {
+async function saveStoredBusinesses(list: any[]): Promise<void> {
+  try {
+    await fsPromises.writeFile(BUSINESSES_FILE, JSON.stringify(list, null, 2), 'utf8');
+  } catch (e) {
+    console.error('Error saving businesses.json:', e);
+  }
+}
+
+// GET /api/databases: list all available businesses
+router.get('/api/databases', async (req, res) => {
+  try {
+    let dbsFromTable: any[] = [];
     try {
-      const { id } = req.params;
-      
-      let business = null;
       if (usePgMap['default'] && activePgPools['default']) {
-          const r = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [id]);
-          if (r.rows.length > 0) business = r.rows[0];
-      } else {
-          const defaultDb = storeContext.run('default', () => getDb());
-          try {
-              const stmt = defaultDb.prepare("SELECT * FROM businesses WHERE id = ?");
-              business = stmt.get(id);
-          } catch(e) {}
+        await activePgPools['default'].query(`
+          CREATE TABLE IF NOT EXISTS businesses (
+            id VARCHAR PRIMARY KEY,
+            name VARCHAR NOT NULL,
+            db_type VARCHAR DEFAULT 'postgres',
+            db_host VARCHAR,
+            db_port VARCHAR,
+            db_name VARCHAR,
+            db_user VARCHAR,
+            db_password VARCHAR
+          )
+        `);
+        const r = await activePgPools['default'].query("SELECT id, name, db_type, db_name FROM businesses");
+        dbsFromTable = r.rows;
       }
-      
-      // Default store is always valid if we reach here
-      if (id === 'default' && !business) {
-          return res.json({ success: true });
-      }
-
-      if (!business && id !== 'default') {
-          // it might be a sqlite file without db entry
-          try {
-             const stat = await fsPromises.stat(path.join(process.cwd(), `database_${id}.sqlite`));
-             return res.json({ success: true });
-          } catch(e) {
-             return res.status(404).json({ error: 'Business not found' });
-          }
-      }
-      
-      if (business && business.db_type === 'postgres') {
-          try {
-              const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
-              const config = JSON.parse(configRaw);
-              const connectionString = decryptValue(config.connectionString);
-              if (config.engine === 'postgres' && connectionString) {
-                  const url = new URL(connectionString);
-                  url.pathname = `/${business.db_name}`;
-                  const pool = new Pool({ connectionString: url.toString() });
-                  await pool.query('SELECT 1');
-                  await pool.end();
-                  return res.json({ success: true });
-              } else {
-                  return res.status(500).json({ error: 'Postgres config missing' });
-              }
-          } catch(e: any) {
-              return res.status(500).json({ error: 'Connection failed: ' + e.message });
-          }
-      } else {
-          return res.json({ success: true });
-      }
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
+    } catch (e) {
+      console.warn('Failed querying businesses table from postgres:', e);
     }
-  });
 
-router.put('/api/databases/:id', requireRole(['admin']), async (req, res) => {
+    const fileBusinesses = await getStoredBusinesses();
+    const mergedMap = new Map<string, any>();
+
+    // 1. Always ensure 'default' business exists
+    mergedMap.set('default', {
+      id: 'default',
+      name: 'کسب و کار اصلی',
+      db_type: usePgMap['default'] ? 'postgres' : 'json'
+    });
+
+    // Try reading actual default store name from settings
     try {
-      const { id } = req.params;
-      const { name, db_type, db_host, db_port, db_name, db_user, db_password } = req.body;
-      if (!name) return res.status(400).json({ error: 'Name is required' });
-            
-      let existing = null;
       if (usePgMap['default'] && activePgPools['default']) {
-          const r = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [id]);
-          if (r.rows.length > 0) existing = r.rows[0];
-      } else { existing = null; }
-
-      if (existing || id === 'default') {
-        if (!existing) {
-           if (usePgMap['default'] && activePgPools['default']) {
-               await activePgPools['default'].query('INSERT INTO businesses (id, name, db_type) VALUES ($1, $2, $3)', [id, name, db_type || 'sqlite']);
-           } else { throw new Error("PostgreSQL required to create businesses"); }
-        } else {
-        if (usePgMap['default'] && activePgPools['default']) {
-            await activePgPools['default'].query(`
-              UPDATE businesses SET 
-                name = $1, 
-                db_type = COALESCE($2, db_type), 
-                db_host = COALESCE($3, db_host), 
-                db_port = COALESCE($4, db_port), 
-                db_name = COALESCE($5, db_name), 
-                db_user = COALESCE($6, db_user), 
-                db_password = COALESCE($7, db_password) 
-              WHERE id = $8
-            `, [name, db_type, db_host, db_port, db_name, db_user, db_password, id]);
-        } else { throw new Error("PostgreSQL required to update businesses"); }
+        const r = await activePgPools['default'].query("SELECT value FROM local_data WHERE key = 'store_settings'");
+        if (r.rows.length > 0 && r.rows[0].value) {
+          const s = JSON.parse(r.rows[0].value);
+          if (s.storeName) mergedMap.get('default')!.name = s.storeName;
         }
-        res.json({ success: true, database: { id, name, db_type: db_type || (existing && existing.db_type) || 'sqlite', db_host, db_port, db_name, db_user, db_password } });
       } else {
-        // Fallback for file-only databases being renamed
-        const newId = encodeURIComponent(name.replace(/\s+/g, '_'));
-        const oldFile = path.join(process.cwd(), `database_${id}.sqlite`);
-        const newFile = path.join(process.cwd(), `database_${newId}.sqlite`);
-        
-        if (dbs[id]) {
-          try { dbs[id].close(); } catch(e) { }
-          delete dbs[id];
+        const dataFile = path.join(process.cwd(), 'data.json');
+        if (fs.existsSync(dataFile)) {
+          const raw = await fsPromises.readFile(dataFile, 'utf8');
+          const d = JSON.parse(raw);
+          if (d.store_settings && d.store_settings.storeName) {
+            mergedMap.get('default')!.name = d.store_settings.storeName;
+          }
         }
-        await fsPromises.rename(oldFile, newFile);
-        res.json({ success: true, database: { id: newId, name } });
       }
-    } catch (e) {
-      res.status(500).json({ error: e.message });
-    }
-  });
+    } catch (_) {}
 
-router.delete('/api/databases/:id', requireRole(['admin']), async (req, res) => {
-    try {
-      const { id } = req.params;
-      if (id === 'default') return res.status(400).json({ error: 'Cannot delete default store' });
-      
-      try {
-        if (usePgMap['default'] && activePgPools['default']) {
-            await activePgPools['default'].query("DELETE FROM businesses WHERE id = $1", [id]);
-        } else { throw new Error("PostgreSQL not configured for default pool"); }
-      } catch(e) { }
-
-      const dbFile = path.join(process.cwd(), `database_${id}.sqlite`);
-      if (dbs[id]) {
-        try { dbs[id].close(); } catch(e) { }
-        delete dbs[id];
+    // 2. Add Postgres businesses (sanitized without credentials)
+    for (const db of dbsFromTable) {
+      if (db && db.id) {
+        mergedMap.set(db.id, {
+          id: db.id,
+          name: db.name,
+          db_type: db.db_type || 'postgres'
+        });
       }
-      try { await fsPromises.unlink(dbFile); } catch(e) { }
-      res.json({ success: true });
-    } catch (e: any) {
-      res.status(500).json({ error: e.message });
     }
-  });
 
-router.post('/api/databases', requireRole(['admin']), async (req, res) => {
-    try {
-      const { name, calendarType } = req.body;
-      const calType = calendarType || 'jalali';
-      if (!name) return res.status(400).json({ error: 'Name is required' });
-      
-      const id = 'store_' + Math.random().toString(36).substring(2, 6) + '_' + Date.now().toString(36);
-      let actualDbType = 'sqlite';
-      
+    // 3. Add File-stored businesses
+    for (const db of fileBusinesses) {
+      if (db && db.id) {
+        mergedMap.set(db.id, {
+          id: db.id,
+          name: db.name,
+          db_type: db.db_type || 'json'
+        });
+      }
+    }
+
+    res.json({ success: true, databases: Array.from(mergedMap.values()) });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'خطا در دریافت لیست کسب و کارها' });
+  }
+});
+
+// GET /api/databases/:id/test-connection: check if business database is reachable
+router.get('/api/databases/:id/test-connection', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (id === 'default') {
+      return res.json({ success: true });
+    }
+
+    // Test Postgres pool if configured
+    if (usePgMap['default'] && activePgPools['default']) {
       try {
-        const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
-        const config = JSON.parse(configRaw);
-        const connectionString = decryptValue(config.connectionString);
-        if (config.engine === 'postgres' && connectionString) {
-          actualDbType = 'postgres';
-          // Provision a new Postgres database for this business
-          const dbNameForBusiness = `store_${id}`.replace(/[^a-zA-Z0-9_]/g, '');
-          
-          const url = new URL(connectionString);
-          url.pathname = '/postgres';
-          const client = new Client({ connectionString: url.toString() });
-          await client.connect();
-          await client.query(`CREATE DATABASE "${dbNameForBusiness}"`);
-          await client.end();
-          
-          // Connect to new DB and initialize schema? 
-          // We don't have to initialize the schema here because `getDbData` and other APIs handle it dynamically, 
-          // but we should probably wait for it.
-          // Wait, the client doesn't connect if we just store the connection string.
-          // In businesses table, we store the new db_name, the rest we can leave empty 
-          // and infer from db_config.json on runtime, or we store the full connection string.
-          // For simplicity, we just store the new dbName.
-          
-          try {
-            if (usePgMap['default'] && activePgPools['default']) {
-                await activePgPools['default'].query(`
-                  CREATE TABLE IF NOT EXISTS businesses (
-                    id VARCHAR PRIMARY KEY,
-                    name VARCHAR NOT NULL,
-                    db_type VARCHAR DEFAULT 'sqlite',
-                    db_host VARCHAR,
-                    db_port VARCHAR,
-                    db_name VARCHAR,
-                    db_user VARCHAR,
-                    db_password VARCHAR
-                  )
-                `);
-                await activePgPools['default'].query(`
-                  INSERT INTO businesses (id, name, db_type, db_host, db_port, db_name, db_user, db_password)
-                  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-                `, [id, name, 'postgres', '', '', dbNameForBusiness, '', '']);
-            } else {
-                const defaultDb = storeContext.run('default', () => getDb());
-                const stmt = defaultDb.prepare(`
-                  INSERT INTO businesses (id, name, db_type, db_host, db_port, db_name, db_user, db_password)
-                  VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-                `);
-                stmt.run(id, name, 'postgres', '', '', dbNameForBusiness, '', '');
-            }
-          } catch(e) { }
-          
-          
-          try {
-             const newUrl = new URL(config.connectionString);
-             newUrl.pathname = '/' + dbNameForBusiness;
-             const initPool = new Pool({ connectionString: newUrl.toString() });
-             await initPool.query('CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)');
-             const initPayload = JSON.stringify({ storeName: name, calendarType: calType });
-             await initPool.query('INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value', ['company_profile', initPayload]);
-             await initPool.end();
-          } catch(e) { console.error("Failed to init postgres system_settings:", e); }
-          return res.json({ success: true, database: { id, name, db_type: 'postgres', db_name: dbNameForBusiness } });
-
+        const r = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [id]);
+        if (r.rows.length > 0 && r.rows[0].db_type === 'postgres') {
+          const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
+          const config = JSON.parse(configRaw);
+          const connectionString = decryptValue(config.connectionString);
+          if (connectionString) {
+            const url = new URL(connectionString);
+            url.pathname = `/${r.rows[0].db_name}`;
+            const pool = new Pool({ connectionString: url.toString(), connectionTimeoutMillis: 3000 });
+            await pool.query('SELECT 1');
+            await pool.end();
+            return res.json({ success: true });
+          }
         }
-      } catch (e) {
-         console.log("Error checking config or creating postgres DB, falling back to sqlite:", e);
+      } catch (err: any) {
+        console.warn('Postgres connection test failed, checking file fallback:', err?.message);
       }
-
-      
-      return res.status(500).json({ error: "PostgreSQL is not properly configured or creation failed." });
-
-    } catch (e) {
-      res.status(500).json({ error: e.message });
     }
-  });
 
+    // File-based check
+    const storeFile = path.join(process.cwd(), `data_${id}.json`);
+    const fileList = await getStoredBusinesses();
+    const exists = fileList.some((b: any) => b.id === id) || fs.existsSync(storeFile);
+
+    if (exists) {
+      return res.json({ success: true });
+    }
+
+    return res.status(404).json({ error: 'کسب و کار مورد نظر یافت نشد' });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'خطا در تست ارتباط با کسب و کار' });
+  }
+});
+
+// POST /api/databases: create a new business
+router.post('/api/databases', requireAuth, async (req, res) => {
+  try {
+    const { name, calendarType } = req.body;
+    const calType = calendarType || 'jalali';
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'نام کسب و کار الزامی است' });
+    }
+
+    const cleanName = String(name).trim();
+    const id = 'store_' + Math.random().toString(36).substring(2, 6) + '_' + Date.now().toString(36);
+    let actualDbType = 'json';
+    let dbNameForBusiness = `store_${id}`.replace(/[^a-zA-Z0-9_]/g, '');
+
+    // 1. Try PostgreSQL provisioning if PostgreSQL is available
+    if (usePgMap['default'] && activePgPools['default']) {
+      try {
+        let connectionString = '';
+        try {
+          const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
+          const config = JSON.parse(configRaw);
+          connectionString = decryptValue(config.connectionString);
+        } catch (_) {}
+
+        if (!connectionString && process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
+          connectionString = process.env.DATABASE_URL;
+        }
+
+        if (connectionString) {
+          try {
+            const url = new URL(connectionString);
+            url.pathname = '/postgres';
+            const client = new Client({ connectionString: url.toString(), connectionTimeoutMillis: 4000 });
+            await client.connect();
+            await client.query(`CREATE DATABASE "${dbNameForBusiness}"`);
+            await client.end();
+            actualDbType = 'postgres';
+          } catch (createErr) {
+            console.warn('Could not CREATE DATABASE, using single DB table segregation:', createErr);
+          }
+        }
+
+        await activePgPools['default'].query(`
+          CREATE TABLE IF NOT EXISTS businesses (
+            id VARCHAR PRIMARY KEY,
+            name VARCHAR NOT NULL,
+            db_type VARCHAR DEFAULT 'postgres',
+            db_host VARCHAR,
+            db_port VARCHAR,
+            db_name VARCHAR,
+            db_user VARCHAR,
+            db_password VARCHAR
+          )
+        `);
+
+        await activePgPools['default'].query(`
+          INSERT INTO businesses (id, name, db_type, db_host, db_port, db_name, db_user, db_password)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+        `, [id, cleanName, actualDbType, '', '', actualDbType === 'postgres' ? dbNameForBusiness : '', '', '']);
+
+        if (actualDbType === 'postgres' && connectionString) {
+          try {
+            const newUrl = new URL(connectionString);
+            newUrl.pathname = '/' + dbNameForBusiness;
+            const initPool = new Pool({ connectionString: newUrl.toString() });
+            await initPool.query('CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)');
+            const initPayload = JSON.stringify({ storeName: cleanName, calendarType: calType });
+            await initPool.query(
+              'INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value',
+              ['company_profile', initPayload]
+            );
+            await initPool.end();
+          } catch (initErr) {
+            console.warn('Failed to seed system_settings on new postgres DB:', initErr);
+          }
+        }
+      } catch (pgErr) {
+        console.warn('Postgres business setup skipped or encountered error:', pgErr);
+      }
+    }
+
+    // 2. Persist to file-based registry & isolated data file
+    const fileList = await getStoredBusinesses();
+    const newEntry = {
+      id,
+      name: cleanName,
+      db_type: actualDbType,
+      db_name: actualDbType === 'postgres' ? dbNameForBusiness : undefined,
+      calendarType: calType,
+      createdAt: new Date().toISOString()
+    };
+    fileList.push(newEntry);
+    await saveStoredBusinesses(fileList);
+
+    // Initialize isolated JSON store file
+    const storeDataFile = path.join(process.cwd(), `data_${id}.json`);
+    const initialData: Record<string, any> = {
+      company_profile: {
+        storeName: cleanName,
+        calendarType: calType
+      },
+      store_settings: {
+        storeName: cleanName,
+        calendarType: calType,
+        currency: 'ریال'
+      }
+    };
+    await fsPromises.writeFile(storeDataFile, JSON.stringify(initialData, null, 2), 'utf8');
+
+    return res.json({
+      success: true,
+      database: {
+        id,
+        name: cleanName,
+        db_type: actualDbType
+      }
+    });
+  } catch (e: any) {
+    console.error('Error in POST /api/databases:', e);
+    res.status(500).json({ error: e.message || 'خطا در ایجاد کسب و کار جدید' });
+  }
+});
+
+// PUT /api/databases/:id: rename / update business
+router.put('/api/databases/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name } = req.body;
+    if (!name || !String(name).trim()) {
+      return res.status(400).json({ error: 'نام کسب و کار الزامی است' });
+    }
+    const cleanName = String(name).trim();
+
+    // 1. Update in Postgres
+    if (usePgMap['default'] && activePgPools['default']) {
+      try {
+        await activePgPools['default'].query(`UPDATE businesses SET name = $1 WHERE id = $2`, [cleanName, id]);
+      } catch (_) {}
+    }
+
+    // 2. Update in businesses.json
+    const fileList = await getStoredBusinesses();
+    const found = fileList.find((b: any) => b.id === id);
+    if (found) {
+      found.name = cleanName;
+      await saveStoredBusinesses(fileList);
+    }
+
+    // 3. Update in store settings file
+    const storeDataFile = id === 'default' ? path.join(process.cwd(), 'data.json') : path.join(process.cwd(), `data_${id}.json`);
+    if (fs.existsSync(storeDataFile)) {
+      try {
+        const raw = await fsPromises.readFile(storeDataFile, 'utf8');
+        const d = JSON.parse(raw);
+        if (d.store_settings) d.store_settings.storeName = cleanName;
+        if (d.company_profile) d.company_profile.storeName = cleanName;
+        await fsPromises.writeFile(storeDataFile, JSON.stringify(d, null, 2), 'utf8');
+      } catch (_) {}
+    }
+
+    res.json({ success: true, database: { id, name: cleanName } });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'خطا در بروزرسانی نام کسب و کار' });
+  }
+});
+
+// DELETE /api/databases/:id: delete a business
+router.delete('/api/databases/:id', requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    if (id === 'default') {
+      return res.status(400).json({ error: 'کسب و کار اصلی قابل حذف نمی‌باشد.' });
+    }
+
+    // 1. Delete from Postgres
+    if (usePgMap['default'] && activePgPools['default']) {
+      try {
+        await activePgPools['default'].query("DELETE FROM businesses WHERE id = $1", [id]);
+      } catch (_) {}
+    }
+
+    // 2. Delete from businesses.json
+    let fileList = await getStoredBusinesses();
+    fileList = fileList.filter((b: any) => b.id !== id);
+    await saveStoredBusinesses(fileList);
+
+    // 3. Delete isolated store file
+    const storeDataFile = path.join(process.cwd(), `data_${id}.json`);
+    if (fs.existsSync(storeDataFile)) {
+      try {
+        await fsPromises.unlink(storeDataFile);
+      } catch (_) {}
+    }
+
+    res.json({ success: true });
+  } catch (e: any) {
+    res.status(500).json({ error: e.message || 'خطا در حذف کسب و کار' });
+  }
+});
 
 export default router;

@@ -1,7 +1,7 @@
 import { exportToExcel, formatDecimalForExcel } from "../utils/exportUtils";
 import { autoGenerateRentCommitments } from "../services/hrService";
 import { hasPagePermission, getPageTitle } from "../utils/permissionUtils";
-import { suspendAppDataChanged, resumeAppDataChanged, invalidateCache } from "../services/coreService";
+import { suspendAppDataChanged, resumeAppDataChanged, invalidateCache, getAuthHeaders } from "../services/coreService";
 import CustomDatePicker from "../components/ui/CustomDatePicker";
 import { SystemUpdatePage } from "../components/admin/SystemUpdatePage";
 import { PersonalNotesManager } from "../components/notes/PersonalNotesManager";
@@ -382,8 +382,8 @@ const { user, loading: authLoading, signIn, signOut } = useAuth();
 // Removed isStoreSelectionOpen state
 
 useEffect(() => {
-  fetch('/api/databases').then(r => r.json()).then(d => {
-    if (d.success) setAvailableStores(d.databases);
+  fetch('/api/databases', { headers: getAuthHeaders() }).then(r => r.json()).then(d => {
+    if (d.success && Array.isArray(d.databases)) setAvailableStores(d.databases);
   }).catch(() => {});
 }, []);
 
@@ -3744,7 +3744,10 @@ const handleSaveSettings = async (e: React.FormEvent) => {
         const activeStoreId = localStorage.getItem('activeStoreId') || 'default';
         await fetch(`/api/databases/${activeStoreId}`, {
           method: 'PUT',
-          headers: { 'Content-Type': 'application/json' },
+          headers: { 
+            'Content-Type': 'application/json',
+            ...getAuthHeaders()
+          },
           body: JSON.stringify({ name: payload.storeName || 'کسب و کار اصلی' })
         });
       } catch (err) {
