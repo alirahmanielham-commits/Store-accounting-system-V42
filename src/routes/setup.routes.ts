@@ -80,16 +80,45 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
     if (dbConfig && dbConfig.engine === 'postgres') {
       try {
         const auth = dbConfig.password ? `${dbConfig.user}:${encodeURIComponent(dbConfig.password)}` : dbConfig.user;
-        const connStr = `postgresql://${auth}@${dbConfig.host}:${dbConfig.port}`;
+        const targetDb = (dbConfig.dbName || 'store_db').trim();
+        const safeDbName = targetDb.replace(/[^a-zA-Z0-9_]/g, '') || 'store_db';
+        const connStr = `postgresql://${auth}@${dbConfig.host}:${dbConfig.port}/${safeDbName}`;
+        const adminConnStr = `postgresql://${auth}@${dbConfig.host}:${dbConfig.port}/postgres`;
+
+        // Check and auto-create database if not exists
+        try {
+          const adminClient = new Client({ connectionString: adminConnStr, connectionTimeoutMillis: 5000 });
+          await adminClient.connect();
+          const checkRes = await adminClient.query('SELECT 1 FROM pg_database WHERE datname = $1', [safeDbName]);
+          if (checkRes.rowCount === 0) {
+            await adminClient.query(`CREATE DATABASE "${safeDbName}"`);
+          }
+          await adminClient.end();
+        } catch (dbCreateErr: any) {
+          console.warn('Postgres database auto-create notice:', dbCreateErr?.message);
+        }
+
         await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify({
           engine: 'postgres',
           connectionString: connStr,
-          dbName: dbConfig.dbName || 'store_db'
+          dbName: safeDbName
         }, null, 2), 'utf-8');
+
+        // Connect and activate pool in-memory so subsequent setDbData writes directly to PostgreSQL!
+        try {
+          const pool = await connectPgDb(connStr);
+          activePgPools['default'] = pool;
+          usePgMap['default'] = true;
+          await ensurePostgresTables(pool);
+        } catch (connectErr: any) {
+          console.error('Failed to connect and initialize PostgreSQL tables:', connectErr?.message);
+        }
       } catch (err: any) {
         console.warn('Could not save DB_CONFIG_FILE:', err?.message);
       }
     } else {
+      activePgPools['default'] = null;
+      usePgMap['default'] = false;
       try {
         await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify({
           engine: 'json',

@@ -14,6 +14,7 @@ export const authMiddleware = (req: any, res: any, next: any) => {
       '/api/setup/status',
       '/api/setup/admin',
       '/api/db/test',
+      '/api/db/create-database',
       '/api/db/config',
       '/api/databases'
     ];

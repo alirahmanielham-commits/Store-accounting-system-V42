@@ -209,7 +209,7 @@ router.post('/api/db/config', async (req, res) => {
 
 router.post('/api/db/test', async (req, res) => {
     try {
-      const { connectionString, engine } = req.body;
+      const { connectionString, engine, dbName } = req.body;
       if (engine === 'sqlite' || connectionString === 'sqlite' || engine === 'json' || connectionString === 'json') {
          return res.json({ success: true, message: 'موتور ذخیره‌سازی محلی (Local JSON Storage) با موفقیت تأیید و آماده به کار است.' });
       }
@@ -222,9 +222,70 @@ router.post('/api/db/test', async (req, res) => {
       await client.end();
       res.json({ success: true, message: 'اتصال به سرور پایگاه داده PostgreSQL با موفقیت برقرار شد.' });
     } catch (e: any) {
-      res.status(400).json({ success: false, error: e.message || 'خطا در برقراری اتصال با پایگاه داده' });
+      const errMsg = e?.message || '';
+      const isDbNotExist = e?.code === '3D000' || errMsg.includes('does not exist') || errMsg.includes('وجود ندارد');
+      if (isDbNotExist) {
+        const targetDbName = req.body.dbName || (req.body.connectionString ? req.body.connectionString.split('/').pop()?.split('?')[0] : 'store_db');
+        return res.json({ 
+          success: false, 
+          dbNotFound: true,
+          dbName: targetDbName,
+          error: `پایگاه داده «${targetDbName}» در سرور PostgreSQL یافت نشد.`,
+          message: `پایگاه داده «${targetDbName}» در سرور PostgreSQL وجود ندارد. آیا مایلید با تایید شما این پایگاه داده ساخته شود؟`
+        });
+      }
+      res.status(400).json({ success: false, error: errMsg || 'خطا در برقراری اتصال با پایگاه داده' });
     }
   });
+
+router.post('/api/db/create-database', async (req, res) => {
+  try {
+    const { connectionString, dbName, host, port, user, password } = req.body;
+    let targetDb = (dbName || '').trim();
+    let adminConnStr = '';
+
+    if (connectionString) {
+      try {
+        const url = new URL(connectionString);
+        if (!targetDb) targetDb = url.pathname.replace(/^\//, '');
+        url.pathname = '/postgres';
+        adminConnStr = url.toString();
+      } catch (_) {
+        adminConnStr = connectionString;
+      }
+    }
+
+    if (!adminConnStr && host && port && user) {
+      const auth = password ? `${user}:${encodeURIComponent(password)}` : user;
+      adminConnStr = `postgresql://${auth}@${host}:${port}/postgres`;
+    }
+
+    if (!targetDb) {
+      targetDb = 'store_db';
+    }
+
+    const safeDbName = targetDb.replace(/[^a-zA-Z0-9_]/g, '');
+    if (!safeDbName) {
+      return res.status(400).json({ success: false, error: 'نام پایگاه داده نامعتبر است.' });
+    }
+
+    const client = new Client({ connectionString: adminConnStr, connectionTimeoutMillis: 5000 });
+    await client.connect();
+    const checkRes = await client.query('SELECT 1 FROM pg_database WHERE datname = $1', [safeDbName]);
+    if (checkRes.rowCount === 0) {
+      await client.query(`CREATE DATABASE "${safeDbName}"`);
+    }
+    await client.end();
+
+    return res.json({ 
+      success: true, 
+      message: `پایگاه داده «${safeDbName}» با موفقیت در سرور PostgreSQL ایجاد شد.` 
+    });
+  } catch (e: any) {
+    console.error('Error creating database in PostgreSQL:', e);
+    return res.status(400).json({ success: false, error: e?.message || 'خطا در ایجاد پایگاه داده در سرور PostgreSQL' });
+  }
+});
 
 router.post('/api/system/update', (req, res) => {
     // In the cloud environment, we don't want to reset the repository as it would overwrite the user's changes.

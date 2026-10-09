@@ -12,12 +12,13 @@ export interface StoreSelectorSlice {
 const getStoredStoreId = () => {
   if (typeof window !== 'undefined' && window.localStorage) {
     try {
-      return localStorage.getItem("activeStoreId");
+      const stored = localStorage.getItem("activeStoreId");
+      if (stored) return stored;
     } catch {
-      return null;
+      return 'default';
     }
   }
-  return null;
+  return 'default';
 };
 
 export const createStoreSelectorSlice: StateCreator<StoreSelectorSlice> = (set) => ({
@@ -28,14 +29,14 @@ export const createStoreSelectorSlice: StateCreator<StoreSelectorSlice> = (set) 
         if (id) {
           localStorage.setItem("activeStoreId", id);
         } else {
-          localStorage.removeItem("activeStoreId");
+          localStorage.setItem("activeStoreId", "default");
         }
       } catch {}
     }
-    set({ activeStoreId: id });
+    set({ activeStoreId: id || 'default' });
   },
   availableStores: [],
   setAvailableStores: (stores) => set({ availableStores: stores }),
-  isStoreSelectionOpen: !getStoredStoreId(),
+  isStoreSelectionOpen: false,
   setIsStoreSelectionOpen: (isOpen) => set({ isStoreSelectionOpen: isOpen }),
 });
