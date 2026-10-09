@@ -295,18 +295,24 @@ export default function SaleInvoiceCreate(props: any) {
     
     // Safely normalize date to string if it is a Date or DateObject instance
     let dateStr = '';
-    if (date instanceof Date) {
-      dateStr = !isNaN(date.getTime()) ? date.toISOString() : new Date().toISOString();
+    if (date instanceof Date || (date && Object.prototype.toString.call(date) === '[object Date]')) {
+      dateStr = !isNaN((date as any).getTime()) ? (date as any).toISOString() : new Date().toISOString();
+    } else if (date && typeof (date as any).toISOString === 'function') {
+      try {
+        dateStr = (date as any).toISOString();
+      } catch (_) {
+        dateStr = new Date().toISOString();
+      }
     } else if (date && typeof (date as any).toDate === 'function') {
       try {
         const d = (date as any).toDate();
-        dateStr = d instanceof Date && !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+        dateStr = d && !isNaN(new Date(d).getTime()) ? new Date(d).toISOString() : new Date().toISOString();
       } catch (_) {
         dateStr = new Date().toISOString();
       }
     } else if (date && typeof (date as any).format === 'function') {
       try {
-        dateStr = (date as any).format();
+        dateStr = (date as any).format() || new Date().toISOString();
       } catch (_) {
         dateStr = new Date().toISOString();
       }
@@ -314,6 +320,13 @@ export default function SaleInvoiceCreate(props: any) {
       dateStr = String(date).trim();
     } else {
       dateStr = new Date().toISOString();
+    }
+
+    let dueDateStr: string | undefined = undefined;
+    if (invoiceDueDate instanceof Date) {
+      dueDateStr = !isNaN(invoiceDueDate.getTime()) ? invoiceDueDate.toISOString() : undefined;
+    } else if (invoiceDueDate) {
+      dueDateStr = String(invoiceDueDate).trim() || undefined;
     }
 
     const validationResult = saleInvoiceFormSchema.safeParse({
@@ -327,7 +340,8 @@ export default function SaleInvoiceCreate(props: any) {
       description: invoiceDescription,
       nationalId: buyerNationalId,
       economicCode: buyerEconomicCode,
-      postalCode: buyerPostalCode
+      postalCode: buyerPostalCode,
+      invoiceDueDate: dueDateStr
     });
 
     if (!validationResult.success) {

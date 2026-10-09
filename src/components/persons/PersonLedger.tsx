@@ -74,6 +74,19 @@ export default function PersonLedger(props: any) {
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A5'>('A4');
 
+  // Ensure fresh invoices, transactions, and accounting documents are loaded
+  useEffect(() => {
+    if ((!invoices || invoices.length === 0) && typeof fetchInvoices === 'function') {
+      fetchInvoices();
+    }
+    if ((!accountingDocuments || accountingDocuments.length === 0) && typeof fetchAccountingDocuments === 'function') {
+      fetchAccountingDocuments();
+    }
+    if ((!transactions || transactions.length === 0) && typeof fetchTransactions === 'function') {
+      fetchTransactions();
+    }
+  }, [ledgerPersonId, invoices?.length, accountingDocuments?.length, transactions?.length]);
+
   const cleanDescription = (desc: string, typeName: string) => {
     if (!desc || desc === "-") return typeName || "رویداد مالی";
     let cleaned = String(desc).trim();
@@ -474,19 +487,32 @@ export default function PersonLedger(props: any) {
                           
                           let entryType = "accounting_document";
                           let typeName = "سند حسابداری";
-                          if (doc.sourceType && doc.sourceType.startsWith("invoice_")) {
+                          const isInvoiceSource = doc.sourceType && (
+                            doc.sourceType.startsWith("invoice") || 
+                            doc.sourceType === "sale" || 
+                            doc.sourceType === "purchase" || 
+                            doc.sourceType === "sale_return" || 
+                            doc.sourceType === "purchase_return"
+                          );
+
+                          let matchedInvoice: any = null;
+                          if (isInvoiceSource || (doc.sourceId && (invoices || []).some(inv => String(inv.id) === String(doc.sourceId) || String(inv.invoiceNumber) === String(doc.sourceId)))) {
                             entryType = "invoice";
-                            const invoice = (invoices || []).find(inv => inv.id.toString() === doc.sourceId?.toString());
-                            if (invoice) {
-                                if (invoice.type === "sale") typeName = "فاکتور فروش";
-                                else if (invoice.type === "purchase") typeName = "فاکتور خرید";
-                                else if (invoice.type === "sale_return") typeName = "برگشت از فروش";
-                                else if (invoice.type === "purchase_return") typeName = "برگشت از خرید";
+                            matchedInvoice = (invoices || []).find(inv => 
+                              String(inv?.id) === String(doc.sourceId) || 
+                              String(inv?.invoiceNumber) === String(doc.sourceId) ||
+                              String(inv?.invoiceNumber) === String(doc.documentNumber)
+                            );
+                            if (matchedInvoice) {
+                                if (matchedInvoice.type === "sale" || !matchedInvoice.type) typeName = "فاکتور فروش";
+                                else if (matchedInvoice.type === "purchase") typeName = "فاکتور خرید";
+                                else if (matchedInvoice.type === "sale_return") typeName = "برگشت از فروش";
+                                else if (matchedInvoice.type === "purchase_return") typeName = "برگشت از خرید";
                             } else {
-                                if (doc.sourceType === "invoice_sale") typeName = "فاکتور فروش";
-                                else if (doc.sourceType === "invoice_purchase") typeName = "فاکتور خرید";
-                                else if (doc.sourceType === "invoice_sale_return") typeName = "برگشت از فروش";
-                                else if (doc.sourceType === "invoice_purchase_return") typeName = "برگشت از خرید";
+                                if (doc.sourceType === "invoice_purchase" || doc.sourceType === "purchase") typeName = "فاکتور خرید";
+                                else if (doc.sourceType === "invoice_sale_return" || doc.sourceType === "sale_return") typeName = "برگشت از فروش";
+                                else if (doc.sourceType === "invoice_purchase_return" || doc.sourceType === "purchase_return") typeName = "برگشت از خرید";
+                                else typeName = "فاکتور فروش";
                             }
                           }
                           else if (doc.sourceType === "receipt") { entryType = "transaction"; typeName = "رسید دریافت"; }
@@ -505,7 +531,46 @@ export default function PersonLedger(props: any) {
                             debit,
                             credit,
                             rawItem: doc,
+                            invoice: matchedInvoice,
                             entryType,
+                          };
+                        });
+
+                      // Also include any invoices of selectedPerson not already linked in accountingDocEntries
+                      const coveredInvoiceIds = new Set(
+                        accountingDocuments
+                          .filter((d: any) => d.sourceId)
+                          .map((d: any) => String(d.sourceId))
+                      );
+
+                      const directInvoiceEntries = (invoices || [])
+                        .filter((inv: any) => 
+                          inv && !inv.isDeleted && !inv.isDraft && inv.status !== 'draft' && inv.status !== 'voided' &&
+                          (String(inv.customerId) === String(selectedPerson.id) || String(inv.personId) === String(selectedPerson.id)) &&
+                          !coveredInvoiceIds.has(String(inv.id)) &&
+                          !coveredInvoiceIds.has(String(inv.invoiceNumber))
+                        )
+                        .map((inv: any) => {
+                          const isSale = inv.type === 'sale' || !inv.type;
+                          const isPurchase = inv.type === 'purchase';
+                          const isSaleReturn = inv.type === 'sale_return';
+                          
+                          let typeName = isSale ? 'فاکتور فروش' : isPurchase ? 'فاکتور خرید' : isSaleReturn ? 'برگشت از فروش' : 'برگشت از خرید';
+                          const total = Number(inv.totalPrice || inv.totalAmount || inv.finalAmount || 0);
+                          const debit = (isSale || inv.type === 'purchase_return') ? total : 0;
+                          const credit = (isPurchase || isSaleReturn) ? total : 0;
+                          
+                          return {
+                            id: `inv-${inv.id}`,
+                            refId: inv.invoiceNumber || String(inv.id),
+                            date: inv.date || inv.createdAt || new Date().toISOString(),
+                            type: typeName,
+                            desc: inv.description || inv.note || `${typeName} شماره ${inv.invoiceNumber || inv.id}`,
+                            debit,
+                            credit,
+                            rawItem: { ...inv, sourceId: inv.id },
+                            invoice: inv,
+                            entryType: 'invoice',
                           };
                         });
 
@@ -525,7 +590,7 @@ export default function PersonLedger(props: any) {
                         return 0;
                       };
 
-                      let allEntries = [...accountingDocEntries].sort((a, b) => {
+                      let allEntries = [...accountingDocEntries, ...directInvoiceEntries].sort((a, b) => {
                         const tA = new Date(convertToGregorian(a.date)).getTime();
                         const tB = new Date(convertToGregorian(b.date)).getTime();
                         const dateDiff = (isNaN(tA) ? 0 : tA) - (isNaN(tB) ? 0 : tB);
@@ -1496,9 +1561,77 @@ export default function PersonLedger(props: any) {
                                                 isDeb ? "bg-rose-50/40 print:bg-rose-50/50" : isCred ? "bg-emerald-50/40 print:bg-emerald-50/50" : "bg-white print:bg-white"
                                               } hover:bg-slate-50/80`}
                                               onClick={() => {
-                                                if (entry.entryType === "invoice" && entry.rawItem) {
-                                                  const actualInvoice = (invoices || []).find(i => String(i?.id) === String(entry.rawItem.sourceId));
-                                                  if (actualInvoice) setViewingInvoice(actualInvoice);
+                                                const isInvoice = isSale || isPurchase || entry.entryType === "invoice" || entry.type?.includes("فروش") || entry.type?.includes("خرید") || entry.type?.includes("فاکتور") || entry.type?.includes("برگشت");
+                                                if (isInvoice) {
+                                                  let actualInvoice = entry.invoice;
+                                                  if (!actualInvoice) {
+                                                    const targetId = String(entry.rawItem?.sourceId || entry.rawItem?.id || entry.id || '').replace(/^inv-/, '');
+                                                    const targetRef = String(entry.refId || '').trim();
+                                                    actualInvoice = (invoices || []).find((i: any) => 
+                                                      (targetId && (String(i?.id) === targetId || String(i?.invoiceNumber) === targetId)) ||
+                                                      (targetRef && targetRef !== '-' && (String(i?.invoiceNumber) === targetRef || String(i?.id) === targetRef)) ||
+                                                      (entry.rawItem?.documentNumber && String(i?.invoiceNumber) === String(entry.rawItem.documentNumber))
+                                                    );
+                                                  }
+                                                  if (!actualInvoice && entry.rawItem && Array.isArray(entry.rawItem.items)) {
+                                                    actualInvoice = entry.rawItem;
+                                                  }
+                                                  if (!actualInvoice) {
+                                                    const invType = isPurchase ? 'purchase' : 'sale';
+                                                    actualInvoice = {
+                                                      id: entry.rawItem?.sourceId || entry.id || `inv-${Date.now()}`,
+                                                      invoiceNumber: entry.refId !== '-' ? entry.refId : (entry.rawItem?.documentNumber || 'سند'),
+                                                      type: invType,
+                                                      title: entry.type || (isPurchase ? 'فاکتور خرید' : 'فاکتور فروش'),
+                                                      date: entry.date,
+                                                      customerId: selectedPerson?.id,
+                                                      customerName: selectedPerson?.name || selectedPerson?.alias,
+                                                      totalAmount: entry.debit || entry.credit || 0,
+                                                      paidAmount: 0,
+                                                      paymentStatus: 'unpaid',
+                                                      description: entry.desc,
+                                                      items: (entry.rawItem?.items && Array.isArray(entry.rawItem.items)) ? entry.rawItem.items : [
+                                                        {
+                                                          id: '1',
+                                                          productName: entry.desc || entry.type,
+                                                          quantity: 1,
+                                                          unitPrice: entry.debit || entry.credit || 0,
+                                                          totalPrice: entry.debit || entry.credit || 0,
+                                                        }
+                                                      ]
+                                                    };
+                                                  }
+                                                  if (setViewingInvoice && actualInvoice) {
+                                                    const safeAmount = entry.debit || entry.credit || actualInvoice.totalAmount || actualInvoice.totalPrice || 0;
+                                                    const safeItems = (actualInvoice.items && Array.isArray(actualInvoice.items) && actualInvoice.items.length > 0)
+                                                      ? actualInvoice.items
+                                                      : (entry.rawItem?.items && Array.isArray(entry.rawItem.items) && entry.rawItem.items.length > 0)
+                                                        ? entry.rawItem.items
+                                                        : [
+                                                            {
+                                                              id: '1',
+                                                              productName: entry.desc || actualInvoice.description || actualInvoice.title || entry.type || 'اقلام سند',
+                                                              quantity: 1,
+                                                              unit: 'عدد',
+                                                              unitPrice: safeAmount,
+                                                              totalPrice: safeAmount,
+                                                            }
+                                                          ];
+
+                                                    const preparedInvoice = {
+                                                      ...actualInvoice,
+                                                      items: safeItems,
+                                                      totalAmount: safeAmount,
+                                                      totalPrice: safeAmount,
+                                                      customerId: actualInvoice.customerId || selectedPerson?.id,
+                                                      customerName: actualInvoice.customerName || selectedPerson?.name || selectedPerson?.alias,
+                                                      invoiceNumber: actualInvoice.invoiceNumber || (entry.refId !== '-' ? entry.refId : (entry.rawItem?.documentNumber || 'سند')),
+                                                      date: actualInvoice.date || entry.date || new Date().toISOString(),
+                                                      type: actualInvoice.type || (isPurchase ? 'purchase' : 'sale')
+                                                    };
+                                                    setViewingInvoice(preparedInvoice);
+                                                    return;
+                                                  }
                                                 } else if (entry.entryType === "transaction" && entry.rawItem) {
                                                   const actualTx = (transactions || []).find(t => String(t?.id) === String(entry.rawItem.sourceId));
                                                   if (actualTx) {

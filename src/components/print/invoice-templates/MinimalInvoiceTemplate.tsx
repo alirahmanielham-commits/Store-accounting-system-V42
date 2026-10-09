@@ -7,7 +7,7 @@ import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 export default function MinimalInvoiceTemplate({
   data,
   storeSettings,
-  persons,
+  persons = [],
   transactions = [],
   invoices = [],
   personOpeningBalances = [],
@@ -26,6 +26,8 @@ export default function MinimalInvoiceTemplate({
     fontSize: 'normal'
   }
 }: InvoicePrintTemplateProps) {
+  if (!data) return null;
+
   const paperSize = printSettings?.paperSize || 'a4';
   const isA5 = paperSize === 'a5';
   const isBold = isA5 || printSettings?.boldBorders;
@@ -65,7 +67,7 @@ export default function MinimalInvoiceTemplate({
     ? "bg-slate-100 text-slate-900 font-black border-t-2 border-slate-700 print:border-slate-800"
     : "bg-slate-100/70 text-slate-800 font-bold border-t-2 border-slate-300";
 
-  const isSale = data.type === "sale" || data.type === "sale_return";
+  const isSale = data.type === "sale" || data.type === "sale_return" || !data.type;
   const isReturn = data.type === "sale_return" || data.type === "purchase_return";
   const isVoided = data.status === "voided" || data.isVoided === true;
   const isDraft = data.status === "draft" || data.isDraft === true;
@@ -80,7 +82,7 @@ export default function MinimalInvoiceTemplate({
       ? `${rawTitle} (پیش‌نویس)`
       : rawTitle;
 
-  const relatedPerson = persons.find(p => p.id?.toString() === data.customerId?.toString());
+  const relatedPerson = (persons || []).find(p => p && p.id?.toString() === data.customerId?.toString());
 
   const getInvoiceDateOnly = (d: any) => {
     return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });
@@ -150,7 +152,20 @@ export default function MinimalInvoiceTemplate({
   const absBalance = Math.abs(personBalance);
 
   // Financial Calculations
-  const allItems = data.items || [];
+  const allItems = (data.items && Array.isArray(data.items) && data.items.length > 0)
+    ? data.items
+    : (data.totalAmount || data.totalPrice || data.finalAmount)
+      ? [
+          {
+            id: '1',
+            productName: data.description || data.title || 'اقلام سند',
+            quantity: 1,
+            unit: 'عدد',
+            unitPrice: Number(data.totalAmount || data.totalPrice || data.finalAmount || 0),
+            totalPrice: Number(data.totalAmount || data.totalPrice || data.finalAmount || 0),
+          }
+        ]
+      : [];
   const totalQuantity = allItems.reduce((sum: number, item: any) => sum + (Number(item.quantity) || 0), 0);
 
   const rawItemsTotal = allItems.reduce((sum: number, item: any) => {
@@ -206,7 +221,11 @@ export default function MinimalInvoiceTemplate({
 
   const finalTotal = data.totalAmount !== undefined && Number(data.totalAmount) > 0
     ? Number(data.totalAmount)
-    : (subtotalAfterAllDiscounts + totalTax);
+    : (data.totalPrice !== undefined && Number(data.totalPrice) > 0
+        ? Number(data.totalPrice)
+        : (data.finalAmount !== undefined && Number(data.finalAmount) > 0
+            ? Number(data.finalAmount)
+            : (subtotalAfterAllDiscounts + totalTax)));
 
   const paidAmount = Number(data.paidAmount) || totalAllocated || 0;
   const remainingDue = Math.max(0, finalTotal - paidAmount);

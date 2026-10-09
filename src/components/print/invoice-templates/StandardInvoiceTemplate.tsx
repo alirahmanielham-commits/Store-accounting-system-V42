@@ -7,7 +7,7 @@ import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 export default function StandardInvoiceTemplate({
   data,
   storeSettings,
-  persons,
+  persons = [],
   transactions = [],
   invoices = [],
   personOpeningBalances = [],
@@ -27,7 +27,9 @@ export default function StandardInvoiceTemplate({
     fontSize: 'normal'
   }
 }: InvoicePrintTemplateProps) {
-  const isSale = data.type === "sale" || data.type === "sale_return";
+  if (!data) return null;
+
+  const isSale = data.type === "sale" || data.type === "sale_return" || !data.type;
   const isReturn = data.type === "sale_return" || data.type === "purchase_return";
   const isVoided = data.status === "voided" || data.isVoided === true;
   const isDraft = data.status === "draft" || data.isDraft === true;
@@ -42,8 +44,8 @@ export default function StandardInvoiceTemplate({
       ? `${rawTitle} (پیش‌نویس)`
       : rawTitle;
       
-  const relatedPerson = persons.find(
-    (p) => p.id?.toString() === data.customerId?.toString()
+  const relatedPerson = (persons || []).find(
+    (p) => p && p.id?.toString() === data.customerId?.toString()
   );
 
   const getInvoiceDateOnly = (d: any) => {
@@ -116,7 +118,20 @@ export default function StandardInvoiceTemplate({
   const absBalance = Math.abs(personBalance);
 
   // --- Financial & Quantity Calculations ---
-  const allItems = data.items || [];
+  const allItems = (data.items && Array.isArray(data.items) && data.items.length > 0)
+    ? data.items
+    : (data.totalAmount || data.totalPrice || data.finalAmount)
+      ? [
+          {
+            id: '1',
+            productName: data.description || data.title || 'اقلام سند',
+            quantity: 1,
+            unit: 'عدد',
+            unitPrice: Number(data.totalAmount || data.totalPrice || data.finalAmount || 0),
+            totalPrice: Number(data.totalAmount || data.totalPrice || data.finalAmount || 0),
+          }
+        ]
+      : [];
   const totalQuantity = allItems.reduce((sum: number, item: any) => sum + (Number(item.quantity) || 0), 0);
 
   const rawItemsTotal = allItems.reduce((sum: number, item: any) => {
@@ -172,7 +187,11 @@ export default function StandardInvoiceTemplate({
 
   const finalTotal = data.totalAmount !== undefined && Number(data.totalAmount) > 0
     ? Number(data.totalAmount)
-    : (subtotalAfterAllDiscounts + totalTax);
+    : (data.totalPrice !== undefined && Number(data.totalPrice) > 0
+        ? Number(data.totalPrice)
+        : (data.finalAmount !== undefined && Number(data.finalAmount) > 0
+            ? Number(data.finalAmount)
+            : (subtotalAfterAllDiscounts + totalTax)));
 
   const paidAmount = Number(data.paidAmount) || totalAllocated || 0;
   const remainingInvoiceBalance = Math.max(0, finalTotal - paidAmount);

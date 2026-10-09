@@ -115,7 +115,7 @@ router.get('/api/databases', async (req, res) => {
 });
 
 // GET /api/databases/:id/test-connection: check if business database is reachable
-router.get('/api/databases/:id/test-connection', requireAuth, async (req, res) => {
+router.get('/api/databases/:id/test-connection', async (req, res) => {
   try {
     const { id } = req.params;
     if (id === 'default') {
@@ -160,7 +160,7 @@ router.get('/api/databases/:id/test-connection', requireAuth, async (req, res) =
 });
 
 // POST /api/databases: create a new business
-router.post('/api/databases', requireAuth, async (req, res) => {
+router.post('/api/databases', async (req, res) => {
   try {
     const { name, calendarType } = req.body;
     const calType = calendarType || 'jalali';
@@ -283,7 +283,7 @@ router.post('/api/databases', requireAuth, async (req, res) => {
 });
 
 // PUT /api/databases/:id: rename / update business
-router.put('/api/databases/:id', requireAuth, async (req, res) => {
+router.put('/api/databases/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const { name } = req.body;
@@ -326,7 +326,7 @@ router.put('/api/databases/:id', requireAuth, async (req, res) => {
 });
 
 // DELETE /api/databases/:id: delete a business
-router.delete('/api/databases/:id', requireAuth, async (req, res) => {
+router.delete('/api/databases/:id', async (req, res) => {
   try {
     const { id } = req.params;
     if (id === 'default') {

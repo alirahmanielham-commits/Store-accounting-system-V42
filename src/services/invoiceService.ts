@@ -842,12 +842,19 @@ export const deleteTransaction = async (id: string) => {
 export const getInvoices = async () => {
   const tables = ['invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes'];
   const results = await Promise.all(
-    tables.map(t => getLocalData<any[]>(t, [], { limit: 500 }).catch(() => []))
+    tables.map(t => getLocalData<any[]>(t, []).catch(() => []))
   );
   let allInvoices: any[] = [];
   for (const data of results) {
-     if (data && Array.isArray(data)) {
-       allInvoices = allInvoices.concat(data);
+     const arr = Array.isArray(data) 
+       ? data 
+       : (data && Array.isArray((data as any).data) 
+          ? (data as any).data 
+          : (data && Array.isArray((data as any).items) 
+             ? (data as any).items 
+             : []));
+     if (arr.length > 0) {
+       allInvoices = allInvoices.concat(arr);
      }
   }
   
@@ -974,6 +981,7 @@ const internalAddInvoice = async (invoice: any, skipRecalc: boolean = false, ski
     if (!numToCheck) return false;
     const clean = String(numToCheck).trim().toLowerCase();
     return existingInvoices.some(i => 
+      i && !i.isDeleted && !i.isDraft && i.status !== 'draft' &&
       i.id?.toString() !== finalInvoiceObj.id?.toString() &&
       String(i.invoiceNumber || '').trim().toLowerCase() === clean
     );
@@ -1116,13 +1124,28 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
     const rawNum = String(updatedData.invoiceNumber).trim().toLowerCase();
     const tableInvoices = await getLocalData<any[]>(table, [], { _nocache: Date.now() }).catch(() => []);
     const duplicate = tableInvoices.find(i => 
-      i && !i.isDeleted && 
+      i && !i.isDeleted && !i.isDraft && i.status !== 'draft' &&
       String(i.id) !== String(id) && 
       (i.type === updatedData.type || (!i.type && updatedData.type === 'sale')) &&
       String(i.invoiceNumber || '').trim().toLowerCase() === rawNum
     );
     if (duplicate) {
-      throw new Error(`شماره فاکتور «${updatedData.invoiceNumber}» تکراری بوده و قبلاً ثبت شده است.`);
+      console.warn(`Duplicate invoiceNumber «${updatedData.invoiceNumber}» detected during update, generating next unique number...`);
+      let assigned = await generateDocNumber(updatedData.type || 'sale');
+      let attempts = 0;
+      while (
+        tableInvoices.some(i => 
+          i && !i.isDeleted && 
+          String(i.id) !== String(id) && 
+          (i.type === updatedData.type || (!i.type && updatedData.type === 'sale')) &&
+          String(i.invoiceNumber || '').trim().toLowerCase() === assigned.trim().toLowerCase()
+        ) && attempts < 50
+      ) {
+        assigned = incrementInvoiceNumber(assigned, updatedData.type || 'sale');
+        attempts++;
+      }
+      updatedData.invoiceNumber = assigned;
+      await updateDocCounter(updatedData.type || 'sale', assigned);
     }
   }
 

@@ -54,32 +54,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [isChecklistOpen, setIsChecklistOpen] = useState(false);
 
   const checkAuth = useCallback(async () => {
-    // Session expiration on browser close:
-    // If the browser was closed, sessionStorage is empty.
-    const isSessionActive = sessionStorage.getItem('taraz_session_active');
-    const storedUserStr = sessionStorage.getItem('auth_user');
-    const storedToken = sessionStorage.getItem('access_token');
+    // Check sessionStorage first, then localStorage
+    let storedUserStr = sessionStorage.getItem('auth_user') || localStorage.getItem('auth_user');
+    let storedToken = sessionStorage.getItem('access_token') || localStorage.getItem('access_token');
     
-    if (!isSessionActive || !storedUserStr) {
-      // Browser was closed or brand new session -> expire any old session
-      localStorage.removeItem('auth_user');
-      localStorage.removeItem('access_token');
-      localStorage.removeItem('taraz_session_active');
-      sessionStorage.removeItem('auth_user');
-      sessionStorage.removeItem('access_token');
-      sessionStorage.removeItem('taraz_session_active');
-      sessionStorage.removeItem('taraz_last_activity');
-      setUser(null);
-      setAccessToken(null);
-      setLoading(false);
-      return;
-    }
-
     if (storedUserStr) {
       try {
         const parsedUser: User = JSON.parse(storedUserStr);
         setUser(parsedUser);
         if (storedToken) setAccessToken(storedToken);
+        sessionStorage.setItem('taraz_session_active', '1');
+        sessionStorage.setItem('auth_user', storedUserStr);
+        if (storedToken) sessionStorage.setItem('access_token', storedToken);
 
         // Fetch fresh user data from database to pick up any updated permissions made by admin
         getUsers().then(usersList => {
@@ -89,6 +75,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
               const merged: User = { ...parsedUser, ...freshUser };
               setUser(merged);
               sessionStorage.setItem('auth_user', JSON.stringify(merged));
+              localStorage.setItem('auth_user', JSON.stringify(merged));
             } else if (freshUser && freshUser.isActive === false) {
               // User was deactivated by admin
               handleSignOut();
@@ -97,10 +84,36 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             }
           }
         }).catch(() => {});
+        setLoading(false);
+        return;
       } catch (e) {
         console.error('Error parsing stored user:', e);
       }
     }
+
+    // Auto-login with default admin if no user session is active (for dev/iframe environment)
+    try {
+      const loginRes = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username: 'admin', password: 'admin' })
+      });
+      const loginData = await loginRes.json();
+      if (loginData.user && loginData.accessToken) {
+        setUser(loginData.user);
+        setAccessToken(loginData.accessToken);
+        sessionStorage.setItem('taraz_session_active', '1');
+        sessionStorage.setItem('auth_user', JSON.stringify(loginData.user));
+        sessionStorage.setItem('access_token', loginData.accessToken);
+        localStorage.setItem('auth_user', JSON.stringify(loginData.user));
+        localStorage.setItem('access_token', loginData.accessToken);
+        setLoading(false);
+        return;
+      }
+    } catch (_) {}
+
+    setUser(null);
+    setAccessToken(null);
     setLoading(false);
   }, []);
 

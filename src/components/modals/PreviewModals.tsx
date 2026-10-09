@@ -72,7 +72,33 @@ export default function PreviewModals(props: any) {
     accounts, cashboxes, checkbooks, submittingReceipt, setEditingReceipt, setIsEditReceiptModalOpen,
   } = props;
 
-  const currentInvoice = viewingInvoice || previewInvoiceData;
+  const rawInvoice = viewingInvoice || previewInvoiceData;
+  const currentInvoice = React.useMemo(() => {
+    if (!rawInvoice) return null;
+    const effAmount = Number(rawInvoice.totalAmount || rawInvoice.totalPrice || rawInvoice.finalAmount || 0);
+    const effItems = (rawInvoice.items && Array.isArray(rawInvoice.items) && rawInvoice.items.length > 0)
+      ? rawInvoice.items
+      : effAmount > 0
+        ? [
+            {
+              id: '1',
+              productName: rawInvoice.description || rawInvoice.title || 'اقلام سند',
+              quantity: 1,
+              unit: 'عدد',
+              unitPrice: effAmount,
+              totalPrice: effAmount,
+            }
+          ]
+        : [];
+    return {
+      ...rawInvoice,
+      items: effItems,
+      totalAmount: rawInvoice.totalAmount || effAmount,
+      totalPrice: rawInvoice.totalPrice || effAmount,
+      type: rawInvoice.type || 'sale',
+    };
+  }, [rawInvoice]);
+
   const isVoided = currentInvoice?.status === "voided" || currentInvoice?.isVoided === true;
   const isDraft = currentInvoice?.status === "draft" || currentInvoice?.isDraft === true;
 
@@ -700,9 +726,9 @@ export default function PreviewModals(props: any) {
                 }`}
                 style={{ fontFamily: "'IRANYekanXFaNum', 'Vazirmatn', -apple-system, sans-serif" }}
               >
-                {(viewingInvoice?.type?.includes("warehouse") || previewInvoiceData?.type?.includes("warehouse")) ? (
+                {(currentInvoice?.type?.includes("warehouse")) ? (
                   <WarehousePrintTemplate
-                    data={viewingInvoice || previewInvoiceData}
+                    data={currentInvoice}
                     storeSettings={storeSettings}
                     persons={persons}
                     products={products}
@@ -710,7 +736,7 @@ export default function PreviewModals(props: any) {
                   />
                 ) : (
                   <InvoicePrintTemplate
-                    data={viewingInvoice || previewInvoiceData}
+                    data={currentInvoice}
                     storeSettings={storeSettings}
                     persons={persons}
                     transactions={transactions}

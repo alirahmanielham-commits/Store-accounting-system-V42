@@ -1,1 +1,9 @@
-[]
+[
+  {
+    "id": "store_2qd7_muzbq8p1",
+    "name": "فروشگاه نمونه جدید",
+    "db_type": "json",
+    "calendarType": "jalali",
+    "createdAt": "2026-10-08T09:18:16.454Z"
+  }
+]

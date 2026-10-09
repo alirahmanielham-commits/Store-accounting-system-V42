@@ -6,7 +6,7 @@ import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 export default function OfficialInvoiceTemplate({
   data,
   storeSettings,
-  persons,
+  persons = [],
   printSettings = {
     showStoreLogo: true,
     showNotes: true,
@@ -17,7 +17,9 @@ export default function OfficialInvoiceTemplate({
     fontSize: 'normal'
   }
 }: InvoicePrintTemplateProps) {
-  const isSale = data.type === "sale" || data.type === "sale_return";
+  if (!data) return null;
+
+  const isSale = data.type === "sale" || data.type === "sale_return" || !data.type;
   const isReturn = data.type === "sale_return" || data.type === "purchase_return";
   const isVoided = data.status === "voided" || data.isVoided === true;
   const isDraft = data.status === "draft" || data.isDraft === true;
@@ -32,7 +34,7 @@ export default function OfficialInvoiceTemplate({
       ? `${rawTitle} (پیش‌نویس)`
       : rawTitle;
       
-  const relatedPerson = persons.find(p => p.id?.toString() === data.customerId?.toString());
+  const relatedPerson = (persons || []).find(p => p && p.id?.toString() === data.customerId?.toString());
 
   const defaultCols = {
     rowIndex: true,
@@ -55,7 +57,20 @@ export default function OfficialInvoiceTemplate({
   };
 
   // Calculations
-  const allItems = data.items || [];
+  const allItems = (data.items && Array.isArray(data.items) && data.items.length > 0)
+    ? data.items
+    : (data.totalAmount || data.totalPrice || data.finalAmount)
+      ? [
+          {
+            id: '1',
+            productName: data.description || data.title || 'اقلام سند',
+            quantity: 1,
+            unit: 'عدد',
+            unitPrice: Number(data.totalAmount || data.totalPrice || data.finalAmount || 0),
+            totalPrice: Number(data.totalAmount || data.totalPrice || data.finalAmount || 0),
+          }
+        ]
+      : [];
   const totalQuantity = allItems.reduce((sum: number, item: any) => sum + (Number(item.quantity) || 0), 0);
 
   const rawItemsTotal = allItems.reduce((sum: number, item: any) => {
@@ -112,7 +127,11 @@ export default function OfficialInvoiceTemplate({
 
   const finalTotal = data.totalAmount !== undefined && Number(data.totalAmount) > 0
     ? Number(data.totalAmount)
-    : (subtotalAfterAllDiscounts + totalTax);
+    : (data.totalPrice !== undefined && Number(data.totalPrice) > 0
+        ? Number(data.totalPrice)
+        : (data.finalAmount !== undefined && Number(data.finalAmount) > 0
+            ? Number(data.finalAmount)
+            : (subtotalAfterAllDiscounts + totalTax)));
 
   const currencyLabel = storeSettings.currency || "تومان";
   const paperSize = printSettings?.paperSize || 'a4';

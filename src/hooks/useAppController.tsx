@@ -5032,12 +5032,14 @@ const getInvoiceNumber = (typeOverride?: string) => {
       const checkInvNum = (customPayload?.invoiceNumber || finalInvoiceNumber || "").trim();
       if (checkInvNum && !checkInvNum.includes("خودکار") && !checkInvNum.includes("تولید خودکار")) {
         const isDuplicate = invoices.some(i => 
+          !i.isDeleted && !i.isDraft && i.status !== 'draft' &&
           i.id?.toString() !== editingInvoiceId?.toString() &&
+          i.id?.toString() !== autoSaveInvoiceId?.toString() &&
           (i.type === "sale" || !i.type) &&
           String(i.invoiceNumber || "").trim().toLowerCase() === checkInvNum.toLowerCase()
         );
         if (isDuplicate) {
-          if (invoiceMode === "auto" && !editingInvoiceId) {
+          if (invoiceMode === "auto" || !editingInvoiceId) {
             // در حالت شماره‌گذاری خودکار، در ثبت‌های همزمان اجازه می‌دهیم موتور تخصیص شماره یکتا را تعیین کند
             if (customPayload) customPayload.invoiceNumber = "";
             finalInvoiceNumber = "";
@@ -5222,12 +5224,14 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
       if (checkInvNum && !checkInvNum.includes("خودکار") && !checkInvNum.includes("تولید خودکار")) {
         const isDuplicate = invoices.some(i => 
+          !i.isDeleted && !i.isDraft && i.status !== 'draft' &&
           i.id?.toString() !== editingInvoiceId?.toString() &&
+          i.id?.toString() !== autoSaveInvoiceId?.toString() &&
           i.type === "purchase" &&
           String(i.invoiceNumber || "").trim().toLowerCase() === checkInvNum.toLowerCase()
         );
         if (isDuplicate) {
-          if (invoiceMode === "auto" && !editingInvoiceId) {
+          if (invoiceMode === "auto" || !editingInvoiceId) {
             if (customPayload) customPayload.invoiceNumber = "";
             finalInvoiceNumber = "";
           } else {
@@ -5238,6 +5242,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
       if (checkSellerNum && actualCustomerId) {
         const isDuplicateSeller = invoices.some(i =>
+          !i.isDeleted && !i.isDraft && i.status !== 'draft' &&
           i.id?.toString() !== editingInvoiceId?.toString() &&
           i.type === "purchase" &&
           i.customerId?.toString() === actualCustomerId.toString() &&
@@ -5322,6 +5327,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
       const checkInvNum = (customPayload?.invoiceNumber || finalInvoiceNumber || "").trim();
       if (checkInvNum && !checkInvNum.includes("خودکار") && !checkInvNum.includes("تولید خودکار")) {
         const isDuplicate = invoices.some(i => 
+          !i.isDeleted && !i.isDraft && i.status !== 'draft' &&
           i.id?.toString() !== editingInvoiceId?.toString() &&
           i.type === actualType &&
           String(i.invoiceNumber || "").trim().toLowerCase() === checkInvNum.toLowerCase()
@@ -6919,7 +6925,7 @@ const renderTabContent = () => {
       case "list_warehouse_docs": {
         return (
           <InvoicesList
-             invoices={invoices} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} persons={persons} activeTab={activeTab} setActiveTab={setActiveTab} purchaseFilter={purchaseFilter} setPurchaseFilter={setPurchaseFilter} formatCurrency={formatCurrency} getPersonDisplayName={getPersonDisplayName} formatDateDisplay={formatDateDisplay}  numToPersianWords={numToPersianWords} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} setCustomerId={setCustomerId}  getRoleName={getRoleName} setEditingInvoiceId={setEditingInvoiceId} handleDeleteInvoice={handleDeleteInvoice}     storeSettings={storeSettings} invoiceCurrentPage={invoiceCurrentPage} setInvoiceCurrentPage={setInvoiceCurrentPage} invoicePageSize={invoicePageSize} setInvoicePageSize={setInvoicePageSize} toPersianDigits={toPersianDigits} listFilter={listFilter} setListFilter={setListFilter} invoiceGroupMode={invoiceGroupMode} setInvoiceGroupMode={setInvoiceGroupMode} List={List} clearDraft={clearDraft} setInvoiceType={setInvoiceType} setWarehouseOperationType={setWarehouseOperationType} Calendar={Calendar} renderPersonLink={renderPersonLink} products={products} setPricingWizardItems={setPricingWizardItems} setPricingWizardInvoice={setPricingWizardInvoice} setSuccessMsg={setSuccessMsg} setReceiptPersonId={setReceiptPersonId} setViewingInvoice={setViewingInvoice} handleEditInvoiceAction={handleEditInvoiceAction} handleFastWarehouseReceipt={handleFastWarehouseReceipt} handleVoidInvoice={handleVoidInvoice}
+             invoices={invoices} fetchInvoices={fetchInvoices} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} persons={persons} activeTab={activeTab} setActiveTab={setActiveTab} purchaseFilter={purchaseFilter} setPurchaseFilter={setPurchaseFilter} formatCurrency={formatCurrency} getPersonDisplayName={getPersonDisplayName} formatDateDisplay={formatDateDisplay}  numToPersianWords={numToPersianWords} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} setCustomerId={setCustomerId}  getRoleName={getRoleName} setEditingInvoiceId={setEditingInvoiceId} handleDeleteInvoice={handleDeleteInvoice}     storeSettings={storeSettings} invoiceCurrentPage={invoiceCurrentPage} setInvoiceCurrentPage={setInvoiceCurrentPage} invoicePageSize={invoicePageSize} setInvoicePageSize={setInvoicePageSize} toPersianDigits={toPersianDigits} listFilter={listFilter} setListFilter={setListFilter} invoiceGroupMode={invoiceGroupMode} setInvoiceGroupMode={setInvoiceGroupMode} List={List} clearDraft={clearDraft} setInvoiceType={setInvoiceType} setWarehouseOperationType={setWarehouseOperationType} Calendar={Calendar} renderPersonLink={renderPersonLink} products={products} setPricingWizardItems={setPricingWizardItems} setPricingWizardInvoice={setPricingWizardInvoice} setSuccessMsg={setSuccessMsg} setReceiptPersonId={setReceiptPersonId} setViewingInvoice={setViewingInvoice} handleEditInvoiceAction={handleEditInvoiceAction} handleFastWarehouseReceipt={handleFastWarehouseReceipt} handleVoidInvoice={handleVoidInvoice}
           />
         );
       }

@@ -5,10 +5,12 @@ import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 export default function ThermalInvoiceTemplate({
   data,
   storeSettings,
-  persons,
+  persons = [],
   printSettings = { showStoreLogo: true, showNotes: true }
 }: InvoicePrintTemplateProps) {
-  const isSale = data.type === "sale" || data.type === "sale_return";
+  if (!data) return null;
+
+  const isSale = data.type === "sale" || data.type === "sale_return" || !data.type;
   const isVoided = data.status === "voided" || data.isVoided === true;
   const isDraft = data.status === "draft" || data.isDraft === true;
   let rawTitle = isSale ? "رسید فروش" : "رسید خرید";
@@ -18,9 +20,23 @@ export default function ThermalInvoiceTemplate({
       ? `${rawTitle} (پیش‌نویس)`
       : rawTitle;
   
-  const relatedPerson = persons.find(p => p.id?.toString() === data.customerId?.toString());
-  const sumTotal = data.items?.reduce((sum: number, item: any) => sum + (item.quantity * item.unitPrice), 0) || 0;
-  const totalDiscount = sumTotal - (data.totalAmount || 0);
+  const relatedPerson = (persons || []).find(p => p && p.id?.toString() === data.customerId?.toString());
+  const allItems = (data.items && Array.isArray(data.items) && data.items.length > 0)
+    ? data.items
+    : (data.totalAmount || data.totalPrice || data.finalAmount)
+      ? [
+          {
+            id: '1',
+            productName: data.description || data.title || 'اقلام سند',
+            quantity: 1,
+            unitPrice: Number(data.totalAmount || data.totalPrice || data.finalAmount || 0),
+            totalPrice: Number(data.totalAmount || data.totalPrice || data.finalAmount || 0),
+          }
+        ]
+      : [];
+  const sumTotal = allItems.reduce((sum: number, item: any) => sum + (Number(item.quantity || 1) * Number(item.unitPrice || 0)), 0);
+  const effectiveTotal = Number(data.totalAmount || data.totalPrice || data.finalAmount || sumTotal);
+  const totalDiscount = Math.max(0, sumTotal - effectiveTotal);
 
   const getInvoiceDateOnly = (d: any) => {
     return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });

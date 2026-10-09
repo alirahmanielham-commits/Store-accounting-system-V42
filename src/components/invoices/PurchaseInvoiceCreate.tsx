@@ -130,18 +130,24 @@ import { purchaseInvoiceFormSchema } from "../../schemas/validation";
     const cleanItems = (items || []).filter((it: any) => it && it.productId);
     if (!isDraft) {
       let dateStr = '';
-      if ((date as any) instanceof Date) {
+      if ((date as any) instanceof Date || (date && Object.prototype.toString.call(date) === '[object Date]')) {
         dateStr = !isNaN((date as any).getTime()) ? (date as any).toISOString() : new Date().toISOString();
+      } else if (date && typeof (date as any).toISOString === 'function') {
+        try {
+          dateStr = (date as any).toISOString();
+        } catch (_) {
+          dateStr = new Date().toISOString();
+        }
       } else if (date && typeof (date as any).toDate === 'function') {
         try {
           const d = (date as any).toDate();
-          dateStr = d instanceof Date && !isNaN(d.getTime()) ? d.toISOString() : new Date().toISOString();
+          dateStr = d && !isNaN(new Date(d).getTime()) ? new Date(d).toISOString() : new Date().toISOString();
         } catch (_) {
           dateStr = new Date().toISOString();
         }
       } else if (date && typeof (date as any).format === 'function') {
         try {
-          dateStr = (date as any).format();
+          dateStr = (date as any).format() || new Date().toISOString();
         } catch (_) {
           dateStr = new Date().toISOString();
         }

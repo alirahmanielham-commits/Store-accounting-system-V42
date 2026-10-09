@@ -13,10 +13,12 @@ interface WarehousePrintTemplateProps {
 export default function WarehousePrintTemplate({
   data,
   storeSettings,
-  warehouses,
-  persons,
+  warehouses = [],
+  persons = [],
   products = [],
 }: WarehousePrintTemplateProps) {
+  if (!data) return null;
+
   const isReceipt = data.type === "warehouse_receipt";
   const isVoided = data.status === "voided" || data.isVoided === true;
   const isDraft = data.status === "draft" || data.isDraft === true;
@@ -29,8 +31,8 @@ export default function WarehousePrintTemplate({
     : isDraft
       ? `${rawTitle} (پیش‌نویس)`
       : rawTitle;
-  const relatedPerson = persons.find(
-    (p) => p.id?.toString() === data.customerId?.toString(),
+  const relatedPerson = (persons || []).find(
+    (p) => p && p.id?.toString() === data.customerId?.toString(),
   );
 
   const resolvedWhId = data.warehouseId ||

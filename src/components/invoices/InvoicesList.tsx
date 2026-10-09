@@ -73,6 +73,7 @@ export default function InvoicesList(props: any) {
     handleEditInvoiceAction,
     handleVoidInvoice,
     handleFastWarehouseReceipt,
+    fetchInvoices,
     ...rest
   } = props;
 
@@ -83,6 +84,13 @@ export default function InvoicesList(props: any) {
   const [selectedPersonFilter, setSelectedPersonFilter] = useState<string>('all');
   const [selectedPaymentStatus, setSelectedPaymentStatus] = useState<string>('all');
   const [selectedWarehouseFilter, setSelectedWarehouseFilter] = useState<string>('all');
+
+  // Ensure invoices are loaded on mount if empty
+  useEffect(() => {
+    if ((!invoices || invoices.length === 0) && typeof fetchInvoices === 'function') {
+      fetchInvoices();
+    }
+  }, [invoices?.length, fetchInvoices]);
 
   // Date range presets state
   const [datePreset, setDatePreset] = useState<DatePreset>('all');
@@ -361,17 +369,18 @@ export default function InvoicesList(props: any) {
   // Base invoices list for this tab before filters
   const baseInvoices = useMemo(() => {
     return (invoices || []).filter((i: any) => {
-      if (i.isDeleted) return false;
+      if (!i || i.isDeleted) return false;
+      const type = String(i.type || 'sale').toLowerCase().trim();
       if (activeTab === "list_sale") {
-        return i.type === "sale" || i.type === "proforma";
+        return type === "sale" || type === "sales" || type === "proforma";
       } else if (activeTab === "list_purchase") {
-        return i.type === "purchase";
+        return type === "purchase" || type === "purchases";
       } else if (activeTab === "list_sale_return") {
-        return i.type === "sale_return";
+        return type === "sale_return" || type === "sales_return";
       } else if (activeTab === "list_purchase_return") {
-        return i.type === "purchase_return";
+        return type === "purchase_return" || type === "purchases_return";
       } else if (activeTab === "list_warehouse_docs") {
-        return i.type === "warehouse_receipt" || i.type === "warehouse_remittance";
+        return type === "warehouse_receipt" || type === "warehouse_remittance";
       }
       return false;
     });

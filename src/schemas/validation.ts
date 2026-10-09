@@ -44,50 +44,28 @@ export const invoiceItemFormSchema = z.object({
   )
 }).passthrough();
 
-export const flexibleDateSchema = (errorMessage = 'تاریخ الزامی است.') =>
-  z.preprocess((val: any) => {
-    if (val === null || val === undefined || val === '') return '';
-    if (val instanceof Date) {
-      return !isNaN(val.getTime()) ? val.toISOString() : '';
-    }
-    if (typeof val === 'object') {
-      if (typeof val.toDate === 'function') {
-        try {
-          const d = val.toDate();
-          if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString();
-        } catch (_) {}
-      }
-      if (typeof val.format === 'function') {
-        try {
-          return val.format();
-        } catch (_) {}
-      }
-      if (val.year && val.month && val.day) {
-        return `${val.year}/${String(val.month.number || val.month).padStart(2, '0')}/${String(val.day).padStart(2, '0')}`;
-      }
-    }
-    if (typeof val === 'number') {
-      const d = new Date(val);
-      return !isNaN(d.getTime()) ? d.toISOString() : String(val);
-    }
-    return String(val).trim();
-  }, z.string().min(1, errorMessage));
-
-export const flexibleOptionalDateSchema = z.preprocess((val: any) => {
-  if (val === null || val === undefined || val === '') return null;
-  if (val instanceof Date) {
-    return !isNaN(val.getTime()) ? val.toISOString() : null;
+export const normalizeToDateString = (val: any): string => {
+  if (val === null || val === undefined || val === '') return '';
+  if (val instanceof Date || (val && Object.prototype.toString.call(val) === '[object Date]')) {
+    return !isNaN((val as any).getTime()) ? (val as any).toISOString() : '';
   }
-  if (typeof val === 'object') {
-    if (typeof val.toDate === 'function') {
+  if (typeof val === 'object' && val !== null) {
+    if (typeof (val as any).toDate === 'function') {
       try {
-        const d = val.toDate();
-        if (d instanceof Date && !isNaN(d.getTime())) return d.toISOString();
+        const d = (val as any).toDate();
+        if (d && !isNaN(new Date(d).getTime())) return new Date(d).toISOString();
       } catch (_) {}
     }
-    if (typeof val.format === 'function') {
+    if (typeof (val as any).toISOString === 'function') {
       try {
-        return val.format();
+        const iso = (val as any).toISOString();
+        if (iso) return String(iso);
+      } catch (_) {}
+    }
+    if (typeof (val as any).format === 'function') {
+      try {
+        const f = (val as any).format();
+        if (f) return String(f).trim();
       } catch (_) {}
     }
     if (val.year && val.month && val.day) {
@@ -99,43 +77,56 @@ export const flexibleOptionalDateSchema = z.preprocess((val: any) => {
     return !isNaN(d.getTime()) ? d.toISOString() : String(val);
   }
   return String(val).trim();
+};
+
+export const flexibleDateSchema = (errorMessage = 'تاریخ الزامی است.') =>
+  z.preprocess((val: any) => normalizeToDateString(val), z.string().min(1, errorMessage));
+
+export const flexibleOptionalDateSchema = z.preprocess((val: any) => {
+  if (val === null || val === undefined || val === '') return null;
+  const s = normalizeToDateString(val);
+  return s || null;
 }, z.string().nullable().optional());
 
 export const saleInvoiceFormSchema = z.object({
-  invoiceNumber: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
+  invoiceNumber: z.preprocess(val => String(val || ''), z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
     message: 'شماره فاکتور الزامی است.'
-  }),
+  })),
   date: flexibleDateSchema('تاریخ صدور فاکتور الزامی است.'),
-  customerId: z.union([z.string(), z.number()]).optional().nullable(),
-  customerName: z.string().optional().nullable(),
-  nationalId: z.string().optional().nullable(),
-  economicCode: z.string().optional().nullable(),
-  postalCode: z.string().optional().nullable(),
-  invoiceType: z.string().default('sale'),
+  dueDate: flexibleOptionalDateSchema,
+  invoiceDueDate: flexibleOptionalDateSchema,
+  customerId: z.preprocess(val => (val === '' || val === undefined ? null : val), z.union([z.string(), z.number()]).optional().nullable()),
+  customerName: z.preprocess(val => (val === null || val === undefined ? null : String(val)), z.string().optional().nullable()),
+  nationalId: z.preprocess(val => (val === null || val === undefined ? null : String(val)), z.string().optional().nullable()),
+  economicCode: z.preprocess(val => (val === null || val === undefined ? null : String(val)), z.string().optional().nullable()),
+  postalCode: z.preprocess(val => (val === null || val === undefined ? null : String(val)), z.string().optional().nullable()),
+  invoiceType: z.preprocess(val => (val ? String(val) : 'sale'), z.string().default('sale')),
   posFastMode: z.boolean().default(false),
   items: z.array(invoiceItemFormSchema).min(1, 'فاکتور باید حداقل شامل یک قلم کالا باشد.'),
-  warehouseId: z.union([z.string(), z.number()]).optional().nullable(),
-  description: z.string().optional().nullable()
+  warehouseId: z.preprocess(val => (val === '' || val === undefined ? null : val), z.union([z.string(), z.number()]).optional().nullable()),
+  description: z.preprocess(val => (val === null || val === undefined ? null : String(val)), z.string().optional().nullable())
 }).passthrough();
 
 export const purchaseInvoiceFormSchema = z.object({
-  invoiceNumber: z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
+  invoiceNumber: z.preprocess(val => String(val || ''), z.union([z.string(), z.number()]).refine(val => Boolean(String(val).trim()), {
     message: 'شماره فاکتور خرید الزامی است.'
-  }),
+  })),
   date: flexibleDateSchema('تاریخ فاکتور خرید الزامی است.'),
-  customerId: z.union([z.string(), z.number()]).refine(val => Boolean(val && String(val).trim()), {
+  dueDate: flexibleOptionalDateSchema,
+  invoiceDueDate: flexibleOptionalDateSchema,
+  customerId: z.preprocess(val => (val === '' || val === undefined ? null : val), z.union([z.string(), z.number()]).refine(val => Boolean(val && String(val).trim()), {
     message: 'انتخاب فروشنده / تامین‌کننده الزامی است.'
-  }),
-  sellerInvoiceNumber: z.string().optional().nullable(),
+  })),
+  sellerInvoiceNumber: z.preprocess(val => (val === null || val === undefined ? null : String(val)), z.string().optional().nullable()),
   items: z.array(invoiceItemFormSchema).min(1, 'فاکتور خرید باید حداقل شامل یک قلم کالا باشد.'),
-  warehouseId: z.union([z.string(), z.number()]).optional().nullable(),
+  warehouseId: z.preprocess(val => (val === '' || val === undefined ? null : val), z.union([z.string(), z.number()]).optional().nullable()),
   paymentStatus: z.enum(['paid', 'partial', 'unpaid']).default('unpaid'),
   paidAmount: z.preprocess(
     val => (val === '' || val === null || val === undefined ? 0 : Number(val)),
     z.number().min(0, 'مبلغ پرداختی نمی‌تواند منفی باشد.')
   ).optional(),
-  paymentAccountId: z.union([z.string(), z.number()]).optional().nullable(),
-  description: z.string().optional().nullable()
+  paymentAccountId: z.preprocess(val => (val === '' || val === undefined ? null : val), z.union([z.string(), z.number()]).optional().nullable()),
+  description: z.preprocess(val => (val === null || val === undefined ? null : String(val)), z.string().optional().nullable())
 }).passthrough();
 
 export const transactionReceiptFormSchema = z.object({
