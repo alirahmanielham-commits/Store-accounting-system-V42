@@ -621,6 +621,19 @@ router.get('/api/data/:key', async (req, res) => {
 
       let data = await getDbData(key);
       
+      const isCollectionKey = [
+        'invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances',
+        'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes', 'transactions', 'receipt_transactions',
+        'payment_transactions', 'persons', 'products', 'warehouses', 'accounting_documents', 'issued_checks',
+        'received_checks', 'checkbooks', 'loans', 'installments', 'payslips', 'product_categories', 'person_groups',
+        'person_roles', 'person_categories', 'sales_invoice_payments', 'purchase_invoice_payments',
+        'inventory_transactions', 'system_logs'
+      ].includes(key);
+
+      if ((data === null || data === undefined) && isCollectionKey) {
+        data = [];
+      }
+      
       // If collection is an array and filtering/pagination is requested
       if (Array.isArray(data)) {
         let items = [...data];
