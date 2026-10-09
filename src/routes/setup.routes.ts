@@ -176,14 +176,96 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
       printHasHeader: true,
       printHasFooter: true,
       requireWarehouse: true,
+      isSetup: true,
       createdAt: Date.now(),
       updatedAt: Date.now(),
     };
     await setDbData('company_profile', companyProfile);
     await setDbData('store_settings', companyProfile);
 
-    // Sync business name to businesses.json
+    // Sync business to database businesses table & businesses.json
     try {
+      const defEntry = {
+        id: 'default',
+        name: storeName,
+        companyName,
+        company_name: companyName,
+        calendarType,
+        calendar_type: calendarType,
+        currency,
+        phone,
+        address,
+        activityField,
+        activity_field: activityField,
+        taxPercent: Number(business?.taxPercent) || 0,
+        tax_percent: Number(business?.taxPercent) || 0,
+        db_type: dbConfig && dbConfig.engine === 'postgres' ? 'postgres' : 'json',
+        db_name: dbConfig && dbConfig.engine === 'postgres' ? (dbConfig.dbName || 'store_db') : '',
+        updatedAt: new Date().toISOString()
+      };
+
+      // 1. In Postgres businesses table if available
+      if (usePgMap['default'] && activePgPools['default']) {
+        try {
+          await activePgPools['default'].query(`
+            CREATE TABLE IF NOT EXISTS businesses (
+              id VARCHAR PRIMARY KEY,
+              name VARCHAR NOT NULL,
+              company_name VARCHAR,
+              calendar_type VARCHAR,
+              currency VARCHAR,
+              phone VARCHAR,
+              address VARCHAR,
+              activity_field VARCHAR,
+              tax_percent NUMERIC,
+              db_type VARCHAR DEFAULT 'postgres',
+              db_host VARCHAR,
+              db_port VARCHAR,
+              db_name VARCHAR,
+              db_user VARCHAR,
+              db_password VARCHAR,
+              created_at VARCHAR,
+              updated_at VARCHAR
+            )
+          `);
+          await activePgPools['default'].query(`
+            INSERT INTO businesses (id, name, company_name, calendar_type, currency, phone, address, activity_field, tax_percent, db_type, db_name, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+            ON CONFLICT (id) DO UPDATE SET
+              name = EXCLUDED.name,
+              company_name = EXCLUDED.company_name,
+              calendar_type = EXCLUDED.calendar_type,
+              currency = EXCLUDED.currency,
+              phone = EXCLUDED.phone,
+              address = EXCLUDED.address,
+              activity_field = EXCLUDED.activity_field,
+              tax_percent = EXCLUDED.tax_percent,
+              db_type = EXCLUDED.db_type,
+              db_name = EXCLUDED.db_name,
+              updated_at = EXCLUDED.updated_at
+          `, [
+            defEntry.id, defEntry.name, defEntry.companyName, defEntry.calendarType,
+            defEntry.currency, defEntry.phone, defEntry.address, defEntry.activityField,
+            defEntry.taxPercent, defEntry.db_type, defEntry.db_name, defEntry.updatedAt
+          ]);
+        } catch (pgErr) {
+          console.warn('Postgres businesses table sync notice:', pgErr);
+        }
+      }
+
+      // 2. In KV store businesses table
+      try {
+        let existingB = (await getDbData('businesses')) || [];
+        if (!Array.isArray(existingB)) existingB = [];
+        const dIdx = existingB.findIndex((b: any) => b.id === 'default');
+        if (dIdx >= 0) existingB[dIdx] = { ...existingB[dIdx], ...defEntry };
+        else existingB.unshift(defEntry);
+        await setDbData('businesses', existingB);
+      } catch (kvErr) {
+        console.warn('KV store businesses sync notice:', kvErr);
+      }
+
+      // 3. Mirror in businesses.json
       const bFile = path.join(process.cwd(), 'businesses.json');
       let bList: any[] = [];
       try {
@@ -194,15 +276,6 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
         bList = [];
       }
       const defIdx = bList.findIndex(b => b.id === 'default');
-      const defEntry = {
-        id: 'default',
-        name: storeName,
-        companyName,
-        db_type: dbConfig && dbConfig.engine === 'postgres' ? 'postgres' : 'json',
-        calendarType,
-        currency,
-        updatedAt: new Date().toISOString()
-      };
       if (defIdx >= 0) {
         bList[defIdx] = { ...bList[defIdx], ...defEntry };
       } else {
@@ -210,7 +283,7 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
       }
       await fsPromises.writeFile(bFile, JSON.stringify(bList, null, 2), 'utf8');
     } catch (e) {
-      console.warn('Could not update businesses.json during setup:', e);
+      console.warn('Could not sync businesses during setup:', e);
     }
 
     // 4. Financial Year

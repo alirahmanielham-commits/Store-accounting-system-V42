@@ -1376,7 +1376,7 @@ if (loading || authLoading) {
     );
   }
 
-if (requiresInitSetup && user) {
+if (requiresInitSetup && user && !storeSettings?.storeName) {
     return (
       <div
         className="min-h-screen bg-slate-50 flex items-center justify-center p-4 pt-10 pb-10"

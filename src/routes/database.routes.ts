@@ -1,4 +1,4 @@
-import { usePgMap, activePgPools, storeContext, connectPgDb, getDb, DB_CONFIG_FILE } from '../db/connection';
+import { usePgMap, activePgPools, storeContext, connectPgDb, getDb, DB_CONFIG_FILE, invalidateStorePgPool } from '../db/connection';
 import { Client, Pool } from 'pg';
 import { Router } from 'express';
 import fs from 'fs';
@@ -6,6 +6,8 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import { requireRole, requireAuth } from '../middleware/auth.middleware';
 import { decryptValue } from '../utils/crypto';
+import { getDbData, setDbData } from '../db/kv-store';
+import { ensurePostgresTables } from '../db/schema-sync';
 
 const router = Router();
 const BUSINESSES_FILE = path.join(process.cwd(), 'businesses.json');
@@ -31,48 +33,74 @@ async function saveStoredBusinesses(list: any[]): Promise<void> {
   }
 }
 
-// GET /api/databases: list all available businesses
+// GET /api/databases: list all available businesses directly from database (businesses table)
 router.get('/api/databases', async (req, res) => {
   try {
     let dbsFromTable: any[] = [];
+    
+    // 1. Check PostgreSQL businesses table if active
     try {
       if (usePgMap['default'] && activePgPools['default']) {
         await activePgPools['default'].query(`
           CREATE TABLE IF NOT EXISTS businesses (
             id VARCHAR PRIMARY KEY,
             name VARCHAR NOT NULL,
+            company_name VARCHAR,
+            calendar_type VARCHAR,
+            currency VARCHAR,
+            phone VARCHAR,
+            address VARCHAR,
+            activity_field VARCHAR,
+            tax_percent NUMERIC,
             db_type VARCHAR DEFAULT 'postgres',
             db_host VARCHAR,
             db_port VARCHAR,
             db_name VARCHAR,
             db_user VARCHAR,
-            db_password VARCHAR
+            db_password VARCHAR,
+            created_at VARCHAR,
+            updated_at VARCHAR
           )
         `);
-        const r = await activePgPools['default'].query("SELECT id, name, db_type, db_name FROM businesses");
+        const r = await activePgPools['default'].query("SELECT * FROM businesses ORDER BY created_at ASC");
         dbsFromTable = r.rows;
       }
     } catch (e) {
       console.warn('Failed querying businesses table from postgres:', e);
     }
 
+    // 2. Check Database KV Store 'businesses'
+    let dbBusinesses: any[] = [];
+    try {
+      const kvList = await getDbData('businesses');
+      if (Array.isArray(kvList)) dbBusinesses = kvList;
+    } catch (_) {}
+
+    // 3. Check filesystem fallback
     const fileBusinesses = await getStoredBusinesses();
+
     const mergedMap = new Map<string, any>();
 
-    // 1. Always ensure 'default' business exists
+    // Always ensure 'default' business exists
     mergedMap.set('default', {
       id: 'default',
       name: 'کسب و کار اصلی',
+      companyName: 'کسب و کار اصلی',
+      calendarType: 'jalali',
+      currency: 'تومان',
       db_type: usePgMap['default'] ? 'postgres' : 'json'
     });
 
     // Try reading actual default store name from settings
     try {
       if (usePgMap['default'] && activePgPools['default']) {
-        const r = await activePgPools['default'].query("SELECT value FROM local_data WHERE key = 'store_settings'");
-        if (r.rows.length > 0 && r.rows[0].value) {
-          const s = JSON.parse(r.rows[0].value);
+        const r = await activePgPools['default'].query("SELECT setting_value FROM system_settings WHERE setting_key = 'store_settings' OR setting_key = 'company_profile'");
+        if (r.rows.length > 0 && r.rows[0].setting_value) {
+          const s = JSON.parse(r.rows[0].setting_value);
           if (s.storeName) mergedMap.get('default')!.name = s.storeName;
+          if (s.companyName) mergedMap.get('default')!.companyName = s.companyName;
+          if (s.currency) mergedMap.get('default')!.currency = s.currency;
+          if (s.calendarType) mergedMap.get('default')!.calendarType = s.calendarType;
         }
       } else {
         const dataFile = path.join(process.cwd(), 'data.json');
@@ -81,34 +109,101 @@ router.get('/api/databases', async (req, res) => {
           const d = JSON.parse(raw);
           if (d.store_settings && d.store_settings.storeName) {
             mergedMap.get('default')!.name = d.store_settings.storeName;
+            mergedMap.get('default')!.companyName = d.store_settings.companyName || d.store_settings.storeName;
+            if (d.store_settings.currency) mergedMap.get('default')!.currency = d.store_settings.currency;
+            if (d.store_settings.calendarType) mergedMap.get('default')!.calendarType = d.store_settings.calendarType;
           }
         }
       }
     } catch (_) {}
 
-    // 2. Add Postgres businesses (sanitized without credentials)
+    // Add Postgres businesses table records
     for (const db of dbsFromTable) {
       if (db && db.id) {
         mergedMap.set(db.id, {
           id: db.id,
           name: db.name,
-          db_type: db.db_type || 'postgres'
+          companyName: db.company_name || db.companyName || db.name,
+          calendarType: db.calendar_type || db.calendarType || 'jalali',
+          currency: db.currency || 'تومان',
+          phone: db.phone || '',
+          address: db.address || '',
+          activityField: db.activity_field || db.activityField || '',
+          taxPercent: Number(db.tax_percent) || 0,
+          db_type: db.db_type || 'postgres',
+          db_name: db.db_name
         });
       }
     }
 
-    // 3. Add File-stored businesses
+    // Add Database KV Store businesses
+    for (const db of dbBusinesses) {
+      if (db && db.id) {
+        const existing = mergedMap.get(db.id) || {};
+        mergedMap.set(db.id, {
+          ...existing,
+          id: db.id,
+          name: db.name || existing.name,
+          companyName: db.companyName || db.company_name || existing.companyName || db.name,
+          calendarType: db.calendarType || db.calendar_type || existing.calendarType || 'jalali',
+          currency: db.currency || existing.currency || 'تومان',
+          phone: db.phone || existing.phone || '',
+          address: db.address || existing.address || '',
+          activityField: db.activityField || db.activity_field || existing.activityField || '',
+          taxPercent: Number(db.taxPercent || db.tax_percent || existing.taxPercent) || 0,
+          db_type: db.db_type || existing.db_type || 'json',
+          db_name: db.db_name || existing.db_name
+        });
+      }
+    }
+
+    // Add File-stored businesses
     for (const db of fileBusinesses) {
       if (db && db.id) {
+        const existing = mergedMap.get(db.id) || {};
         mergedMap.set(db.id, {
+          ...existing,
           id: db.id,
-          name: db.name,
-          db_type: db.db_type || 'json'
+          name: db.name || existing.name,
+          companyName: db.companyName || db.company_name || existing.companyName || db.name,
+          calendarType: db.calendarType || db.calendar_type || existing.calendarType || 'jalali',
+          currency: db.currency || existing.currency || 'تومان',
+          phone: db.phone || existing.phone || '',
+          address: db.address || existing.address || '',
+          activityField: db.activityField || db.activity_field || existing.activityField || '',
+          taxPercent: Number(db.taxPercent || db.tax_percent || existing.taxPercent) || 0,
+          db_type: db.db_type || existing.db_type || 'json',
+          db_name: db.db_name || existing.db_name
         });
       }
     }
 
-    res.json({ success: true, databases: Array.from(mergedMap.values()) });
+    const fullList = Array.from(mergedMap.values());
+
+    // Backfill into database businesses table if empty
+    if (usePgMap['default'] && activePgPools['default'] && dbsFromTable.length === 0) {
+      for (const item of fullList) {
+        try {
+          await activePgPools['default'].query(`
+            INSERT INTO businesses (id, name, company_name, calendar_type, currency, phone, address, activity_field, tax_percent, db_type, db_name, created_at, updated_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            ON CONFLICT (id) DO NOTHING
+          `, [
+            item.id, item.name, item.companyName, item.calendarType, item.currency,
+            item.phone, item.address, item.activityField, item.taxPercent,
+            item.db_type, item.db_name || '', new Date().toISOString(), new Date().toISOString()
+          ]);
+        } catch (_) {}
+      }
+    }
+
+    // Sync to KV store and businesses.json
+    try {
+      await setDbData('businesses', fullList);
+      await saveStoredBusinesses(fullList);
+    } catch (_) {}
+
+    res.json({ success: true, databases: fullList });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'خطا در دریافت لیست کسب و کارها' });
   }
@@ -361,25 +456,52 @@ router.post('/api/databases', async (req, res) => {
           CREATE TABLE IF NOT EXISTS businesses (
             id VARCHAR PRIMARY KEY,
             name VARCHAR NOT NULL,
+            company_name VARCHAR,
+            calendar_type VARCHAR,
+            currency VARCHAR,
+            phone VARCHAR,
+            address VARCHAR,
+            activity_field VARCHAR,
+            tax_percent NUMERIC,
             db_type VARCHAR DEFAULT 'postgres',
             db_host VARCHAR,
             db_port VARCHAR,
             db_name VARCHAR,
             db_user VARCHAR,
-            db_password VARCHAR
+            db_password VARCHAR,
+            created_at VARCHAR,
+            updated_at VARCHAR
           )
         `);
 
         await activePgPools['default'].query(`
-          INSERT INTO businesses (id, name, db_type, db_host, db_port, db_name, db_user, db_password)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
-        `, [id, cleanName, actualDbType, '', '', actualDbType === 'postgres' ? dbNameForBusiness : '', '', '']);
+          INSERT INTO businesses (id, name, company_name, calendar_type, currency, phone, address, activity_field, tax_percent, db_type, db_name, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT (id) DO UPDATE SET
+            name = EXCLUDED.name,
+            company_name = EXCLUDED.company_name,
+            calendar_type = EXCLUDED.calendar_type,
+            currency = EXCLUDED.currency,
+            phone = EXCLUDED.phone,
+            address = EXCLUDED.address,
+            activity_field = EXCLUDED.activity_field,
+            tax_percent = EXCLUDED.tax_percent,
+            db_type = EXCLUDED.db_type,
+            db_name = EXCLUDED.db_name,
+            updated_at = EXCLUDED.updated_at
+        `, [
+          id, cleanName, cleanCompanyName, calType, cleanCurrency,
+          phone || '', address || '', activityField || 'خرده‌فروشی و بازرگانی',
+          Number(taxPercent) || 0, actualDbType, actualDbType === 'postgres' ? dbNameForBusiness : '',
+          new Date().toISOString(), new Date().toISOString()
+        ]);
 
         if (actualDbType === 'postgres' && connectionString) {
           try {
             const newUrl = new URL(connectionString);
             newUrl.pathname = '/' + dbNameForBusiness;
-            const initPool = new Pool({ connectionString: newUrl.toString() });
+            const initPool = new Pool({ connectionString: newUrl.toString(), connectionTimeoutMillis: 5000 });
+            await ensurePostgresTables(initPool);
             await initPool.query('CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)');
             const initPayload = JSON.stringify({ 
               storeName: cleanName, 
@@ -389,11 +511,18 @@ router.post('/api/databases', async (req, res) => {
               calendarType: calType,
               phone: phone || '',
               address: address || '',
-              taxPercent: Number(taxPercent) || 0
+              taxPercent: Number(taxPercent) || 0,
+              isSetup: true,
+              createdAt: Date.now(),
+              updatedAt: Date.now()
             });
             await initPool.query(
               'INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value',
               ['company_profile', initPayload]
+            );
+            await initPool.query(
+              'INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value',
+              ['store_settings', initPayload]
             );
             await initPool.end();
           } catch (initErr) {
@@ -405,19 +534,41 @@ router.post('/api/databases', async (req, res) => {
       }
     }
 
-    // 2. Persist to file-based registry & isolated data file
-    const fileList = await getStoredBusinesses();
+    // 2. Persist to database KV Store
     const newEntry = {
       id,
       name: cleanName,
       companyName: cleanCompanyName,
+      company_name: cleanCompanyName,
       db_type: actualDbType,
       db_name: actualDbType === 'postgres' ? dbNameForBusiness : undefined,
       calendarType: calType,
+      calendar_type: calType,
       currency: cleanCurrency,
-      createdAt: new Date().toISOString()
+      phone: phone || '',
+      address: address || '',
+      activityField: activityField || 'خرده‌فروشی و بازرگانی',
+      activity_field: activityField || 'خرده‌فروشی و بازرگانی',
+      taxPercent: Number(taxPercent) || 0,
+      tax_percent: Number(taxPercent) || 0,
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
-    fileList.push(newEntry);
+
+    try {
+      let kvBusinesses = (await getDbData('businesses')) || [];
+      if (!Array.isArray(kvBusinesses)) kvBusinesses = [];
+      const exIdx = kvBusinesses.findIndex((b: any) => b.id === id);
+      if (exIdx >= 0) kvBusinesses[exIdx] = { ...kvBusinesses[exIdx], ...newEntry };
+      else kvBusinesses.push(newEntry);
+      await setDbData('businesses', kvBusinesses);
+    } catch (_) {}
+
+    // 3. Persist to file-based registry & isolated data file
+    const fileList = await getStoredBusinesses();
+    const flIdx = fileList.findIndex((b: any) => b.id === id);
+    if (flIdx >= 0) fileList[flIdx] = { ...fileList[flIdx], ...newEntry };
+    else fileList.push(newEntry);
     await saveStoredBusinesses(fileList);
 
     // Initialize isolated JSON store file with all essential initial accounting tables
@@ -432,6 +583,7 @@ router.post('/api/databases', async (req, res) => {
         phone: phone || '',
         address: address || '',
         taxPercent: Number(taxPercent) || 0,
+        isSetup: true,
         createdAt: Date.now(),
         updatedAt: Date.now()
       },
@@ -444,6 +596,7 @@ router.post('/api/databases', async (req, res) => {
         phone: phone || '',
         address: address || '',
         taxPercent: Number(taxPercent) || 0,
+        isSetup: true,
         createdAt: Date.now()
       },
       financial_years: [defaultFiscalYear],
@@ -456,12 +609,16 @@ router.post('/api/databases', async (req, res) => {
     };
     await fsPromises.writeFile(storeDataFile, JSON.stringify(initialData, null, 2), 'utf8');
 
+    // Invalidate cached pool so it connects fresh on selection
+    invalidateStorePgPool(id);
+
     return res.json({
       success: true,
       message: 'کسب و کار با سال مالی و زیرساخت اولیه با موفقیت ایجاد شد.',
       database: {
         id,
         name: cleanName,
+        companyName: cleanCompanyName,
         db_type: actualDbType,
         calendarType: calType,
         currency: cleanCurrency,
@@ -478,40 +635,68 @@ router.post('/api/databases', async (req, res) => {
 router.put('/api/databases/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { name } = req.body;
+    const { name, companyName, activityField, currency, calendarType, phone, address, taxPercent } = req.body;
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: 'نام کسب و کار الزامی است' });
     }
     const cleanName = String(name).trim();
+    const cleanCompanyName = companyName ? String(companyName).trim() : cleanName;
 
-    // 1. Update in Postgres
+    // 1. Update in Postgres businesses table
     if (usePgMap['default'] && activePgPools['default']) {
       try {
-        await activePgPools['default'].query(`UPDATE businesses SET name = $1 WHERE id = $2`, [cleanName, id]);
+        await activePgPools['default'].query(`
+          UPDATE businesses 
+          SET name = $1, company_name = $2, updated_at = $3
+          WHERE id = $4
+        `, [cleanName, cleanCompanyName, new Date().toISOString(), id]);
       } catch (_) {}
     }
 
-    // 2. Update in businesses.json
+    // 2. Update in KV Store 'businesses'
+    try {
+      let kvList = (await getDbData('businesses')) || [];
+      if (Array.isArray(kvList)) {
+        kvList = kvList.map((b: any) => b.id === id ? { 
+          ...b, 
+          name: cleanName, 
+          companyName: cleanCompanyName,
+          company_name: cleanCompanyName,
+          updatedAt: new Date().toISOString() 
+        } : b);
+        await setDbData('businesses', kvList);
+      }
+    } catch (_) {}
+
+    // 3. Update in businesses.json
     const fileList = await getStoredBusinesses();
     const found = fileList.find((b: any) => b.id === id);
     if (found) {
       found.name = cleanName;
+      found.companyName = cleanCompanyName;
+      found.updatedAt = new Date().toISOString();
       await saveStoredBusinesses(fileList);
     }
 
-    // 3. Update in store settings file
+    // 4. Update in store settings file or Postgres DB
     const storeDataFile = id === 'default' ? path.join(process.cwd(), 'data.json') : path.join(process.cwd(), `data_${id}.json`);
     if (fs.existsSync(storeDataFile)) {
       try {
         const raw = await fsPromises.readFile(storeDataFile, 'utf8');
         const d = JSON.parse(raw);
-        if (d.store_settings) d.store_settings.storeName = cleanName;
-        if (d.company_profile) d.company_profile.storeName = cleanName;
+        if (d.store_settings) {
+          d.store_settings.storeName = cleanName;
+          d.store_settings.companyName = cleanCompanyName;
+        }
+        if (d.company_profile) {
+          d.company_profile.storeName = cleanName;
+          d.company_profile.companyName = cleanCompanyName;
+        }
         await fsPromises.writeFile(storeDataFile, JSON.stringify(d, null, 2), 'utf8');
       } catch (_) {}
     }
 
-    res.json({ success: true, database: { id, name: cleanName } });
+    res.json({ success: true, database: { id, name: cleanName, companyName: cleanCompanyName } });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'خطا در بروزرسانی نام کسب و کار' });
   }
@@ -525,25 +710,37 @@ router.delete('/api/databases/:id', async (req, res) => {
       return res.status(400).json({ error: 'کسب و کار اصلی قابل حذف نمی‌باشد.' });
     }
 
-    // 1. Delete from Postgres
+    // 1. Delete from Postgres businesses table
     if (usePgMap['default'] && activePgPools['default']) {
       try {
         await activePgPools['default'].query("DELETE FROM businesses WHERE id = $1", [id]);
       } catch (_) {}
     }
 
-    // 2. Delete from businesses.json
+    // 2. Delete from KV Store 'businesses'
+    try {
+      let kvList = (await getDbData('businesses')) || [];
+      if (Array.isArray(kvList)) {
+        kvList = kvList.filter((b: any) => b.id !== id);
+        await setDbData('businesses', kvList);
+      }
+    } catch (_) {}
+
+    // 3. Delete from businesses.json
     let fileList = await getStoredBusinesses();
     fileList = fileList.filter((b: any) => b.id !== id);
     await saveStoredBusinesses(fileList);
 
-    // 3. Delete isolated store file
+    // 4. Delete isolated store file
     const storeDataFile = path.join(process.cwd(), `data_${id}.json`);
     if (fs.existsSync(storeDataFile)) {
       try {
         await fsPromises.unlink(storeDataFile);
       } catch (_) {}
     }
+
+    // Invalidate any loaded pool
+    invalidateStorePgPool(id);
 
     res.json({ success: true });
   } catch (e: any) {

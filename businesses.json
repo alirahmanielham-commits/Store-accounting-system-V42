@@ -1,16 +1,38 @@
 [
   {
+    "id": "default",
+    "name": "کسب و کار اصلی",
+    "companyName": "کسب و کار اصلی",
+    "calendarType": "jalali",
+    "currency": "تومان",
+    "db_type": "json",
+    "phone": "",
+    "address": "",
+    "activityField": "",
+    "taxPercent": 0
+  },
+  {
     "id": "store_2qd7_muzbq8p1",
     "name": "فروشگاه نمونه جدید",
-    "db_type": "json",
+    "companyName": "فروشگاه نمونه جدید",
     "calendarType": "jalali",
-    "createdAt": "2026-10-08T09:18:16.454Z"
+    "currency": "تومان",
+    "phone": "",
+    "address": "",
+    "activityField": "",
+    "taxPercent": 0,
+    "db_type": "json"
   },
   {
     "id": "store_mp3c_mv1arht8",
     "name": "فروشگاه تستی سیستم",
-    "db_type": "json",
+    "companyName": "فروشگاه تستی سیستم",
     "calendarType": "jalali",
-    "createdAt": "2026-10-09T18:26:47.661Z"
+    "currency": "تومان",
+    "phone": "",
+    "address": "",
+    "activityField": "",
+    "taxPercent": 0,
+    "db_type": "json"
   }
 ]

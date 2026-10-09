@@ -25,8 +25,20 @@ export function getDb() {
   }
   return dbs[storeId];
 }
+export function invalidateStorePgPool(storeId?: string) {
+    if (storeId) {
+        delete activePgPools[storeId];
+        delete usePgMap[storeId];
+        delete pendingPgPools[storeId];
+    } else {
+        Object.keys(activePgPools).forEach(k => delete activePgPools[k]);
+        Object.keys(usePgMap).forEach(k => delete usePgMap[k]);
+        Object.keys(pendingPgPools).forEach(k => delete pendingPgPools[k]);
+    }
+}
+
 export async function loadPgPoolForStore(storeId: string) {
-    if (activePgPools[storeId] !== undefined) return;
+    if (activePgPools[storeId]) return;
     if (pendingPgPools[storeId]) {
         await pendingPgPools[storeId];
         return;
@@ -45,7 +57,7 @@ export async function loadPgPoolForStore(storeId: string) {
                     await ensurePostgresTables(pool);
                     return;
                 }
-            } catch(e) { console.error('ERROR in loadPgPoolForStore default:', e); }
+            } catch(e) { /* ignore config file error */ }
             
             if (process.env.SQL_HOST && process.env.SQL_USER) {
                 try {
@@ -83,20 +95,37 @@ export async function loadPgPoolForStore(storeId: string) {
         
         // For other stores
         try {
-            if (activePgPools['default'] === undefined) {
+            if (!activePgPools['default']) {
                 await loadPgPoolForStore('default');
             }
             let business = null;
             if (usePgMap['default'] && activePgPools['default']) {
-                const res = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [storeId]);
-                if (res.rows.length > 0) business = res.rows[0];
-            } else {
+                try {
+                    const res = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [storeId]);
+                    if (res.rows.length > 0) business = res.rows[0];
+                } catch (_) {}
+            }
+            
+            if (!business) {
                 try {
                     const businessesFile = path.join(process.cwd(), 'businesses.json');
                     const raw = await fsPromises.readFile(businessesFile, 'utf8');
                     const list = JSON.parse(raw);
                     if (Array.isArray(list)) {
                         business = list.find((b: any) => b.id === storeId);
+                    }
+                } catch (_) {}
+            }
+
+            if (!business) {
+                try {
+                    const dataFile = path.join(process.cwd(), 'data.json');
+                    if (fs.existsSync(dataFile)) {
+                        const raw = await fsPromises.readFile(dataFile, 'utf8');
+                        const d = JSON.parse(raw);
+                        if (Array.isArray(d.businesses)) {
+                            business = d.businesses.find((b: any) => b.id === storeId);
+                        }
                     }
                 } catch (_) {}
             }

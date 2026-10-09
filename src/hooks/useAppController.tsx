@@ -3665,7 +3665,14 @@ const fetchSettings = async () => {
     try {
       const data = await getStoreSettings();
       const docCounters = await getLocalData<Record<string, number>>('doc_counters', {});
-      if (data && (data as any).isSetup) {
+      const isConfigured = Boolean(
+        data && (
+          (data as any).isSetup || 
+          (data as any).storeName || 
+          (data as any).companyName
+        )
+      );
+      if (isConfigured) {
         const savedData = data as any;
         const mergedSettings = {
           ...savedData,
@@ -3715,7 +3722,7 @@ const fetchSettings = async () => {
         if (mergedSettings.menuLayout) setMenuLayout(mergedSettings.menuLayout);
         if (mergedSettings.isFullWidth !== undefined) setIsFullWidth(mergedSettings.isFullWidth);
       } else {
-        setRequiresInitSetup(true);
+        setRequiresInitSetup(false);
       }
     } catch (error) {
       console.error("Error fetching settings", error);

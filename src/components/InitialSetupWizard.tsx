@@ -507,9 +507,16 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
         const data = await res.json();
 
         if (data.success) {
-          // Explicitly set activeStoreId to prevent prompt modal on first load
+          // Explicitly set activeStoreId and company_profile to prevent prompt modal on first load
           localStorage.setItem('activeStoreId', 'default');
           sessionStorage.setItem('activeStoreId', 'default');
+          localStorage.setItem('company_profile', JSON.stringify({
+            storeName: storeName.trim(),
+            companyName: companyName.trim() || storeName.trim(),
+            currency,
+            calendarType,
+            isSetup: true
+          }));
 
           if (data.accessToken) {
             sessionStorage.setItem('access_token', data.accessToken);

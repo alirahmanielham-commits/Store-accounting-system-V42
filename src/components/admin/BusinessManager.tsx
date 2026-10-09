@@ -267,13 +267,13 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
         </div>
 
         {showWizardModal && (
-          <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
+          <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-sm overflow-y-auto">
             <InitialSetupWizard 
               mode="business_only"
               onComplete={async () => {
                 setShowWizardModal(false);
                 await fetchStores();
-                if (showNotification) showNotification('کسب و کار جدید همراه با سال مالی و زیرساخت آغازین با موفقیت ایجاد شد', 'success');
+                if (showNotification) showNotification('کسب و کار جدید همراه با سال مالی و زیرساخت آغازین با موفقیت در پایگاه داده ایجاد شد', 'success');
               }}
               onCancel={() => setShowWizardModal(false)}
             />
