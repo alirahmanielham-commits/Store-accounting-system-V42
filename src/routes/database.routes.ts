@@ -162,16 +162,172 @@ router.get('/api/databases/:id/test-connection', async (req, res) => {
 // POST /api/databases: create a new business
 router.post('/api/databases', async (req, res) => {
   try {
-    const { name, calendarType } = req.body;
+    const { 
+      name, 
+      companyName, 
+      activityField, 
+      currency, 
+      calendarType, 
+      phone, 
+      address, 
+      taxPercent, 
+      fiscalYear, 
+      bankAccount, 
+      cashbox, 
+      warehouse, 
+      starterPack, 
+      customPerson, 
+      customProduct 
+    } = req.body;
     const calType = calendarType || 'jalali';
     if (!name || !String(name).trim()) {
       return res.status(400).json({ error: 'نام کسب و کار الزامی است' });
     }
 
     const cleanName = String(name).trim();
+    const cleanCompanyName = (companyName && String(companyName).trim()) || cleanName;
+    const cleanCurrency = currency || (calType === 'jalali' ? 'تومان' : 'USD');
     const id = 'store_' + Math.random().toString(36).substring(2, 6) + '_' + Date.now().toString(36);
     let actualDbType = 'json';
     let dbNameForBusiness = `store_${id}`.replace(/[^a-zA-Z0-9_]/g, '');
+
+    // Prepare default fiscal year based on calendar type
+    const now = new Date();
+    const defaultYear = calType === 'jalali' ? (now.getFullYear() - 621) : now.getFullYear();
+    const fyStartDate = fiscalYear?.startDate?.trim() || (calType === 'jalali' ? `${defaultYear}/01/01` : `${defaultYear}-01-01`);
+    const fyEndDate = fiscalYear?.endDate?.trim() || (calType === 'jalali' ? `${defaultYear}/12/29` : `${defaultYear}-12-31`);
+    const fyName = fiscalYear?.name?.trim() || (calType === 'jalali' ? `سال مالی ${defaultYear}` : `Fiscal Year ${defaultYear}`);
+    const fyCode = fiscalYear?.code?.trim() || `FY-${defaultYear}`;
+    const fyDesc = fiscalYear?.description?.trim() || 'سال مالی افتتاحیه کسب و کار';
+
+    const defaultFiscalYear = {
+      id: 'fy-' + Date.now(),
+      name: fyName,
+      code: fyCode,
+      startDate: fyStartDate,
+      endDate: fyEndDate,
+      description: fyDesc,
+      status: 'open',
+      createdAt: Date.now(),
+      updatedAt: Date.now()
+    };
+
+    const defaultWh = {
+      id: 'wh-main',
+      name: warehouse?.name?.trim() || 'انبار مرکزی',
+      code: warehouse?.code?.trim() || 'WH-01',
+      address: warehouse?.address?.trim() || address || 'دفتر و انبار مرکزی',
+      isDefault: true,
+      createdAt: Date.now()
+    };
+
+    const bankBal = Number(bankAccount?.initialBalance) || 0;
+    const defaultBank = {
+      id: 'acc-main-' + Date.now(),
+      title: bankAccount?.bankName?.trim() || 'حساب بانکی اصلی',
+      bankName: bankAccount?.bankName?.trim() || 'بانک ملت',
+      accountNumber: bankAccount?.accountNumber?.trim() || '',
+      cardNumber: bankAccount?.cardNumber?.trim() || '',
+      shebaNumber: bankAccount?.shebaNumber?.trim() || '',
+      balance: bankBal,
+      initialBalance: bankBal,
+      isDefault: true,
+      status: 'active',
+      createdAt: Date.now()
+    };
+
+    const cashBal = Number(cashbox?.initialBalance) || 0;
+    const defaultCashbox = {
+      id: 'cb-main-' + Date.now(),
+      name: cashbox?.name?.trim() || 'صندوق مرکزی',
+      balance: cashBal,
+      initialBalance: cashBal,
+      isDefault: true,
+      status: 'active',
+      createdAt: Date.now()
+    };
+
+    const initialCategories = [
+      { id: 'cat-general', name: 'کالاهای عمومی', code: 'CAT-01', createdAt: Date.now() },
+      { id: 'cat-service', name: 'خدمات', code: 'CAT-02', createdAt: Date.now() }
+    ];
+
+    const initialPersons: any[] = [];
+    const initialProducts: any[] = [];
+
+    if (starterPack) {
+      initialPersons.push({
+        id: 'person-retail-cash',
+        name: 'مشتری عمومی (نقدی)',
+        alias: 'مشتری نقدی',
+        personType: 'individual',
+        role: 'customer',
+        personCode: '1001',
+        phone: '09120000000',
+        initialBalance: 0,
+        initialBalanceType: 'settled',
+        createdAt: Date.now()
+      });
+      initialPersons.push({
+        id: 'person-supplier-default',
+        name: 'تامین‌کننده نمونه',
+        alias: 'تامین‌کننده اصلی',
+        personType: 'company',
+        role: 'supplier',
+        personCode: '2001',
+        phone: '02188888888',
+        initialBalance: 0,
+        initialBalanceType: 'settled',
+        createdAt: Date.now()
+      });
+
+      initialProducts.push({
+        id: 'prod-sample-1',
+        code: '101',
+        barcode: '626000000101',
+        name: 'کالای نمونه شماره ۱',
+        categoryId: 'cat-general',
+        unit: 'عدد',
+        type: 'goods',
+        purchasePrice: 120000,
+        sellPrice: 180000,
+        currentStock: 50,
+        initialStock: 50,
+        warehouseId: defaultWh.id,
+        createdAt: Date.now()
+      });
+    } else {
+      if (customPerson && customPerson.name?.trim()) {
+        initialPersons.push({
+          id: 'person-' + Date.now(),
+          name: customPerson.name.trim(),
+          alias: customPerson.name.trim(),
+          personType: 'individual',
+          role: customPerson.role || 'customer',
+          personCode: '1001',
+          phone: customPerson.phone?.trim() || '',
+          initialBalance: 0,
+          initialBalanceType: 'settled',
+          createdAt: Date.now()
+        });
+      }
+      if (customProduct && customProduct.name?.trim()) {
+        initialProducts.push({
+          id: 'prod-' + Date.now(),
+          code: '101',
+          name: customProduct.name.trim(),
+          categoryId: 'cat-general',
+          unit: customProduct.unit || 'عدد',
+          type: 'goods',
+          purchasePrice: Number(customProduct.purchasePrice) || 0,
+          sellPrice: Number(customProduct.salePrice) || 0,
+          currentStock: Number(customProduct.initialStock) || 0,
+          initialStock: Number(customProduct.initialStock) || 0,
+          warehouseId: defaultWh.id,
+          createdAt: Date.now()
+        });
+      }
+    }
 
     // 1. Try PostgreSQL provisioning if PostgreSQL is available
     if (usePgMap['default'] && activePgPools['default']) {
@@ -225,7 +381,16 @@ router.post('/api/databases', async (req, res) => {
             newUrl.pathname = '/' + dbNameForBusiness;
             const initPool = new Pool({ connectionString: newUrl.toString() });
             await initPool.query('CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)');
-            const initPayload = JSON.stringify({ storeName: cleanName, calendarType: calType });
+            const initPayload = JSON.stringify({ 
+              storeName: cleanName, 
+              companyName: cleanCompanyName,
+              activityField: activityField || 'خرده‌فروشی و بازرگانی',
+              currency: cleanCurrency,
+              calendarType: calType,
+              phone: phone || '',
+              address: address || '',
+              taxPercent: Number(taxPercent) || 0
+            });
             await initPool.query(
               'INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value',
               ['company_profile', initPayload]
@@ -245,35 +410,62 @@ router.post('/api/databases', async (req, res) => {
     const newEntry = {
       id,
       name: cleanName,
+      companyName: cleanCompanyName,
       db_type: actualDbType,
       db_name: actualDbType === 'postgres' ? dbNameForBusiness : undefined,
       calendarType: calType,
+      currency: cleanCurrency,
       createdAt: new Date().toISOString()
     };
     fileList.push(newEntry);
     await saveStoredBusinesses(fileList);
 
-    // Initialize isolated JSON store file
+    // Initialize isolated JSON store file with all essential initial accounting tables
     const storeDataFile = path.join(process.cwd(), `data_${id}.json`);
     const initialData: Record<string, any> = {
       company_profile: {
         storeName: cleanName,
-        calendarType: calType
+        companyName: cleanCompanyName,
+        activityField: activityField || 'خرده‌فروشی و بازرگانی',
+        currency: cleanCurrency,
+        calendarType: calType,
+        phone: phone || '',
+        address: address || '',
+        taxPercent: Number(taxPercent) || 0,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
       },
       store_settings: {
         storeName: cleanName,
+        companyName: cleanCompanyName,
+        activityField: activityField || 'خرده‌فروشی و بازرگانی',
+        currency: cleanCurrency,
         calendarType: calType,
-        currency: 'ریال'
-      }
+        phone: phone || '',
+        address: address || '',
+        taxPercent: Number(taxPercent) || 0,
+        createdAt: Date.now()
+      },
+      financial_years: [defaultFiscalYear],
+      warehouses: [defaultWh],
+      accounts: [defaultBank],
+      cashboxes: [defaultCashbox],
+      product_categories: initialCategories,
+      persons: initialPersons,
+      products: initialProducts
     };
     await fsPromises.writeFile(storeDataFile, JSON.stringify(initialData, null, 2), 'utf8');
 
     return res.json({
       success: true,
+      message: 'کسب و کار با سال مالی و زیرساخت اولیه با موفقیت ایجاد شد.',
       database: {
         id,
         name: cleanName,
-        db_type: actualDbType
+        db_type: actualDbType,
+        calendarType: calType,
+        currency: cleanCurrency,
+        fiscalYear: defaultFiscalYear
       }
     });
   } catch (e: any) {

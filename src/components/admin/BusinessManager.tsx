@@ -1,8 +1,9 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { Database, Plus, Check, Loader2, Trash2, Edit2, X, Building2, Search, ArrowLeft, Shield, AlertTriangle, RefreshCw } from 'lucide-react';
+import { Database, Plus, Check, Loader2, Trash2, Edit2, X, Building2, Search, ArrowLeft, Shield, AlertTriangle, RefreshCw, Sparkles } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import ConfirmModal from '../modals/ConfirmModal';
 import { getAuthHeaders } from '../../services/coreService';
+import InitialSetupWizard from '../InitialSetupWizard';
 
 export default function BusinessManager({ availableStores, setAvailableStores, onSelectStore, showNotification }: any) {
   const [newStoreName, setNewStoreName] = useState('');
@@ -11,6 +12,7 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
   const [creating, setCreating] = useState(false);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showWizardModal, setShowWizardModal] = useState(false);
   const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
     message: string;
@@ -231,27 +233,52 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
             </div>
           </div>
           
-          <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 p-2 lg:w-[400px]">
-            <input 
-              type="text" 
-              value={newStoreName}
-              onChange={e => setNewStoreName(e.target.value)}
-              onKeyDown={e => {
-                if (e.key === 'Enter') handleCreate();
-              }}
-              placeholder="نام کسب و کار جدید..." 
-              className="flex-1 bg-transparent px-3 outline-none text-slate-800 font-bold placeholder:font-normal placeholder:text-slate-400"
-            />
-            <button 
-              onClick={handleCreate}
-              disabled={creating || !newStoreName.trim()}
-              className="bg-blue-600 hover:bg-blue-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-600/20"
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+            <button
+              type="button"
+              onClick={() => setShowWizardModal(true)}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2.5 rounded-xl font-bold flex items-center justify-center gap-2 transition-all shadow-md shadow-indigo-600/20 text-sm cursor-pointer hover:scale-[1.02] active:scale-[0.98]"
             >
-              {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
-              ایجاد
+              <Sparkles className="w-4 h-4 text-indigo-200" />
+              <span>ایجاد با ویزارد استاندارد</span>
             </button>
+
+            <div className="flex bg-white rounded-xl shadow-sm border border-slate-200 p-1.5 lg:w-[380px]">
+              <input 
+                type="text" 
+                value={newStoreName}
+                onChange={e => setNewStoreName(e.target.value)}
+                onKeyDown={e => {
+                  if (e.key === 'Enter') handleCreate();
+                }}
+                placeholder="نام کسب و کار جدید (سریع)..." 
+                className="flex-1 bg-transparent px-3 outline-none text-slate-800 text-sm font-bold placeholder:font-normal placeholder:text-slate-400"
+              />
+              <button 
+                onClick={handleCreate}
+                disabled={creating || !newStoreName.trim()}
+                className="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg text-sm font-bold flex items-center gap-1.5 transition-all disabled:opacity-50 disabled:cursor-not-allowed shadow-md shadow-blue-600/20 cursor-pointer"
+              >
+                {creating ? <Loader2 className="w-4 h-4 animate-spin" /> : <Plus className="w-4 h-4" />}
+                سریع
+              </button>
+            </div>
           </div>
         </div>
+
+        {showWizardModal && (
+          <div className="fixed inset-0 z-50 bg-slate-950/90 backdrop-blur-md overflow-y-auto">
+            <InitialSetupWizard 
+              mode="business_only"
+              onComplete={async () => {
+                setShowWizardModal(false);
+                await fetchStores();
+                if (showNotification) showNotification('کسب و کار جدید همراه با سال مالی و زیرساخت آغازین با موفقیت ایجاد شد', 'success');
+              }}
+              onCancel={() => setShowWizardModal(false)}
+            />
+          </div>
+        )}
 
         <AnimatePresence>
             {errorMsg && (

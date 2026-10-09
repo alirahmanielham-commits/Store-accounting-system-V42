@@ -18,7 +18,7 @@ export const authMiddleware = (req: any, res: any, next: any) => {
       '/api/databases'
     ];
     const pathStr = req.path || req.originalUrl || '';
-    if (!pathStr.startsWith('/api/') || publicPaths.includes(req.path) || publicPaths.includes(pathStr) || pathStr.startsWith('/api/databases')) {
+    if (!pathStr.startsWith('/api/') || publicPaths.includes(req.path) || publicPaths.includes(pathStr) || pathStr.startsWith('/api/databases') || pathStr.startsWith('/api/setup')) {
        req.user = req.user || { id: 'admin-default', username: 'admin', role: 'admin', name: 'مدیر سیستم' };
        return next();
     }

@@ -210,16 +210,19 @@ router.post('/api/db/config', async (req, res) => {
 router.post('/api/db/test', async (req, res) => {
     try {
       const { connectionString, engine } = req.body;
-      if (engine === 'sqlite' || connectionString === 'sqlite') {
-         return res.json({ success: true, message: 'اتصال SQLite (ذخیره سازی محلی) با موفقیت تأیید شد' });
+      if (engine === 'sqlite' || connectionString === 'sqlite' || engine === 'json' || connectionString === 'json') {
+         return res.json({ success: true, message: 'موتور ذخیره‌سازی محلی (Local JSON Storage) با موفقیت تأیید و آماده به کار است.' });
       }
-      const client = new Client({ connectionString });
+      if (!connectionString) {
+        return res.status(400).json({ success: false, error: 'رشته اتصال (Connection String) الزامی است.' });
+      }
+      const client = new Client({ connectionString, connectionTimeoutMillis: 5000 });
       await client.connect();
       await client.query('SELECT NOW()');
       await client.end();
-      res.json({ success: true, message: 'اتصال با موفقیت انجام شد' });
+      res.json({ success: true, message: 'اتصال به سرور پایگاه داده PostgreSQL با موفقیت برقرار شد.' });
     } catch (e: any) {
-      res.status(400).json({ success: false, error: e.message });
+      res.status(400).json({ success: false, error: e.message || 'خطا در برقراری اتصال با پایگاه داده' });
     }
   });
 
