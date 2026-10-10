@@ -84,14 +84,46 @@ const queryClient = new QueryClient({
 import { backfillInstallmentCodes } from "./migrations/backfillInstallmentCodes";
 
 const Root = () => {
-  const [setupComplete, setSetupComplete] = useState(() => {
-    return localStorage.getItem('initial_setup_complete') === 'true';
-  });
+  const [setupComplete, setSetupComplete] = useState<boolean | null>(null);
+
+  useEffect(() => {
+    let isMounted = true;
+    fetch('/api/setup/status')
+      .then(res => res.json())
+      .then(data => {
+        if (!isMounted) return;
+        if (data && data.dbConfigured && data.pgConnected && data.adminConfigured && data.companyConfigured) {
+          localStorage.setItem('initial_setup_complete', 'true');
+          setSetupComplete(true);
+        } else {
+          localStorage.removeItem('initial_setup_complete');
+          setSetupComplete(false);
+        }
+      })
+      .catch(() => {
+        if (!isMounted) return;
+        setSetupComplete(false);
+      });
+
+    return () => { isMounted = false; };
+  }, []);
+
   useEffect(() => {
     if (setupComplete) {
        backfillInstallmentCodes().catch(console.error);
     }
   }, [setupComplete]);
+
+  if (setupComplete === null) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-50 text-slate-800" dir="rtl">
+        <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center mb-3 shadow-xs">
+          <div className="w-6 h-6 border-2 border-indigo-600 border-t-transparent rounded-full animate-spin" />
+        </div>
+        <p className="text-xs font-bold text-slate-700">در حال بررسی وضعیت اتصال به پایگاه داده PostgreSQL...</p>
+      </div>
+    );
+  }
 
   return (
     <>
@@ -101,7 +133,6 @@ const Root = () => {
           setSetupComplete(true);
         }} />
       ) : (
-        
         <QueryClientProvider client={queryClient}>
           <BrowserRouter>
             <AuthProvider>
@@ -109,7 +140,6 @@ const Root = () => {
             </AuthProvider>
           </BrowserRouter>
         </QueryClientProvider>
-
       )}
     </>
   );

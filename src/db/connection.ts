@@ -47,10 +47,10 @@ export async function getDefaultPgConnectionString(): Promise<string | null> {
             if (!connectionString && config.host && config.user) {
                 const host = config.host;
                 const user = encodeURIComponent(config.user);
-                const pwd = encodeURIComponent(config.password || '');
+                const auth = config.password ? `${user}:${encodeURIComponent(config.password)}` : user;
                 const port = config.port || '5432';
                 const db = config.dbName || 'store_db';
-                connectionString = `postgresql://${user}:${pwd}@${host}:${port}/${db}`;
+                connectionString = `postgresql://${auth}@${host}:${port}/${db}`;
             }
             if (connectionString) {
                 return connectionString;
@@ -61,10 +61,10 @@ export async function getDefaultPgConnectionString(): Promise<string | null> {
     if (process.env.SQL_HOST && process.env.SQL_USER) {
         const host = process.env.SQL_HOST;
         const user = encodeURIComponent(process.env.SQL_USER);
-        const pwd = encodeURIComponent(process.env.SQL_PASSWORD || '');
+        const auth = process.env.SQL_PASSWORD ? `${user}:${encodeURIComponent(process.env.SQL_PASSWORD)}` : user;
         const port = process.env.SQL_PORT || '5432';
         const db = process.env.SQL_DB_NAME || 'store_db';
-        return `postgresql://${user}:${pwd}@${host}:${port}/${db}`;
+        return `postgresql://${auth}@${host}:${port}/${db}`;
     }
 
     if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres') && !process.env.DATABASE_URL.includes('user:pass@localhost') && process.env.DATABASE_URL !== '23') {

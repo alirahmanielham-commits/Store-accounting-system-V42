@@ -1,5 +1,5 @@
 
-import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
+import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE, loadPgPoolForStore } from '../db/connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
@@ -24,10 +24,18 @@ const router = Router();
 
 
   // === AUTHENTICATION & USERS === //
-  // const JWT_SECRET = ...
-  // const JWT_REFRESH_SECRET = ...
 
   const getUsers = async () => {
+    if (!activePgPools['default']) {
+      try {
+        await loadPgPoolForStore('default');
+      } catch (_) {}
+    }
+
+    if (!activePgPools['default']) {
+      return [];
+    }
+
     let users = (await getDbData('users')) || [];
     if (!Array.isArray(users) || users.length === 0) {
       const hashedPassword = await bcrypt.hash('admin', 10);
@@ -44,13 +52,28 @@ const router = Router();
         createdAt: Date.now()
       };
       users = [defaultAdmin];
-      await setDbData('users', users);
+      try {
+        await setDbData('users', users);
+      } catch (e: any) {
+        console.warn('Notice: Could not persist default admin to PostgreSQL:', e?.message);
+      }
     }
     return users;
   };
 
-  const saveUsers = async (users) => {
-    await setDbData('users', users);
+  const saveUsers = async (users: any[]) => {
+    if (!activePgPools['default']) {
+      try {
+        await loadPgPoolForStore('default');
+      } catch (_) {}
+    }
+    if (activePgPools['default']) {
+      try {
+        await setDbData('users', users);
+      } catch (e: any) {
+        console.warn('Notice: Could not save users to PostgreSQL:', e?.message);
+      }
+    }
   };
   
   async function logAuthToServer(action: string, user: any, req: any, details?: string) {
@@ -147,8 +170,21 @@ const JWT_REFRESH_SECRET = process.env.JWT_REFRESH_SECRET || 'super-secret-jwt-r
 router.post('/api/auth/login', async (req, res) => {
     try {
       console.log('Login attempt body:', req.body); loginSchema.parse(req.body);
-    } catch (e) {
+    } catch (e: any) {
       return res.status(400).json({ error: 'داده‌های ورودی نامعتبر است', details: e.errors, message: e.message, name: e.name });
+    }
+
+    if (!activePgPools['default']) {
+      try {
+        await loadPgPoolForStore('default');
+      } catch (_) {}
+    }
+
+    if (!activePgPools['default']) {
+      return res.status(503).json({
+        error: 'اتصال به پایگاه داده PostgreSQL برقرار نیست. سیستم فقط با اتصال به پایگاه داده PostgreSQL کار می‌کند. لطفاً ابتدا ویزارد راه‌اندازی را تکمیل نمایید.',
+        needsSetup: true
+      });
     }
 
     const { username, password } = req.body;
