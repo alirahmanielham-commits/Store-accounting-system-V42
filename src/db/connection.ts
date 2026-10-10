@@ -4,7 +4,7 @@ import path from 'path';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { Client, Pool } from 'pg';
-import { ensurePostgresTables } from './schema-sync';
+import { ensurePostgresTables, ensureBusinessesTable } from './schema-sync';
 import { decryptValue } from '../utils/crypto';
 
 export const storeContext = new AsyncLocalStorage<string>();
@@ -109,6 +109,7 @@ export async function loadPgPoolForStore(storeId: string) {
             let business: any = null;
             if (usePgMap['default'] && activePgPools['default']) {
                 try {
+                    await ensureBusinessesTable(activePgPools['default']);
                     const res = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [storeId]);
                     if (res.rows.length > 0) business = res.rows[0];
                 } catch (_) {}

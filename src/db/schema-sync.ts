@@ -67,7 +67,7 @@ export let currentSyncProgress: TableSyncProgress = {
   stageDescription: 'در حال تنظیم و پیکربندی اولیه زیرساخت‌های پایگاه داده PostgreSQL'
 };
 
-export function updateSyncProgress(current: number, _tableName?: string, status: 'idle' | 'running' | 'completed' | 'error' = 'running') {
+export function updateSyncProgress(current: number, _tableName?: string, status: 'idle' | 'running' | 'completed' | 'error' = 'running', customDesc?: string) {
   const total = KNOWN_TABLES.length;
   const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 100;
   const stage = getFriendlyStageInfo(percent);
@@ -75,8 +75,53 @@ export function updateSyncProgress(current: number, _tableName?: string, status:
     status,
     percent,
     stageTitle: stage.stageTitle,
-    stageDescription: stage.stageDescription
+    stageDescription: customDesc || stage.stageDescription
   };
+}
+
+export async function ensureBusinessesTable(pool: any) {
+  if (!pool) return;
+  try {
+    await pool.query(`
+      CREATE TABLE IF NOT EXISTS businesses (
+        id VARCHAR PRIMARY KEY,
+        name VARCHAR NOT NULL DEFAULT '',
+        company_name VARCHAR,
+        calendar_type VARCHAR,
+        currency VARCHAR,
+        phone VARCHAR,
+        address VARCHAR,
+        activity_field VARCHAR,
+        tax_percent NUMERIC,
+        db_type VARCHAR DEFAULT 'postgres',
+        db_host VARCHAR,
+        db_port VARCHAR,
+        db_name VARCHAR,
+        db_user VARCHAR,
+        db_password VARCHAR,
+        created_at VARCHAR,
+        updated_at VARCHAR
+      );
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS name VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS company_name VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS calendar_type VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS currency VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS phone VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS address VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS activity_field VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS tax_percent NUMERIC;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS db_type VARCHAR DEFAULT 'postgres';
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS db_host VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS db_port VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS db_name VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS db_user VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS db_password VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS created_at VARCHAR;
+      ALTER TABLE businesses ADD COLUMN IF NOT EXISTS updated_at VARCHAR;
+    `);
+  } catch (e: any) {
+    console.warn('ensureBusinessesTable notice:', e?.message || e);
+  }
 }
 
 export const tableSchemas = new Map<string, Map<string, string>>();
@@ -334,11 +379,13 @@ export async function ensurePostgresTables(poolOverride?: any) {
       console.warn('Could not run automated date column migration:', migErr?.message);
     }
 
+    await ensureBusinessesTable(p);
+
     let tableIdx = 0;
     const totalTables = KNOWN_TABLES.length;
     for (const key of KNOWN_TABLES) {
       tableIdx++;
-      updateSyncProgress(tableIdx, key, 'running');
+      updateSyncProgress(tableIdx, undefined, 'running');
       try {
         await p.query(`
           CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY);
@@ -392,6 +439,6 @@ export async function ensurePostgresTables(poolOverride?: any) {
         // column may not exist yet until table populated; ignore silently
       }
     }
-    updateSyncProgress(totalTables, 'پایان ساخت جداول', 'completed', `تمامی ${totalTables} جدول پایگاه داده با موفقیت ایجاد و آماده‌سازی شدند.`);
+    updateSyncProgress(totalTables, undefined, 'completed', 'تمامی زیرساخت‌ها و ساختارهای داده با موفقیت پیکربندی و آماده استفاده گردیدند.');
   }
 }

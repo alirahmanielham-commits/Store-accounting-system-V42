@@ -1,6 +1,6 @@
 
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE, loadPgPoolForStore } from '../db/connection';
-import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables, currentSyncProgress } from '../db/schema-sync';
+import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables, ensureBusinessesTable, currentSyncProgress } from '../db/schema-sync';
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
 
@@ -224,27 +224,7 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
       // 1. In Postgres businesses table if available
       if (usePgMap['default'] && activePgPools['default']) {
         try {
-          await activePgPools['default'].query(`
-            CREATE TABLE IF NOT EXISTS businesses (
-              id VARCHAR PRIMARY KEY,
-              name VARCHAR NOT NULL,
-              company_name VARCHAR,
-              calendar_type VARCHAR,
-              currency VARCHAR,
-              phone VARCHAR,
-              address VARCHAR,
-              activity_field VARCHAR,
-              tax_percent NUMERIC,
-              db_type VARCHAR DEFAULT 'postgres',
-              db_host VARCHAR,
-              db_port VARCHAR,
-              db_name VARCHAR,
-              db_user VARCHAR,
-              db_password VARCHAR,
-              created_at VARCHAR,
-              updated_at VARCHAR
-            )
-          `);
+          await ensureBusinessesTable(activePgPools['default']);
           await activePgPools['default'].query(`
             INSERT INTO businesses (id, name, company_name, calendar_type, currency, phone, address, activity_field, tax_percent, db_type, db_name, updated_at)
             VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)

@@ -206,8 +206,8 @@ export async function innerSetDbData(key: string, data: any) {
        client.release();
     }
   } else {
-    // Strictly no local database engine or local file storage
-    throw new Error('سیستم فقط با اتصال به پایگاه داده PostgreSQL قابل راه‌اندازی و استفاده است و ذخیره محلی غیرفعال می‌باشد.');
+     console.warn(`[kv-store] PostgreSQL connection not active for key '${key}'. Write skipped.`);
+     return false;
   }
 }
 

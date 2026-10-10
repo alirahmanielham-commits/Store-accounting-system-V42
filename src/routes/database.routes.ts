@@ -7,7 +7,7 @@ import path from 'path';
 import { requireRole, requireAuth } from '../middleware/auth.middleware';
 import { decryptValue } from '../utils/crypto';
 import { getDbData, setDbData, invalidateKvCache } from '../db/kv-store';
-import { ensurePostgresTables } from '../db/schema-sync';
+import { ensurePostgresTables, ensureBusinessesTable } from '../db/schema-sync';
 
 const router = Router();
 const BUSINESSES_FILE = path.join(process.cwd(), 'businesses.json');
@@ -41,27 +41,7 @@ router.get('/api/databases', async (req, res) => {
     // 1. Check PostgreSQL businesses table if active
     try {
       if (usePgMap['default'] && activePgPools['default']) {
-        await activePgPools['default'].query(`
-          CREATE TABLE IF NOT EXISTS businesses (
-            id VARCHAR PRIMARY KEY,
-            name VARCHAR NOT NULL,
-            company_name VARCHAR,
-            calendar_type VARCHAR,
-            currency VARCHAR,
-            phone VARCHAR,
-            address VARCHAR,
-            activity_field VARCHAR,
-            tax_percent NUMERIC,
-            db_type VARCHAR DEFAULT 'postgres',
-            db_host VARCHAR,
-            db_port VARCHAR,
-            db_name VARCHAR,
-            db_user VARCHAR,
-            db_password VARCHAR,
-            created_at VARCHAR,
-            updated_at VARCHAR
-          )
-        `);
+        await ensureBusinessesTable(activePgPools['default']);
         const r = await activePgPools['default'].query("SELECT * FROM businesses ORDER BY created_at ASC");
         dbsFromTable = r.rows;
       }
@@ -182,6 +162,7 @@ router.get('/api/databases', async (req, res) => {
 
     // Backfill into database businesses table if empty
     if (usePgMap['default'] && activePgPools['default'] && dbsFromTable.length === 0) {
+      await ensureBusinessesTable(activePgPools['default']);
       for (const item of fullList) {
         try {
           await activePgPools['default'].query(`
@@ -479,27 +460,7 @@ router.post('/api/databases', async (req, res) => {
 
     // 2. Register business in the central businesses table in the MAIN database
     if (activePgPools['default']) {
-      await activePgPools['default'].query(`
-        CREATE TABLE IF NOT EXISTS businesses (
-          id VARCHAR PRIMARY KEY,
-          name VARCHAR NOT NULL,
-          company_name VARCHAR,
-          calendar_type VARCHAR,
-          currency VARCHAR,
-          phone VARCHAR,
-          address VARCHAR,
-          activity_field VARCHAR,
-          tax_percent NUMERIC,
-          db_type VARCHAR DEFAULT 'postgres',
-          db_host VARCHAR,
-          db_port VARCHAR,
-          db_name VARCHAR,
-          db_user VARCHAR,
-          db_password VARCHAR,
-          created_at VARCHAR,
-          updated_at VARCHAR
-        )
-      `);
+      await ensureBusinessesTable(activePgPools['default']);
 
       await activePgPools['default'].query(`
         INSERT INTO businesses (id, name, company_name, calendar_type, currency, phone, address, activity_field, tax_percent, db_type, db_name, created_at, updated_at)
