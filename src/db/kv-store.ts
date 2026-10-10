@@ -1,4 +1,4 @@
-import { getDb, isPgActive, getActivePgPool, storeContext, activePgPools } from './connection';
+import { getDb, isPgActive, getActivePgPool, storeContext, activePgPools, loadPgPoolForStore } from './connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, preparePgItem } from './schema-sync';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
@@ -55,7 +55,15 @@ export function invalidateKvCache(storeId?: string) {
 
 export async function innerGetDbData(key: string) {
   const isGlobalTable = GLOBAL_MAIN_DB_TABLES.includes(key);
-  const targetPool = isGlobalTable ? (activePgPools['default'] || null) : (isPgActive() ? getActivePgPool() : null);
+  const currentStore = storeContext.getStore() || 'default';
+  const targetStoreId = isGlobalTable ? 'default' : currentStore;
+
+  if (!activePgPools[targetStoreId]) {
+    try {
+      await loadPgPoolForStore(targetStoreId);
+    } catch (_) {}
+  }
+  const targetPool = isGlobalTable ? (activePgPools['default'] || null) : (isPgActive() ? getActivePgPool() : (activePgPools[currentStore] || null));
 
   if (targetPool) {
     if (!KNOWN_TABLES.includes(key)) return null;
@@ -70,29 +78,35 @@ export async function innerGetDbData(key: string) {
          return row;
     };
     try {
-      const res = await targetPool.query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
-
-      if (key === 'company_profile') {
+      if (key === 'company_profile' || key === 'store_settings') {
         try {
+            await targetPool.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)`);
             const r = await targetPool.query("SELECT * FROM system_settings");
             if (r.rows.length === 0) {
-               const r2 = await targetPool.query("SELECT value FROM store WHERE key = 'company_profile'");
-               if (r2.rows.length > 0) return JSON.parse(r2.rows[0].value);
                return null;
             }
-            const obj = { id: 'singleton' };
+            let obj: any = { id: 'singleton' };
             for (const row of r.rows) {
                 try { obj[row.setting_key] = JSON.parse(row.setting_value); } catch(e) { obj[row.setting_key] = row.setting_value; }
+            }
+            if (obj.company_profile && typeof obj.company_profile === 'object') {
+                obj = { ...obj.company_profile, ...obj, id: 'singleton' };
+            }
+            if (obj.store_settings && typeof obj.store_settings === 'object') {
+                obj = { ...obj.store_settings, ...obj, id: 'singleton' };
             }
             return obj;
         } catch(e) { return null; }
       } else if (key === 'backupConfig') {
+          const res = await targetPool.query(`SELECT * FROM "${key}"`);
           return res.rows.length > 0 ? parseJSONFields(res.rows[0]) : null;
       }
+
+      const res = await targetPool.query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
       return res.rows.map(parseJSONFields);
     } catch (e: any) {
       if (e.code === '42P01') { // table does not exist
-        return (key === 'company_profile' || key === 'backupConfig') ? null : [];
+        return (key === 'company_profile' || key === 'store_settings' || key === 'backupConfig') ? null : [];
       }
       if (e.code === '42703' && isSoftDeletable) {
         // Fallback if deleted_at column doesn't exist
@@ -107,29 +121,41 @@ export async function innerGetDbData(key: string) {
       throw e;
     }
   } else {
-    const dbData = await getFileData(isGlobalTable ? 'default' : undefined);
-    return dbData[key] !== undefined ? dbData[key] : null;
+    // Strictly no local database engine or local file storage
+    return (key === 'company_profile' || key === 'store_settings' || key === 'backupConfig') ? null : [];
   }
 }
 
 export async function innerSetDbData(key: string, data: any) {
   const isGlobalTable = GLOBAL_MAIN_DB_TABLES.includes(key);
-  const targetPool = isGlobalTable ? (activePgPools['default'] || null) : (isPgActive() ? getActivePgPool() : null);
+  const currentStore = storeContext.getStore() || 'default';
+  const targetStoreId = isGlobalTable ? 'default' : currentStore;
+
+  if (!activePgPools[targetStoreId]) {
+    try {
+      await loadPgPoolForStore(targetStoreId);
+    } catch (_) {}
+  }
+  const targetPool = isGlobalTable ? (activePgPools['default'] || null) : (isPgActive() ? getActivePgPool() : (activePgPools[currentStore] || null));
 
   if (targetPool) {
     if (!KNOWN_TABLES.includes(key)) return;
     const client = await targetPool.connect();
     try {
        await client.query('BEGIN');
-       if (key === 'company_profile') {
+       if (key === 'company_profile' || key === 'store_settings') {
            await client.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)`);
            if (data && typeof data === 'object') {
+               const valStr = JSON.stringify(data);
+               await client.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value`, ['company_profile', valStr]);
+               await client.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value`, ['store_settings', valStr]);
+
                const keys = Object.keys(data);
                for (const k of keys) {
-                   if (k === 'id') continue;
+                   if (k === 'id' || k === 'company_profile' || k === 'store_settings') continue;
                    let v = data[k];
-                   const valStr = (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v);
-                   await client.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value`, [k, valStr]);
+                   const vStr = (v !== null && typeof v === 'object') ? JSON.stringify(v) : String(v);
+                   await client.query(`INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value`, [k, vStr]);
                }
            }
        } else {
@@ -180,10 +206,8 @@ export async function innerSetDbData(key: string, data: any) {
        client.release();
     }
   } else {
-    const storeTarget = isGlobalTable ? 'default' : undefined;
-    const dbData = await getFileData(storeTarget);
-    dbData[key] = data;
-    scheduleFileSave(storeTarget);
+    // Strictly no local database engine or local file storage
+    throw new Error('سیستم فقط با اتصال به پایگاه داده PostgreSQL قابل راه‌اندازی و استفاده است و ذخیره محلی غیرفعال می‌باشد.');
   }
 }
 
@@ -321,8 +345,18 @@ export async function getAllDbData() {
     try {
       await client.query('BEGIN ISOLATION LEVEL REPEATABLE READ');
       for (const key of KNOWN_TABLES) {
+         const isGlobal = GLOBAL_MAIN_DB_TABLES.includes(key);
          const isSoftDeletable = ["checkbooks", "issued_checks", "received_checks"].includes(key);
          let res;
+         
+         if (isGlobal && activePgPools['default'] && activePgPools['default'] !== getActivePgPool()) {
+           try {
+             const gRes = await activePgPools['default'].query(`SELECT * FROM "${key}"`);
+             allData.push({ key, value: gRes.rows.map(parseJSONFields) });
+             continue;
+           } catch (_) {}
+         }
+
          await client.query(`SAVEPOINT sp_table`);
          try {
              res = await client.query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
@@ -344,8 +378,8 @@ export async function getAllDbData() {
                  throw err;
              }
          }
-         if (key === 'company_profile') {
-           let cval = null;
+         if (key === 'company_profile' || key === 'store_settings') {
+           let cval: any = null;
            await client.query(`SAVEPOINT sp_sysset`);
            try {
               await client.query(`CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)`);
@@ -356,6 +390,12 @@ export async function getAllDbData() {
                  for (const r of cres.rows) {
                     try { cval[r.setting_key] = JSON.parse(r.setting_value); }
                     catch(e) { cval[r.setting_key] = r.setting_value; }
+                 }
+                 if (cval.company_profile && typeof cval.company_profile === 'object') {
+                    cval = { ...cval.company_profile, ...cval, id: 'singleton' };
+                 }
+                 if (cval.store_settings && typeof cval.store_settings === 'object') {
+                    cval = { ...cval.store_settings, ...cval, id: 'singleton' };
                  }
               }
            } catch(e) {

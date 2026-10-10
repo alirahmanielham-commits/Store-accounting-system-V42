@@ -1321,7 +1321,8 @@ if (appState.isStoreSelectionOpen) {
           sessionStorage.removeItem("company_profile");
           sessionStorage.removeItem("store_settings");
           appState.setActiveStoreId(id);
-          window.location.reload();
+          appState.setIsStoreSelectionOpen(false);
+          window.location.href = "/financial_report";
         }}
         onClose={localStorage.getItem("activeStoreId") ? () => appState.setIsStoreSelectionOpen(false) : undefined}
       />
@@ -1545,16 +1546,17 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
   if (activeTab === "welcome_page") {
     const handleWelcomeEnter = (storeId?: string) => {
       const targetStore = storeId || localStorage.getItem("activeStoreId") || "default";
-      if (targetStore !== appState.activeStoreId) {
-        appState.setActiveStoreId(targetStore);
-        localStorage.setItem("activeStoreId", targetStore);
-        sessionStorage.setItem("activeStoreId", targetStore);
-        try {
-          document.cookie = `activeStoreId=${encodeURIComponent(targetStore)}; path=/; max-age=31536000; SameSite=Lax`;
-        } catch (_) {}
-        window.location.reload();
-        return;
-      }
+      appState.setActiveStoreId(targetStore);
+      localStorage.setItem("activeStoreId", targetStore);
+      sessionStorage.setItem("activeStoreId", targetStore);
+      try {
+        document.cookie = `activeStoreId=${encodeURIComponent(targetStore)}; path=/; max-age=31536000; SameSite=Lax`;
+      } catch (_) {}
+      localStorage.removeItem("company_profile");
+      localStorage.removeItem("store_settings");
+      sessionStorage.removeItem("company_profile");
+      sessionStorage.removeItem("store_settings");
+
       if (isMobileScreen) {
         setActiveTab("create_sale");
       } else {

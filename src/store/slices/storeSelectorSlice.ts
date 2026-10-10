@@ -10,10 +10,10 @@ export interface StoreSelectorSlice {
 }
 
 const getStoredStoreId = () => {
-  if (typeof window !== 'undefined' && window.localStorage) {
+  if (typeof window !== 'undefined') {
     try {
-      const stored = localStorage.getItem("activeStoreId");
-      if (stored) return stored;
+      const stored = window.localStorage?.getItem("activeStoreId") || window.sessionStorage?.getItem("activeStoreId");
+      if (stored && stored !== 'null' && stored !== 'undefined') return stored;
     } catch {
       return 'default';
     }
@@ -24,16 +24,15 @@ const getStoredStoreId = () => {
 export const createStoreSelectorSlice: StateCreator<StoreSelectorSlice> = (set) => ({
   activeStoreId: getStoredStoreId(),
   setActiveStoreId: (id) => {
-    if (typeof window !== 'undefined' && window.localStorage) {
+    const val = (id && id !== 'null' && id !== 'undefined') ? id : 'default';
+    if (typeof window !== 'undefined') {
       try {
-        if (id) {
-          localStorage.setItem("activeStoreId", id);
-        } else {
-          localStorage.setItem("activeStoreId", "default");
-        }
+        window.localStorage?.setItem("activeStoreId", val);
+        window.sessionStorage?.setItem("activeStoreId", val);
+        document.cookie = `activeStoreId=${encodeURIComponent(val)}; path=/; max-age=31536000; SameSite=Lax`;
       } catch {}
     }
-    set({ activeStoreId: id || 'default' });
+    set({ activeStoreId: val });
   },
   availableStores: [],
   setAvailableStores: (stores) => set({ availableStores: stores }),

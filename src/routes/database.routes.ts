@@ -1,4 +1,4 @@
-import { usePgMap, activePgPools, storeContext, connectPgDb, getDb, DB_CONFIG_FILE, invalidateStorePgPool, getDefaultPgConnectionString } from '../db/connection';
+import { usePgMap, activePgPools, storeContext, connectPgDb, getDb, DB_CONFIG_FILE, invalidateStorePgPool, getDefaultPgConnectionString, loadPgPoolForStore } from '../db/connection';
 import { Client, Pool } from 'pg';
 import { Router } from 'express';
 import fs from 'fs';
@@ -213,40 +213,44 @@ router.get('/api/databases', async (req, res) => {
 router.get('/api/databases/:id/test-connection', async (req, res) => {
   try {
     const { id } = req.params;
-    if (id === 'default') {
-      return res.json({ success: true });
+    if (!activePgPools['default']) {
+      await loadPgPoolForStore('default');
     }
 
-    // Test Postgres pool if configured
-    if (usePgMap['default'] && activePgPools['default']) {
+    if (id === 'default') {
+      if (activePgPools['default']) {
+        await activePgPools['default'].query('SELECT 1');
+        return res.json({ success: true, message: 'ارتباط با پایگاه داده اصلی PostgreSQL برقرار است.' });
+      }
+      return res.status(500).json({ error: 'ارتباط با پایگاه داده اصلی برقرار نمی‌باشد.' });
+    }
+
+    let targetDbName = '';
+    if (activePgPools['default']) {
       try {
         const r = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [id]);
-        if (r.rows.length > 0 && r.rows[0].db_type === 'postgres') {
-          const connectionString = await getDefaultPgConnectionString();
-          if (connectionString) {
-            const url = new URL(connectionString);
-            url.pathname = `/${r.rows[0].db_name}`;
-            const pool = new Pool({ connectionString: url.toString(), connectionTimeoutMillis: 3000 });
-            await pool.query('SELECT 1');
-            await pool.end();
-            return res.json({ success: true });
-          }
+        if (r.rows.length > 0) {
+          targetDbName = r.rows[0].db_name;
         }
-      } catch (err: any) {
-        console.warn('Postgres connection test failed, checking file fallback:', err?.message);
-      }
+      } catch (_) {}
     }
 
-    // File-based check
-    const storeFile = path.join(process.cwd(), `data_${id}.json`);
-    const fileList = await getStoredBusinesses();
-    const exists = fileList.some((b: any) => b.id === id) || fs.existsSync(storeFile);
-
-    if (exists) {
-      return res.json({ success: true });
+    if (!targetDbName) {
+      const cleanId = id.replace(/[^a-zA-Z0-9_]/g, '');
+      targetDbName = `store_${cleanId}`;
     }
 
-    return res.status(404).json({ error: 'کسب و کار مورد نظر یافت نشد' });
+    const connectionString = await getDefaultPgConnectionString();
+    if (connectionString) {
+      const url = new URL(connectionString);
+      url.pathname = `/${targetDbName}`;
+      const pool = new Pool({ connectionString: url.toString(), connectionTimeoutMillis: 4000 });
+      await pool.query('SELECT 1');
+      await pool.end();
+      return res.json({ success: true, message: `ارتباط با دیتابیس «${targetDbName}» با موفقیت برقرار شد.` });
+    }
+
+    return res.status(500).json({ error: 'تنظیمات اتصال به PostgreSQL در سیستم یافت نشد.' });
   } catch (e: any) {
     res.status(500).json({ error: e.message || 'خطا در تست ارتباط با کسب و کار' });
   }
@@ -281,8 +285,9 @@ router.post('/api/databases', async (req, res) => {
     const cleanCompanyName = (companyName && String(companyName).trim()) || cleanName;
     const cleanCurrency = currency || (calType === 'jalali' ? 'تومان' : 'USD');
     const id = 'store_' + Math.random().toString(36).substring(2, 6) + '_' + Date.now().toString(36);
-    let actualDbType = 'json';
-    let dbNameForBusiness = `store_${id}`.replace(/[^a-zA-Z0-9_]/g, '');
+    const cleanId = id.replace(/[^a-zA-Z0-9_]/g, '');
+    let actualDbType = 'postgres';
+    let dbNameForBusiness = `store_${cleanId}`;
 
     // Prepare default fiscal year based on calendar type
     const now = new Date();
@@ -443,120 +448,210 @@ router.post('/api/databases', async (req, res) => {
       }
     }
 
-    // 1. Try PostgreSQL provisioning if default database is PostgreSQL
-    if (usePgMap['default'] && activePgPools['default']) {
-      try {
-        const connectionString = await getDefaultPgConnectionString();
-        if (connectionString) {
-          try {
-            const url = new URL(connectionString);
-            url.pathname = '/postgres';
-            const client = new Client({ connectionString: url.toString(), connectionTimeoutMillis: 5000 });
-            await client.connect();
-            try {
-              await client.query(`CREATE DATABASE "${dbNameForBusiness}"`);
-            } catch (createErr: any) {
-              if (createErr.code !== '42P04') {
-                console.warn('CREATE DATABASE notice:', createErr.message);
-              }
-            }
-            await client.end();
-            actualDbType = 'postgres';
-          } catch (createErr) {
-            console.warn('Could not CREATE DATABASE, fallback notice:', createErr);
-          }
-        }
-
-        await activePgPools['default'].query(`
-          CREATE TABLE IF NOT EXISTS businesses (
-            id VARCHAR PRIMARY KEY,
-            name VARCHAR NOT NULL,
-            company_name VARCHAR,
-            calendar_type VARCHAR,
-            currency VARCHAR,
-            phone VARCHAR,
-            address VARCHAR,
-            activity_field VARCHAR,
-            tax_percent NUMERIC,
-            db_type VARCHAR DEFAULT 'postgres',
-            db_host VARCHAR,
-            db_port VARCHAR,
-            db_name VARCHAR,
-            db_user VARCHAR,
-            db_password VARCHAR,
-            created_at VARCHAR,
-            updated_at VARCHAR
-          )
-        `);
-
-        await activePgPools['default'].query(`
-          INSERT INTO businesses (id, name, company_name, calendar_type, currency, phone, address, activity_field, tax_percent, db_type, db_name, created_at, updated_at)
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-          ON CONFLICT (id) DO UPDATE SET
-            name = EXCLUDED.name,
-            company_name = EXCLUDED.company_name,
-            calendar_type = EXCLUDED.calendar_type,
-            currency = EXCLUDED.currency,
-            phone = EXCLUDED.phone,
-            address = EXCLUDED.address,
-            activity_field = EXCLUDED.activity_field,
-            tax_percent = EXCLUDED.tax_percent,
-            db_type = EXCLUDED.db_type,
-            db_name = EXCLUDED.db_name,
-            updated_at = EXCLUDED.updated_at
-        `, [
-          id, cleanName, cleanCompanyName, calType, cleanCurrency,
-          phone || '', address || '', activityField || 'خرده‌فروشی و بازرگانی',
-          Number(taxPercent) || 0, actualDbType, actualDbType === 'postgres' ? dbNameForBusiness : '',
-          new Date().toISOString(), new Date().toISOString()
-        ]);
-
-        if (actualDbType === 'postgres' && connectionString) {
-          try {
-            const newUrl = new URL(connectionString);
-            newUrl.pathname = '/' + dbNameForBusiness;
-            const initPool = await connectPgDb(newUrl.toString());
-            await ensurePostgresTables(initPool);
-            await initPool.query('CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)');
-            const initPayload = JSON.stringify({ 
-              storeName: cleanName, 
-              companyName: cleanCompanyName,
-              activityField: activityField || 'خرده‌فروشی و بازرگانی',
-              currency: cleanCurrency,
-              calendarType: calType,
-              phone: phone || '',
-              address: address || '',
-              taxPercent: Number(taxPercent) || 0,
-              isSetup: true,
-              createdAt: Date.now(),
-              updatedAt: Date.now()
-            });
-            await initPool.query(
-              'INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value',
-              ['company_profile', initPayload]
-            );
-            await initPool.query(
-              'INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value',
-              ['store_settings', initPayload]
-            );
-            await initPool.end();
-          } catch (initErr) {
-            console.warn('Failed to seed system_settings on new postgres DB:', initErr);
-          }
-        }
-      } catch (pgErr) {
-        console.warn('Postgres business setup skipped or encountered error:', pgErr);
-      }
+    // 1. Provision separate PostgreSQL database for the business
+    const connectionString = await getDefaultPgConnectionString();
+    if (!connectionString) {
+      return res.status(500).json({ error: 'اتصال به سرور PostgreSQL یافت نشد. سیستم فقط با اتصال به PostgreSQL کار می‌کند.' });
     }
 
-    // 2. Persist to database KV Store
+    try {
+      const rootUrl = new URL(connectionString);
+      rootUrl.pathname = '/postgres';
+      const rootClient = new Client({ connectionString: rootUrl.toString(), connectionTimeoutMillis: 5000 });
+      await rootClient.connect();
+      try {
+        await rootClient.query(`CREATE DATABASE "${dbNameForBusiness}"`);
+      } catch (createErr: any) {
+        if (createErr.code !== '42P04') {
+          console.warn('CREATE DATABASE notice:', createErr.message);
+        }
+      }
+      await rootClient.end();
+      actualDbType = 'postgres';
+    } catch (createErr) {
+      console.warn('Could not CREATE DATABASE, attempting direct pool connect:', createErr);
+    }
+
+    // Ensure default pool is active
+    if (!activePgPools['default']) {
+      await loadPgPoolForStore('default');
+    }
+
+    // 2. Register business in the central businesses table in the MAIN database
+    if (activePgPools['default']) {
+      await activePgPools['default'].query(`
+        CREATE TABLE IF NOT EXISTS businesses (
+          id VARCHAR PRIMARY KEY,
+          name VARCHAR NOT NULL,
+          company_name VARCHAR,
+          calendar_type VARCHAR,
+          currency VARCHAR,
+          phone VARCHAR,
+          address VARCHAR,
+          activity_field VARCHAR,
+          tax_percent NUMERIC,
+          db_type VARCHAR DEFAULT 'postgres',
+          db_host VARCHAR,
+          db_port VARCHAR,
+          db_name VARCHAR,
+          db_user VARCHAR,
+          db_password VARCHAR,
+          created_at VARCHAR,
+          updated_at VARCHAR
+        )
+      `);
+
+      await activePgPools['default'].query(`
+        INSERT INTO businesses (id, name, company_name, calendar_type, currency, phone, address, activity_field, tax_percent, db_type, db_name, created_at, updated_at)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+        ON CONFLICT (id) DO UPDATE SET
+          name = EXCLUDED.name,
+          company_name = EXCLUDED.company_name,
+          calendar_type = EXCLUDED.calendar_type,
+          currency = EXCLUDED.currency,
+          phone = EXCLUDED.phone,
+          address = EXCLUDED.address,
+          activity_field = EXCLUDED.activity_field,
+          tax_percent = EXCLUDED.tax_percent,
+          db_type = EXCLUDED.db_type,
+          db_name = EXCLUDED.db_name,
+          updated_at = EXCLUDED.updated_at
+      `, [
+        id, cleanName, cleanCompanyName, calType, cleanCurrency,
+        phone || '', address || '', activityField || 'خرده‌فروشی و بازرگانی',
+        Number(taxPercent) || 0, 'postgres', dbNameForBusiness,
+        new Date().toISOString(), new Date().toISOString()
+      ]);
+    }
+
+    // 3. Connect to the isolated new PostgreSQL database and seed all initial business structures
+    try {
+      const newDbUrl = new URL(connectionString);
+      newDbUrl.pathname = '/' + dbNameForBusiness;
+      const initPool = await connectPgDb(newDbUrl.toString());
+      await ensurePostgresTables(initPool);
+
+      await initPool.query('CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)');
+      const initPayload = JSON.stringify({ 
+        storeName: cleanName, 
+        companyName: cleanCompanyName,
+        activityField: activityField || 'خرده‌فروشی و بازرگانی',
+        currency: cleanCurrency,
+        calendarType: calType,
+        phone: phone || '',
+        address: address || '',
+        taxPercent: Number(taxPercent) || 0,
+        isSetup: true,
+        createdAt: Date.now(),
+        updatedAt: Date.now()
+      });
+      await initPool.query(
+        'INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value',
+        ['company_profile', initPayload]
+      );
+      await initPool.query(
+        'INSERT INTO system_settings (setting_key, setting_value) VALUES ($1, $2) ON CONFLICT(setting_key) DO UPDATE SET setting_value = EXCLUDED.setting_value',
+        ['store_settings', initPayload]
+      );
+
+      // Seed initial fiscal year
+      try {
+        await initPool.query(`
+          INSERT INTO financial_years (id, name, code, start_date, end_date, description, status, created_at, updated_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+          ON CONFLICT(id) DO NOTHING
+        `, [
+          defaultFiscalYear.id, defaultFiscalYear.name, defaultFiscalYear.code,
+          defaultFiscalYear.startDate, defaultFiscalYear.endDate, defaultFiscalYear.description,
+          defaultFiscalYear.status, defaultFiscalYear.createdAt, defaultFiscalYear.updatedAt
+        ]);
+      } catch (_) {}
+
+      // Seed default warehouse
+      try {
+        await initPool.query(`
+          INSERT INTO warehouses (id, name, code, address, is_default, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6)
+          ON CONFLICT(id) DO NOTHING
+        `, [defaultWh.id, defaultWh.name, defaultWh.code, defaultWh.address, true, defaultWh.createdAt]);
+      } catch (_) {}
+
+      // Seed bank account
+      try {
+        await initPool.query(`
+          INSERT INTO accounts (id, title, bank_name, branch_name, account_number, card_number, sheba_number, account_holder, balance, initial_balance, is_default, status, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          ON CONFLICT(id) DO NOTHING
+        `, [
+          defaultBank.id, defaultBank.title, defaultBank.bankName, defaultBank.branchName,
+          defaultBank.accountNumber, defaultBank.cardNumber, defaultBank.shebaNumber,
+          defaultBank.accountHolder, defaultBank.balance, defaultBank.initialBalance,
+          true, defaultBank.status, defaultBank.createdAt
+        ]);
+      } catch (_) {}
+
+      // Seed cashbox
+      try {
+        await initPool.query(`
+          INSERT INTO cashboxes (id, name, manager, account_number, description, balance, initial_balance, is_default, status, created_at)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+          ON CONFLICT(id) DO NOTHING
+        `, [
+          defaultCashbox.id, defaultCashbox.name, defaultCashbox.manager, defaultCashbox.accountNumber,
+          defaultCashbox.description, defaultCashbox.balance, defaultCashbox.initialBalance,
+          true, defaultCashbox.status, defaultCashbox.createdAt
+        ]);
+      } catch (_) {}
+
+      // Seed categories
+      for (const cat of initialCategories) {
+        try {
+          await initPool.query(`
+            INSERT INTO product_categories (id, name, code, created_at)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT(id) DO NOTHING
+          `, [cat.id, cat.name, cat.code, cat.createdAt]);
+        } catch (_) {}
+      }
+
+      // Seed persons
+      for (const p of initialPersons) {
+        try {
+          await initPool.query(`
+            INSERT INTO persons (id, name, alias, person_type, role, person_code, phone, initial_balance, initial_balance_type, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            ON CONFLICT(id) DO NOTHING
+          `, [p.id, p.name, p.alias, p.personType, p.role, p.personCode, p.phone, p.initialBalance, p.initialBalanceType, p.createdAt]);
+        } catch (_) {}
+      }
+
+      // Seed products
+      for (const pr of initialProducts) {
+        try {
+          await initPool.query(`
+            INSERT INTO products (id, code, barcode, name, category_id, unit, type, purchase_price, sell_price, current_stock, initial_stock, warehouse_id, created_at)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+            ON CONFLICT(id) DO NOTHING
+          `, [
+            pr.id, pr.code, pr.barcode || '', pr.name, pr.categoryId, pr.unit, pr.type,
+            pr.purchasePrice, pr.sellPrice, pr.currentStock, pr.initialStock, pr.warehouseId, pr.createdAt
+          ]);
+        } catch (_) {}
+      }
+
+      await initPool.end();
+    } catch (initErr) {
+      console.warn('Seeding isolated postgres DB error:', initErr);
+    }
+
+    // 4. Update memory registry
     const newEntry = {
       id,
       name: cleanName,
       companyName: cleanCompanyName,
       company_name: cleanCompanyName,
-      db_type: actualDbType,
-      db_name: actualDbType === 'postgres' ? dbNameForBusiness : undefined,
+      db_type: 'postgres',
+      db_name: dbNameForBusiness,
       calendarType: calType,
       calendar_type: calType,
       currency: cleanCurrency,
@@ -579,50 +674,11 @@ router.post('/api/databases', async (req, res) => {
       await setDbData('businesses', kvBusinesses);
     } catch (_) {}
 
-    // 3. Persist to file-based registry & isolated data file
     const fileList = await getStoredBusinesses();
     const flIdx = fileList.findIndex((b: any) => b.id === id);
     if (flIdx >= 0) fileList[flIdx] = { ...fileList[flIdx], ...newEntry };
     else fileList.push(newEntry);
     await saveStoredBusinesses(fileList);
-
-    // Initialize isolated JSON store file with all essential initial accounting tables
-    const storeDataFile = path.join(process.cwd(), `data_${id}.json`);
-    const initialData: Record<string, any> = {
-      company_profile: {
-        storeName: cleanName,
-        companyName: cleanCompanyName,
-        activityField: activityField || 'خرده‌فروشی و بازرگانی',
-        currency: cleanCurrency,
-        calendarType: calType,
-        phone: phone || '',
-        address: address || '',
-        taxPercent: Number(taxPercent) || 0,
-        isSetup: true,
-        createdAt: Date.now(),
-        updatedAt: Date.now()
-      },
-      store_settings: {
-        storeName: cleanName,
-        companyName: cleanCompanyName,
-        activityField: activityField || 'خرده‌فروشی و بازرگانی',
-        currency: cleanCurrency,
-        calendarType: calType,
-        phone: phone || '',
-        address: address || '',
-        taxPercent: Number(taxPercent) || 0,
-        isSetup: true,
-        createdAt: Date.now()
-      },
-      financial_years: [defaultFiscalYear],
-      warehouses: [defaultWh],
-      accounts: [defaultBank],
-      cashboxes: [defaultCashbox],
-      product_categories: initialCategories,
-      persons: initialPersons,
-      products: initialProducts
-    };
-    await fsPromises.writeFile(storeDataFile, JSON.stringify(initialData, null, 2), 'utf8');
 
     // Invalidate cached pool so it connects fresh on selection
     invalidateStorePgPool(id);
@@ -630,12 +686,13 @@ router.post('/api/databases', async (req, res) => {
 
     return res.json({
       success: true,
-      message: 'کسب و کار با سال مالی و زیرساخت اولیه با موفقیت ایجاد شد.',
+      message: 'کسب و کار با سال مالی و پایگاه داده مجزای PostgreSQL با موفقیت ایجاد شد.',
       database: {
         id,
         name: cleanName,
         companyName: cleanCompanyName,
-        db_type: actualDbType,
+        db_type: 'postgres',
+        db_name: dbNameForBusiness,
         calendarType: calType,
         currency: cleanCurrency,
         fiscalYear: defaultFiscalYear

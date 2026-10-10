@@ -1,5 +1,5 @@
 
-import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
+import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE, loadPgPoolForStore } from '../db/connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables, currentSyncProgress } from '../db/schema-sync';
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
@@ -35,27 +35,40 @@ router.get('/api/setup/sync-progress', (req, res) => {
 router.get('/api/setup/status', async (req, res) => {
     try {
        let configExists = false;
+       let pgConnected = false;
        try {
-           await fsPromises.access(DB_CONFIG_FILE);
-           configExists = true;
+           const raw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
+           const cfg = JSON.parse(raw);
+           if (cfg && cfg.engine === 'postgres') {
+               configExists = true;
+           }
        } catch(e) { }
        
-       const usingEnvVars = !!(process.env.SQL_HOST || process.env.DATABASE_URL);
+       if (!activePgPools['default']) {
+           await loadPgPoolForStore('default');
+       }
+       pgConnected = !!(usePgMap['default'] && activePgPools['default']);
        
-       const users = await getDbData('users') || [];
-       const adminConfigured = users.length > 0;
-       
-       const profile = await getDbData('company_profile') || null;
-       const companyConfigured = !!(profile && (profile.companyName || profile.storeName));
-       
-       const financialYears = (await getDbData('financial_years')) || [];
-       const fiscalYearConfigured = Array.isArray(financialYears) && financialYears.length > 0;
+       let users: any[] = [];
+       let profile: any = null;
+       let financialYears: any[] = [];
 
-       const dbConfigured = configExists || usingEnvVars || (adminConfigured && companyConfigured);
+       if (pgConnected) {
+         try {
+           users = (await getDbData('users')) || [];
+           profile = (await getDbData('company_profile')) || null;
+           financialYears = (await getDbData('financial_years')) || [];
+         } catch (_) {}
+       }
+       
+       const adminConfigured = users.length > 0;
+       const companyConfigured = !!(profile && (profile.companyName || profile.storeName));
+       const fiscalYearConfigured = Array.isArray(financialYears) && financialYears.length > 0;
+       const dbConfigured = configExists && pgConnected;
        
        res.json({ 
          dbConfigured, 
-         usingEnvVars,
+         pgConnected,
          adminConfigured,
          companyConfigured,
          fiscalYearConfigured,
@@ -84,56 +97,52 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
       customProduct,
     } = req.body;
 
-    // 1. Configure DB if PostgreSQL is chosen
-    if (dbConfig && dbConfig.engine === 'postgres') {
-      try {
-        const auth = dbConfig.password ? `${dbConfig.user}:${encodeURIComponent(dbConfig.password)}` : dbConfig.user;
-        const targetDb = (dbConfig.dbName || 'store_db').trim();
-        const safeDbName = targetDb.replace(/[^a-zA-Z0-9_]/g, '') || 'store_db';
-        const connStr = `postgresql://${auth}@${dbConfig.host}:${dbConfig.port}/${safeDbName}`;
-        const adminConnStr = `postgresql://${auth}@${dbConfig.host}:${dbConfig.port}/postgres`;
-
-        // Check and auto-create database if not exists
-        try {
-          const adminClient = new Client({ connectionString: adminConnStr, connectionTimeoutMillis: 5000 });
-          await adminClient.connect();
-          const checkRes = await adminClient.query('SELECT 1 FROM pg_database WHERE datname = $1', [safeDbName]);
-          if (checkRes.rowCount === 0) {
-            await adminClient.query(`CREATE DATABASE "${safeDbName}"`);
-          }
-          await adminClient.end();
-        } catch (dbCreateErr: any) {
-          console.warn('Postgres database auto-create notice:', dbCreateErr?.message);
-        }
-
-        await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify({
-          engine: 'postgres',
-          connectionString: connStr,
-          dbName: safeDbName
-        }, null, 2), 'utf-8');
-
-        // Connect and activate pool in-memory so subsequent setDbData writes directly to PostgreSQL!
-        try {
-          const pool = await connectPgDb(connStr);
-          activePgPools['default'] = pool;
-          usePgMap['default'] = true;
-          await ensurePostgresTables(pool);
-        } catch (connectErr: any) {
-          console.error('Failed to connect and initialize PostgreSQL tables:', connectErr?.message);
-        }
-      } catch (err: any) {
-        console.warn('Could not save DB_CONFIG_FILE:', err?.message);
-      }
-    } else {
-      activePgPools['default'] = null;
-      usePgMap['default'] = false;
-      try {
-        await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify({
-          engine: 'json',
-          storage: 'local_file'
-        }, null, 2), 'utf-8');
-      } catch (_) {}
+    // 1. Configure DB - PostgreSQL is strictly required
+    if (!dbConfig || dbConfig.engine !== 'postgres') {
+      return res.status(400).json({ 
+        error: 'سیستم فقط با اتصال به PostgreSQL قابل راه‌اندازی است. لطفاً مشخصات سرور PostgreSQL را وارد نمایید.' 
+      });
     }
+
+    const host = dbConfig.host || 'localhost';
+    const port = dbConfig.port || '5432';
+    const user = dbConfig.user || 'postgres';
+    const password = dbConfig.password || '';
+    const auth = password ? `${user}:${encodeURIComponent(password)}` : user;
+    const targetDb = (dbConfig.dbName || 'store_db').trim();
+    const safeDbName = targetDb.replace(/[^a-zA-Z0-9_]/g, '') || 'store_db';
+    const connStr = `postgresql://${auth}@${host}:${port}/${safeDbName}`;
+    const adminConnStr = `postgresql://${auth}@${host}:${port}/postgres`;
+
+    // Check and auto-create database on PostgreSQL server if not exists
+    try {
+      const adminClient = new Client({ connectionString: adminConnStr, connectionTimeoutMillis: 5000 });
+      await adminClient.connect();
+      const checkRes = await adminClient.query('SELECT 1 FROM pg_database WHERE datname = $1', [safeDbName]);
+      if (checkRes.rowCount === 0) {
+        await adminClient.query(`CREATE DATABASE "${safeDbName}"`);
+      }
+      await adminClient.end();
+    } catch (dbCreateErr: any) {
+      console.warn('Postgres database auto-create notice:', dbCreateErr?.message);
+    }
+
+    // Save complete connection configuration in db_config.json
+    await fsPromises.writeFile(DB_CONFIG_FILE, JSON.stringify({
+      engine: 'postgres',
+      host,
+      port,
+      user,
+      password,
+      dbName: safeDbName,
+      connectionString: connStr
+    }, null, 2), 'utf-8');
+
+    // Connect and activate pool in-memory
+    const pool = await connectPgDb(connStr);
+    activePgPools['default'] = pool;
+    usePgMap['default'] = true;
+    await ensurePostgresTables(pool);
 
     // 2. Admin user creation
     const username = admin?.username?.trim() || 'admin';

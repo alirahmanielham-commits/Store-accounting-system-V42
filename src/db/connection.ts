@@ -42,9 +42,19 @@ export async function getDefaultPgConnectionString(): Promise<string | null> {
     try {
         const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
         const config = JSON.parse(configRaw);
-        const connectionString = decryptValue(config.connectionString);
-        if (config.engine === 'postgres' && connectionString) {
-            return connectionString;
+        if (config.engine === 'postgres') {
+            let connectionString = config.connectionString ? decryptValue(config.connectionString) : null;
+            if (!connectionString && config.host && config.user) {
+                const host = config.host;
+                const user = encodeURIComponent(config.user);
+                const pwd = encodeURIComponent(config.password || '');
+                const port = config.port || '5432';
+                const db = config.dbName || 'store_db';
+                connectionString = `postgresql://${user}:${pwd}@${host}:${port}/${db}`;
+            }
+            if (connectionString) {
+                return connectionString;
+            }
         }
     } catch (_) {}
 
@@ -53,11 +63,11 @@ export async function getDefaultPgConnectionString(): Promise<string | null> {
         const user = encodeURIComponent(process.env.SQL_USER);
         const pwd = encodeURIComponent(process.env.SQL_PASSWORD || '');
         const port = process.env.SQL_PORT || '5432';
-        const db = process.env.SQL_DB_NAME || 'postgres';
-        return `postgres://${user}:${pwd}@${host}:${port}/${db}`;
+        const db = process.env.SQL_DB_NAME || 'store_db';
+        return `postgresql://${user}:${pwd}@${host}:${port}/${db}`;
     }
 
-    if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres') && !process.env.DATABASE_URL.includes('user:pass@localhost')) {
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres') && !process.env.DATABASE_URL.includes('user:pass@localhost') && process.env.DATABASE_URL !== '23') {
         return process.env.DATABASE_URL;
     }
 
@@ -82,7 +92,7 @@ export async function loadPgPoolForStore(storeId: string) {
                     await ensurePostgresTables(pool);
                     return;
                 } catch (err: any) {
-                    console.warn('Postgres connection failed, using local database storage:', err?.message);
+                    console.error('PostgreSQL connection failed:', err?.message);
                 }
             }
             
@@ -91,12 +101,12 @@ export async function loadPgPoolForStore(storeId: string) {
             return;
         }
         
-        // For other stores
+        // For other stores: Isolated PostgreSQL database per business
         try {
             if (!activePgPools['default']) {
                 await loadPgPoolForStore('default');
             }
-            let business = null;
+            let business: any = null;
             if (usePgMap['default'] && activePgPools['default']) {
                 try {
                     const res = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [storeId]);
@@ -115,33 +125,21 @@ export async function loadPgPoolForStore(storeId: string) {
                 } catch (_) {}
             }
 
-            if (!business) {
-                try {
-                    const dataFile = path.join(process.cwd(), 'data.json');
-                    if (fs.existsSync(dataFile)) {
-                        const raw = await fsPromises.readFile(dataFile, 'utf8');
-                        const d = JSON.parse(raw);
-                        if (Array.isArray(d.businesses)) {
-                            business = d.businesses.find((b: any) => b.id === storeId);
-                        }
-                    }
-                } catch (_) {}
+            const connStr = await getDefaultPgConnectionString();
+            if (connStr) {
+                const url = new URL(connStr);
+                const cleanId = storeId.replace(/[^a-zA-Z0-9_]/g, '');
+                const dbName = (business && business.db_name) || ('store_' + cleanId);
+                url.pathname = `/${dbName}`;
+                const pool = await connectPgDb(url.toString());
+                activePgPools[storeId] = pool;
+                usePgMap[storeId] = true;
+                await ensurePostgresTables(pool);
+                return;
             }
-            
-            if (business && business.db_type === 'postgres') {
-                const connStr = await getDefaultPgConnectionString();
-                if (connStr) {
-                    const url = new URL(connStr);
-                    const dbName = business.db_name || ('store_' + storeId).replace(/[^a-zA-Z0-9_]/g, '');
-                    url.pathname = `/${dbName}`;
-                    const pool = await connectPgDb(url.toString());
-                    activePgPools[storeId] = pool;
-                    usePgMap[storeId] = true;
-                    await ensurePostgresTables(pool);
-                    return;
-                }
-            }
-        } catch(e) { console.error('ERROR in loadPgPoolForStore other:', e); }
+        } catch(e) { 
+            console.error('ERROR in loadPgPoolForStore for store ' + storeId + ':', e); 
+        }
         
         activePgPools[storeId] = null;
         usePgMap[storeId] = false;

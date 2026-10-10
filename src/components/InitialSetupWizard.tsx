@@ -6,7 +6,8 @@ import {
   Rocket, ShieldCheck, Sparkles, RefreshCw, Eye, EyeOff,
   Phone, MapPin, Tag, Check, ChevronLeft, ChevronRight,
   CreditCard, Coins, ShoppingBag, ArrowUpRight, HelpCircle,
-  FileText, Percent, Globe, AlertTriangle, PlusCircle, Layers
+  FileText, Percent, Globe, AlertTriangle, PlusCircle, Layers,
+  Plus, Clock, User, Building, Package, Shield, Lock, Radio
 } from 'lucide-react';
 import { numberToWords } from '../utils/format';
 
@@ -35,8 +36,8 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
     isComplete: false
   });
 
-  // Step 1: Database Model & Connection (Only in initial mode)
-  const [dbType, setDbType] = useState<'json' | 'postgres'>('json');
+  // Step 1: Database Model & Connection (PostgreSQL strictly required)
+  const [dbType, setDbType] = useState<'postgres'>('postgres');
   const [dbHost, setDbHost] = useState('localhost');
   const [dbPort, setDbPort] = useState('5432');
   const [dbUser, setDbUser] = useState('postgres');
@@ -149,6 +150,7 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
   const [customPersonBankName, setCustomPersonBankName] = useState('');
   const [customPersonAccountNumber, setCustomPersonAccountNumber] = useState('');
   const [customPersonSheba, setCustomPersonSheba] = useState('');
+  const [personSubTab, setPersonSubTab] = useState<'identity' | 'contact' | 'financial'>('identity');
 
   // Table Creation Progress State (107 tables)
   const [syncProgress, setSyncProgress] = useState<{
@@ -230,13 +232,6 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
   }, [isBusinessOnly]);
 
   const handleTestDb = async () => {
-    if (dbType === 'json') {
-      setDbTestResult({ 
-        success: true, 
-        message: 'موتور پایگاه داده محلی (JSON Storage) تایید شد و بدون نیاز به سرور خارجی آماده فعالیت است.' 
-      });
-      return;
-    }
     setDbTesting(true);
     setDbTestResult(null);
     try {
@@ -246,7 +241,15 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
       const res = await fetch('/api/db/test', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ connectionString: connStr, dbName: targetDb })
+        body: JSON.stringify({ 
+          connectionString: connStr, 
+          dbName: targetDb,
+          host: dbHost,
+          port: dbPort,
+          user: dbUser,
+          password: dbPass,
+          saveConfig: true
+        })
       });
       const data = await res.json();
       if (data.dbNotFound) {
@@ -264,7 +267,7 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
         });
       }
     } catch (err: any) {
-      setDbTestResult({ success: false, message: err?.message || 'خطا در ارتباط با سرور' });
+      setDbTestResult({ success: false, message: err?.message || 'خطا در ارتباط با سرور PostgreSQL' });
     } finally {
       setDbTesting(false);
     }
@@ -745,83 +748,39 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
               <div className="border-b border-slate-100 pb-4">
                 <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
                   <Database className="w-5 h-5 text-indigo-600" />
-                  مرحله ۱: انتخاب و پیکربندی موتور پایگاه داده
+                  مرحله ۱: پیکربندی و اتصال به پایگاه داده PostgreSQL
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  سامانه از دو حالت ذخیره‌سازی محلی فایل‌محور (JSON Local Database) و سرور سازمانی PostgreSQL / Cloud SQL پشتیبانی می‌کند.
+                  سیستم منحصراً با اتصال به سرور پایگاه داده PostgreSQL قابل راه‌اندازی است و اطلاعات کسب‌وکارها در پایگاه‌های داده مجزا ذخیره می‌گردند.
                 </p>
               </div>
 
-              {/* Mode Selection Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div
-                  onClick={() => setDbType('json')}
-                  className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                    dbType === 'json'
-                      ? 'bg-indigo-50/70 border-indigo-500 text-slate-900 ring-2 ring-indigo-500/20 shadow-sm'
-                      : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100/70 hover:border-slate-300'
-                  }`}
-                >
+              {/* PostgreSQL Engine Active Card */}
+              <div className="p-5 rounded-2xl border bg-indigo-50/70 border-indigo-500 text-slate-900 ring-2 ring-indigo-500/20 shadow-sm flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+                <div className="flex items-start gap-3.5">
+                  <div className="w-12 h-12 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center border border-sky-200 shrink-0">
+                    <Server className="w-6 h-6" />
+                  </div>
                   <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-600 flex items-center justify-center border border-indigo-200">
-                        <HardDrive className="w-5 h-5" />
-                      </div>
-                      {dbType === 'json' && (
-                        <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-600 text-white flex items-center gap-1 shadow-xs">
-                          <Check className="w-3 h-3" /> انتخاب شده
-                        </span>
-                      )}
+                    <div className="flex items-center gap-2 mb-1">
+                      <h3 className="font-black text-sm text-slate-900">موتور پایگاه داده PostgreSQL (الزامی)</h3>
+                      <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-emerald-600 text-white flex items-center gap-1">
+                        <Check className="w-3 h-3" /> موتور فعال سیستم
+                      </span>
                     </div>
-                    <h3 className="font-black text-sm text-slate-900 mb-1.5">پایگاه داده محلی توکار (JSON Storage)</h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      سریع‌ترین حالت راه‌اندازی بدون نیاز به سرور دیتابیس جداگانه. ایده‌آل برای شروع سریع، سیستم‌های مستقل و محیط پیش‌نمایش.
+                    <p className="text-xs text-slate-600 leading-relaxed">
+                      تفکیک پایگاه‌های داده برای هر کسب‌وکار، ثبت مستقیم تراکنش‌ها و نگهداری اطلاعات اتصال در فایل db_config.
                     </p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-200/70 flex items-center gap-1.5 text-[11px] text-emerald-700 font-bold">
-                    <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>موتور آماده به کار - بدون نیاز به تنظیمات سرور</span>
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => setDbType('postgres')}
-                  className={`p-5 rounded-2xl border transition-all cursor-pointer flex flex-col justify-between ${
-                    dbType === 'postgres'
-                      ? 'bg-indigo-50/70 border-indigo-500 text-slate-900 ring-2 ring-indigo-500/20 shadow-sm'
-                      : 'bg-slate-50/60 border-slate-200 text-slate-700 hover:bg-slate-100/70 hover:border-slate-300'
-                  }`}
-                >
-                  <div>
-                    <div className="flex items-center justify-between mb-3">
-                      <div className="w-10 h-10 rounded-xl bg-sky-100 text-sky-600 flex items-center justify-center border border-sky-200">
-                        <Server className="w-5 h-5" />
-                      </div>
-                      {dbType === 'postgres' && (
-                        <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-600 text-white flex items-center gap-1 shadow-xs">
-                          <Check className="w-3 h-3" /> انتخاب شده
-                        </span>
-                      )}
-                    </div>
-                    <h3 className="font-black text-sm text-slate-900 mb-1.5">سرور پایگاه داده PostgreSQL / Cloud SQL</h3>
-                    <p className="text-xs text-slate-500 leading-relaxed">
-                      اتصال سازمانی به PostgreSQL برای حجم‌های بزرگ مالی و چندین کاربر همزمان با قفل‌های تراکنشی سخت‌گیرانه.
-                    </p>
-                  </div>
-                  <div className="mt-4 pt-3 border-t border-slate-200/70 flex items-center gap-1.5 text-[11px] text-indigo-700 font-bold">
-                    <Database className="w-3.5 h-3.5" />
-                    <span>قابلیت مقیاس‌پذیری بالا و تراکنش‌های همزمان</span>
                   </div>
                 </div>
               </div>
 
               {/* PostgreSQL Config Form */}
-              {dbType === 'postgres' && (
-                <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-4 animate-in slide-in-from-top-2 duration-200">
-                  <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
-                    <Server className="w-4 h-4 text-sky-600" />
-                    <span>مشخصات اتصال به سرور PostgreSQL:</span>
-                  </div>
+              <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-4 animate-in slide-in-from-top-2 duration-200">
+                <div className="text-xs font-bold text-slate-800 flex items-center gap-2">
+                  <Server className="w-4 h-4 text-sky-600" />
+                  <span>مشخصات اتصال به سرور PostgreSQL:</span>
+                </div>
                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                     <div className="sm:col-span-2">
                       <label className="block text-xs font-bold text-slate-700 mb-1">آدرس سرور یا هاست (Host) *</label>
@@ -898,7 +857,6 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                     </div>
                   </div>
                 </div>
-              )}
 
               {/* DB Test Result Badge & Confirmation Banner */}
               {dbTestResult && (
@@ -1071,574 +1029,836 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
             </div>
           )}
 
-          {/* STEP 3: BUSINESS PROFILE */}
+          {/* STEP 3: BUSINESS PROFILE - SEPARATED & BEAUTIFUL */}
           {activeStepType === 'business' && (
             <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="border-b border-slate-100 pb-4">
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Building2 className="w-5 h-5 text-indigo-600" />
-                  {isBusinessOnly ? 'مرحله ۱: مشخصات و تنظیمات کسب‌وکار' : 'مرحله ۳: مشخصات و تنظیمات اولیه کسب‌وکار'}
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  نام تجاری، واحد پول رسمی، تقویم و اطلاعات ارتباطی فروشگاه در این بخش ثبت می‌شود.
-                </p>
+              <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-indigo-600" />
+                    {isBusinessOnly ? 'مرحله ۱: مشخصات و اطلاعات کسب‌وکار' : 'مرحله ۳: اطلاعات و تنظیمات کسب‌وکار'}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    تنظیم مشخصات هویتی کسب‌وکار، برند تجاری، واحد پول رسمی، نوع تقویم و اطلاعات مالیاتی به صورت تفکیک‌شده.
+                  </p>
+                </div>
+                <span className="self-start sm:self-auto text-[11px] font-bold px-3 py-1 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-200">
+                  تفکیک اطلاعات تجاری
+                </span>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    نام فروشگاه / کسب‌وکار <span className="text-rose-500">*</span>
-                  </label>
-                  <div className="relative">
-                    <Store className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      required
-                      value={storeName}
-                      onChange={e => setStoreName(e.target.value)}
-                      placeholder="مثال: فروشگاه بزرگ رایانه یا شرکت آرتان"
-                      className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none font-bold"
-                    />
-                  </div>
+              {/* Card 1: Brand & Identity */}
+              <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/90 space-y-4">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-800">
+                  <Store className="w-4 h-4 text-indigo-600" />
+                  <span>هویت تجاری و نام برند</span>
                 </div>
 
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">نام رسمی / حقوقی شرکت</label>
-                  <input
-                    type="text"
-                    value={companyName}
-                    onChange={e => setCompanyName(e.target.value)}
-                    placeholder="اختیاری - در صورت شرکت رسمی"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">حوزه فعالیت</label>
-                  <select
-                    value={activityField}
-                    onChange={e => setActivityField(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                  >
-                    <option value="خرده‌فروشی و بازرگانی">خرده‌فروشی و فروشگاهی</option>
-                    <option value="عمده‌فروشی و توزیع">عمده‌فروشی و پخش</option>
-                    <option value="خدماتی و پیمانکاری">خدماتی و مهندسی</option>
-                    <option value="تولیدی و کارگاهی">تولیدی و صنعتی</option>
-                    <option value="رستوران و فست‌فود">رستوران و کافه</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">واحد پول پیش‌فرض</label>
-                  <select
-                    value={currency}
-                    onChange={e => setCurrency(e.target.value)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none font-bold"
-                  >
-                    <option value="تومان">تومان (پیش‌فرض ایران)</option>
-                    <option value="ریال">ریال (رسمی)</option>
-                    <option value="USD">دلار آمریکا (USD)</option>
-                    <option value="EUR">یورو (EUR)</option>
-                  </select>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">نوع تقویم سیستم</label>
-                  <select
-                    value={calendarType}
-                    onChange={e => setCalendarType(e.target.value as any)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none font-bold"
-                  >
-                    <option value="jalali">هجری شمسی (جلالی)</option>
-                    <option value="gregorian">میلادی (Gregorian)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">شماره تلفن ثابت یا همراه</label>
-                  <div className="relative">
-                    <Phone className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={storePhone}
-                      onChange={e => setStorePhone(e.target.value)}
-                      placeholder="021-88888888"
-                      className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                      dir="ltr"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">شماره همراه مدیریت</label>
-                  <div className="relative">
-                    <Phone className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
-                    <input
-                      type="text"
-                      value={storeMobile}
-                      onChange={e => setStoreMobile(e.target.value)}
-                      placeholder="09120000000"
-                      className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                      dir="ltr"
-                    />
-                  </div>
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">شناسه ملی / کد اقتصادی</label>
-                  <input
-                    type="text"
-                    value={nationalId}
-                    onChange={e => setNationalId(e.target.value)}
-                    placeholder="اختیاری"
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">درصد مالیات ارزش افزوده پیش‌فرض</label>
-                  <div className="flex items-center gap-2">
-                    <div className="relative flex-1">
-                      <Percent className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                      نام فروشگاه یا کسب‌وکار <span className="text-rose-500">*</span>
+                    </label>
+                    <div className="relative">
+                      <Store className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
                       <input
-                        type="number"
-                        value={taxPercent}
-                        onChange={e => setTaxPercent(e.target.value)}
-                        placeholder="0 یا 10"
-                        className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none font-bold"
+                        type="text"
+                        required
+                        value={storeName}
+                        onChange={e => setStoreName(e.target.value)}
+                        placeholder="مثال: فروشگاه بزرگ رایانه یا شرکت آرتان"
+                        className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none font-bold"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">نام رسمی / ثبتی شرکت (اختیاری)</label>
+                    <div className="relative">
+                      <Building className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={companyName}
+                        onChange={e => setCompanyName(e.target.value)}
+                        placeholder="مثال: بازرگانی نوآوران تجارت آریا"
+                        className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">حوزه فعالیت و صنف</label>
+                    <select
+                      value={activityField}
+                      onChange={e => setActivityField(e.target.value)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none font-bold"
+                    >
+                      <option value="خرده‌فروشی و بازرگانی">خرده‌فروشی و فروشگاهی</option>
+                      <option value="عمده‌فروشی و توزیع">عمده‌فروشی و پخش کالا</option>
+                      <option value="خدماتی و پیمانکاری">خدماتی، مهندسی و پیمانکاری</option>
+                      <option value="تولیدی و کارگاهی">تولیدی و کارگاهی صنعتی</option>
+                      <option value="رستوران و فست‌فود">رستوران، کافه و صنایع غذایی</option>
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">شناسه ملی / کد اقتصادی</label>
+                    <input
+                      type="text"
+                      value={nationalId}
+                      onChange={e => setNationalId(e.target.value)}
+                      placeholder="شناسه ملی ۱۱ رقمی یا کد اقتصادی"
+                      className="w-full px-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2: Currency & Calendar Settings */}
+              <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/90 space-y-4">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-800">
+                  <Coins className="w-4 h-4 text-amber-600" />
+                  <span>پیکربندی مالی و تقویم سیستم</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">واحد پول سیستم</label>
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                      {[
+                        { id: 'تومان', label: 'تومان', desc: 'پیش‌فرض' },
+                        { id: 'ریال', label: 'ریال', desc: 'رسمی' },
+                        { id: 'USD', label: 'دلار (USD)', desc: 'بین‌الملل' },
+                        { id: 'EUR', label: 'یورو (EUR)', desc: 'بین‌الملل' },
+                      ].map(c => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => setCurrency(c.id)}
+                          className={`p-2.5 rounded-xl border text-center transition-all cursor-pointer ${
+                            currency === c.id
+                              ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/20 ring-2 ring-indigo-500/20'
+                              : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          <div className="text-xs font-black">{c.label}</div>
+                          <div className={`text-[10px] ${currency === c.id ? 'text-indigo-100' : 'text-slate-400'}`}>{c.desc}</div>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-2">نوع تقویم و تاریخ سیستم</label>
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setCalendarType('jalali')}
+                        className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          calendarType === 'jalali'
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/20 ring-2 ring-indigo-500/20'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <Calendar className="w-4 h-4" />
+                        <span className="text-xs font-bold">هجری شمسی (جلالی)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setCalendarType('gregorian')}
+                        className={`p-2.5 rounded-xl border flex items-center justify-center gap-2 transition-all cursor-pointer ${
+                          calendarType === 'gregorian'
+                            ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm shadow-indigo-600/20 ring-2 ring-indigo-500/20'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        <Globe className="w-4 h-4" />
+                        <span className="text-xs font-bold">میلادی (Gregorian)</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3: Contact and Address */}
+              <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/90 space-y-4">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-800">
+                  <Phone className="w-4 h-4 text-emerald-600" />
+                  <span>اطلاعات تماس و نشانی</span>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">شماره تلفن ثابت فروشگاه</label>
+                    <div className="relative">
+                      <Phone className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={storePhone}
+                        onChange={e => setStorePhone(e.target.value)}
+                        placeholder="021-88888888"
+                        className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
                         dir="ltr"
                       />
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => setTaxPercent('0')}
-                      className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                        taxPercent === '0' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-                      }`}
-                    >
-                      ۰٪ (معاف)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setTaxPercent('10')}
-                      className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
-                        taxPercent === '10' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-slate-100 text-slate-700 border-slate-200 hover:bg-slate-200'
-                      }`}
-                    >
-                      ۱۰٪ (قانونی)
-                    </button>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">شماره همراه مدیریت</label>
+                    <div className="relative">
+                      <Phone className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
+                      <input
+                        type="text"
+                        value={storeMobile}
+                        onChange={e => setStoreMobile(e.target.value)}
+                        placeholder="09120000000"
+                        className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                        dir="ltr"
+                      />
+                    </div>
                   </div>
                 </div>
 
                 <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">فرمت پیش‌فرض چاپ فاکتور</label>
-                  <select
-                    value={invoicePrintFormat}
-                    onChange={e => setInvoicePrintFormat(e.target.value as any)}
-                    className="w-full px-3 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none font-bold"
-                  >
-                    <option value="standard">فاکتور استاندارد A4 / A5 شرکتی</option>
-                    <option value="official">فاکتور رسمی دارایی (ماده ۱۶۹)</option>
-                    <option value="thermal">فیش حرارتی ۸۰ میلی‌متری (فروشگاهی / POS)</option>
-                  </select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">نشانی و آدرس کسب‌وکار</label>
-                <div className="relative">
-                  <MapPin className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
-                  <input
-                    type="text"
-                    value={storeAddress}
-                    onChange={e => setStoreAddress(e.target.value)}
-                    placeholder="تهران، خیابان ولیعصر، پلاک ..."
-                    className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                  />
-                </div>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 4: FISCAL YEAR */}
-          {activeStepType === 'fiscal' && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="border-b border-slate-100 pb-4">
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Calendar className="w-5 h-5 text-indigo-600" />
-                  {isBusinessOnly ? 'مرحله ۲: تعریف سال مالی کسب‌وکار' : 'مرحله ۴: تعریف سال مالی کسب‌وکار'}
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  تمامی اسناد حسابداری، فاکتورها، انبارداری و ترازهای مالی بر اساس سال مالی باز ردیابی می‌شوند.
-                </p>
-              </div>
-
-              {/* Quick Presets */}
-              <div className="flex flex-wrap items-center gap-2 pb-1">
-                <span className="text-xs text-slate-500 font-bold ml-1">دوره‌های سریع:</span>
-                {calendarType === 'jalali' ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFiscalYearName(`سال مالی ${currentJalaliYear}`);
-                        setFiscalYearCode(`FY-${currentJalaliYear}`);
-                        setFiscalYearStart(`${currentJalaliYear}/01/01`);
-                        setFiscalYearEnd(`${currentJalaliYear}/12/29`);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      سال مالی جاری ({currentJalaliYear})
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFiscalYearName(`سال مالی ${currentJalaliYear + 1}`);
-                        setFiscalYearCode(`FY-${currentJalaliYear + 1}`);
-                        setFiscalYearStart(`${currentJalaliYear + 1}/01/01`);
-                        setFiscalYearEnd(`${currentJalaliYear + 1}/12/29`);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      سال مالی آینده ({currentJalaliYear + 1})
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setFiscalYearName(`Fiscal Year ${currentGregorianYear}`);
-                        setFiscalYearCode(`FY-${currentGregorianYear}`);
-                        setFiscalYearStart(`${currentGregorianYear}-01-01`);
-                        setFiscalYearEnd(`${currentGregorianYear}-12-31`);
-                      }}
-                      className="px-3 py-1.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
-                    >
-                      Current Year ({currentGregorianYear})
-                    </button>
-                  </>
-                )}
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    عنوان دوره مالی <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={fiscalYearName}
-                    onChange={e => setFiscalYearName(e.target.value)}
-                    placeholder={`سال مالی ${currentJalaliYear}`}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">کد شناسایی سال مالی *</label>
-                  <input
-                    type="text"
-                    value={fiscalYearCode}
-                    onChange={e => setFiscalYearCode(e.target.value)}
-                    placeholder={`FY-${currentJalaliYear}`}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-indigo-700 font-mono text-left text-xs font-bold focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    تاریخ شروع سال مالی <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={fiscalYearStart}
-                    onChange={e => setFiscalYearStart(e.target.value)}
-                    placeholder={calendarType === 'jalali' ? `${currentJalaliYear}/01/01` : `${currentGregorianYear}-01-01`}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none font-bold"
-                    dir="ltr"
-                  />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                    تاریخ پایان سال مالی <span className="text-rose-500">*</span>
-                  </label>
-                  <input
-                    type="text"
-                    value={fiscalYearEnd}
-                    onChange={e => setFiscalYearEnd(e.target.value)}
-                    placeholder={calendarType === 'jalali' ? `${currentJalaliYear}/12/29` : `${currentGregorianYear}-12-31`}
-                    className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none font-bold"
-                    dir="ltr"
-                  />
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1.5">توضیحات و شرح افتتاح دوره</label>
-                <input
-                  type="text"
-                  value={fiscalYearDesc}
-                  onChange={e => setFiscalYearDesc(e.target.value)}
-                  placeholder="افتتاحیه سال مالی جدید"
-                  className="w-full px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                />
-              </div>
-
-              <div className="p-4 bg-indigo-50/70 rounded-2xl border border-indigo-200/80 flex items-center justify-between gap-2 text-xs text-indigo-900">
-                <div className="flex items-center gap-2">
-                  <CheckCircle2 className="w-4 h-4 shrink-0 text-indigo-600" />
-                  <span>این دوره مالی به صورت خودکار به عنوان دوره فعال و باز (Status: Open) در سیستم قرار خواهد گرفت.</span>
-                </div>
-                <span className="px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-800 border border-emerald-200 font-bold text-[11px] shrink-0">
-                  وضعیت: باز
-                </span>
-              </div>
-            </div>
-          )}
-
-          {/* STEP 5: BANK, CASH & WAREHOUSE */}
-          {activeStepType === 'infrastructure' && (
-            <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="border-b border-slate-100 pb-4">
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <Landmark className="w-5 h-5 text-indigo-600" />
-                  {isBusinessOnly ? 'مرحله ۳: زیرساخت مالی و عملیاتی (بانک، صندوق و انبار)' : 'مرحله ۵: زیرساخت مالی و عملیاتی (بانک، صندوق و انبار)'}
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  تعریف حداقل یک حساب بانکی، صندوق نقدینگی و انبار اصلی برای انجام دریافت، پرداخت و گردش کالا.
-                </p>
-              </div>
-
-              {/* Bank Account Section */}
-              <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-4">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2 text-xs font-black text-slate-900">
-                    <CreditCard className="w-4 h-4 text-emerald-600" />
-                    <span>حساب بانکی اولیه</span>
+                  <label className="block text-xs font-bold text-slate-700 mb-1.5">نشانی و آدرس کسب‌وکار</label>
+                  <div className="relative">
+                    <MapPin className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
+                    <input
+                      type="text"
+                      value={storeAddress}
+                      onChange={e => setStoreAddress(e.target.value)}
+                      placeholder="تهران، خیابان ولیعصر، پلاک ..."
+                      className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none"
+                    />
                   </div>
-                  <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-bold">پیش‌فرض دریافت و پرداخت</span>
+                </div>
+              </div>
+
+              {/* Card 4: Tax & Invoice Format */}
+              <div className="bg-slate-50/80 p-5 rounded-2xl border border-slate-200/90 space-y-4">
+                <div className="flex items-center gap-2 text-xs font-black text-slate-800">
+                  <FileText className="w-4 h-4 text-sky-600" />
+                  <span>تنظیمات فاکتور و مالیات</span>
                 </div>
 
-                {/* Popular Bank Selector */}
-                <div>
-                  <span className="block text-[11px] font-bold text-slate-500 mb-1.5">بانک‌های پرکاربرد:</span>
-                  <div className="flex flex-wrap gap-1.5">
-                    {popularBanks.map(b => (
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">درصد مالیات ارزش افزوده پیش‌فرض</label>
+                    <div className="flex items-center gap-2">
+                      <div className="relative flex-1">
+                        <Percent className="absolute right-3.5 top-3 w-4 h-4 text-slate-400" />
+                        <input
+                          type="number"
+                          value={taxPercent}
+                          onChange={e => setTaxPercent(e.target.value)}
+                          placeholder="0 یا 10"
+                          className="w-full pr-10 pl-3.5 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none font-bold"
+                          dir="ltr"
+                        />
+                      </div>
                       <button
-                        key={b}
                         type="button"
-                        onClick={() => setBankName(b)}
-                        className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                          bankName === b 
-                            ? 'bg-emerald-600 text-white border border-emerald-600 shadow-xs' 
-                            : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                        onClick={() => setTaxPercent('0')}
+                        className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          taxPercent === '0' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
-                        {b}
+                        ۰٪ (معاف)
                       </button>
-                    ))}
+                      <button
+                        type="button"
+                        onClick={() => setTaxPercent('10')}
+                        className={`px-3 py-2.5 rounded-xl text-xs font-bold border transition-colors cursor-pointer ${
+                          taxPercent === '10' ? 'bg-indigo-600 text-white border-indigo-600 shadow-xs' : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                        }`}
+                      >
+                        ۱۰٪ (قانونی)
+                      </button>
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">فرمت پیش‌فرض چاپ فاکتور</label>
+                    <select
+                      value={invoicePrintFormat}
+                      onChange={e => setInvoicePrintFormat(e.target.value as any)}
+                      className="w-full px-3 py-2.5 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none font-bold"
+                    >
+                      <option value="standard">فاکتور استاندارد A4 / A5 شرکتی</option>
+                      <option value="official">فاکتور رسمی دارایی (ماده ۱۶۹)</option>
+                      <option value="thermal">فیش حرارتی ۸۰ میلی‌متری (فروشگاهی / POS)</option>
+                    </select>
                   </div>
                 </div>
+              </div>
+            </div>
+          )}
 
-                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">نام بانک *</label>
-                    <input
-                      type="text"
-                      value={bankName}
-                      onChange={e => setBankName(e.target.value)}
-                      placeholder="بانک ملت"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none font-bold"
-                    />
+          {/* STEP 4: FISCAL YEAR - EXACTLY MATCHING FinancialYearManager.tsx */}
+          {activeStepType === 'fiscal' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              
+              {/* Header Status Card - exactly like FinancialYearManager */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                  <div className="flex items-center gap-2">
+                    <Calendar className="w-5 h-5 text-indigo-600" />
+                    <div>
+                      <h3 className="font-black text-slate-800 text-base">وضعیت دوره سال مالی سیستم</h3>
+                      <p className="text-xs text-slate-500">مشخصات دوره افتتاحیه برای صدور اسناد حسابداری، فاکتورها و عملیات انبار</p>
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">نام یا کد شعبه</label>
-                    <input
-                      type="text"
-                      value={bankBranchName}
-                      onChange={e => setBankBranchName(e.target.value)}
-                      placeholder="شعبه مرکزی"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">نام دارنده حساب</label>
-                    <input
-                      type="text"
-                      value={bankAccountHolder}
-                      onChange={e => setBankAccountHolder(e.target.value)}
-                      placeholder={companyName || storeName || "نام صاحب حساب"}
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره حساب</label>
-                    <input
-                      type="text"
-                      value={bankAccountNumber}
-                      onChange={e => setBankAccountNumber(e.target.value)}
-                      placeholder="123456789"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                      dir="ltr"
-                    />
+                  <div className="flex items-center gap-2 self-start sm:self-auto">
+                    <span className="flex h-2.5 w-2.5 relative">
+                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
+                      <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500"></span>
+                    </span>
+                    <span className="text-xs font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-full border border-emerald-200">
+                      فعال و آماده کار
+                    </span>
                   </div>
                 </div>
 
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره کارت (۱۶ رقمی)</label>
-                    <input
-                      type="text"
-                      value={bankCardNumber}
-                      onChange={e => setBankCardNumber(e.target.value)}
-                      placeholder="6104-3378-..."
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                      dir="ltr"
-                    />
+                  <div className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-3.5">
+                    <span className="text-xs font-bold text-slate-400 block mb-1">سال مالی فعال</span>
+                    <span className="font-black text-slate-800 text-sm">{fiscalYearName || `سال مالی ${currentJalaliYear}`}</span>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره شبا (IBAN)</label>
-                    <input
-                      type="text"
-                      value={bankSheba}
-                      onChange={e => setBankSheba(e.target.value)}
-                      placeholder="IR123456789..."
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                      dir="ltr"
-                    />
+                  <div className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-3.5">
+                    <span className="text-xs font-bold text-slate-400 block mb-1">محدوده سال مالی فعال</span>
+                    <span className="font-mono font-bold text-slate-700 text-xs" dir="ltr">{fiscalYearStart} تا {fiscalYearEnd}</span>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">موجودی اولیه ({currency})</label>
-                    <input
-                      type="number"
-                      value={bankInitialBalance}
-                      onChange={e => setBankInitialBalance(e.target.value)}
-                      placeholder="0"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-emerald-700 font-bold font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                      dir="ltr"
-                    />
-                    {Number(bankInitialBalance) > 0 && (
-                      <span className="block text-[10px] text-emerald-700 font-bold mt-1 truncate">
-                        {numberToWords(bankInitialBalance)} {currency}
-                      </span>
-                    )}
+                  <div className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-3.5">
+                    <span className="text-xs font-bold text-slate-400 block mb-1">کد شناسایی دوره</span>
+                    <span className="font-mono font-bold text-indigo-700 text-xs" dir="ltr">{fiscalYearCode}</span>
                   </div>
                 </div>
               </div>
 
-              {/* Cashbox & Warehouse Grid */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                
-                {/* Cashbox */}
-                <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-black text-slate-900">
-                    <Wallet className="w-4 h-4 text-amber-600" />
-                    <span>صندوق نقدی و تنخواه‌گردان</span>
+              {/* Form panel titled "تعریف سال مالی جدید" - identical to FinancialYearManager form */}
+              <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
+                <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
+                  <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                    <Plus className="w-5 h-5 text-emerald-500" />
+                    تعریف سال مالی جدید
+                  </h3>
+
+                  {/* Quick Preset Buttons */}
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="text-xs text-slate-400 font-bold ml-1 hidden sm:inline">انتخاب سریع:</span>
+                    {calendarType === 'jalali' ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFiscalYearName(`سال مالی ${currentJalaliYear}`);
+                            setFiscalYearCode(`FY-${currentJalaliYear}`);
+                            setFiscalYearStart(`${currentJalaliYear}/01/01`);
+                            setFiscalYearEnd(`${currentJalaliYear}/12/29`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          سال مالی جاری ({currentJalaliYear})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setFiscalYearName(`سال مالی ${currentJalaliYear + 1}`);
+                            setFiscalYearCode(`FY-${currentJalaliYear + 1}`);
+                            setFiscalYearStart(`${currentJalaliYear + 1}/01/01`);
+                            setFiscalYearEnd(`${currentJalaliYear + 1}/12/29`);
+                          }}
+                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          سال مالی آینده ({currentJalaliYear + 1})
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setFiscalYearName(`Fiscal Year ${currentGregorianYear}`);
+                          setFiscalYearCode(`FY-${currentGregorianYear}`);
+                          setFiscalYearStart(`${currentGregorianYear}-01-01`);
+                          setFiscalYearEnd(`${currentGregorianYear}-12-31`);
+                        }}
+                        className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
+                      >
+                        Fiscal Year {currentGregorianYear}
+                      </button>
+                    )}
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+                </div>
+
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">نام صندوق / تنخواه *</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">عنوان سال مالی *</label>
+                      <input
+                        type="text"
+                        required
+                        value={fiscalYearName}
+                        onChange={e => setFiscalYearName(e.target.value)}
+                        placeholder={`مثال: سال مالی ${currentJalaliYear}`}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-bold text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">کد شناسایی سال مالی *</label>
+                      <input
+                        type="text"
+                        value={fiscalYearCode}
+                        onChange={e => setFiscalYearCode(e.target.value)}
+                        placeholder={`FY-${currentJalaliYear}`}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-indigo-700 text-left focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
+                        dir="ltr"
+                      />
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">تاریخ شروع سال مالی *</label>
+                      <input
+                        type="text"
+                        value={fiscalYearStart}
+                        onChange={e => setFiscalYearStart(e.target.value)}
+                        placeholder={calendarType === 'jalali' ? `${currentJalaliYear}/01/01` : `${currentGregorianYear}-01-01`}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 text-left focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">تاریخ پایان سال مالی *</label>
+                      <input
+                        type="text"
+                        value={fiscalYearEnd}
+                        onChange={e => setFiscalYearEnd(e.target.value)}
+                        placeholder={calendarType === 'jalali' ? `${currentJalaliYear}/12/29` : `${currentGregorianYear}-12-31`}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 text-left focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
+                        dir="ltr"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-700 mb-1.5">توضیحات (اختیاری)</label>
+                    <textarea
+                      rows={2}
+                      value={fiscalYearDesc}
+                      onChange={e => setFiscalYearDesc(e.target.value)}
+                      placeholder="توضیحات مربوط به سال مالی..."
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs text-slate-900 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none resize-none"
+                    />
+                  </div>
+
+                  <div className="p-3.5 bg-emerald-50/70 rounded-xl border border-emerald-200/80 flex items-center gap-2.5 text-xs text-emerald-900 font-bold">
+                    <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                    <span>این سال مالی به عنوان دوره افتتاحیه و باز (Open) در سیستم ثبت شده و آماده ثبت اسناد و فاکتورها خواهد بود.</span>
+                  </div>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {/* STEP 5: BANK, CASH & WAREHOUSE - EXACTLY MATCHING AccountFormModal.tsx & CashboxFormModal.tsx */}
+          {activeStepType === 'infrastructure' && (
+            <div className="space-y-6 animate-in fade-in duration-300">
+              <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <Landmark className="w-5 h-5 text-indigo-600" />
+                    {isBusinessOnly ? 'مرحله ۳: زیرساخت مالی و عملیاتی (بانک، صندوق و انبار)' : 'مرحله ۵: زیرساخت مالی و عملیاتی (بانک، صندوق و انبار)'}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    طراحی منطبق با فرم‌های سیستم جهت تعریف حساب بانکی اولیه، صندوق نقدی و انبار مرکزی کالاها.
+                  </p>
+                </div>
+                <span className="self-start sm:self-auto text-[11px] font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                  تراز افتتاحیه نقد و بانک
+                </span>
+              </div>
+
+              {/* Bank Account Section - Matching AccountFormModal.tsx */}
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-emerald-50/30">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                      <CreditCard className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h3 className="text-sm font-black text-slate-900 flex items-center gap-2">
+                        ثبت حساب بانکی اولیه
+                        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+                          حساب پیش‌فرض سیستم
+                        </span>
+                      </h3>
+                      <p className="text-xs text-slate-500 font-medium mt-0.5">
+                        مشخصات حساب بانکی جهت دریافت، پرداخت، واریز فاکتورها و تراکنش‌های دستگاه کارتخوان (POS)
+                      </p>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="p-6 space-y-6">
+                  {/* Top: Card Visual Preview & Popular Banks */}
+                  <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 items-center">
+                    {/* Realistic Bank Card Visual */}
+                    <div className="lg:col-span-1">
+                      <div className="relative w-full h-44 rounded-2xl p-5 text-white shadow-xl overflow-hidden bg-gradient-to-br from-slate-900 via-indigo-950 to-slate-800 border border-slate-700/60 flex flex-col justify-between">
+                        {/* Card Glow FX */}
+                        <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full blur-2xl pointer-events-none" />
+                        <div className="absolute bottom-0 left-0 w-32 h-32 bg-emerald-500/10 rounded-full blur-2xl pointer-events-none" />
+
+                        {/* Card Top Row */}
+                        <div className="flex items-center justify-between relative z-10">
+                          <div className="flex items-center gap-2">
+                            <Landmark className="w-4 h-4 text-emerald-400" />
+                            <span className="text-xs font-black tracking-wide">{bankName || 'بانک ملت'}</span>
+                          </div>
+                          <span className="text-[10px] font-mono font-bold text-slate-400 tracking-wider">DEBIT CARD</span>
+                        </div>
+
+                        {/* Card Chip & Contactless */}
+                        <div className="flex items-center gap-3 relative z-10 my-1">
+                          <div className="w-9 h-7 rounded-md bg-gradient-to-tr from-amber-300 via-amber-200 to-amber-400 border border-amber-400/80 shadow-xs flex items-center justify-center">
+                            <div className="w-full h-[1px] bg-amber-500/40 my-auto" />
+                          </div>
+                          <Radio className="w-4 h-4 text-slate-400 rotate-90" />
+                        </div>
+
+                        {/* Card Number */}
+                        <div className="relative z-10">
+                          <div className="font-mono text-sm sm:text-base tracking-widest text-slate-100 font-bold" dir="ltr">
+                            {bankCardNumber ? (
+                              bankCardNumber.replace(/(\d{4})/g, '$1 ').trim()
+                            ) : (
+                              '6037 •••• •••• 1234'
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Card Bottom Row: Holder & Sheba */}
+                        <div className="flex items-end justify-between relative z-10 text-[10px]">
+                          <div>
+                            <span className="text-[9px] text-slate-400 block font-bold">صاحب حساب:</span>
+                            <span className="font-bold text-slate-200 truncate max-w-[140px] block">
+                              {bankAccountHolder || companyName || storeName || 'دارنده حساب'}
+                            </span>
+                          </div>
+                          <div className="text-left font-mono" dir="ltr">
+                            <span className="text-[9px] text-slate-400 block text-right">IBAN:</span>
+                            <span className="text-[10px] text-emerald-300 font-bold">
+                              {bankSheba ? (bankSheba.startsWith('IR') ? bankSheba.slice(0, 8) + '...' : 'IR' + bankSheba.slice(0, 6) + '...') : 'IR•• •••• ••••'}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Quick Popular Banks Selector */}
+                    <div className="lg:col-span-2 space-y-3 bg-slate-50/70 p-4 rounded-xl border border-slate-200/80">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-black text-slate-700">انتخاب سریع از میان بانک‌های پرکاربرد کشور:</span>
+                        <span className="text-[10px] text-slate-400 font-bold">کلیک برای تکمیل خودکار</span>
+                      </div>
+                      <div className="flex flex-wrap gap-1.5">
+                        {popularBanks.map(b => (
+                          <button
+                            key={b}
+                            type="button"
+                            onClick={() => {
+                              setBankName(b);
+                              if (!bankBranchName) setBankBranchName('شعبه مرکزی');
+                            }}
+                            className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                              bankName === b 
+                                ? 'bg-indigo-600 text-white shadow-xs ring-2 ring-indigo-500/20' 
+                                : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200 shadow-2xs'
+                            }`}
+                          >
+                            {b}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Form Fields - Grid identical to AccountFormModal */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-5 text-right pt-2 border-t border-slate-100">
+                    <div className="w-full text-right">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        نام بانک <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={bankName}
+                        onChange={e => setBankName(e.target.value)}
+                        placeholder="مثال: بانک ملی، بانک ملت"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div className="w-full text-right">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        نام صاحب حساب <span className="text-rose-500">*</span>
+                      </label>
+                      <input
+                        type="text"
+                        value={bankAccountHolder}
+                        onChange={e => setBankAccountHolder(e.target.value)}
+                        placeholder={companyName || storeName || "مثال: علی محمدی"}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                        required
+                      />
+                    </div>
+
+                    <div className="w-full text-right">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        شماره حساب
+                      </label>
+                      <input
+                        type="text"
+                        value={bankAccountNumber}
+                        onChange={e => setBankAccountNumber(e.target.value)}
+                        placeholder="مثال: 0102030405"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-left font-mono text-xs outline-none"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div className="w-full text-right">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        شماره کارت (۱۶ رقمی)
+                      </label>
+                      <input
+                        type="text"
+                        value={bankCardNumber}
+                        onChange={e => setBankCardNumber(e.target.value)}
+                        placeholder="6104-3378-..."
+                        maxLength={19}
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-left font-mono text-xs outline-none"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div className="w-full text-right md:col-span-2">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        شماره شبا (IBAN)
+                      </label>
+                      <input
+                        type="text"
+                        value={bankSheba}
+                        onChange={e => setBankSheba(e.target.value)}
+                        placeholder="مثال: IR12017000000000..."
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-left font-mono text-xs outline-none"
+                        dir="ltr"
+                      />
+                    </div>
+
+                    <div className="w-full text-right">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        نام شعبه
+                      </label>
+                      <input
+                        type="text"
+                        value={bankBranchName}
+                        onChange={e => setBankBranchName(e.target.value)}
+                        placeholder="مثال: شعبه مرکزی"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs outline-none"
+                      />
+                    </div>
+
+                    <div className="w-full text-right">
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        موجودی اولیه ({currency})
+                      </label>
+                      <input
+                        type="number"
+                        value={bankInitialBalance}
+                        onChange={e => setBankInitialBalance(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-emerald-700 font-bold font-mono text-left text-xs outline-none"
+                        dir="ltr"
+                      />
+                      {Number(bankInitialBalance) > 0 && (
+                        <div className="mt-1.5 p-2 bg-emerald-50 rounded-lg border border-emerald-100 flex items-center gap-1.5 text-[11px] text-emerald-800 font-bold">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span className="truncate">{numberToWords(bankInitialBalance)} {currency}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cashbox & Warehouse Grid - Matching CashboxFormModal.tsx & System Design */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                
+                {/* Cashbox Section - Exactly matching CashboxFormModal */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-amber-50/30">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-amber-500 text-white flex items-center justify-center shadow-md shadow-amber-500/20 shrink-0">
+                        <Wallet className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900">
+                          ثبت صندوق یا تنخواه جدید
+                        </h3>
+                        <p className="text-xs text-slate-500 font-medium">
+                          صندوق نقدی پیش‌فرض دریافت و پرداخت اسکناس
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-700 border border-amber-200">
+                      صندوق ۱
+                    </span>
+                  </div>
+
+                  <div className="p-5 flex-1 space-y-4">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        نام صندوق / تنخواه <span className="text-rose-500">*</span>
+                      </label>
                       <input
                         type="text"
                         value={cashboxName}
                         onChange={e => setCashboxName(e.target.value)}
-                        placeholder="صندوق مرکزی"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none font-bold"
+                        placeholder="مثال: صندوق اصلی، تنخواه دفتر"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                        required
                       />
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">مسئول صندوق</label>
-                      <input
-                        type="text"
-                        value={cashboxManager}
-                        onChange={e => setCashboxManager(e.target.value)}
-                        placeholder="مسئول صندوق"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                      />
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          نام مسئول صندوق
+                        </label>
+                        <input
+                          type="text"
+                          value={cashboxManager}
+                          onChange={e => setCashboxManager(e.target.value)}
+                          placeholder="مثال: سارا احمدی"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs outline-none"
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          کد تفصیلی / شماره حساب
+                        </label>
+                        <input
+                          type="text"
+                          value={cashboxAccountNumber}
+                          onChange={e => setCashboxAccountNumber(e.target.value)}
+                          placeholder="101"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none"
+                          dir="ltr"
+                        />
+                      </div>
                     </div>
-                  </div>
-                  <div className="grid grid-cols-2 gap-2">
+
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره حساب / کد تفصیلی</label>
-                      <input
-                        type="text"
-                        value={cashboxAccountNumber}
-                        onChange={e => setCashboxAccountNumber(e.target.value)}
-                        placeholder="101"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                        dir="ltr"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">موجودی نقدی اولیه ({currency})</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        موجودی نقدی اولیه ({currency})
+                      </label>
                       <input
                         type="number"
                         value={cashboxInitialBalance}
                         onChange={e => setCashboxInitialBalance(e.target.value)}
                         placeholder="0"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-amber-700 font-bold font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-amber-700 font-bold font-mono text-left text-xs outline-none"
                         dir="ltr"
                       />
+                      {Number(cashboxInitialBalance) > 0 && (
+                        <div className="mt-1.5 p-2 bg-amber-50 rounded-lg border border-amber-100 flex items-center gap-1.5 text-[11px] text-amber-800 font-bold">
+                          <Check className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                          <span className="truncate">{numberToWords(cashboxInitialBalance)} {currency}</span>
+                        </div>
+                      )}
                     </div>
                   </div>
-                  {Number(cashboxInitialBalance) > 0 && (
-                    <span className="block text-[10px] text-amber-700 font-bold truncate">
-                      {numberToWords(cashboxInitialBalance)} {currency}
-                    </span>
-                  )}
                 </div>
 
-                {/* Warehouse */}
-                <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-black text-slate-900">
-                    <Warehouse className="w-4 h-4 text-sky-600" />
-                    <span>انبار پیش‌فرض کالاها</span>
+                {/* Warehouse Section */}
+                <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden flex flex-col">
+                  <div className="px-5 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-sky-50/30">
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-2xl bg-sky-500 text-white flex items-center justify-center shadow-md shadow-sky-500/20 shrink-0">
+                        <Warehouse className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h3 className="text-sm font-black text-slate-900">
+                          تعریف انبار مرکزی کالاها
+                        </h3>
+                        <p className="text-xs text-slate-500 font-medium">
+                          انبار پیش‌فرض برای نگهداری و موجودی کالاها
+                        </p>
+                      </div>
+                    </div>
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-700 border border-sky-200">
+                      انبار اصلی
+                    </span>
                   </div>
-                  <div className="grid grid-cols-2 gap-2">
+
+                  <div className="p-5 flex-1 space-y-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          نام انبار <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={warehouseName}
+                          onChange={e => setWarehouseName(e.target.value)}
+                          placeholder="انبار مرکزی"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          کد انبار
+                        </label>
+                        <input
+                          type="text"
+                          value={warehouseCode}
+                          onChange={e => setWarehouseCode(e.target.value)}
+                          placeholder="WH-01"
+                          className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-sky-700 font-mono text-left text-xs outline-none font-bold"
+                          dir="ltr"
+                        />
+                      </div>
+                    </div>
+
                     <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">نام انبار *</label>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        آدرس و موقعیت انبار
+                      </label>
                       <input
                         type="text"
-                        value={warehouseName}
-                        onChange={e => setWarehouseName(e.target.value)}
-                        placeholder="انبار مرکزی"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none font-bold"
+                        value={warehouseAddress}
+                        onChange={e => setWarehouseAddress(e.target.value)}
+                        placeholder="دفتر مرکزی، سالن نگهداری کالا"
+                        className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs outline-none"
                       />
                     </div>
-                    <div>
-                      <label className="block text-[11px] font-bold text-slate-600 mb-1">کد انبار</label>
-                      <input
-                        type="text"
-                        value={warehouseCode}
-                        onChange={e => setWarehouseCode(e.target.value)}
-                        placeholder="WH-01"
-                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sky-700 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                        dir="ltr"
-                      />
+
+                    <div className="p-3 bg-slate-50 rounded-xl border border-slate-200/80 text-[11px] text-slate-600 flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                      <span>کالاهای وارد شده در گام بعد مستقیماً در این انبار ذخیره خواهند شد.</span>
                     </div>
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">آدرس انبار</label>
-                    <input
-                      type="text"
-                      value={warehouseAddress}
-                      onChange={e => setWarehouseAddress(e.target.value)}
-                      placeholder="دفتر مرکزی فروشگاه"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                    />
                   </div>
                 </div>
 
@@ -1646,17 +1866,43 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
             </div>
           )}
 
-          {/* STEP 6: CONTACTS & CATALOG */}
+          {/* STEP 6: CONTACTS & CATALOG - EXACTLY MATCHING PersonFormModal.tsx & ProductFormModal.tsx */}
           {activeStepType === 'catalog' && (
             <div className="space-y-6 animate-in fade-in duration-300">
-              <div className="border-b border-slate-100 pb-4">
-                <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
-                  <PackagePlus className="w-5 h-5 text-indigo-600" />
-                  {isBusinessOnly ? 'مرحله ۴: طرف‌های حساب و کاتالوگ کالای اولیه' : 'مرحله ۶: طرف‌های حساب و کاتالوگ کالای اولیه'}
-                </h2>
-                <p className="text-xs text-slate-500 mt-1">
-                  می‌توانید از پکیج شروع سریع آماده استفاده کنید یا اولین شخص و کالای خود را دستی وارد نمایید.
-                </p>
+              <div className="border-b border-slate-100 pb-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                <div>
+                  <h2 className="text-lg font-black text-slate-900 flex items-center gap-2">
+                    <PackagePlus className="w-5 h-5 text-indigo-600" />
+                    {isBusinessOnly ? 'مرحله ۴: طرف‌های حساب و کاتالوگ کالای اولیه' : 'مرحله ۶: طرف‌های حساب و کاتالوگ کالای اولیه'}
+                  </h2>
+                  <p className="text-xs text-slate-500 mt-1">
+                    تعریف اشخاص (مشتری/تامین‌کننده) مطابق فرم ثبت پرونده اشخاص و کاتالوگ کالا مطابق فرم ثبت کالا.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setUseStarterPack(true)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      useStarterPack
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    پکیج شروع سریع آماده
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setUseStarterPack(false)}
+                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                      !useStarterPack
+                        ? 'bg-indigo-600 text-white shadow-xs'
+                        : 'bg-slate-100 text-slate-600 hover:bg-slate-200 border border-slate-200'
+                    }`}
+                  >
+                    تعریف دستی شخص و کالا
+                  </button>
+                </div>
               </div>
 
               {/* Starter Pack Option Selector */}
@@ -1676,18 +1922,18 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                       </div>
                       {useStarterPack && (
                         <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-emerald-600 text-white flex items-center gap-1 shadow-xs">
-                          <Check className="w-3 h-3" /> توصیه شده
+                          <Check className="w-3 h-3" /> فعال شده
                         </span>
                       )}
                     </div>
-                    <h3 className="font-black text-sm text-slate-900 mb-1.5">پکیج شروع سریع هوشمند (یک کلیک)</h3>
+                    <h3 className="font-black text-sm text-slate-900 mb-1.5">پکیج شروع سریع هوشمند (آماده ثبت فاکتور)</h3>
                     <p className="text-xs text-slate-500 leading-relaxed">
-                      ایجاد خودکار «مشتری عمومی نقدی»، «تامین‌کننده اصلی»، دسته‌بندی‌های استاندارد کالا و ۲ قلم کالای نمونه تستی.
+                      ایجاد خودکار «مشتری عمومی نقدی»، «تامین‌کننده اصلی»، دسته‌بندی‌های استاندارد کالا و قلم‌های تستی اولیه.
                     </p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-200/70 text-[11px] text-emerald-700 font-bold flex items-center gap-1.5">
                     <CheckCircle2 className="w-3.5 h-3.5" />
-                    <span>آماده ثبت فوری فاکتور فروش بلافاصله پس از ورود</span>
+                    <span>پیشنهادی: بلافاصله پس از اتمام راه‌اندازی می‌توانید فاکتور فروش ثبت کنید.</span>
                   </div>
                 </div>
 
@@ -1706,284 +1952,456 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                       </div>
                       {!useStarterPack && (
                         <span className="text-[10px] font-black px-2.5 py-1 rounded-full bg-indigo-600 text-white flex items-center gap-1 shadow-xs">
-                          <Check className="w-3 h-3" /> انتخاب شده
+                          <Check className="w-3 h-3" /> فعال شده
                         </span>
                       )}
                     </div>
-                    <h3 className="font-black text-sm text-slate-900 mb-1.5">تعریف دستی شخص و کالا</h3>
+                    <h3 className="font-black text-sm text-slate-900 mb-1.5">تعریف سفارشی طرف حساب و کالا</h3>
                     <p className="text-xs text-slate-500 leading-relaxed">
-                      اگر می‌خواهید کالاها و طرف‌های حساب واقعی کسب‌وکار خود را مستقیماً از ابتدا وارد کنید.
+                      ورود فرم مشخصات دقیق اولین شخص و اولین کالای اختصاصی شما با تمام جزئیات مالی و شناسنامه‌ای.
                     </p>
                   </div>
                   <div className="mt-4 pt-3 border-t border-slate-200/70 text-[11px] text-indigo-700 font-bold flex items-center gap-1.5">
                     <ShoppingBag className="w-3.5 h-3.5" />
-                    <span>ورود اطلاعات اختصاصی شما</span>
+                    <span>ورود اطلاعات واقعی از طریق فرم اختصاصی</span>
                   </div>
                 </div>
               </div>
 
-              {/* Custom Entry Fields (if starter pack disabled) */}
+              {/* Custom Person & Product Forms - Exactly Matching System Modals */}
               {!useStarterPack && (
-                <div className="space-y-4 pt-2 animate-in slide-in-from-top-2 duration-200">
-                  {/* Person */}
-                  <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-4">
-                    <div className="flex items-center justify-between">
-                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                        <Users className="w-4 h-4 text-indigo-600" />
-                        <span>اولین طرف حساب (مشتری یا تامین‌کننده)</span>
+                <div className="space-y-6 pt-2 animate-in slide-in-from-top-2 duration-200">
+                  
+                  {/* PERSON FORM CONTAINER - EXACTLY MATCHING PersonFormModal.tsx */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                    {/* Header matching PersonFormModal */}
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-indigo-50/30">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                          {customPersonType === 'legal' ? <Building2 className="w-5 h-5" /> : <User className="w-5 h-5" />}
+                        </div>
+                        <div>
+                          <div className="flex items-center gap-2">
+                            <h3 className="text-sm sm:text-base font-black text-slate-900">
+                              ثبت شخص / طرف‌حساب جدید
+                            </h3>
+                            <span className={`text-[11px] font-bold px-2.5 py-0.5 rounded-full ${
+                              customPersonType === 'legal'
+                                ? 'bg-amber-50 text-amber-700 border border-amber-200'
+                                : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                            }`}>
+                              {customPersonType === 'legal' ? 'حقوقی / شرکتی' : 'حقیقی / فردی'}
+                            </span>
+                          </div>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            تکمیل مشخصات فردی، ارتباطی و اعتباری جهت ایجاد پرونده شخص در سامانه
+                          </p>
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
+
+                      {/* Real vs Legal Type Toggle */}
+                      <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200">
                         <button
                           type="button"
                           onClick={() => setCustomPersonType('real')}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                             customPersonType === 'real'
-                              ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'bg-white text-slate-600 border border-slate-200'
+                              ? 'bg-white text-indigo-600 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
-                          شخص حقیقی
+                          <User className="w-3.5 h-3.5" />
+                          <span>شخص حقیقی</span>
                         </button>
                         <button
                           type="button"
                           onClick={() => setCustomPersonType('legal')}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                          className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
                             customPersonType === 'legal'
-                              ? 'bg-indigo-600 text-white shadow-xs'
-                              : 'bg-white text-slate-600 border border-slate-200'
+                              ? 'bg-white text-indigo-600 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
                           }`}
                         >
-                          شخص حقوقی / شرکت
+                          <Building2 className="w-3.5 h-3.5" />
+                          <span>شخص حقوقی</span>
                         </button>
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                          {customPersonType === 'real' ? 'نام و نام خانوادگی *' : 'نام شرکت یا موسسه *'}
-                        </label>
-                        <input
-                          type="text"
-                          value={customPersonName}
-                          onChange={e => setCustomPersonName(e.target.value)}
-                          placeholder={customPersonType === 'real' ? 'علی رضایی' : 'شرکت توسعه تجارت'}
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
-                          {customPersonType === 'real' ? 'کد ملی (۱۰ رقم)' : 'شناسه ملی (۱۱ رقم)'}
-                        </label>
-                        <input
-                          type="text"
-                          value={customPersonNationalId}
-                          onChange={e => setCustomPersonNationalId(e.target.value)}
-                          placeholder={customPersonType === 'real' ? '0012345678' : '10100123456'}
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                          dir="ltr"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">نقش طرف حساب</label>
-                        <select
-                          value={customPersonRole}
-                          onChange={e => setCustomPersonRole(e.target.value as any)}
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-bold"
-                        >
-                          <option value="customer">مشتری (خریدار)</option>
-                          <option value="supplier">تامین‌کننده (فروشنده)</option>
-                          <option value="both">مشتری و تامین‌کننده</option>
-                        </select>
-                      </div>
+                    {/* Sub-tabs exactly like PersonFormModal.tsx */}
+                    <div className="flex border-b border-slate-200 px-6 gap-6 bg-slate-50/60 text-xs font-bold">
+                      <button
+                        type="button"
+                        onClick={() => setPersonSubTab('identity')}
+                        className={`py-3 flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                          personSubTab === 'identity'
+                            ? 'border-indigo-600 text-indigo-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <User className="w-4 h-4" />
+                        <span>اطلاعات عمومی و هویتی</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPersonSubTab('contact')}
+                        className={`py-3 flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                          personSubTab === 'contact'
+                            ? 'border-indigo-600 text-indigo-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <Phone className="w-4 h-4" />
+                        <span>اطلاعات تماس و نشانی</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setPersonSubTab('financial')}
+                        className={`py-3 flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                          personSubTab === 'financial'
+                            ? 'border-indigo-600 text-indigo-600'
+                            : 'border-transparent text-slate-500 hover:text-slate-800'
+                        }`}
+                      >
+                        <CreditCard className="w-4 h-4" />
+                        <span>اطلاعات مالی و اعتباری</span>
+                      </button>
                     </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره همراه (موبایل)</label>
-                        <input
-                          type="text"
-                          value={customPersonMobile}
-                          onChange={e => setCustomPersonMobile(e.target.value)}
-                          placeholder="0912..."
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                          dir="ltr"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">تلفن ثابت</label>
-                        <input
-                          type="text"
-                          value={customPersonPhone}
-                          onChange={e => setCustomPersonPhone(e.target.value)}
-                          placeholder="021..."
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                          dir="ltr"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">کد اقتصادی (اختیاری)</label>
-                        <input
-                          type="text"
-                          value={customPersonEconomicCode}
-                          onChange={e => setCustomPersonEconomicCode(e.target.value)}
-                          placeholder="12 رقمی"
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                          dir="ltr"
-                        />
-                      </div>
-                    </div>
+                    {/* Tab Contents */}
+                    <div className="p-6">
+                      {personSubTab === 'identity' && (
+                        <div className="space-y-4 animate-in fade-in duration-200">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                            <div className="sm:col-span-2">
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                {customPersonType === 'real' ? 'نام و نام خانوادگی' : 'نام شرکت یا سازمان'} <span className="text-rose-500">*</span>
+                              </label>
+                              <input
+                                type="text"
+                                value={customPersonName}
+                                onChange={e => setCustomPersonName(e.target.value)}
+                                placeholder={customPersonType === 'real' ? 'مثال: علی رضایی' : 'مثال: شرکت توسعه تجارت البرز'}
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                                required
+                              />
+                            </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div className="sm:col-span-2">
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">نشانی و آدرس</label>
-                        <input
-                          type="text"
-                          value={customPersonAddress}
-                          onChange={e => setCustomPersonAddress(e.target.value)}
-                          placeholder="استان، شهر، خیابان..."
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">مانده حساب اول دوره ({currency})</label>
-                        <div className="flex gap-1.5">
-                          <input
-                            type="number"
-                            value={customPersonBalance}
-                            onChange={e => setCustomPersonBalance(e.target.value)}
-                            placeholder="0"
-                            className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                            dir="ltr"
-                          />
-                          <select
-                            value={customPersonBalanceType}
-                            onChange={e => setCustomPersonBalanceType(e.target.value as any)}
-                            className="px-2 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-[10px] font-bold outline-none"
-                          >
-                            <option value="settled">بی‌حساب</option>
-                            <option value="debtor">بدهکار</option>
-                            <option value="creditor">بستانکار</option>
-                          </select>
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                نقش طرف حساب <span className="text-rose-500">*</span>
+                              </label>
+                              <select
+                                value={customPersonRole}
+                                onChange={e => setCustomPersonRole(e.target.value as any)}
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                              >
+                                <option value="customer">مشتری (خریدار)</option>
+                                <option value="supplier">تامین‌کننده (فروشنده)</option>
+                                <option value="both">مشتری و تامین‌کننده</option>
+                              </select>
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                {customPersonType === 'real' ? 'کد ملی (۱۰ رقم)' : 'شناسه ملی شرکت (۱۱ رقم)'}
+                              </label>
+                              <input
+                                type="text"
+                                value={customPersonNationalId}
+                                onChange={e => setCustomPersonNationalId(e.target.value)}
+                                placeholder={customPersonType === 'real' ? '0012345678' : '10100123456'}
+                                maxLength={11}
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none"
+                                dir="ltr"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                کد اقتصادی (اختیاری)
+                              </label>
+                              <input
+                                type="text"
+                                value={customPersonEconomicCode}
+                                onChange={e => setCustomPersonEconomicCode(e.target.value)}
+                                placeholder="کد اقتصادی ۱۲ رقمی"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none"
+                                dir="ltr"
+                              />
+                            </div>
+                          </div>
                         </div>
-                      </div>
-                    </div>
+                      )}
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-slate-200/60">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">نام بانک طرف حساب</label>
-                        <input
-                          type="text"
-                          value={customPersonBankName}
-                          onChange={e => setCustomPersonBankName(e.target.value)}
-                          placeholder="مثال: بانک ملی"
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره حساب / کارت</label>
-                        <input
-                          type="text"
-                          value={customPersonAccountNumber}
-                          onChange={e => setCustomPersonAccountNumber(e.target.value)}
-                          placeholder="شماره حساب یا کارت"
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                          dir="ltr"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره شبا طرف حساب</label>
-                        <input
-                          type="text"
-                          value={customPersonSheba}
-                          onChange={e => setCustomPersonSheba(e.target.value)}
-                          placeholder="IR..."
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                          dir="ltr"
-                        />
-                      </div>
+                      {personSubTab === 'contact' && (
+                        <div className="space-y-4 animate-in fade-in duration-200">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                شماره همراه (موبایل)
+                              </label>
+                              <input
+                                type="text"
+                                value={customPersonMobile}
+                                onChange={e => setCustomPersonMobile(e.target.value)}
+                                placeholder="0912..."
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none"
+                                dir="ltr"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                تلفن ثابت
+                              </label>
+                              <input
+                                type="text"
+                                value={customPersonPhone}
+                                onChange={e => setCustomPersonPhone(e.target.value)}
+                                placeholder="021..."
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none"
+                                dir="ltr"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">استان</label>
+                              <input
+                                type="text"
+                                value={customPersonProvince}
+                                onChange={e => setCustomPersonProvince(e.target.value)}
+                                placeholder="تهران"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs outline-none"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">شهر</label>
+                              <input
+                                type="text"
+                                value={customPersonCity}
+                                onChange={e => setCustomPersonCity(e.target.value)}
+                                placeholder="تهران"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div>
+                            <label className="block text-xs font-bold text-slate-700 mb-1.5">نشانی و آدرس کامل</label>
+                            <input
+                              type="text"
+                              value={customPersonAddress}
+                              onChange={e => setCustomPersonAddress(e.target.value)}
+                              placeholder="خیابان، پلاک، واحد..."
+                              className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs outline-none"
+                            />
+                          </div>
+                        </div>
+                      )}
+
+                      {personSubTab === 'financial' && (
+                        <div className="space-y-4 animate-in fade-in duration-200">
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                مانده حساب اول دوره ({currency})
+                              </label>
+                              <div className="flex gap-2">
+                                <input
+                                  type="number"
+                                  value={customPersonBalance}
+                                  onChange={e => setCustomPersonBalance(e.target.value)}
+                                  placeholder="0"
+                                  className="flex-1 px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none"
+                                  dir="ltr"
+                                />
+                                <select
+                                  value={customPersonBalanceType}
+                                  onChange={e => setCustomPersonBalanceType(e.target.value as any)}
+                                  className="px-3 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                                >
+                                  <option value="settled">بی‌حساب (صفر)</option>
+                                  <option value="debtor">بدهکار به ما</option>
+                                  <option value="creditor">بستانکار از ما</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                نام بانک طرف حساب
+                              </label>
+                              <input
+                                type="text"
+                                value={customPersonBankName}
+                                onChange={e => setCustomPersonBankName(e.target.value)}
+                                placeholder="مثال: بانک ملی"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs outline-none"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                شماره حساب / شماره کارت
+                              </label>
+                              <input
+                                type="text"
+                                value={customPersonAccountNumber}
+                                onChange={e => setCustomPersonAccountNumber(e.target.value)}
+                                placeholder="شماره کارت یا حساب"
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none"
+                                dir="ltr"
+                              />
+                            </div>
+
+                            <div>
+                              <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                                شماره شبا (IBAN)
+                              </label>
+                              <input
+                                type="text"
+                                value={customPersonSheba}
+                                onChange={e => setCustomPersonSheba(e.target.value)}
+                                placeholder="IR..."
+                                className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none"
+                                dir="ltr"
+                              />
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
 
-                  {/* Product */}
-                  <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-3">
-                    <div className="text-xs font-bold text-slate-900 flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <ShoppingBag className="w-4 h-4 text-emerald-600" />
-                        <span>اولین کالا یا خدمات</span>
+                  {/* PRODUCT FORM CONTAINER - EXACTLY MATCHING ProductFormModal.tsx */}
+                  <div className="bg-white rounded-2xl border border-slate-200 shadow-xs overflow-hidden">
+                    <div className="px-6 py-4 border-b border-slate-100 flex items-center justify-between bg-gradient-to-r from-slate-50 via-white to-emerald-50/30">
+                      <div className="flex items-center gap-3">
+                        <div className="w-10 h-10 rounded-2xl bg-indigo-600 text-white flex items-center justify-center shadow-md shadow-indigo-600/20 shrink-0">
+                          <Package className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h3 className="text-sm sm:text-base font-black text-slate-900 flex items-center gap-2">
+                            ثبت کالا / خدمات جدید
+                          </h3>
+                          <p className="text-xs text-slate-500 font-medium mt-0.5">
+                            تعریف مشخصات اولین قلم کالا جهت موجودی اولیه انبار و صدور فاکتور
+                          </p>
+                        </div>
                       </div>
+
                       {Number(customProductPurchasePrice) > 0 && Number(customProductSalePrice) > 0 && (
-                        <span className="text-[10px] text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded-full border border-emerald-200 font-bold">
+                        <span className="text-xs font-bold px-3 py-1 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200 flex items-center gap-1">
+                          <ArrowUpRight className="w-3.5 h-3.5" />
                           حاشیه سود: {Math.round(((Number(customProductSalePrice) - Number(customProductPurchasePrice)) / Number(customProductPurchasePrice)) * 100)}٪
                         </span>
                       )}
                     </div>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">نام کالا / خدمت *</label>
-                        <input
-                          type="text"
-                          value={customProductName}
-                          onChange={e => setCustomProductName(e.target.value)}
-                          placeholder="نام کالا"
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-bold"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">دسته‌بندی</label>
-                        <input
-                          type="text"
-                          value={customProductCategory}
-                          onChange={e => setCustomProductCategory(e.target.value)}
-                          placeholder="عمومی"
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">واحد شمارش</label>
-                        <input
-                          type="text"
-                          value={customProductUnit}
-                          onChange={e => setCustomProductUnit(e.target.value)}
-                          placeholder="عدد"
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-bold"
-                        />
-                      </div>
-                    </div>
 
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">قیمت خرید ({currency})</label>
-                        <input
-                          type="number"
-                          value={customProductPurchasePrice}
-                          onChange={e => setCustomProductPurchasePrice(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-bold"
-                          dir="ltr"
-                        />
+                    <div className="p-6 space-y-4">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+                        <div className="sm:col-span-2">
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            نام کالا یا خدمت <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={customProductName}
+                            onChange={e => setCustomProductName(e.target.value)}
+                            placeholder="مثال: لپ‌تاپ مدل Pro 16"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                            required
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            دسته‌بندی کالا
+                          </label>
+                          <input
+                            type="text"
+                            value={customProductCategory}
+                            onChange={e => setCustomProductCategory(e.target.value)}
+                            placeholder="کالاهای عمومی"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs outline-none"
+                          />
+                        </div>
                       </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">قیمت فروش ({currency})</label>
-                        <input
-                          type="number"
-                          value={customProductSalePrice}
-                          onChange={e => setCustomProductSalePrice(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-emerald-700 font-bold font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                          dir="ltr"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">موجودی اولیه در انبار</label>
-                        <input
-                          type="number"
-                          value={customProductInitialStock}
-                          onChange={e => setCustomProductInitialStock(e.target.value)}
-                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-sky-700 font-bold font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
-                          dir="ltr"
-                        />
+
+                      <div className="grid grid-cols-1 sm:grid-cols-4 gap-4">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            واحد سنجش اصلی
+                          </label>
+                          <select
+                            value={customProductUnit}
+                            onChange={e => setCustomProductUnit(e.target.value)}
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 text-xs font-bold outline-none"
+                          >
+                            <option value="عدد">عدد</option>
+                            <option value="بسته">بسته</option>
+                            <option value="کیلوگرم">کیلوگرم</option>
+                            <option value="متر">متر</option>
+                            <option value="کارتن">کارتن</option>
+                            <option value="جین">جین</option>
+                            <option value="جعبه">جعبه</option>
+                            <option value="لیتر">لیتر</option>
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            قیمت خرید ({currency})
+                          </label>
+                          <input
+                            type="number"
+                            value={customProductPurchasePrice}
+                            onChange={e => setCustomProductPurchasePrice(e.target.value)}
+                            placeholder="0"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-slate-900 font-mono text-left text-xs outline-none font-bold"
+                            dir="ltr"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            قیمت فروش ({currency})
+                          </label>
+                          <input
+                            type="number"
+                            value={customProductSalePrice}
+                            onChange={e => setCustomProductSalePrice(e.target.value)}
+                            placeholder="0"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-emerald-700 font-bold font-mono text-left text-xs outline-none"
+                            dir="ltr"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                            موجودی اولیه در انبار
+                          </label>
+                          <input
+                            type="number"
+                            value={customProductInitialStock}
+                            onChange={e => setCustomProductInitialStock(e.target.value)}
+                            placeholder="0"
+                            className="w-full px-3.5 py-2.5 rounded-xl border border-slate-200 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 shadow-2xs text-sky-700 font-bold font-mono text-left text-xs outline-none"
+                            dir="ltr"
+                          />
+                        </div>
                       </div>
                     </div>
                   </div>
+
                 </div>
               )}
             </div>
@@ -2012,10 +2430,10 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                       <span>موتور پایگاه داده</span>
                     </div>
                     <div className="text-sm font-black text-slate-900">
-                      {dbType === 'json' ? 'دیتابیس محلی (JSON Storage)' : `PostgreSQL (${dbHost})`}
+                      {`PostgreSQL (${dbHost}:${dbPort})`}
                     </div>
                     <div className="text-[11px] text-slate-500 mt-1">
-                      {dbType === 'json' ? 'ذخیره در data.json محلی' : `دیتابیس: ${dbName}`}
+                      {`پایگاه داده اصلی: ${dbName}`}
                     </div>
                   </div>
                 )}

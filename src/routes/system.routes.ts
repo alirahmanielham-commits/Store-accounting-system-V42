@@ -209,18 +209,49 @@ router.post('/api/db/config', async (req, res) => {
 
 router.post('/api/db/test', async (req, res) => {
     try {
-      const { connectionString, engine, dbName } = req.body;
+      const { connectionString, engine, dbName, host, port, user, password, saveConfig } = req.body;
       if (engine === 'sqlite' || connectionString === 'sqlite' || engine === 'json' || connectionString === 'json') {
-         return res.json({ success: true, message: 'موتور ذخیره‌سازی محلی (Local JSON Storage) با موفقیت تأیید و آماده به کار است.' });
+         return res.status(400).json({ success: false, error: 'سیستم منحصراً با پایگاه داده PostgreSQL قابل اتصال و راه‌اندازی است.' });
       }
-      if (!connectionString) {
-        return res.json({ success: false, error: 'رشته اتصال (Connection String) الزامی است.' });
+      let finalConnStr = connectionString;
+      if (!finalConnStr && host && user) {
+        const auth = password ? `${user}:${encodeURIComponent(password)}` : user;
+        const target = dbName?.trim() || 'store_db';
+        finalConnStr = `postgresql://${auth}@${host}:${port || '5432'}/${target}`;
       }
-      const client = new Client({ connectionString, connectionTimeoutMillis: 5000 });
+      if (!finalConnStr) {
+        return res.json({ success: false, error: 'اطلاعات اتصال به پایگاه داده PostgreSQL الزامی است.' });
+      }
+      const client = new Client({ connectionString: finalConnStr, connectionTimeoutMillis: 5000 });
       await client.connect();
       await client.query('SELECT NOW()');
       await client.end();
-      res.json({ success: true, message: 'اتصال به سرور پایگاه داده PostgreSQL با موفقیت برقرار شد.' });
+
+      // Always save PostgreSQL connection to db_config.json on successful test
+      try {
+        const configObj = {
+          engine: 'postgres',
+          host: host || 'localhost',
+          port: port || '5432',
+          user: user || 'postgres',
+          password: password || '',
+          dbName: dbName?.trim() || 'store_db',
+          connectionString: finalConnStr
+        };
+        await fsPromises.writeFile(path.join(process.cwd(), 'db_config.json'), JSON.stringify(configObj, null, 2), 'utf-8');
+        
+        // Also connect and ensure tables in the default pool
+        try {
+          const pool = await connectPgDb(finalConnStr);
+          activePgPools['default'] = pool;
+          usePgMap['default'] = true;
+          await ensurePostgresTables(pool);
+        } catch (_) {}
+      } catch (saveErr) {
+        console.warn('Failed to save db_config.json:', saveErr);
+      }
+
+      res.json({ success: true, message: 'اتصال به سرور پایگاه داده PostgreSQL با موفقیت برقرار و در فایل db_config ذخیره شد.' });
     } catch (e: any) {
       const errMsg = e?.message || '';
       const isDbNotExist = e?.code === '3D000' || errMsg.includes('does not exist') || errMsg.includes('وجود ندارد');
