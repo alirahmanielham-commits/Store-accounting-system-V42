@@ -116,12 +116,16 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
 
   // Step 5 / 3: Financial Infrastructure (Bank, Cashbox, Warehouse)
   const [bankName, setBankName] = useState('بانک ملت');
+  const [bankBranchName, setBankBranchName] = useState('');
   const [bankAccountNumber, setBankAccountNumber] = useState('');
   const [bankCardNumber, setBankCardNumber] = useState('');
   const [bankSheba, setBankSheba] = useState('');
+  const [bankAccountHolder, setBankAccountHolder] = useState('');
   const [bankInitialBalance, setBankInitialBalance] = useState('0');
 
   const [cashboxName, setCashboxName] = useState('صندوق مرکزی');
+  const [cashboxManager, setCashboxManager] = useState('');
+  const [cashboxAccountNumber, setCashboxAccountNumber] = useState('101');
   const [cashboxInitialBalance, setCashboxInitialBalance] = useState('0');
 
   const [warehouseName, setWarehouseName] = useState('انبار مرکزی');
@@ -130,11 +134,38 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
 
   // Step 6 / 4: Starter Catalog & Contacts
   const [useStarterPack, setUseStarterPack] = useState(true);
+  const [customPersonType, setCustomPersonType] = useState<'real' | 'legal'>('real');
   const [customPersonName, setCustomPersonName] = useState('مشتری عمومی (نقدی)');
-  const [customPersonPhone, setCustomPersonPhone] = useState('09120000000');
+  const [customPersonNationalId, setCustomPersonNationalId] = useState('');
+  const [customPersonEconomicCode, setCustomPersonEconomicCode] = useState('');
+  const [customPersonPhone, setCustomPersonPhone] = useState('02188888888');
+  const [customPersonMobile, setCustomPersonMobile] = useState('09120000000');
+  const [customPersonProvince, setCustomPersonProvince] = useState('');
+  const [customPersonCity, setCustomPersonCity] = useState('');
+  const [customPersonAddress, setCustomPersonAddress] = useState('');
   const [customPersonRole, setCustomPersonRole] = useState<'customer' | 'supplier' | 'both'>('customer');
   const [customPersonBalance, setCustomPersonBalance] = useState('0');
   const [customPersonBalanceType, setCustomPersonBalanceType] = useState<'settled' | 'debtor' | 'creditor'>('settled');
+  const [customPersonBankName, setCustomPersonBankName] = useState('');
+  const [customPersonAccountNumber, setCustomPersonAccountNumber] = useState('');
+  const [customPersonSheba, setCustomPersonSheba] = useState('');
+
+  // Table Creation Progress State (107 tables)
+  const [syncProgress, setSyncProgress] = useState<{
+    current: number;
+    total: number;
+    tableName: string;
+    status: string;
+    percent: number;
+    message: string;
+  }>({
+    current: 0,
+    total: 107,
+    tableName: '',
+    status: 'idle',
+    percent: 0,
+    message: 'در حال آماده‌سازی و ساخت جداول پایگاه داده...'
+  });
 
   const [customProductName, setCustomProductName] = useState('کالای نمونه ۱');
   const [customProductCategory, setCustomProductCategory] = useState('کالاهای عمومی');
@@ -362,6 +393,20 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
   const handleFinalSubmit = async () => {
     setSaving(true);
     setError('');
+    
+    // Poll table creation progress while saving
+    const pollInterval = setInterval(async () => {
+      try {
+        const pRes = await fetch('/api/setup/sync-progress');
+        if (pRes.ok) {
+          const pData = await pRes.json();
+          if (pData.success && pData.progress) {
+            setSyncProgress(pData.progress);
+          }
+        }
+      } catch (_) {}
+    }, 250);
+
     try {
       if (isBusinessOnly) {
         const payload = {
@@ -382,13 +427,17 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           },
           bankAccount: {
             bankName: bankName.trim(),
+            branchName: bankBranchName.trim(),
             accountNumber: bankAccountNumber.trim(),
             cardNumber: bankCardNumber.trim(),
             shebaNumber: bankSheba.trim(),
+            accountHolder: bankAccountHolder.trim() || companyName.trim() || storeName.trim(),
             initialBalance: Number(bankInitialBalance) || 0
           },
           cashbox: {
             name: cashboxName.trim(),
+            manager: cashboxManager.trim(),
+            accountNumber: cashboxAccountNumber.trim(),
             initialBalance: Number(cashboxInitialBalance) || 0
           },
           warehouse: {
@@ -398,11 +447,21 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           },
           starterPack: useStarterPack,
           customPerson: !useStarterPack ? {
+            personType: customPersonType,
             name: customPersonName.trim(),
+            nationalId: customPersonNationalId.trim(),
+            economicCode: customPersonEconomicCode.trim(),
             phone: customPersonPhone.trim(),
+            mobile: customPersonMobile.trim() || customPersonPhone.trim(),
+            province: customPersonProvince.trim(),
+            city: customPersonCity.trim(),
+            address: customPersonAddress.trim(),
             role: customPersonRole,
             initialBalance: Number(customPersonBalance) || 0,
-            initialBalanceType: customPersonBalanceType
+            initialBalanceType: customPersonBalanceType,
+            bankName: customPersonBankName.trim(),
+            accountNumber: customPersonAccountNumber.trim(),
+            shebaNumber: customPersonSheba.trim()
           } : null,
           customProduct: !useStarterPack ? {
             name: customProductName.trim(),
@@ -426,8 +485,10 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
         });
         const data = await res.json();
         if (data.success) {
+          clearInterval(pollInterval);
           onComplete();
         } else {
+          clearInterval(pollInterval);
           setError(data.error || 'خطا در ایجاد کسب و کار جدید');
         }
       } else {
@@ -467,13 +528,17 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           },
           bankAccount: {
             bankName: bankName.trim(),
+            branchName: bankBranchName.trim(),
             accountNumber: bankAccountNumber.trim(),
             cardNumber: bankCardNumber.trim(),
             shebaNumber: bankSheba.trim(),
+            accountHolder: bankAccountHolder.trim() || companyName.trim() || storeName.trim(),
             initialBalance: Number(bankInitialBalance) || 0
           },
           cashbox: {
             name: cashboxName.trim(),
+            manager: cashboxManager.trim(),
+            accountNumber: cashboxAccountNumber.trim(),
             initialBalance: Number(cashboxInitialBalance) || 0
           },
           warehouse: {
@@ -483,11 +548,21 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           },
           starterPack: useStarterPack,
           customPerson: !useStarterPack ? {
+            personType: customPersonType,
             name: customPersonName.trim(),
+            nationalId: customPersonNationalId.trim(),
+            economicCode: customPersonEconomicCode.trim(),
             phone: customPersonPhone.trim(),
+            mobile: customPersonMobile.trim() || customPersonPhone.trim(),
+            province: customPersonProvince.trim(),
+            city: customPersonCity.trim(),
+            address: customPersonAddress.trim(),
             role: customPersonRole,
             initialBalance: Number(customPersonBalance) || 0,
-            initialBalanceType: customPersonBalanceType
+            initialBalanceType: customPersonBalanceType,
+            bankName: customPersonBankName.trim(),
+            accountNumber: customPersonAccountNumber.trim(),
+            shebaNumber: customPersonSheba.trim()
           } : null,
           customProduct: !useStarterPack ? {
             name: customProductName.trim(),
@@ -505,6 +580,7 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           body: JSON.stringify(payload)
         });
         const data = await res.json();
+        clearInterval(pollInterval);
 
         if (data.success) {
           // Explicitly set activeStoreId and company_profile to prevent prompt modal on first load
@@ -1371,7 +1447,7 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                   </div>
                 </div>
 
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                   <div>
                     <label className="block text-[11px] font-bold text-slate-600 mb-1">نام بانک *</label>
                     <input
@@ -1383,12 +1459,57 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                     />
                   </div>
                   <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">نام یا کد شعبه</label>
+                    <input
+                      type="text"
+                      value={bankBranchName}
+                      onChange={e => setBankBranchName(e.target.value)}
+                      placeholder="شعبه مرکزی"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">نام دارنده حساب</label>
+                    <input
+                      type="text"
+                      value={bankAccountHolder}
+                      onChange={e => setBankAccountHolder(e.target.value)}
+                      placeholder={companyName || storeName || "نام صاحب حساب"}
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+                  <div>
                     <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره حساب</label>
                     <input
                       type="text"
                       value={bankAccountNumber}
                       onChange={e => setBankAccountNumber(e.target.value)}
                       placeholder="123456789"
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                      dir="ltr"
+                    />
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره کارت (۱۶ رقمی)</label>
+                    <input
+                      type="text"
+                      value={bankCardNumber}
+                      onChange={e => setBankCardNumber(e.target.value)}
+                      placeholder="6104-3378-..."
+                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                      dir="ltr"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره شبا (IBAN)</label>
+                    <input
+                      type="text"
+                      value={bankSheba}
+                      onChange={e => setBankSheba(e.target.value)}
+                      placeholder="IR123456789..."
                       className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
                       dir="ltr"
                     />
@@ -1410,31 +1531,6 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                     )}
                   </div>
                 </div>
-
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره کارت (اختیاری)</label>
-                    <input
-                      type="text"
-                      value={bankCardNumber}
-                      onChange={e => setBankCardNumber(e.target.value)}
-                      placeholder="6104-3378-..."
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                      dir="ltr"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره شبا (اختیاری)</label>
-                    <input
-                      type="text"
-                      value={bankSheba}
-                      onChange={e => setBankSheba(e.target.value)}
-                      placeholder="IR123456789..."
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                      dir="ltr"
-                    />
-                  </div>
-                </div>
               </div>
 
               {/* Cashbox & Warehouse Grid */}
@@ -1444,34 +1540,59 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                 <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-3">
                   <div className="flex items-center gap-2 text-xs font-black text-slate-900">
                     <Wallet className="w-4 h-4 text-amber-600" />
-                    <span>صندوق نقدی اولیه</span>
+                    <span>صندوق نقدی و تنخواه‌گردان</span>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">نام صندوق *</label>
-                    <input
-                      type="text"
-                      value={cashboxName}
-                      onChange={e => setCashboxName(e.target.value)}
-                      placeholder="صندوق مرکزی"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none font-bold"
-                    />
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">نام صندوق / تنخواه *</label>
+                      <input
+                        type="text"
+                        value={cashboxName}
+                        onChange={e => setCashboxName(e.target.value)}
+                        placeholder="صندوق مرکزی"
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">مسئول صندوق</label>
+                      <input
+                        type="text"
+                        value={cashboxManager}
+                        onChange={e => setCashboxManager(e.target.value)}
+                        placeholder="مسئول صندوق"
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
                   </div>
-                  <div>
-                    <label className="block text-[11px] font-bold text-slate-600 mb-1">موجودی نقدی اولیه ({currency})</label>
-                    <input
-                      type="number"
-                      value={cashboxInitialBalance}
-                      onChange={e => setCashboxInitialBalance(e.target.value)}
-                      placeholder="0"
-                      className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-amber-700 font-bold font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
-                      dir="ltr"
-                    />
-                    {Number(cashboxInitialBalance) > 0 && (
-                      <span className="block text-[10px] text-amber-700 font-bold mt-1 truncate">
-                        {numberToWords(cashboxInitialBalance)} {currency}
-                      </span>
-                    )}
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره حساب / کد تفصیلی</label>
+                      <input
+                        type="text"
+                        value={cashboxAccountNumber}
+                        onChange={e => setCashboxAccountNumber(e.target.value)}
+                        placeholder="101"
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                        dir="ltr"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-bold text-slate-600 mb-1">موجودی نقدی اولیه ({currency})</label>
+                      <input
+                        type="number"
+                        value={cashboxInitialBalance}
+                        onChange={e => setCashboxInitialBalance(e.target.value)}
+                        placeholder="0"
+                        className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-amber-700 font-bold font-mono text-left text-xs focus:ring-1 focus:ring-indigo-500 outline-none"
+                        dir="ltr"
+                      />
+                    </div>
                   </div>
+                  {Number(cashboxInitialBalance) > 0 && (
+                    <span className="block text-[10px] text-amber-700 font-bold truncate">
+                      {numberToWords(cashboxInitialBalance)} {currency}
+                    </span>
+                  )}
                 </div>
 
                 {/* Warehouse */}
@@ -1599,29 +1720,60 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
               {!useStarterPack && (
                 <div className="space-y-4 pt-2 animate-in slide-in-from-top-2 duration-200">
                   {/* Person */}
-                  <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-3">
-                    <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
-                      <Users className="w-4 h-4 text-indigo-600" />
-                      <span>اولین طرف حساب (شخص)</span>
+                  <div className="bg-slate-50/90 p-5 rounded-2xl border border-slate-200 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <div className="text-xs font-bold text-slate-900 flex items-center gap-2">
+                        <Users className="w-4 h-4 text-indigo-600" />
+                        <span>اولین طرف حساب (مشتری یا تامین‌کننده)</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setCustomPersonType('real')}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                            customPersonType === 'real'
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-white text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          شخص حقیقی
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setCustomPersonType('legal')}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-bold cursor-pointer transition-all ${
+                            customPersonType === 'legal'
+                              ? 'bg-indigo-600 text-white shadow-xs'
+                              : 'bg-white text-slate-600 border border-slate-200'
+                          }`}
+                        >
+                          شخص حقوقی / شرکت
+                        </button>
+                      </div>
                     </div>
+
                     <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">نام شخص یا شرکت *</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                          {customPersonType === 'real' ? 'نام و نام خانوادگی *' : 'نام شرکت یا موسسه *'}
+                        </label>
                         <input
                           type="text"
                           value={customPersonName}
                           onChange={e => setCustomPersonName(e.target.value)}
-                          placeholder="مشتری نقدی"
+                          placeholder={customPersonType === 'real' ? 'علی رضایی' : 'شرکت توسعه تجارت'}
                           className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500 font-bold"
                         />
                       </div>
                       <div>
-                        <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره تماس</label>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">
+                          {customPersonType === 'real' ? 'کد ملی (۱۰ رقم)' : 'شناسه ملی (۱۱ رقم)'}
+                        </label>
                         <input
                           type="text"
-                          value={customPersonPhone}
-                          onChange={e => setCustomPersonPhone(e.target.value)}
-                          placeholder="0912..."
+                          value={customPersonNationalId}
+                          onChange={e => setCustomPersonNationalId(e.target.value)}
+                          placeholder={customPersonType === 'real' ? '0012345678' : '10100123456'}
                           className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
                           dir="ltr"
                         />
@@ -1637,6 +1789,112 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                           <option value="supplier">تامین‌کننده (فروشنده)</option>
                           <option value="both">مشتری و تامین‌کننده</option>
                         </select>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره همراه (موبایل)</label>
+                        <input
+                          type="text"
+                          value={customPersonMobile}
+                          onChange={e => setCustomPersonMobile(e.target.value)}
+                          placeholder="0912..."
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                          dir="ltr"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">تلفن ثابت</label>
+                        <input
+                          type="text"
+                          value={customPersonPhone}
+                          onChange={e => setCustomPersonPhone(e.target.value)}
+                          placeholder="021..."
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                          dir="ltr"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">کد اقتصادی (اختیاری)</label>
+                        <input
+                          type="text"
+                          value={customPersonEconomicCode}
+                          onChange={e => setCustomPersonEconomicCode(e.target.value)}
+                          placeholder="12 رقمی"
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                          dir="ltr"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div className="sm:col-span-2">
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">نشانی و آدرس</label>
+                        <input
+                          type="text"
+                          value={customPersonAddress}
+                          onChange={e => setCustomPersonAddress(e.target.value)}
+                          placeholder="استان، شهر، خیابان..."
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">مانده حساب اول دوره ({currency})</label>
+                        <div className="flex gap-1.5">
+                          <input
+                            type="number"
+                            value={customPersonBalance}
+                            onChange={e => setCustomPersonBalance(e.target.value)}
+                            placeholder="0"
+                            className="flex-1 px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                            dir="ltr"
+                          />
+                          <select
+                            value={customPersonBalanceType}
+                            onChange={e => setCustomPersonBalanceType(e.target.value as any)}
+                            className="px-2 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-[10px] font-bold outline-none"
+                          >
+                            <option value="settled">بی‌حساب</option>
+                            <option value="debtor">بدهکار</option>
+                            <option value="creditor">بستانکار</option>
+                          </select>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-1 border-t border-slate-200/60">
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">نام بانک طرف حساب</label>
+                        <input
+                          type="text"
+                          value={customPersonBankName}
+                          onChange={e => setCustomPersonBankName(e.target.value)}
+                          placeholder="مثال: بانک ملی"
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره حساب / کارت</label>
+                        <input
+                          type="text"
+                          value={customPersonAccountNumber}
+                          onChange={e => setCustomPersonAccountNumber(e.target.value)}
+                          placeholder="شماره حساب یا کارت"
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                          dir="ltr"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-600 mb-1">شماره شبا طرف حساب</label>
+                        <input
+                          type="text"
+                          value={customPersonSheba}
+                          onChange={e => setCustomPersonSheba(e.target.value)}
+                          placeholder="IR..."
+                          className="w-full px-3 py-2 rounded-xl bg-white border border-slate-300 text-slate-900 font-mono text-left text-xs outline-none focus:ring-1 focus:ring-indigo-500"
+                          dir="ltr"
+                        />
                       </div>
                     </div>
                   </div>
@@ -1867,6 +2125,73 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
       <footer className="text-center py-4 border-t border-slate-200 text-[11px] text-slate-500 font-sans">
         سیستم یکپارچه مدیریت مالی و حسابداری فروشگاهی · طراحی شده بر پایه استانداردهای نوین رابط کاربری
       </footer>
+
+      {/* 107 Tables Creation Progress Overlay Modal */}
+      {saving && (
+        <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-200" dir="rtl">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-200 text-center space-y-5">
+            
+            {/* Top Animated Icon */}
+            <div className="w-16 h-16 mx-auto rounded-2xl bg-indigo-50 border border-indigo-200 flex items-center justify-center text-indigo-600 shadow-sm relative">
+              <Database className="w-8 h-8 animate-pulse text-indigo-600" />
+              <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-emerald-500 text-white flex items-center justify-center text-[10px] font-bold shadow-xs">
+                <Sparkles className="w-3 h-3" />
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-base sm:text-lg font-black text-slate-900">
+                در حال ساخت و سازمان‌دهی ۱۰۷ جدول پایگاه داده
+              </h3>
+              <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                لطفاً شکیبا باشید؛ ساختارهای پایگاه داده، سال مالی، حساب‌های بانکی و ایندکس‌های مالی در حال آماده‌سازی امن هستند.
+              </p>
+            </div>
+
+            {/* Progress Bar & Percentage */}
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs font-bold text-slate-700">
+                <span className="flex items-center gap-1.5">
+                  <span className="inline-block w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
+                  <span>پیشرفت ساخت جداول:</span>
+                </span>
+                <span className="font-mono text-indigo-600 font-black text-sm">
+                  {syncProgress.percent || Math.min(100, Math.round(((syncProgress.current || 1) / (syncProgress.total || 107)) * 100))}%
+                </span>
+              </div>
+
+              <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200 p-0.5">
+                <div 
+                  className="h-full bg-gradient-to-l from-indigo-600 to-indigo-500 rounded-full transition-all duration-300 relative shadow-sm"
+                  style={{ width: `${Math.max(5, syncProgress.percent || Math.min(100, Math.round(((syncProgress.current || 1) / (syncProgress.total || 107)) * 100)))}%` }}
+                >
+                  <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
+                </div>
+              </div>
+            </div>
+
+            {/* Table Detail Badges */}
+            <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
+              <div className="flex items-center gap-2 text-slate-600 font-bold">
+                <Layers className="w-4 h-4 text-indigo-600" />
+                <span>
+                  جدول <span className="font-mono text-indigo-600 font-black">{syncProgress.current || 1}</span> از <span className="font-mono text-slate-900 font-black">{syncProgress.total || 107}</span>
+                </span>
+              </div>
+              {syncProgress.tableName && (
+                <div className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 max-w-[200px] truncate" dir="ltr">
+                  {syncProgress.tableName}
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-slate-500 font-medium">
+              {syncProgress.message || 'در حال ایجاد جداول و ساختاردهی فیلدهای تخصصی پایگاه داده...'}
+            </p>
+
+          </div>
+        </div>
+      )}
 
     </div>
   );

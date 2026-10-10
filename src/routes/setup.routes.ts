@@ -1,6 +1,6 @@
 
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
-import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
+import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables, currentSyncProgress } from '../db/schema-sync';
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
 
@@ -23,6 +23,14 @@ import * as schema from '../db/schema';
 import { requireRole } from '../middleware/auth.middleware';
 
 const router = Router();
+
+// GET /api/setup/sync-progress: Table creation progress reporting
+router.get('/api/setup/sync-progress', (req, res) => {
+  res.json({
+    success: true,
+    progress: currentSyncProgress
+  });
+});
 
 router.get('/api/setup/status', async (req, res) => {
     try {
@@ -337,11 +345,14 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
       const bankId = 'acc-main-' + Date.now();
       accountsList.push({
         id: bankId,
-        title: bankName,
+        title: bankAccount?.title?.trim() || bankName,
         bankName,
+        branchName: bankAccount?.branchName?.trim() || bankAccount?.branch?.trim() || '',
         accountNumber: bankAccount?.accountNumber?.trim() || '',
         cardNumber: bankAccount?.cardNumber?.trim() || '',
         shebaNumber: bankAccount?.shebaNumber?.trim() || '',
+        sheba: bankAccount?.shebaNumber?.trim() || '',
+        accountHolder: bankAccount?.accountHolder?.trim() || bankAccount?.owner?.trim() || companyName,
         balance: bankBal,
         initialBalance: bankBal,
         isDefault: true,
@@ -360,6 +371,9 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
       cashboxesList.push({
         id: 'cb-main-' + Date.now(),
         name: cashName,
+        manager: cashbox?.manager?.trim() || fullName,
+        accountNumber: cashbox?.accountNumber?.trim() || '101',
+        description: `صندوق پیش‌فرض سیستم مالی - مسئول: ${cashbox?.manager?.trim() || fullName}`,
         balance: cashBal,
         initialBalance: cashBal,
         isDefault: true,
@@ -469,16 +483,31 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
       }
     } else {
       if (customPerson && customPerson.name?.trim()) {
+        const isLegal = customPerson.personType === 'legal' || customPerson.personType === 'company';
         personsList.push({
           id: 'person-' + Date.now(),
           name: customPerson.name.trim(),
           alias: customPerson.alias?.trim() || customPerson.name.trim(),
-          personType: customPerson.personType || 'individual',
+          personType: isLegal ? 'legal' : 'real',
           role: customPerson.role || 'customer',
-          personCode: '1001',
+          roles: [customPerson.role || 'customer'],
+          personCode: customPerson.personCode?.trim() || '1001',
+          nationalId: customPerson.nationalId?.trim() || '',
+          economicCode: customPerson.economicCode?.trim() || '',
+          registrationNumber: customPerson.registrationNumber?.trim() || '',
           phone: customPerson.phone?.trim() || '',
+          mobile: customPerson.mobile?.trim() || customPerson.phone?.trim() || '',
+          province: customPerson.province?.trim() || '',
+          city: customPerson.city?.trim() || '',
+          address: customPerson.address?.trim() || '',
+          bankName: customPerson.bankName?.trim() || '',
+          accountNumber: customPerson.accountNumber?.trim() || '',
+          cardNumber: customPerson.cardNumber?.trim() || '',
+          shebaNumber: customPerson.shebaNumber?.trim() || '',
           initialBalance: Number(customPerson.initialBalance) || 0,
+          balance: Number(customPerson.initialBalance) || 0,
           initialBalanceType: customPerson.initialBalanceType || 'settled',
+          status: 'active',
           createdAt: Date.now()
         });
         await setDbData('persons', personsList);

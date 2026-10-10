@@ -319,11 +319,14 @@ router.post('/api/databases', async (req, res) => {
     const bankBal = Number(bankAccount?.initialBalance) || 0;
     const defaultBank = {
       id: 'acc-main-' + Date.now(),
-      title: bankAccount?.bankName?.trim() || 'حساب بانکی اصلی',
+      title: bankAccount?.title?.trim() || bankAccount?.bankName?.trim() || 'حساب بانکی اصلی',
       bankName: bankAccount?.bankName?.trim() || 'بانک ملت',
+      branchName: bankAccount?.branchName?.trim() || bankAccount?.branch?.trim() || '',
       accountNumber: bankAccount?.accountNumber?.trim() || '',
       cardNumber: bankAccount?.cardNumber?.trim() || '',
       shebaNumber: bankAccount?.shebaNumber?.trim() || '',
+      sheba: bankAccount?.shebaNumber?.trim() || '',
+      accountHolder: bankAccount?.accountHolder?.trim() || bankAccount?.owner?.trim() || cleanCompanyName,
       balance: bankBal,
       initialBalance: bankBal,
       isDefault: true,
@@ -335,6 +338,9 @@ router.post('/api/databases', async (req, res) => {
     const defaultCashbox = {
       id: 'cb-main-' + Date.now(),
       name: cashbox?.name?.trim() || 'صندوق مرکزی',
+      manager: cashbox?.manager?.trim() || '',
+      accountNumber: cashbox?.accountNumber?.trim() || '101',
+      description: `صندوق پیش‌فرض کسب و کار ${cleanName}`,
       balance: cashBal,
       initialBalance: cashBal,
       isDefault: true,
@@ -393,16 +399,31 @@ router.post('/api/databases', async (req, res) => {
       });
     } else {
       if (customPerson && customPerson.name?.trim()) {
+        const isLegal = customPerson.personType === 'legal' || customPerson.personType === 'company';
         initialPersons.push({
           id: 'person-' + Date.now(),
           name: customPerson.name.trim(),
-          alias: customPerson.name.trim(),
-          personType: 'individual',
+          alias: customPerson.alias?.trim() || customPerson.name.trim(),
+          personType: isLegal ? 'legal' : 'real',
           role: customPerson.role || 'customer',
-          personCode: '1001',
+          roles: [customPerson.role || 'customer'],
+          personCode: customPerson.personCode?.trim() || '1001',
+          nationalId: customPerson.nationalId?.trim() || '',
+          economicCode: customPerson.economicCode?.trim() || '',
+          registrationNumber: customPerson.registrationNumber?.trim() || '',
           phone: customPerson.phone?.trim() || '',
-          initialBalance: 0,
-          initialBalanceType: 'settled',
+          mobile: customPerson.mobile?.trim() || customPerson.phone?.trim() || '',
+          province: customPerson.province?.trim() || '',
+          city: customPerson.city?.trim() || '',
+          address: customPerson.address?.trim() || '',
+          bankName: customPerson.bankName?.trim() || '',
+          accountNumber: customPerson.accountNumber?.trim() || '',
+          cardNumber: customPerson.cardNumber?.trim() || '',
+          shebaNumber: customPerson.shebaNumber?.trim() || '',
+          initialBalance: Number(customPerson.initialBalance) || 0,
+          balance: Number(customPerson.initialBalance) || 0,
+          initialBalanceType: customPerson.initialBalanceType || 'settled',
+          status: 'active',
           createdAt: Date.now()
         });
       }

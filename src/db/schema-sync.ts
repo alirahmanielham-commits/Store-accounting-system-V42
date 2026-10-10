@@ -24,6 +24,37 @@ export const KNOWN_TABLES = ['businesses', 'notifications', 'customers_risk_prof
 , 'InventoryTransactions', 'inventory_transactions', 'kardex', 'personal_notes',
   'sms_providers', 'sms_provider_settings', 'sms_templates', 'sms_campaigns',
   'sms_delivery_logs', 'sms_retry_logs', 'sms_settings', 'sms_quota_logs', 'sms_audit_logs', 'employee_orders', 'employee_profiles', 'order_templates', 'workplaces'];
+export interface TableSyncProgress {
+  current: number;
+  total: number;
+  tableName: string;
+  status: 'idle' | 'running' | 'completed' | 'error';
+  percent: number;
+  message: string;
+}
+
+export let currentSyncProgress: TableSyncProgress = {
+  current: 0,
+  total: KNOWN_TABLES.length,
+  tableName: '',
+  status: 'idle',
+  percent: 0,
+  message: 'آماده‌سازی پایگاه داده...'
+};
+
+export function updateSyncProgress(current: number, tableName: string, status: 'idle' | 'running' | 'completed' | 'error' = 'running', message?: string) {
+  const total = KNOWN_TABLES.length;
+  const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 100;
+  currentSyncProgress = {
+    current,
+    total,
+    tableName,
+    status,
+    percent,
+    message: message || `در حال ایجاد و ساختاردهی جدول ${current} از ${total}: ${tableName}`
+  };
+}
+
 export const tableSchemas = new Map<string, Map<string, string>>();
 
 export const isNumericField = (k: string) => {
@@ -279,7 +310,11 @@ export async function ensurePostgresTables(poolOverride?: any) {
       console.warn('Could not run automated date column migration:', migErr?.message);
     }
 
+    let tableIdx = 0;
+    const totalTables = KNOWN_TABLES.length;
     for (const key of KNOWN_TABLES) {
+      tableIdx++;
+      updateSyncProgress(tableIdx, key, 'running', `در حال ساخت و همگام‌سازی جدول ${tableIdx} از ${totalTables}: ${key}`);
       try {
         await p.query(`
           CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY);
@@ -304,6 +339,7 @@ export async function ensurePostgresTables(poolOverride?: any) {
       }
     }
     tableSchemas.clear();
+    updateSyncProgress(totalTables, 'ایندکس‌گذاری پایگاه داده', 'running', 'در حال ایجاد ایندکس‌های بهینه‌سازی جداول...');
     // Create essential performance indexes
     const essentialIndexes = [
       'CREATE INDEX IF NOT EXISTS idx_invoices_date ON "invoices" ("date")',
@@ -332,5 +368,6 @@ export async function ensurePostgresTables(poolOverride?: any) {
         // column may not exist yet until table populated; ignore silently
       }
     }
+    updateSyncProgress(totalTables, 'پایان ساخت جداول', 'completed', `تمامی ${totalTables} جدول پایگاه داده با موفقیت ایجاد و آماده‌سازی شدند.`);
   }
 }

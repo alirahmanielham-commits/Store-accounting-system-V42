@@ -389,7 +389,7 @@ export default function BusinessManager({ availableStores, setAvailableStores, o
                       </td>
                       <td className="p-4 align-middle text-center">
                         <span className="text-[11px] font-bold px-2 py-1 rounded bg-slate-50 text-slate-500 border border-slate-200 inline-block">
-                          {store.db_type === 'postgres' ? 'PostgreSQL' : 'SQLite'}
+                          {store.db_type === 'postgres' ? 'PostgreSQL' : 'موتور محلی'}
                         </span>
                       </td>
                       <td className="p-4 align-middle text-center">
