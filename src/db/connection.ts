@@ -1,6 +1,7 @@
 import 'dotenv/config';
 import { AsyncLocalStorage } from 'node:async_hooks';
 import path from 'path';
+import fs from 'fs';
 import fsPromises from 'fs/promises';
 import { Client, Pool } from 'pg';
 import { ensurePostgresTables } from './schema-sync';
@@ -37,6 +38,32 @@ export function invalidateStorePgPool(storeId?: string) {
     }
 }
 
+export async function getDefaultPgConnectionString(): Promise<string | null> {
+    try {
+        const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
+        const config = JSON.parse(configRaw);
+        const connectionString = decryptValue(config.connectionString);
+        if (config.engine === 'postgres' && connectionString) {
+            return connectionString;
+        }
+    } catch (_) {}
+
+    if (process.env.SQL_HOST && process.env.SQL_USER) {
+        const host = process.env.SQL_HOST;
+        const user = encodeURIComponent(process.env.SQL_USER);
+        const pwd = encodeURIComponent(process.env.SQL_PASSWORD || '');
+        const port = process.env.SQL_PORT || '5432';
+        const db = process.env.SQL_DB_NAME || 'postgres';
+        return `postgres://${user}:${pwd}@${host}:${port}/${db}`;
+    }
+
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres') && !process.env.DATABASE_URL.includes('user:pass@localhost')) {
+        return process.env.DATABASE_URL;
+    }
+
+    return null;
+}
+
 export async function loadPgPoolForStore(storeId: string) {
     if (activePgPools[storeId]) return;
     if (pendingPgPools[storeId]) {
@@ -46,45 +73,16 @@ export async function loadPgPoolForStore(storeId: string) {
 
     pendingPgPools[storeId] = (async () => {
         if (storeId === 'default') {
-            try {
-                const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
-                const config = JSON.parse(configRaw);
-                const connectionString = decryptValue(config.connectionString);
-                if (config.engine === 'postgres' && connectionString) {
-                    const pool = await connectPgDb(connectionString);
-                    activePgPools['default'] = pool;
-                    usePgMap['default'] = true;
-                    await ensurePostgresTables(pool);
-                    return;
-                }
-            } catch(e) { /* ignore config file error */ }
-            
-            if (process.env.SQL_HOST && process.env.SQL_USER) {
+            const connStr = await getDefaultPgConnectionString();
+            if (connStr) {
                 try {
-                    const pool = new Pool({
-                        host: process.env.SQL_HOST,
-                        user: process.env.SQL_USER,
-                        password: process.env.SQL_PASSWORD,
-                        database: process.env.SQL_DB_NAME,
-                        connectionTimeoutMillis: 2000,
-                    });
-                    await pool.query('SELECT 1');
+                    const pool = await connectPgDb(connStr);
                     activePgPools['default'] = pool;
                     usePgMap['default'] = true;
                     await ensurePostgresTables(pool);
                     return;
-                } catch(err) {
-                    console.warn('Postgres connection via SQL_HOST failed, using local database storage:', (err as any)?.message);
-                }
-            } else if (process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres') && !process.env.DATABASE_URL.includes('user:pass@localhost')) {
-                try {
-                    const pool = await connectPgDb(process.env.DATABASE_URL);
-                    activePgPools['default'] = pool;
-                    usePgMap['default'] = true;
-                    await ensurePostgresTables(pool);
-                    return;
-                } catch(err) {
-                    console.warn('Postgres connection via DATABASE_URL failed, using local database storage:', (err as any)?.message);
+                } catch (err: any) {
+                    console.warn('Postgres connection failed, using local database storage:', err?.message);
                 }
             }
             
@@ -131,12 +129,11 @@ export async function loadPgPoolForStore(storeId: string) {
             }
             
             if (business && business.db_type === 'postgres') {
-                const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
-                const config = JSON.parse(configRaw);
-                const connectionString = decryptValue(config.connectionString);
-                if (config.engine === 'postgres' && connectionString) {
-                    const url = new URL(connectionString);
-                    url.pathname = `/${business.db_name}`;
+                const connStr = await getDefaultPgConnectionString();
+                if (connStr) {
+                    const url = new URL(connStr);
+                    const dbName = business.db_name || ('store_' + storeId).replace(/[^a-zA-Z0-9_]/g, '');
+                    url.pathname = `/${dbName}`;
                     const pool = await connectPgDb(url.toString());
                     activePgPools[storeId] = pool;
                     usePgMap[storeId] = true;

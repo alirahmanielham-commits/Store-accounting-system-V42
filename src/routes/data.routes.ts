@@ -613,10 +613,11 @@ router.get('/api/data/:key', async (req, res) => {
     const { limit, offset, page, pageSize, search, sortBy, sortOrder, sortDir, paginated } = req.query;
     try {
       // 1. Intelligent HTTP caching for base reference tables
-      if (['product_categories', 'warehouses', 'store_settings', 'company_profile', 'person_roles', 'person_groups'].includes(key)) {
-        res.setHeader('Cache-Control', 'public, max-age=60, stale-while-revalidate=120');
+      res.setHeader('Vary', 'x-store-id, Authorization');
+      if (['product_categories', 'warehouses', 'person_roles', 'person_groups'].includes(key)) {
+        res.setHeader('Cache-Control', 'public, max-age=15, stale-while-revalidate=30');
       } else {
-        res.setHeader('Cache-Control', 'no-cache, must-revalidate');
+        res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       }
 
       let data = await getDbData(key);

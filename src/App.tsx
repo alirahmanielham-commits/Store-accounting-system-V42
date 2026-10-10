@@ -1311,14 +1311,16 @@ if (appState.isStoreSelectionOpen) {
         onSelectStore={(id: string) => {
           localStorage.setItem("activeStoreId", id);
           sessionStorage.setItem("activeStoreId", id);
+          localStorage.setItem("initial_setup_complete", "true");
           try {
-            document.cookie = `activeStoreId=${encodeURIComponent(id)}; path=/; max-age=31536000`;
+            document.cookie = `activeStoreId=${encodeURIComponent(id)}; path=/; max-age=31536000; SameSite=Lax`;
           } catch (_) {}
           // Clear previous cached profile and store settings
           localStorage.removeItem("company_profile");
           localStorage.removeItem("store_settings");
           sessionStorage.removeItem("company_profile");
           sessionStorage.removeItem("store_settings");
+          appState.setActiveStoreId(id);
           window.location.reload();
         }}
         onClose={localStorage.getItem("activeStoreId") ? () => appState.setIsStoreSelectionOpen(false) : undefined}
@@ -1541,10 +1543,25 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
   }
 
   if (activeTab === "welcome_page") {
-    if (isMobileScreen) {
-      return <WelcomePage onLoginClick={() => setActiveTab("create_sale")} />;
-    }
-    return <WelcomePage onLoginClick={() => setActiveTab("financial_report")} />;
+    const handleWelcomeEnter = (storeId?: string) => {
+      const targetStore = storeId || localStorage.getItem("activeStoreId") || "default";
+      if (targetStore !== appState.activeStoreId) {
+        appState.setActiveStoreId(targetStore);
+        localStorage.setItem("activeStoreId", targetStore);
+        sessionStorage.setItem("activeStoreId", targetStore);
+        try {
+          document.cookie = `activeStoreId=${encodeURIComponent(targetStore)}; path=/; max-age=31536000; SameSite=Lax`;
+        } catch (_) {}
+        window.location.reload();
+        return;
+      }
+      if (isMobileScreen) {
+        setActiveTab("create_sale");
+      } else {
+        setActiveTab("financial_report");
+      }
+    };
+    return <WelcomePage onLoginClick={handleWelcomeEnter} />;
   }
 
   return (
@@ -2149,33 +2166,40 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                             <Layers className="w-4 h-4 relative z-10" />
                           </div>
                         )}
-                        <button
-                          type="button"
-                          onClick={() => {
-                            appState.confirmAction(
-                              'آیا از تغییر کسب‌وکار یا مدیریت فروشگاه‌ها اطمینان دارید؟',
-                              () => { appState.setIsStoreSelectionOpen(true); }
-                            );
-                          }}
-                          className="flex items-center gap-2 px-2.5 py-1.5 rounded-xl bg-slate-50 hover:bg-indigo-50 border border-slate-200 hover:border-indigo-200 transition-all cursor-pointer shadow-3xs group"
-                          title="کسب‌وکار فعال - برای جابجایی یا افزودن کلیک کنید"
-                        >
-                          <div className="flex flex-col text-right">
-                            <div className="flex items-center gap-1.5">
-                              <Store className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
-                              <span className="text-xs font-black text-slate-900 group-hover:text-indigo-700 truncate max-w-[130px] sm:max-w-[190px]">
-                                {storeSettings.storeName || "سیستم پیش‌فرض"}
-                              </span>
-                              <span className="text-[9px] px-1.5 py-0.2 rounded-full font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shrink-0">
-                                فعال
-                              </span>
-                            </div>
-                            <span className="text-[10px] text-slate-400 font-medium flex items-center gap-1">
-                              <span>تغییر کسب‌وکار</span>
-                              <ChevronDown className="w-2.5 h-2.5" />
-                            </span>
-                          </div>
-                        </button>
+                        {(() => {
+                          const activeStoreIdVal = (typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || 'default';
+                          const activeStoreObj = appState.availableStores.find(s => s.id === activeStoreIdVal);
+                          const activeStoreName = activeStoreObj?.name || storeSettings.storeName || "کسب‌وکار اصلی";
+                          return (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                appState.confirmAction(
+                                  'آیا از تغییر کسب‌وکار یا مدیریت فروشگاه‌ها اطمینان دارید؟',
+                                  () => { appState.setIsStoreSelectionOpen(true); }
+                                );
+                              }}
+                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50/80 hover:bg-indigo-100/90 border border-indigo-200/80 transition-all cursor-pointer shadow-3xs group"
+                              title="کسب‌وکار فعال - برای جابجایی یا افزودن کلیک کنید"
+                            >
+                              <div className="flex flex-col text-right">
+                                <div className="flex items-center gap-1.5">
+                                  <Store className="w-4 h-4 text-indigo-600 shrink-0" />
+                                  <span className="text-xs font-black text-slate-900 group-hover:text-indigo-800 truncate max-w-[130px] sm:max-w-[210px]">
+                                    {activeStoreName}
+                                  </span>
+                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
+                                    کسب‌وکار انتخابی
+                                  </span>
+                                </div>
+                                <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
+                                  <span>تغییر کسب‌وکار</span>
+                                  <ChevronDown className="w-2.5 h-2.5" />
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })()}
                       </div>
                     </div>
 
@@ -2779,48 +2803,62 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                 </main>
 
                 {/* Clean Bottom Business Status Footer Bar */}
-                <footer className="border-t border-slate-200/80 bg-white/95 backdrop-blur-md px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 no-print z-40 select-none shadow-3xs" dir="rtl">
-                  <div className="flex items-center gap-3">
-                    <div className="flex items-center gap-2">
-                      <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
-                      <span className="text-slate-500 font-bold">کسب‌وکار انتخابی:</span>
-                      <span className="font-black text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded-lg border border-slate-200/60 flex items-center gap-1.5">
-                        <Store className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>{storeSettings.storeName || "سیستم پیش‌فرض"}</span>
-                      </span>
-                    </div>
-                    <span className="text-slate-300 hidden sm:inline">|</span>
-                    <div className="hidden sm:flex items-center gap-1.5 text-slate-500">
-                      <span>واحد پول:</span>
-                      <span className="font-bold text-slate-800">{storeSettings.currency || "تومان"}</span>
-                      <span className="text-slate-400">({storeSettings.calendarType === "gregorian" ? "تقویم میلادی" : "تقویم هجری شمسی"})</span>
-                    </div>
-                  </div>
+                {(() => {
+                  const activeStoreIdVal = (typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || 'default';
+                  const activeStoreObj = appState.availableStores.find(s => s.id === activeStoreIdVal);
+                  const activeStoreName = activeStoreObj?.name || storeSettings.storeName || "کسب‌وکار اصلی";
+                  const dbTypeLabel = activeStoreObj?.db_type === 'postgres' ? 'PostgreSQL' : 'محلی (JSON/SQLite)';
 
-                  <div className="flex items-center gap-3">
-                    <div className="hidden md:flex items-center gap-1.5 text-slate-500 text-[11px]">
-                      <Database className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>شناسه پایگاه داده:</span>
-                      <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200/50" dir="ltr">
-                        {localStorage.getItem('activeStoreId') || 'default'}
-                      </span>
-                    </div>
+                  return (
+                    <footer className="border-t border-slate-200/80 bg-white/95 backdrop-blur-md px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 no-print z-40 select-none shadow-3xs" dir="rtl">
+                      <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
+                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span className="text-slate-500 font-bold">کسب‌وکار فعال:</span>
+                          <span className="font-black text-slate-900 bg-indigo-50 text-indigo-900 px-3 py-1 rounded-xl border border-indigo-200/80 flex items-center gap-1.5 shadow-3xs">
+                            <Store className="w-3.5 h-3.5 text-indigo-600" />
+                            <span>{activeStoreName}</span>
+                          </span>
+                        </div>
+                        <span className="text-slate-300 hidden sm:inline">|</span>
+                        <div className="hidden sm:flex items-center gap-1.5 text-slate-500">
+                          <span>نوع پایگاه داده:</span>
+                          <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200/60">{dbTypeLabel}</span>
+                        </div>
+                        <span className="text-slate-300 hidden md:inline">|</span>
+                        <div className="hidden md:flex items-center gap-1.5 text-slate-500">
+                          <span>واحد پول:</span>
+                          <span className="font-bold text-slate-800">{storeSettings.currency || "تومان"}</span>
+                          <span className="text-slate-400">({storeSettings.calendarType === "gregorian" ? "میلادی" : "شمسی"})</span>
+                        </div>
+                      </div>
 
-                    <button
-                      type="button"
-                      onClick={() => {
-                        appState.confirmAction(
-                          'آیا از تعویض کسب‌وکار فعلی اطمینان دارید؟',
-                          () => { appState.setIsStoreSelectionOpen(true); }
-                        );
-                      }}
-                      className="px-3 py-1 bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 rounded-lg text-xs font-bold border border-slate-200 hover:border-indigo-200 transition-colors flex items-center gap-1.5 cursor-pointer shadow-3xs active:scale-95"
-                    >
-                      <RefreshCw className="w-3 h-3 text-indigo-600" />
-                      <span>تغییر کسب‌وکار</span>
-                    </button>
-                  </div>
-                </footer>
+                      <div className="flex items-center gap-3">
+                        <div className="hidden lg:flex items-center gap-1.5 text-slate-500 text-[11px]">
+                          <Database className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>شناسه کسب‌وکار:</span>
+                          <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200/50" dir="ltr">
+                            {activeStoreIdVal}
+                          </span>
+                        </div>
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            appState.confirmAction(
+                              'آیا از تعویض کسب‌وکار فعلی اطمینان دارید؟',
+                              () => { appState.setIsStoreSelectionOpen(true); }
+                            );
+                          }}
+                          className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 rounded-xl text-xs font-black border border-indigo-200/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs active:scale-95"
+                        >
+                          <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
+                          <span>تغییر و مدیریت کسب‌وکارها</span>
+                        </button>
+                      </div>
+                    </footer>
+                  );
+                })()}
 </div>
 </div>
 )}

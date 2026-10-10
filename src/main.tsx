@@ -84,7 +84,9 @@ const queryClient = new QueryClient({
 import { backfillInstallmentCodes } from "./migrations/backfillInstallmentCodes";
 
 const Root = () => {
-  const [setupComplete, setSetupComplete] = useState(false);
+  const [setupComplete, setSetupComplete] = useState(() => {
+    return localStorage.getItem('initial_setup_complete') === 'true';
+  });
   useEffect(() => {
     if (setupComplete) {
        backfillInstallmentCodes().catch(console.error);
@@ -94,7 +96,10 @@ const Root = () => {
   return (
     <>
       {!setupComplete ? (
-        <InitialSetupWizard onComplete={() => setSetupComplete(true)} />
+        <InitialSetupWizard onComplete={() => {
+          localStorage.setItem('initial_setup_complete', 'true');
+          setSetupComplete(true);
+        }} />
       ) : (
         
         <QueryClientProvider client={queryClient}>

@@ -6,7 +6,7 @@ import {
   Rocket, ShieldCheck, Sparkles, RefreshCw, Eye, EyeOff,
   Phone, MapPin, Tag, Check, ChevronLeft, ChevronRight,
   CreditCard, Coins, ShoppingBag, ArrowUpRight, HelpCircle,
-  FileText, Percent, Globe, AlertTriangle, PlusCircle
+  FileText, Percent, Globe, AlertTriangle, PlusCircle, Layers
 } from 'lucide-react';
 import { numberToWords } from '../utils/format';
 
@@ -214,8 +214,12 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           setCurrency(data.companyProfile.currency);
         }
         if (data.isComplete && !onCancel) {
-          localStorage.setItem('activeStoreId', 'default');
-          sessionStorage.setItem('activeStoreId', 'default');
+          localStorage.setItem('initial_setup_complete', 'true');
+          const currentStore = localStorage.getItem('activeStoreId');
+          if (!currentStore) {
+            localStorage.setItem('activeStoreId', 'default');
+            sessionStorage.setItem('activeStoreId', 'default');
+          }
           onComplete();
         }
       })
@@ -583,9 +587,11 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
         clearInterval(pollInterval);
 
         if (data.success) {
-          // Explicitly set activeStoreId and company_profile to prevent prompt modal on first load
-          localStorage.setItem('activeStoreId', 'default');
-          sessionStorage.setItem('activeStoreId', 'default');
+          localStorage.setItem('initial_setup_complete', 'true');
+          if (!isBusinessOnly) {
+            localStorage.setItem('activeStoreId', 'default');
+            sessionStorage.setItem('activeStoreId', 'default');
+          }
           localStorage.setItem('company_profile', JSON.stringify({
             storeName: storeName.trim(),
             companyName: companyName.trim() || storeName.trim(),

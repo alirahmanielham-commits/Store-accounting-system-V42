@@ -25,15 +25,29 @@ interface NewsArticle {
   isImportant?: boolean;
 }
 
-export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void }) {
+export default function WelcomePage({ onLoginClick }: { onLoginClick: (storeId?: string) => void }) {
   const { user } = useAuth();
   const [businesses, setBusinesses] = useState<any[]>([]);
-  const [selectedBusiness, setSelectedBusiness] = useState('');
+  const [selectedBusiness, setSelectedBusiness] = useState(() => {
+    return (typeof window !== 'undefined' && localStorage.getItem('activeStoreId')) || '';
+  });
   
   const [storeProducts, setStoreProducts] = useState<any[]>([]);
   const [storeSettings, setStoreSettings] = useState<any>({});
   const [isLoadingStore, setIsLoadingStore] = useState(false);
   const [showFullPricePage, setShowFullPricePage] = useState(false);
+
+  const handleEnterSystem = (storeIdToActivate?: string) => {
+    const chosen = storeIdToActivate || selectedBusiness || 'default';
+    localStorage.setItem('activeStoreId', chosen);
+    sessionStorage.setItem('activeStoreId', chosen);
+    try {
+      document.cookie = `activeStoreId=${encodeURIComponent(chosen)}; path=/; max-age=31536000; SameSite=Lax`;
+    } catch (_) {}
+    if (onLoginClick) {
+      onLoginClick(chosen);
+    }
+  };
   
   // News state
   const [selectedCategory, setSelectedCategory] = useState<string>('all');
@@ -79,7 +93,10 @@ export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void
         const data = await res.json();
         if (data.success && data.databases) {
           setBusinesses(data.databases);
-          if (data.databases.length > 0 && !selectedBusiness) {
+          const savedActive = localStorage.getItem('activeStoreId');
+          if (savedActive && data.databases.some((b: any) => b.id === savedActive)) {
+            setSelectedBusiness(savedActive);
+          } else if (data.databases.length > 0 && !selectedBusiness) {
             setSelectedBusiness(data.databases[0].id);
           }
         }
@@ -412,7 +429,7 @@ export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void
             <div className="flex items-center gap-3">
               {user ? (
                 <button
-                  onClick={onLoginClick}
+                  onClick={() => handleEnterSystem()}
                   className="flex items-center gap-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 px-5 py-2.5 rounded-xl font-black text-sm transition-all border border-indigo-200/60 shadow-xs cursor-pointer"
                 >
                   <span className="truncate max-w-[140px]">{user.name || user.username}</span>
@@ -420,7 +437,7 @@ export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void
                 </button>
               ) : (
                 <button 
-                  onClick={onLoginClick}
+                  onClick={() => handleEnterSystem()}
                   className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-2.5 rounded-xl font-black text-sm transition-all shadow-md shadow-indigo-600/20 hover:shadow-lg cursor-pointer"
                 >
                   <LogIn className="w-4 h-4" />
@@ -465,7 +482,7 @@ export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void
               <div className="flex flex-wrap items-center gap-4 pt-2">
                 {user ? (
                   <button 
-                    onClick={onLoginClick}
+                    onClick={() => handleEnterSystem()}
                     className="flex items-center justify-center gap-2.5 bg-indigo-600 hover:bg-indigo-700 text-white px-7 py-3.5 rounded-xl font-black text-base transition-all shadow-lg shadow-indigo-600/25 cursor-pointer"
                   >
                     <span>ورود به داشبورد کاری</span>
@@ -473,7 +490,7 @@ export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void
                   </button>
                 ) : (
                   <button 
-                    onClick={onLoginClick}
+                    onClick={() => handleEnterSystem()}
                     className="flex items-center justify-center gap-2.5 bg-indigo-600 hover:bg-indigo-700 text-white px-7 py-3.5 rounded-xl font-black text-base transition-all shadow-lg shadow-indigo-600/25 cursor-pointer"
                   >
                     <span>ورود به پنل کاربری</span>
@@ -646,7 +663,15 @@ export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void
                 <Database className="w-4 h-4 absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none" />
                 <select
                   value={selectedBusiness}
-                  onChange={(e) => setSelectedBusiness(e.target.value)}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setSelectedBusiness(val);
+                    localStorage.setItem('activeStoreId', val);
+                    sessionStorage.setItem('activeStoreId', val);
+                    try {
+                      document.cookie = `activeStoreId=${encodeURIComponent(val)}; path=/; max-age=31536000; SameSite=Lax`;
+                    } catch (_) {}
+                  }}
                   className="w-full bg-white border border-slate-200 text-slate-900 rounded-xl py-2.5 pr-9 pl-4 text-xs font-bold focus:ring-2 focus:ring-indigo-600 outline-none appearance-none shadow-xs"
                 >
                   {businesses.map((b, idx) => (
@@ -752,7 +777,7 @@ export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void
 
                     <div className="pt-4 flex items-center gap-4">
                       <button 
-                        onClick={onLoginClick}
+                        onClick={() => handleEnterSystem()}
                         className="flex items-center gap-2 bg-indigo-600 hover:bg-indigo-700 text-white px-6 py-3 rounded-xl text-xs font-black transition-all shadow-md shadow-indigo-600/20 cursor-pointer"
                       >
                         <span>ورود و استفاده از این بخش</span>
@@ -1249,7 +1274,7 @@ export default function WelcomePage({ onLoginClick }: { onLoginClick: () => void
                 <button
                   onClick={() => {
                     setSelectedArticle(null);
-                    onLoginClick();
+                    handleEnterSystem();
                   }}
                   className="px-6 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-colors shadow-xs cursor-pointer flex items-center gap-1.5"
                 >

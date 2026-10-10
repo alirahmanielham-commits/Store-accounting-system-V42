@@ -114,9 +114,12 @@ export const getAuthHeaders = (): Record<string, string> => {
 export const getLocalData = async <T>(key: string, defaultValue: T, queryParams: Record<string, string | number> = {}, retries = 3): Promise<T> => {
   const qs = new URLSearchParams(Object.entries(queryParams).map(([k, v]) => [k, String(v)])).toString();
   const url = qs ? `/api/data/${key}?${qs}` : `/api/data/${key}`;
+  const authHeaders = getAuthHeaders();
+  const currentStore = authHeaders['x-store-id'] || 'default';
+  const cacheKey = `${currentStore}:${key}`;
   
   if (CACHEABLE_KEYS.includes(key) && !qs) {
-    const cached = cache[key];
+    const cached = cache[cacheKey];
     if (cached && (Date.now() - cached.timestamp < CACHE_DURATION)) {
       return cached.data;
     }
@@ -126,7 +129,7 @@ export const getLocalData = async <T>(key: string, defaultValue: T, queryParams:
     const fetchUrl = url.includes('?') ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
     let res = await fetch(fetchUrl, {
       cache: 'no-store',
-      headers: getAuthHeaders()
+      headers: authHeaders
     });
     if (!res.ok) {
       if (res.status === 401 && retries > 0) {
@@ -151,8 +154,8 @@ export const getLocalData = async <T>(key: string, defaultValue: T, queryParams:
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('auth_unauthorized', { detail: { key } }));
         }
-        if (cache[key]) {
-          return cache[key].data;
+        if (cache[cacheKey]) {
+          return cache[cacheKey].data;
         }
         return defaultValue;
       }
@@ -175,7 +178,7 @@ export const getLocalData = async <T>(key: string, defaultValue: T, queryParams:
     }
     
     if (CACHEABLE_KEYS.includes(key) && !qs) {
-      cache[key] = { data: finalData, timestamp: Date.now() };
+      cache[cacheKey] = { data: finalData, timestamp: Date.now() };
     }
     return finalData;
   } catch (error) {

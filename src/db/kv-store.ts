@@ -1,4 +1,4 @@
-import { getDb, isPgActive, getActivePgPool, storeContext } from './connection';
+import { getDb, isPgActive, getActivePgPool, storeContext, activePgPools } from './connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, preparePgItem } from './schema-sync';
 import fs from 'fs';
 import fsPromises from 'fs/promises';
@@ -43,8 +43,21 @@ function scheduleFileSave(storeId?: string) {
   }, 100);
 }
 
+export const GLOBAL_MAIN_DB_TABLES = ['users', 'roles', 'permissions', 'businesses'];
+
+export function invalidateKvCache(storeId?: string) {
+  if (storeId) {
+    delete cachedDbDataMap[storeId];
+  } else {
+    Object.keys(cachedDbDataMap).forEach(k => delete cachedDbDataMap[k]);
+  }
+}
+
 export async function innerGetDbData(key: string) {
-  if (isPgActive() && getActivePgPool()) {
+  const isGlobalTable = GLOBAL_MAIN_DB_TABLES.includes(key);
+  const targetPool = isGlobalTable ? (activePgPools['default'] || null) : (isPgActive() ? getActivePgPool() : null);
+
+  if (targetPool) {
     if (!KNOWN_TABLES.includes(key)) return null;
     const isSoftDeletable = ["checkbooks", "issued_checks", "received_checks"].includes(key);
     const parseJSONFields = (row: any) => {
@@ -57,13 +70,13 @@ export async function innerGetDbData(key: string) {
          return row;
     };
     try {
-      const res = await getActivePgPool().query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
+      const res = await targetPool.query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
 
       if (key === 'company_profile') {
         try {
-            const r = await getActivePgPool().query("SELECT * FROM system_settings");
+            const r = await targetPool.query("SELECT * FROM system_settings");
             if (r.rows.length === 0) {
-               const r2 = await getActivePgPool().query("SELECT value FROM store WHERE key = 'company_profile'");
+               const r2 = await targetPool.query("SELECT value FROM store WHERE key = 'company_profile'");
                if (r2.rows.length > 0) return JSON.parse(r2.rows[0].value);
                return null;
             }
@@ -84,7 +97,7 @@ export async function innerGetDbData(key: string) {
       if (e.code === '42703' && isSoftDeletable) {
         // Fallback if deleted_at column doesn't exist
         try {
-          const fallbackRes = await getActivePgPool().query(`SELECT * FROM "${key}"`);
+          const fallbackRes = await targetPool.query(`SELECT * FROM "${key}"`);
           return fallbackRes.rows.map(parseJSONFields);
         } catch (fallbackError) {
           throw fallbackError;
@@ -94,15 +107,18 @@ export async function innerGetDbData(key: string) {
       throw e;
     }
   } else {
-    const dbData = await getFileData();
+    const dbData = await getFileData(isGlobalTable ? 'default' : undefined);
     return dbData[key] !== undefined ? dbData[key] : null;
   }
 }
 
 export async function innerSetDbData(key: string, data: any) {
-  if (isPgActive() && getActivePgPool()) {
+  const isGlobalTable = GLOBAL_MAIN_DB_TABLES.includes(key);
+  const targetPool = isGlobalTable ? (activePgPools['default'] || null) : (isPgActive() ? getActivePgPool() : null);
+
+  if (targetPool) {
     if (!KNOWN_TABLES.includes(key)) return;
-    const client = await getActivePgPool().connect();
+    const client = await targetPool.connect();
     try {
        await client.query('BEGIN');
        if (key === 'company_profile') {
@@ -164,9 +180,10 @@ export async function innerSetDbData(key: string, data: any) {
        client.release();
     }
   } else {
-    const dbData = await getFileData();
+    const storeTarget = isGlobalTable ? 'default' : undefined;
+    const dbData = await getFileData(storeTarget);
     dbData[key] = data;
-    scheduleFileSave();
+    scheduleFileSave(storeTarget);
   }
 }
 

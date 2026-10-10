@@ -121,6 +121,15 @@ async function startServer() {
   app.use(express.text({ limit: '500mb', type: ['text/*', 'application/sql', 'application/json'] }));
   app.use(cookieParser());
 
+  app.get('/favicon.ico', (req, res) => {
+    const iconPath = path.join(process.cwd(), 'public', 'favicon.svg');
+    if (fs.existsSync(iconPath)) {
+      res.type('image/svg+xml').sendFile(iconPath);
+    } else {
+      res.status(204).end();
+    }
+  });
+
   app.use(authMiddleware);
   app.use(storeContextMiddleware);
 

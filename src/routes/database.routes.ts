@@ -1,4 +1,4 @@
-import { usePgMap, activePgPools, storeContext, connectPgDb, getDb, DB_CONFIG_FILE, invalidateStorePgPool } from '../db/connection';
+import { usePgMap, activePgPools, storeContext, connectPgDb, getDb, DB_CONFIG_FILE, invalidateStorePgPool, getDefaultPgConnectionString } from '../db/connection';
 import { Client, Pool } from 'pg';
 import { Router } from 'express';
 import fs from 'fs';
@@ -6,7 +6,7 @@ import fsPromises from 'fs/promises';
 import path from 'path';
 import { requireRole, requireAuth } from '../middleware/auth.middleware';
 import { decryptValue } from '../utils/crypto';
-import { getDbData, setDbData } from '../db/kv-store';
+import { getDbData, setDbData, invalidateKvCache } from '../db/kv-store';
 import { ensurePostgresTables } from '../db/schema-sync';
 
 const router = Router();
@@ -222,9 +222,7 @@ router.get('/api/databases/:id/test-connection', async (req, res) => {
       try {
         const r = await activePgPools['default'].query("SELECT * FROM businesses WHERE id = $1", [id]);
         if (r.rows.length > 0 && r.rows[0].db_type === 'postgres') {
-          const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
-          const config = JSON.parse(configRaw);
-          const connectionString = decryptValue(config.connectionString);
+          const connectionString = await getDefaultPgConnectionString();
           if (connectionString) {
             const url = new URL(connectionString);
             url.pathname = `/${r.rows[0].db_name}`;
@@ -445,31 +443,27 @@ router.post('/api/databases', async (req, res) => {
       }
     }
 
-    // 1. Try PostgreSQL provisioning if PostgreSQL is available
+    // 1. Try PostgreSQL provisioning if default database is PostgreSQL
     if (usePgMap['default'] && activePgPools['default']) {
       try {
-        let connectionString = '';
-        try {
-          const configRaw = await fsPromises.readFile(DB_CONFIG_FILE, 'utf-8');
-          const config = JSON.parse(configRaw);
-          connectionString = decryptValue(config.connectionString);
-        } catch (_) {}
-
-        if (!connectionString && process.env.DATABASE_URL && process.env.DATABASE_URL.startsWith('postgres')) {
-          connectionString = process.env.DATABASE_URL;
-        }
-
+        const connectionString = await getDefaultPgConnectionString();
         if (connectionString) {
           try {
             const url = new URL(connectionString);
             url.pathname = '/postgres';
-            const client = new Client({ connectionString: url.toString(), connectionTimeoutMillis: 4000 });
+            const client = new Client({ connectionString: url.toString(), connectionTimeoutMillis: 5000 });
             await client.connect();
-            await client.query(`CREATE DATABASE "${dbNameForBusiness}"`);
+            try {
+              await client.query(`CREATE DATABASE "${dbNameForBusiness}"`);
+            } catch (createErr: any) {
+              if (createErr.code !== '42P04') {
+                console.warn('CREATE DATABASE notice:', createErr.message);
+              }
+            }
             await client.end();
             actualDbType = 'postgres';
           } catch (createErr) {
-            console.warn('Could not CREATE DATABASE, using single DB table segregation:', createErr);
+            console.warn('Could not CREATE DATABASE, fallback notice:', createErr);
           }
         }
 
@@ -521,7 +515,7 @@ router.post('/api/databases', async (req, res) => {
           try {
             const newUrl = new URL(connectionString);
             newUrl.pathname = '/' + dbNameForBusiness;
-            const initPool = new Pool({ connectionString: newUrl.toString(), connectionTimeoutMillis: 5000 });
+            const initPool = await connectPgDb(newUrl.toString());
             await ensurePostgresTables(initPool);
             await initPool.query('CREATE TABLE IF NOT EXISTS system_settings (setting_key VARCHAR PRIMARY KEY, setting_value TEXT)');
             const initPayload = JSON.stringify({ 
@@ -632,6 +626,7 @@ router.post('/api/databases', async (req, res) => {
 
     // Invalidate cached pool so it connects fresh on selection
     invalidateStorePgPool(id);
+    invalidateKvCache(id);
 
     return res.json({
       success: true,

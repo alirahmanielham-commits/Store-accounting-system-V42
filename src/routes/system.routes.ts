@@ -214,7 +214,7 @@ router.post('/api/db/test', async (req, res) => {
          return res.json({ success: true, message: 'موتور ذخیره‌سازی محلی (Local JSON Storage) با موفقیت تأیید و آماده به کار است.' });
       }
       if (!connectionString) {
-        return res.status(400).json({ success: false, error: 'رشته اتصال (Connection String) الزامی است.' });
+        return res.json({ success: false, error: 'رشته اتصال (Connection String) الزامی است.' });
       }
       const client = new Client({ connectionString, connectionTimeoutMillis: 5000 });
       await client.connect();
@@ -234,7 +234,7 @@ router.post('/api/db/test', async (req, res) => {
           message: `پایگاه داده «${targetDbName}» در سرور PostgreSQL وجود ندارد. آیا مایلید با تایید شما این پایگاه داده ساخته شود؟`
         });
       }
-      res.status(400).json({ success: false, error: errMsg || 'خطا در برقراری اتصال با پایگاه داده' });
+      res.json({ success: false, error: errMsg || 'خطا در برقراری اتصال با پایگاه داده' });
     }
   });
 
