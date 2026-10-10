@@ -25,33 +25,57 @@ export const KNOWN_TABLES = ['businesses', 'notifications', 'customers_risk_prof
   'sms_providers', 'sms_provider_settings', 'sms_templates', 'sms_campaigns',
   'sms_delivery_logs', 'sms_retry_logs', 'sms_settings', 'sms_quota_logs', 'sms_audit_logs', 'employee_orders', 'employee_profiles', 'order_templates', 'workplaces'];
 export interface TableSyncProgress {
-  current: number;
-  total: number;
-  tableName: string;
   status: 'idle' | 'running' | 'completed' | 'error';
   percent: number;
-  message: string;
+  stageTitle: string;
+  stageDescription: string;
+}
+
+export function getFriendlyStageInfo(percent: number): { stageTitle: string; stageDescription: string } {
+  if (percent < 25) {
+    return {
+      stageTitle: 'پیکربندی ساختارهای پایه و تعاریف هویتی',
+      stageDescription: 'راه‌اندازی پروفایل کسب‌وکار، سطوح دسترسی کاربران و تنظیمات عمومی سامانه'
+    };
+  } else if (percent < 50) {
+    return {
+      stageTitle: 'راه‌اندازی ماژول‌های حسابداری و اسناد مالی',
+      stageDescription: 'سازمان‌دهی کدینگ حساب‌ها، دفاتر مالی، اسناد حسابداری و سال مالی'
+    };
+  } else if (percent < 75) {
+    return {
+      stageTitle: 'پیکربندی انبارداری و کاتالوگ محصولات',
+      stageDescription: 'آماده‌سازی موجودی کالاها، انبارها، قیمت‌گذاری و مدیریت فاکتورها'
+    };
+  } else if (percent < 95) {
+    return {
+      stageTitle: 'ساماندهی طرف‌های حساب و مدیریت دریافت/پرداخت',
+      stageDescription: 'پیکربندی پرونده اشخاص، ماژول چک‌ها، بانک‌ها و صندوق‌های نقدی'
+    };
+  } else {
+    return {
+      stageTitle: 'بهینه‌سازی نهایی و ایجاد ایندکس‌های امنیتی',
+      stageDescription: 'تسریع دسترسی به داده‌ها، راه‌اندازی ایندکس‌های محاسباتی و تکمیل فرآیند'
+    };
+  }
 }
 
 export let currentSyncProgress: TableSyncProgress = {
-  current: 0,
-  total: KNOWN_TABLES.length,
-  tableName: '',
   status: 'idle',
   percent: 0,
-  message: 'آماده‌سازی پایگاه داده...'
+  stageTitle: 'آماده‌سازی و راه‌اندازی پایگاه داده',
+  stageDescription: 'در حال تنظیم و پیکربندی اولیه زیرساخت‌های پایگاه داده PostgreSQL'
 };
 
-export function updateSyncProgress(current: number, tableName: string, status: 'idle' | 'running' | 'completed' | 'error' = 'running', message?: string) {
+export function updateSyncProgress(current: number, _tableName?: string, status: 'idle' | 'running' | 'completed' | 'error' = 'running') {
   const total = KNOWN_TABLES.length;
   const percent = total > 0 ? Math.min(100, Math.round((current / total) * 100)) : 100;
+  const stage = getFriendlyStageInfo(percent);
   currentSyncProgress = {
-    current,
-    total,
-    tableName,
     status,
     percent,
-    message: message || `در حال ایجاد و ساختاردهی جدول ${current} از ${total}: ${tableName}`
+    stageTitle: stage.stageTitle,
+    stageDescription: stage.stageDescription
   };
 }
 
@@ -314,7 +338,7 @@ export async function ensurePostgresTables(poolOverride?: any) {
     const totalTables = KNOWN_TABLES.length;
     for (const key of KNOWN_TABLES) {
       tableIdx++;
-      updateSyncProgress(tableIdx, key, 'running', `در حال ساخت و همگام‌سازی جدول ${tableIdx} از ${totalTables}: ${key}`);
+      updateSyncProgress(tableIdx, key, 'running');
       try {
         await p.query(`
           CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY);
@@ -339,7 +363,7 @@ export async function ensurePostgresTables(poolOverride?: any) {
       }
     }
     tableSchemas.clear();
-    updateSyncProgress(totalTables, 'ایندکس‌گذاری پایگاه داده', 'running', 'در حال ایجاد ایندکس‌های بهینه‌سازی جداول...');
+    updateSyncProgress(totalTables, undefined, 'completed');
     // Create essential performance indexes
     const essentialIndexes = [
       'CREATE INDEX IF NOT EXISTS idx_invoices_date ON "invoices" ("date")',

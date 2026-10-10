@@ -152,21 +152,17 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
   const [customPersonSheba, setCustomPersonSheba] = useState('');
   const [personSubTab, setPersonSubTab] = useState<'identity' | 'contact' | 'financial'>('identity');
 
-  // Table Creation Progress State (107 tables)
+  // Database Structure Setup Progress State
   const [syncProgress, setSyncProgress] = useState<{
-    current: number;
-    total: number;
-    tableName: string;
     status: string;
     percent: number;
-    message: string;
+    stageTitle: string;
+    stageDescription: string;
   }>({
-    current: 0,
-    total: 107,
-    tableName: '',
     status: 'idle',
     percent: 0,
-    message: 'در حال آماده‌سازی و ساخت جداول پایگاه داده...'
+    stageTitle: 'در حال آماده‌سازی و راه‌اندازی ساختار پایگاه داده',
+    stageDescription: 'پیکربندی ساختارهای امن اطلاعاتی و تعاریف اولیه سیستم'
   });
 
   const [customProductName, setCustomProductName] = useState('کالای نمونه ۱');
@@ -2550,7 +2546,7 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
         سیستم یکپارچه مدیریت مالی و حسابداری فروشگاهی · طراحی شده بر پایه استانداردهای نوین رابط کاربری
       </footer>
 
-      {/* 107 Tables Creation Progress Overlay Modal */}
+      {/* Database Structure Setup Progress Overlay Modal */}
       {saving && (
         <div className="fixed inset-0 z-[99999] bg-slate-900/60 backdrop-blur-md flex items-center justify-center p-4 select-none animate-in fade-in duration-200" dir="rtl">
           <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl border border-slate-200 text-center space-y-5">
@@ -2565,10 +2561,10 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
 
             <div>
               <h3 className="text-base sm:text-lg font-black text-slate-900">
-                در حال ساخت و سازمان‌دهی ۱۰۷ جدول پایگاه داده
+                در حال پیکربندی و راه‌اندازی ساختار پایگاه داده
               </h3>
               <p className="text-xs text-slate-500 mt-1 leading-relaxed">
-                لطفاً شکیبا باشید؛ ساختارهای پایگاه داده، سال مالی، حساب‌های بانکی و ایندکس‌های مالی در حال آماده‌سازی امن هستند.
+                لطفاً شکیبا باشید؛ ساختارهای امن اطلاعاتی، دفاتر مالی و ماژول‌های سامانه در حال آماده‌سازی هستند.
               </p>
             </div>
 
@@ -2577,41 +2573,38 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
               <div className="flex items-center justify-between text-xs font-bold text-slate-700">
                 <span className="flex items-center gap-1.5">
                   <span className="inline-block w-2 h-2 rounded-full bg-indigo-600 animate-ping"></span>
-                  <span>پیشرفت ساخت جداول:</span>
+                  <span>پیشرفت آماده‌سازی سامانه:</span>
                 </span>
                 <span className="font-mono text-indigo-600 font-black text-sm">
-                  {syncProgress.percent || Math.min(100, Math.round(((syncProgress.current || 1) / (syncProgress.total || 107)) * 100))}%
+                  {syncProgress.percent || 1}%
                 </span>
               </div>
 
               <div className="w-full h-3 bg-slate-100 rounded-full overflow-hidden border border-slate-200 p-0.5">
                 <div 
                   className="h-full bg-gradient-to-l from-indigo-600 to-indigo-500 rounded-full transition-all duration-300 relative shadow-sm"
-                  style={{ width: `${Math.max(5, syncProgress.percent || Math.min(100, Math.round(((syncProgress.current || 1) / (syncProgress.total || 107)) * 100)))}%` }}
+                  style={{ width: `${Math.max(5, syncProgress.percent || 1)}%` }}
                 >
                   <div className="absolute inset-0 bg-white/20 animate-pulse"></div>
                 </div>
               </div>
             </div>
 
-            {/* Table Detail Badges */}
-            <div className="bg-slate-50 rounded-2xl p-3 border border-slate-200/80 flex flex-col sm:flex-row items-center justify-between gap-2 text-xs">
-              <div className="flex items-center gap-2 text-slate-600 font-bold">
-                <Layers className="w-4 h-4 text-indigo-600" />
-                <span>
-                  جدول <span className="font-mono text-indigo-600 font-black">{syncProgress.current || 1}</span> از <span className="font-mono text-slate-900 font-black">{syncProgress.total || 107}</span>
-                </span>
+            {/* Stage Info Card */}
+            <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80 text-right space-y-1.5">
+              <div className="flex items-center gap-2 text-xs font-black text-slate-800">
+                <Layers className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>{syncProgress.stageTitle || 'پیکربندی ماژول‌های سیستم'}</span>
               </div>
-              {syncProgress.tableName && (
-                <div className="font-mono text-[11px] font-bold text-indigo-700 bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-200 max-w-[200px] truncate" dir="ltr">
-                  {syncProgress.tableName}
-                </div>
-              )}
+              <p className="text-[11px] text-slate-500 font-medium leading-relaxed pr-6">
+                {syncProgress.stageDescription || 'در حال آماده‌سازی زیرساخت‌های محاسباتی و امنیتی سیستم...'}
+              </p>
             </div>
 
-            <p className="text-[11px] text-slate-500 font-medium">
-              {syncProgress.message || 'در حال ایجاد جداول و ساختاردهی فیلدهای تخصصی پایگاه داده...'}
-            </p>
+            <div className="flex items-center justify-center gap-2 text-[11px] text-emerald-700 font-bold bg-emerald-50 py-2.5 px-3 rounded-xl border border-emerald-200/80">
+              <CheckCircle2 className="w-3.5 h-3.5 shrink-0 text-emerald-600" />
+              <span>اتصال مستقیم و امن به پایگاه داده PostgreSQL برقرار است</span>
+            </div>
 
           </div>
         </div>
