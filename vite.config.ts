@@ -30,7 +30,7 @@ export default defineConfig(() => {
               if (id.includes('@tanstack')) {
                 return 'vendor-query';
               }
-              if (id.includes('jspdf') || id.includes('html2canvas')) {
+              if (id.includes('html2pdf') || id.includes('html2canvas')) {
                 return 'vendor-pdf';
               }
               if (id.includes('react-multi-date-picker') || id.includes('react-date-object')) {
@@ -46,10 +46,11 @@ export default defineConfig(() => {
       include: [
         'react',
         'react-dom',
-        'react-router',
+        'react-router-dom',
         'lucide-react',
         '@tanstack/react-query',
-        'num2persian'
+        'num2persian',
+        'zustand'
       ]
     },
     server: {

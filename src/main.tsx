@@ -1,5 +1,4 @@
 import {StrictMode, useState, useEffect} from 'react';
-import * as Sentry from "@sentry/react";
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx'
 import 'vazirmatn/Vazirmatn-font-face.css';
@@ -12,20 +11,22 @@ import InitialSetupWizard from './components/InitialSetupWizard';
 window.addEventListener("error", (e) => { fetch("/api/data/system_logs/append", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ action: "FRONTEND_ERROR", entityType: "error", entityId: "1", oldData: e.message, newData: e.error?.stack }) }); });
 
 if ((import.meta as any).env.VITE_SENTRY_DSN && String((import.meta as any).env.VITE_SENTRY_DSN).startsWith('http')) {
-  try {
-    Sentry.init({
-      dsn: (import.meta as any).env.VITE_SENTRY_DSN,
-      integrations: [
-        Sentry.browserTracingIntegration(),
-        Sentry.replayIntegration(),
-      ],
-      tracesSampleRate: 1.0,
-      replaysSessionSampleRate: 0.1,
-      replaysOnErrorSampleRate: 1.0,
-    });
-  } catch (e) {
-    console.error("Failed to initialize Sentry:", e);
-  }
+  import('@sentry/react').then((Sentry) => {
+    try {
+      Sentry.init({
+        dsn: (import.meta as any).env.VITE_SENTRY_DSN,
+        integrations: [
+          Sentry.browserTracingIntegration(),
+          Sentry.replayIntegration(),
+        ],
+        tracesSampleRate: 1.0,
+        replaysSessionSampleRate: 0.1,
+        replaysOnErrorSampleRate: 1.0,
+      });
+    } catch (e) {
+      console.error("Failed to initialize Sentry:", e);
+    }
+  }).catch(() => {});
 }
 
 

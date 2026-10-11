@@ -1,4 +1,5 @@
 import os from "os";
+import fs from "fs";
 import 'dotenv/config';
 import express from 'express';
 import path from 'path';
@@ -9,11 +10,8 @@ import cors from 'cors';
 import rateLimit from 'express-rate-limit';
 import compression from 'compression';
 
-import { initDB } from './src/db/migration';
-import { startCronJobs } from './src/jobs/checkNotificationsJob';
 import { authMiddleware } from './src/middleware/auth.middleware';
 import { storeContextMiddleware } from './src/middleware/store-context.middleware';
-import { startSyncWorker } from './src/worker/sync-worker';
 
 import authRoutes from './src/routes/auth.routes';
 import setupRoutes from './src/routes/setup.routes';
@@ -46,14 +44,6 @@ if (process.env.SENTRY_DSN && String(process.env.SENTRY_DSN).startsWith('http'))
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT) || 3000;
-
-  // Run background initialization concurrently without blocking server listen
-  initDB().catch((e) => console.warn("initDB warning (using local database):", e));
-  try {
-    startCronJobs();
-  } catch (e) {
-    console.warn("Cron jobs start warning:", e);
-  }
 
   // Trust Cloud Run / Reverse Proxy headers (X-Forwarded-For, Forwarded)
   app.set('trust proxy', 1);
@@ -190,8 +180,31 @@ async function startServer() {
 
   app.listen(PORT, "0.0.0.0", () => {
     console.log(`Server running on port ${PORT}`);
+
+    // Asynchronously bootstrap database, cron jobs, and sync worker without delaying port binding
+    setImmediate(async () => {
+      try {
+        const { initDB } = await import('./src/db/migration');
+        initDB().catch((e) => console.warn("initDB warning (using local database):", e));
+      } catch (e) {
+        console.warn("initDB import warning:", e);
+      }
+
+      try {
+        const { startCronJobs } = await import('./src/jobs/checkNotificationsJob');
+        startCronJobs();
+      } catch (e) {
+        console.warn("Cron jobs start warning:", e);
+      }
+
+      try {
+        const { startSyncWorker } = await import('./src/worker/sync-worker');
+        startSyncWorker();
+      } catch (e) {
+        console.warn("Sync worker start warning:", e);
+      }
+    });
   });
 }
 
 startServer();
-startSyncWorker();

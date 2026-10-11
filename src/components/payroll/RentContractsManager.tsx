@@ -3,7 +3,7 @@ import { Plus, Edit2, Trash2, FileText, Check, X, AlertCircle, CheckCircle, Play
 import { getRentContracts, addRentContract, updateRentContract, deleteRentContract, autoGenerateRentCommitments, testGenerateRentCommitments, getPendingRentCommitments } from '../../services/hrService';
 import Select from 'react-select';
 import { convertToGregorian, formatDateDisplay } from '../../utils/format';
-import { NumericFormat } from 'react-number-format';
+import CurrencyInput from '../common/CurrencyInput';
 import { getLedgerAccounts, addAccountingDocument, getAccountingDocuments, getTransactions } from '../../services/dataService';
 import { Eye, Calendar } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
@@ -541,40 +541,42 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">مبلغ ماهانه تعهد ({storeSettings?.currency || 'ریال'}) <span className="text-rose-500">*</span></label>
-                  <NumericFormat 
+                  <CurrencyInput 
                     value={form.monthlyAmount}
-                    onValueChange={(values) => setForm({...form, monthlyAmount: values.value})}
-                    thousandSeparator=","
+                    onChange={(e: any) => setForm({...form, monthlyAmount: e.target.value})}
+                    storeSettings={storeSettings}
+                    hideWords={true}
                     className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
                     placeholder="0"
-                    dir="ltr"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">مبلغ ودیعه/پیش‌پرداخت ({storeSettings?.currency || 'ریال'})</label>
-                  <NumericFormat 
+                  <CurrencyInput 
                     value={form.depositAmount}
-                    onValueChange={(values) => setForm({...form, depositAmount: values.value})}
-                    thousandSeparator=","
+                    onChange={(e: any) => setForm({...form, depositAmount: e.target.value})}
+                    storeSettings={storeSettings}
+                    hideWords={true}
                     className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
                     placeholder="0"
-                    dir="ltr"
                   />
                 </div>
                 <div>
                   <label className="block text-sm font-bold text-slate-700 mb-2">روز تعهد پرداخت (۱ تا ۳۱)</label>
-                  <NumericFormat 
+                  <input 
+                    type="number"
+                    min="1"
+                    max="31"
                     value={form.paymentDay}
-                    onValueChange={(values) => setForm({...form, paymentDay: values.value})}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      if (!v || (Number(v) >= 1 && Number(v) <= 31)) {
+                        setForm({...form, paymentDay: v});
+                      }
+                    }}
                     className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-center"
                     placeholder="پیش‌فرض: روز تاریخ شروع"
                     dir="ltr"
-                    allowNegative={false}
-                    decimalScale={0}
-                    isAllowed={(values) => {
-                      const { floatValue } = values;
-                      return floatValue === undefined || (floatValue >= 1 && floatValue <= 31);
-                    }}
                   />
                 </div>
                 <div>
@@ -710,13 +712,13 @@ export default function RentContractsManager({ personsData, storeSettings, showN
               </div>
               <div>
                 <label className="block text-sm font-bold text-slate-700 mb-2">مبلغ ({storeSettings?.currency || 'ریال'}) <span className="text-rose-500">*</span></label>
-                <NumericFormat 
+                <CurrencyInput 
                   value={docForm.amount}
-                  onValueChange={(values) => setDocForm({...docForm, amount: values.value})}
-                  thousandSeparator=","
+                  onChange={(e: any) => setDocForm({...docForm, amount: e.target.value})}
+                  storeSettings={storeSettings}
+                  hideWords={true}
                   className="w-full border border-slate-200 rounded-xl p-[9px] outline-none focus:border-indigo-500 text-left"
                   placeholder="0"
-                  dir="ltr"
                 />
               </div>
               <div>

@@ -11,7 +11,6 @@ import {
   ShoppingCart, Building2, UserCircle, Hash, Percent,
   Calendar, CreditCard, Banknote, FileText, Truck, ShieldCheck, Zap
 , UserPlus } from 'lucide-react';
-import FastItemEntryBar from './FastItemEntryBar';
 import BulkProductPickerModal from './BulkProductPickerModal';
 import { useDirtyForm } from "../../hooks/useDirtyForm";
 import { UnsavedChangesPrompt } from "../common/UnsavedChangesPrompt";

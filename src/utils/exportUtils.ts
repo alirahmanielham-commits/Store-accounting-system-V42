@@ -1,6 +1,4 @@
 import * as XLSX from 'xlsx';
-import jsPDF from 'jspdf';
-import 'jspdf-autotable';
 import { getActiveStoreSettings, NumberFormatConfig } from './format';
 
 export interface ExportColumn {
@@ -189,45 +187,42 @@ export const exportMultiSheetExcel = ({
 };
 
 export const exportToPDF = ({ filename, title, subtitle, columns, data }: ExportOptions) => {
-  const doc = new jsPDF({
-    orientation: 'landscape',
-    unit: 'mm',
-    format: 'a4',
-  });
-
-  doc.setFontSize(16);
-  doc.text(title || filename, 280, 15, { align: 'right' });
-
-  if (subtitle) {
-    doc.setFontSize(11);
-    doc.text(subtitle, 280, 22, { align: 'right' });
-  }
-
   const cols = columns || Object.keys(data[0] || {}).map(k => ({ header: k, key: k }));
-  const tableData = data.map(item => cols.map(col => String(item[col.key] || '')));
-  const head = [cols.map(col => col.header)];
-
-  const reverseHead = [head[0].reverse()];
-  const reverseData = tableData.map(row => row.reverse());
-
-  (doc as any).autoTable({
-    head: reverseHead,
-    body: reverseData,
-    startY: 30,
-    theme: 'grid',
-    styles: {
-      fontStyle: 'normal',
-      halign: 'center',
-    },
-    headStyles: {
-      fillColor: [79, 70, 229],
-      textColor: 255,
-      fontStyle: 'bold',
-    },
-    alternateRowStyles: {
-      fillColor: [249, 250, 251],
-    }
-  });
-
-  doc.save(`${filename}.pdf`);
+  const html = `
+    <!DOCTYPE html>
+    <html dir="rtl" lang="fa">
+    <head>
+      <meta charset="utf-8">
+      <title>${title || filename}</title>
+      <style>
+        body { font-family: system-ui, -apple-system, sans-serif; padding: 20px; direction: rtl; }
+        h1 { font-size: 18px; margin-bottom: 6px; }
+        p { font-size: 13px; color: #555; margin-top: 0; }
+        table { width: 100%; border-collapse: collapse; margin-top: 15px; font-size: 12px; }
+        th, td { border: 1px solid #ddd; padding: 8px; text-align: center; }
+        th { background-color: #f3f4f6; font-weight: bold; }
+        tr:nth-child(even) { background-color: #fafafa; }
+      </style>
+    </head>
+    <body>
+      <h1>${title || filename}</h1>
+      ${subtitle ? `<p>${subtitle}</p>` : ''}
+      <table>
+        <thead>
+          <tr>${cols.map(c => `<th>${c.header}</th>`).join('')}</tr>
+        </thead>
+        <tbody>
+          ${data.map(row => `<tr>${cols.map(c => `<td>${row[c.key] ?? ''}</td>`).join('')}</tr>`).join('')}
+        </tbody>
+      </table>
+    </body>
+    </html>
+  `;
+  const printWindow = window.open('', '_blank');
+  if (printWindow) {
+    printWindow.document.write(html);
+    printWindow.document.close();
+    printWindow.focus();
+    printWindow.print();
+  }
 };

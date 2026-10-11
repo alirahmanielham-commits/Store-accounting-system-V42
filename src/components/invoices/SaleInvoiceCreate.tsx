@@ -13,7 +13,6 @@ import {
     ThumbsDown, Share2, Link, Copy, Paperclip, Mail, MessageCircle, MessageSquare, Send, AtSign,
     Globe, Award, Gift, Coffee
 , Calendar, CornerDownLeft, Sparkles, LayoutGrid, Building2, Zap} from "lucide-react";
-import FastItemEntryBar from "./FastItemEntryBar";
 import BulkProductPickerModal from "./BulkProductPickerModal";
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
 import { useDirtyForm } from "../../hooks/useDirtyForm";

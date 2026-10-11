@@ -11,7 +11,6 @@ import {
   ShoppingCart, Building2, UserCircle, Hash, Percent,
   Calendar, CreditCard, Banknote, FileText, Truck
 , UserPlus } from 'lucide-react';
-import FastItemEntryBar from './FastItemEntryBar';
 // @ts-nocheck
 
       export default function PurchaseReturnInvoiceCreate(props: any) {
@@ -688,14 +687,14 @@ import FastItemEntryBar from './FastItemEntryBar';
                         }))}
                         value=""
                         onChange={(val) => handleFastAddProduct(String(val))}
-                        placeholder="جستجو و افزودن سریع کالا به لیست خرید (نام، کد، بارکد)..."
-                        searchPlaceholder="جستجوی کالای خریداری شده..."
+                        placeholder="جستجو و افزودن سریع کالا به لیست برگشت از خرید (نام، کد، بارکد)..."
+                        searchPlaceholder="جستجوی کالا برای برگشت از خرید..."
                       />
                     </div>
                   </div>
                   <button
                     onClick={() => setIsScannerOpen(true)}
-                    className="p-[11px] bg-white border border-emerald-200 text-emerald-600 rounded-xl shadow-sm hover:bg-emerald-50 transition-colors focus:ring-2 focus:ring-emerald-500"
+                    className="p-[11px] bg-white border border-emerald-200 text-emerald-600 rounded-xl shadow-sm hover:bg-emerald-50 transition-colors focus:ring-2 focus:ring-emerald-500 cursor-pointer"
                     title="اسکن بارکد با دوربین"
                   >
                     <ScanLine className="w-5 h-5" />

@@ -14,7 +14,6 @@ import {
     ThumbsDown, Share2, Link, Copy, Paperclip, Mail, MessageCircle, MessageSquare, Send, AtSign,
     Globe, Award, Gift, Coffee
 , Calendar, CornerDownLeft} from "lucide-react";
-import FastItemEntryBar from "./FastItemEntryBar";
 
 export default function SaleReturnInvoiceCreate(props: any) {
   const {
@@ -668,14 +667,14 @@ export default function SaleReturnInvoiceCreate(props: any) {
                           }))}
                         value=""
                         onChange={(val) => handleFastAddProduct(String(val))}
-                        placeholder="جستجو و افزودن سریع کالا به لیست فروش (نام، کد، بارکد)..."
-                        searchPlaceholder="جستجوی کالای مورد نظر برای فروش..."
+                        placeholder="جستجو و افزودن سریع کالا به لیست برگشت از فروش (نام، کد، بارکد)..."
+                        searchPlaceholder="جستجوی کالا برای برگشت از فروش..."
                       />
                     </div>
                   </div>
                   <button
                     onClick={() => setIsScannerOpen(true)}
-                    className="p-[11px] bg-white border border-indigo-200 text-indigo-600 rounded-xl shadow-sm hover:bg-indigo-50 transition-colors focus:ring-2 focus:ring-indigo-500"
+                    className="p-[11px] bg-white border border-indigo-200 text-indigo-600 rounded-xl shadow-sm hover:bg-indigo-50 transition-colors focus:ring-2 focus:ring-indigo-500 cursor-pointer"
                     title="اسکن بارکد با دوربین"
                   >
                     <ScanLine className="w-5 h-5" />
