@@ -1,5 +1,4 @@
 import { Router } from 'express';
-import * as XLSX from 'xlsx';
 import { getDbData } from '../db/kv-store';
 import { calculateAllWarehouseStocks } from '../utils/stockLogic';
 import { convertToGregorian } from '../utils/format';
@@ -778,6 +777,7 @@ router.get('/api/reports/export/:reportType', async (req, res) => {
       return res.status(400).json({ error: 'نوع گزارش نامعتبر است.' });
     }
 
+    const XLSX = await import('xlsx');
     const wb = XLSX.utils.book_new();
     const ws = XLSX.utils.json_to_sheet(exportRows);
     XLSX.utils.book_append_sheet(wb, ws, sheetName);

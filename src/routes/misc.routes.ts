@@ -15,13 +15,7 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { exec } from 'child_process';
 import { validateData } from '../schemas/validation';
-import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
-import { db } from '../db';
-import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
-import * as schema from '../db/schema';
-import { PDFParse } from 'pdf-parse';
-import { NEWPIPE_OFFICIAL_CATALOG } from '../data/newpipeCatalogData';
-import { NewpipeProductItem } from '../types/newpipe';
+import type { NewpipeProductItem } from '../types/newpipe';
 
 const router = Router();
 router.post('/api/generate_demo_data', async (req, res) => {
@@ -338,6 +332,7 @@ router.post('/api/scraping/parse-newpipe-pdf', async (req, res) => {
     // If a PDF is uploaded, parse it with PDFParse
     if (pdfBase64 && !useSample) {
       try {
+        const { PDFParse } = await import('pdf-parse');
         const cleanBase64 = pdfBase64.replace(/^data:application\/pdf;base64,/, '');
         const buffer = Buffer.from(cleanBase64, 'base64');
         const parser = new PDFParse({ data: buffer });
@@ -357,6 +352,7 @@ router.post('/api/scraping/parse-newpipe-pdf', async (req, res) => {
         const uniqueCodes = Array.from(new Set(codeMatches));
 
         if (uniqueCodes.length > 0) {
+          const { NEWPIPE_OFFICIAL_CATALOG } = await import('../data/newpipeCatalogData');
           const matchedCatalog = NEWPIPE_OFFICIAL_CATALOG.filter(item => uniqueCodes.includes(item.code));
           if (matchedCatalog.length > 0) {
             extractedItems = matchedCatalog;
@@ -369,6 +365,7 @@ router.post('/api/scraping/parse-newpipe-pdf', async (req, res) => {
 
     // Default to the full official 12-page Newpipe catalog
     if (extractedItems.length === 0) {
+      const { NEWPIPE_OFFICIAL_CATALOG } = await import('../data/newpipeCatalogData');
       extractedItems = [...NEWPIPE_OFFICIAL_CATALOG];
     }
 

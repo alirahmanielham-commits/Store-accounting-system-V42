@@ -23,7 +23,6 @@ import os from 'os';
 
 import { Router } from 'express';
 
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
 import cron from 'node-cron';
 import { loadPgPoolForStore } from '../db/connection';
 
@@ -34,10 +33,6 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { requireRole } from '../middleware/auth.middleware';
 import { validateData } from '../schemas/validation';
-import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
-import { db } from '../db';
-import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
-import * as schema from '../db/schema';
 import { encryptBackupData, decryptBackupData, isEncryptedBackup } from '../utils/backupCrypto';
 import { performDryRunAnalysis, createSafetySnapshot, saveSecondaryReplica } from '../services/backupEngine';
 import { extractRequestUser } from './data.routes';
@@ -243,6 +238,7 @@ router.post('/api/db/logs', async (req, res) => {
     if (!config.cloudAuthUrl || !config.cloudUser || !config.cloudPass) {
       throw new Error('مشخصات اتصال S3 (آدرس سرور، کلید دسترسی یا رمز) کامل نیست.');
     }
+    const { S3Client, PutObjectCommand } = await import('@aws-sdk/client-s3');
     const s3 = new S3Client({
       region: config.region || 'default',
       endpoint: config.cloudAuthUrl.startsWith('http') ? config.cloudAuthUrl : `https://${config.cloudAuthUrl}`,
@@ -1078,6 +1074,7 @@ router.post('/api/db/cloud/test-connection', requireRole(['admin']), async (req,
       if (!cfg.cloudAuthUrl || !cfg.cloudUser || !cfg.cloudPass) {
         return res.status(400).json({ success: false, error: 'مشخصات سرور S3 کامل نیست.' });
       }
+      const { S3Client, ListObjectsV2Command } = await import('@aws-sdk/client-s3');
       const s3 = new S3Client({
         region: cfg.region || 'default',
         endpoint: cfg.cloudAuthUrl.startsWith('http') ? cfg.cloudAuthUrl : `https://${cfg.cloudAuthUrl}`,
@@ -1087,7 +1084,6 @@ router.post('/api/db/cloud/test-connection', requireRole(['admin']), async (req,
         }
       });
       const bucket = cfg.cloudBucket || 'taraz-backups';
-      const { ListObjectsV2Command } = await import('@aws-sdk/client-s3');
       await s3.send(new ListObjectsV2Command({ Bucket: bucket, MaxKeys: 1 }));
       return res.json({
         success: true,

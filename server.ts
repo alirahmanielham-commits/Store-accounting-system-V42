@@ -1,7 +1,5 @@
 import os from "os";
 import 'dotenv/config';
-import * as Sentry from "@sentry/node";
-import { nodeProfilingIntegration } from "@sentry/profiling-node";
 import express from 'express';
 import path from 'path';
 import { createServer as createViteServer } from 'vite';
@@ -27,34 +25,35 @@ import reportsRoutes from './src/routes/reports.routes';
 import systemRoutes from './src/routes/system.routes';
 import miscRoutes from './src/routes/misc.routes';
 
+// Initialize Sentry only when DSN is provided to prevent 700ms+ startup penalty
+let sentryModule: any = null;
 if (process.env.SENTRY_DSN && String(process.env.SENTRY_DSN).startsWith('http')) {
-  try {
-    Sentry.init({
-      dsn: process.env.SENTRY_DSN,
-      integrations: [
-        nodeProfilingIntegration(),
-      ],
-      tracesSampleRate: 1.0,
-      profilesSampleRate: 1.0,
-    });
-  } catch (e) {
+  import('@sentry/node').then((Sentry) => {
+    sentryModule = Sentry;
+    import('@sentry/profiling-node').then(({ nodeProfilingIntegration }) => {
+      Sentry.init({
+        dsn: process.env.SENTRY_DSN,
+        integrations: [nodeProfilingIntegration()],
+        tracesSampleRate: 1.0,
+        profilesSampleRate: 1.0,
+      });
+    }).catch(() => {});
+  }).catch((e) => {
     console.error("Failed to initialize Sentry on backend:", e);
-  }
+  });
 }
 
 async function startServer() {
+  const app = express();
+  const PORT = Number(process.env.PORT) || 3000;
+
+  // Run background initialization concurrently without blocking server listen
+  initDB().catch((e) => console.warn("initDB warning (using local database):", e));
   try {
     startCronJobs();
   } catch (e) {
     console.warn("Cron jobs start warning:", e);
   }
-  try {
-    await initDB();
-  } catch (e) {
-    console.warn("initDB warning (using local database):", e);
-  }
-  const app = express();
-  const PORT = 3000;
 
   // Trust Cloud Run / Reverse Proxy headers (X-Forwarded-For, Forwarded)
   app.set('trust proxy', 1);
@@ -143,16 +142,21 @@ async function startServer() {
   app.use(systemRoutes);
   app.use(miscRoutes);
 
-  if (process.env.SENTRY_DSN && String(process.env.SENTRY_DSN).startsWith('http')) {
-    Sentry.setupExpressErrorHandler(app);
+  if (sentryModule) {
+    sentryModule.setupExpressErrorHandler(app);
   }
 
   if (process.env.NODE_ENV !== "production") {
+    const isHmrDisabled = process.env.DISABLE_HMR === 'true';
     const vite = await createViteServer({
       server: {
         middlewareMode: true,
-        watch: {
+        hmr: !isHmrDisabled,
+        watch: isHmrDisabled ? null : {
           ignored: [
+            '**/node_modules/**',
+            '**/dist/**',
+            '**/.git/**',
             '**/server_logs.txt',
             '**/server_logs*',
             '**/*.log',

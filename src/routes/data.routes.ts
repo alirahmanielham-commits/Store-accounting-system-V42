@@ -15,10 +15,6 @@ import jwt from 'jsonwebtoken';
 import { z } from 'zod';
 import { requireRole } from '../middleware/auth.middleware';
 import { validateData } from '../schemas/validation';
-import { eq, isNull, sql, desc, asc, inArray, and } from 'drizzle-orm';
-import { db } from '../db';
-import { checkbooks, issuedChecks, receivedChecks, checkAuditLogs, notifications, accounts, cashboxes } from '../db/schema';
-import * as schema from '../db/schema';
 import { calculateAllWarehouseStocks, validateStockAvailability } from '../utils/stockLogic';
 
 const router = Router();
