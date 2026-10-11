@@ -14,6 +14,7 @@ import {
     ThumbsDown, Share2, Link, Copy, Paperclip, Mail, MessageCircle, MessageSquare, Send, AtSign,
     Globe, Award, Gift, Coffee
 , Calendar, CornerDownLeft} from "lucide-react";
+import FastItemEntryBar from "./FastItemEntryBar";
 
 export default function SaleReturnInvoiceCreate(props: any) {
   const {
@@ -90,7 +91,10 @@ export default function SaleReturnInvoiceCreate(props: any) {
     calculateProductCurrentStock,
     formatProductStockDetails,
     activeTab,
-    calculateSubtotal
+    calculateSubtotal,
+    handleDuplicateItem,
+    handleIncrementQuantity,
+    handleAddBlankRow
   } = props;
   const itemsEndRef = useRef<HTMLDivElement>(null);
   const [prevItemsLength, setPrevItemsLength] = useState((items || []).length);
@@ -337,52 +341,82 @@ export default function SaleReturnInvoiceCreate(props: any) {
               className="bg-white rounded-3xl shadow-sm border-2 border-indigo-50 "
               data-invoice-flow="sale-return"
             >
-              <div className="p-5 bg-indigo-50/30 border-b border-indigo-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                <h3 className="font-extrabold text-slate-800 flex items-center gap-2 whitespace-nowrap">
-                  <Package className="w-5 h-5 text-indigo-600" /> لیست اقلام
-                  برگشت از فروش
-                </h3>
+              <div className="p-4 sm:p-5 bg-indigo-50/30 border-b border-indigo-100 space-y-3">
+                <div className="flex items-center justify-between w-full">
+                  <div className="flex items-center gap-3">
+                    <h3 className="font-extrabold text-slate-800 flex items-center gap-2 whitespace-nowrap text-base">
+                      <Package className="w-5 h-5 text-indigo-600" /> لیست اقلام برگشت از فروش
+                    </h3>
+                    <span className="text-xs bg-indigo-100 text-indigo-800 font-bold px-2 py-0.5 rounded-full">
+                      {toPersianDigits((items || []).length)} ردیف
+                    </span>
+                  </div>
+                  {handleAddBlankRow && (
+                    <button
+                      type="button"
+                      onClick={handleAddBlankRow}
+                      className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                      title="افزودن سطر خالی دستی"
+                    >
+                      <Plus className="w-3.5 h-3.5 text-slate-500" />
+                      <span>سطر خالی</span>
+                    </button>
+                  )}
+                </div>
+
+                <FastItemEntryBar
+                  products={products}
+                  onAddProduct={(pid, prod, qty) => handleFastAddProduct(pid, prod, qty)}
+                  onAddBlankRow={handleAddBlankRow}
+                  onOpenScanner={() => setIsScannerOpen(true)}
+                  onOpenNewProductModal={() => setIsProductModalOpen(true)}
+                  formatNumber={formatNumber}
+                  formatCurrency={formatCurrency}
+                  invoiceCurrency={invoiceCurrency}
+                  themeColor="indigo"
+                  toPersianDigits={toPersianDigits}
+                />
               </div>
               <div className="overflow-x-auto">
-                <table className="w-full text-right min-w-[1000px]">
+                <table className="w-full text-right min-w-[950px] border-collapse">
                   <thead>
-                    <tr className="bg-white text-xs font-black text-slate-400 border-b border-indigo-50">
-                      <th className="p-5 w-12 text-center">ردیف</th>
-                      <th className="p-5 min-w-[200px] w-[30%] text-right">
+                    <tr className="bg-slate-50/90 text-xs font-bold text-slate-500 border-b border-slate-200">
+                      <th className="py-2.5 px-3 w-12 text-center">ردیف</th>
+                      <th className="py-2.5 px-3 min-w-[240px] text-right">
                         شرح کالا / خدمات
                       </th>
-                      <th className="p-5 w-32 text-center border-r border-indigo-50/50">
+                      <th className="py-2.5 px-3 w-36 text-center border-r border-slate-200/60">
                         تعداد
                       </th>
-                      <th className="p-5 w-32 text-center border-r border-indigo-50/50">
+                      <th className="py-2.5 px-3 w-28 text-center border-r border-slate-200/60">
                         واحد
                       </th>
-                      <th className="p-5 w-48 border-r border-indigo-50/50 text-left text-indigo-800">
+                      <th className="py-2.5 px-3 w-40 border-r border-slate-200/60 text-left text-slate-700">
                         فی ({invoiceCurrency})
                       </th>
-                      <th className="p-5 w-28 text-center border-r border-indigo-50/50">
+                      <th className="py-2.5 px-3 w-24 text-center border-r border-slate-200/60">
                         تخفیف %
                       </th>
-                      <th className="p-5 w-48 border-r border-indigo-50/50 text-left text-indigo-800">
+                      <th className="py-2.5 px-3 w-36 border-r border-slate-200/60 text-left text-slate-700">
                         مبلغ کل ({invoiceCurrency})
                       </th>
-                      <th className="p-5 w-12 text-center border-r border-indigo-50/50">
+                      <th className="py-2.5 px-2 w-20 text-center border-r border-slate-200/60">
                         عملیات
                       </th>
                     </tr>
                   </thead>
-                  <tbody className="divide-y divide-indigo-50/50">
+                  <tbody className="divide-y divide-slate-100">
                     {(items || []).length === 0 && (
                       <tr>
                         <td
                           colSpan={8}
-                          className="p-8 text-center text-indigo-400 font-bold text-sm bg-indigo-50/30"
+                          className="py-12 text-center text-slate-400 font-bold text-sm bg-slate-50/30"
                         >
                           <div className="flex flex-col items-center justify-center space-y-2">
-                            <Box className="w-8 h-8 text-indigo-200" />
+                            <Box className="w-8 h-8 text-slate-300" />
                             <span>
                               هیچ کالا یا خدماتی به این سند اضافه نشده است.
-                              لطفاً جستجو کرده یا محصول جدیدی تعریف کنید.
+                              برای شروع کالا جستجو کنید یا سطر جدید بسازید.
                             </span>
                           </div>
                         </td>
@@ -391,43 +425,37 @@ export default function SaleReturnInvoiceCreate(props: any) {
                     {(items || []).map((item, index) => (
                       <tr
                         key={item.id}
-                        className="hover:bg-indigo-50/20 transition-colors"
+                        className="hover:bg-slate-50/70 transition-colors text-sm"
                         data-row-type="sale-return-row"
                       >
-                        <td className="p-5 text-center font-bold text-slate-300">
-                          {index + 1}
+                        {/* شماره ردیف */}
+                        <td className="py-2 px-3 text-center align-middle">
+                          <span className="text-slate-400 font-bold text-xs">{index + 1}</span>
                         </td>
-                        <td className="p-5">
+
+                        {/* شرح کالا / خدمات */}
+                        <td className="py-2 px-3 align-middle">
                           {item.productId ? (
-                            <div className="font-black text-slate-800 flex flex-col gap-1">
-                              <span>{item.productName}</span>
+                            <div className="flex items-center gap-2">
+                              <span className="font-bold text-slate-800 text-sm leading-tight">
+                                {item.productName}
+                              </span>
                               {(() => {
                                 const p = products.find(
                                   (prod) => prod.id === item.productId,
                                 );
+                                if (!p?.code && !p?.barcode) return null;
                                 return (
-                                  <div className="flex items-center gap-2">
-                                    <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 self-start px-2 py-0.5 rounded-md">
-                                      کالای سیستمی
-                                    </span>
-                                    {(p?.code || p?.barcode) && (
-                                      <span className="text-[10px] text-indigo-500 font-mono flex gap-2">
-                                        {p.code ? (
-                                          <span>کد: {p.code}</span>
-                                        ) : null}
-                                        {p.barcode ? (
-                                          <span>بارکد: {p.barcode}</span>
-                                        ) : null}
-                                      </span>
-                                    )}
-                                  </div>
+                                  <span className="text-[11px] text-slate-400 font-mono font-normal">
+                                    {p.code ? `[${p.code}]` : `[${p.barcode}]`}
+                                  </span>
                                 );
                               })()}
                             </div>
                           ) : (
                             <input
                               type="text"
-                              placeholder="شرح دلخواه وارد کنید..."
+                              placeholder="شرح کالا یا خدمات..."
                               value={item.productName}
                               onChange={(e) =>
                                 handleItemChange(
@@ -436,28 +464,66 @@ export default function SaleReturnInvoiceCreate(props: any) {
                                   e.target.value,
                                 )
                               }
-                              className="w-full p-2.5 bg-white border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 text-sm font-bold text-slate-800 outline-none"
+                              className="w-full h-8 px-2.5 bg-white border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm font-bold text-slate-800 outline-none transition-all"
                             />
                           )}
                         </td>
-                        <td className="p-5">
-                          <div className="flex flex-col gap-1.5">
-                            <CurrencyInput
-                              hideWords={true}
-                              storeSettings={storeSettings}
-                              value={item.quantity}
-                              onChange={(e: any) =>
-                                handleItemChange(
-                                  item.id,
-                                  "quantity",
-                                  e.target.value,
-                                )
-                              }
-                              className="w-full p-2.5 bg-indigo-50/30 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-sans text-center font-black text-slate-800 outline-none"
-                            />
+
+                        {/* تعداد */}
+                        <td className="py-2 px-3 align-middle">
+                          <div className="flex items-center justify-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (handleIncrementQuantity) {
+                                  handleIncrementQuantity(item.id, -1);
+                                } else {
+                                  const current = Number(item.quantity) || 0;
+                                  const next = Math.max(0.01, Number((current - 1).toFixed(4)));
+                                  handleItemChange(item.id, "quantity", next);
+                                }
+                              }}
+                              className="w-7 h-8 shrink-0 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-rose-600 transition-colors cursor-pointer"
+                              title="کاهش یک واحد"
+                            >
+                              <Minus className="w-3.5 h-3.5" />
+                            </button>
+                            <div className="w-20 min-w-0">
+                              <CurrencyInput
+                                hideWords={true}
+                                storeSettings={storeSettings}
+                                value={item.quantity}
+                                onChange={(e: any) =>
+                                  handleItemChange(
+                                    item.id,
+                                    "quantity",
+                                    e.target.value,
+                                  )
+                                }
+                                className="w-full h-8 px-1 bg-white border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-sans text-center font-black text-slate-800 outline-none text-sm transition-all"
+                              />
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                if (handleIncrementQuantity) {
+                                  handleIncrementQuantity(item.id, 1);
+                                } else {
+                                  const current = Number(item.quantity) || 0;
+                                  const next = Number((current + 1).toFixed(4));
+                                  handleItemChange(item.id, "quantity", next);
+                                }
+                              }}
+                              className="w-7 h-8 shrink-0 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-emerald-600 transition-colors cursor-pointer"
+                              title="افزایش یک واحد"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
-                        <td className="p-5">
+
+                        {/* واحد */}
+                        <td className="py-2 px-3 align-middle">
                           {(() => {
                             const product = item.productId
                               ? products.find(
@@ -466,66 +532,59 @@ export default function SaleReturnInvoiceCreate(props: any) {
                                 )
                               : null;
                             const hasSecondary = product?.secondaryUnit;
+                            if (hasSecondary) {
+                              return (
+                                <select
+                                  value={
+                                    item.isSecondaryUnit ? "true" : "false"
+                                  }
+                                  onChange={(e) =>
+                                    handleItemChange(
+                                      item.id,
+                                      "isSecondaryUnit",
+                                      e.target.value === "true",
+                                    )
+                                  }
+                                  className="w-full h-8 px-1 text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none cursor-pointer focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                                >
+                                  <option value="false">
+                                    {product.unit} (اصلی)
+                                  </option>
+                                  <option value="true">
+                                    {product.secondaryUnit} (فرعی)
+                                  </option>
+                                </select>
+                              );
+                            }
+                            if (product) {
+                              return (
+                                <div className="w-full h-8 px-2 flex items-center justify-center text-xs font-bold text-slate-600 bg-slate-50 border border-slate-200/60 rounded-lg">
+                                  {product.unit || "-"}
+                                </div>
+                              );
+                            }
                             return (
-                              <div className="flex flex-col gap-1.5">
-                                {hasSecondary ? (
-                                  <select
-                                    value={
-                                      item.isSecondaryUnit ? "true" : "false"
-                                    }
-                                    onChange={(e) =>
-                                      handleItemChange(
-                                        item.id,
-                                        "isSecondaryUnit",
-                                        e.target.value === "true",
-                                      )
-                                    }
-                                    className="w-full p-2 text-sm font-bold text-indigo-800 bg-indigo-50 border border-indigo-100/50 rounded-xl outline-none cursor-pointer focus:ring-2 focus:ring-indigo-400"
-                                  >
-                                    {(() => {
-                                      const dir = product.unitRatioDirection || getUnitRatioDirection(product);
-                                      const baseP = item.isSecondaryUnit
-                                        ? getPriceForSelectedUnit(item.unitPrice, false, product.unitRatio, dir)
-                                        : item.unitPrice;
-                                      const secP = getPriceForSelectedUnit(baseP, true, product.unitRatio, dir);
-                                      return (
-                                        <>
-                                          <option value="false">
-                                            {product.unit} (اصلی) - {formatNumber(baseP)}
-                                          </option>
-                                          <option value="true">
-                                            {product.secondaryUnit} (فرعی) - {formatNumber(secP)}
-                                          </option>
-                                        </>
-                                      );
-                                    })()}
-                                  </select>
-                                ) : product ? (
-                                  <div className="w-full p-2 text-center text-indigo-700 font-bold bg-indigo-50/50 border border-indigo-100 rounded-xl text-sm shadow-sm">
-                                    {product.unit || "-"}
-                                  </div>
-                                ) : (
-                                  <input
-                                    type="text"
-                                    value={item.selectedUnit || ""}
-                                    onChange={(e) =>
-                                      handleItemChange(
-                                        item.id,
-                                        "selectedUnit",
-                                        e.target.value,
-                                      )
-                                    }
-                                    placeholder="واحد..."
-                                    className="w-full p-2 text-center text-indigo-800 font-bold bg-white border border-indigo-200/50 rounded-xl text-sm focus:ring-2 focus:ring-indigo-500 outline-none"
-                                  />
-                                )}
-                              </div>
+                              <input
+                                type="text"
+                                value={item.selectedUnit || ""}
+                                onChange={(e) =>
+                                  handleItemChange(
+                                    item.id,
+                                    "selectedUnit",
+                                    e.target.value,
+                                  )
+                                }
+                                placeholder="واحد"
+                                className="w-full h-8 px-1 text-center text-xs font-bold text-slate-700 bg-white border border-slate-200 rounded-lg outline-none focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500"
+                              />
                             );
                           })()}
                         </td>
-                        <td className="p-5">
+
+                        {/* فی */}
+                        <td className="py-2 px-3 align-middle">
                           <CurrencyInput
-                            currencyLabel={storeSettings?.currency}
+                            currencyLabel=""
                             value={item.unitPrice}
                             onChange={(e: any) =>
                               handleItemChange(
@@ -534,10 +593,12 @@ export default function SaleReturnInvoiceCreate(props: any) {
                                 e.target.value,
                               )
                             }
-                            className="w-full p-2.5 bg-indigo-50/30 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-sans text-left font-black text-indigo-900 text-sm outline-none"
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-sans text-left font-bold text-slate-800 text-sm outline-none"
                           />
                         </td>
-                        <td className="p-5">
+
+                        {/* تخفیف % */}
+                        <td className="py-2 px-3 align-middle">
                           <input
                             type="number"
                             min="0"
@@ -551,45 +612,44 @@ export default function SaleReturnInvoiceCreate(props: any) {
                                 e.target.value,
                               )
                             }
-                            className="w-full p-2.5 bg-white border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono text-center text-rose-600 font-black outline-none"
+                            className="w-full h-8 px-1 bg-white border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono text-center text-rose-600 font-bold text-sm outline-none"
                             dir="ltr"
                           />
                         </td>
+
+                        {/* مبلغ کل */}
                         <td
-                          className="p-5 font-black text-left font-sans text-indigo-950"
+                          className="py-2 px-3 align-middle font-mono font-black text-left text-slate-900 text-sm whitespace-nowrap"
                           dir="ltr"
                         >
                           {formatCurrency(item.totalPrice)}
                         </td>
-                        <td className="p-5 text-center">
-                          <button
-                            onClick={() => handleRemoveItem(item.id)}
-                            className="p-2.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-xl transition-colors outline-none focus:ring-2 focus:ring-rose-500"
-                          >
-                            <Trash2 className="w-5 h-5" />
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                    {(items || []).length === 0 && (
-                      <tr>
-                        <td colSpan={7} className="p-16 text-center">
-                          <div className="flex flex-col items-center justify-center gap-4 text-indigo-600/50">
-                            <div className="bg-indigo-50 p-6 rounded-full border-2 border-indigo-100/50">
-                              <Package className="w-12 h-12" />
-                            </div>
-                            <p className="font-extrabold text-lg text-slate-700">
-                              لیست کالاها خالی است
-                            </p>
-                            <p className="text-sm font-bold text-slate-400">
-                              یک کالا از نوار جستجو انتخاب کنید یا سطر جدید
-                              بسازید.
-                            </p>
+
+                        {/* عملیات */}
+                        <td className="py-2 px-2 align-middle text-center">
+                          <div className="flex items-center justify-center gap-0.5">
+                            {handleDuplicateItem && (
+                              <button
+                                type="button"
+                                onClick={() => handleDuplicateItem(item.id)}
+                                className="p-1.5 text-slate-400 hover:bg-slate-100 hover:text-indigo-600 rounded-lg transition-colors cursor-pointer"
+                                title="تکرار سطر"
+                              >
+                                <Copy className="w-3.5 h-3.5" />
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveItem(item.id)}
+                              className="p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg transition-colors cursor-pointer"
+                              title="حذف سطر"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    )}
-                    
+                    ))}
                   </tbody>
                 </table>
               </div>
