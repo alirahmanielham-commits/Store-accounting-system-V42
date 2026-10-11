@@ -1114,7 +1114,15 @@ const [invoiceWarehouseId, setInvoiceWarehouseId] = useState<
     string | number | ""
   >("");
 
-const [invoiceCurrency, setInvoiceCurrency] = useState<string>("تومان");
+const [invoiceCurrency, setInvoiceCurrency] = useState<string>(() => {
+  return storeSettings?.currency || "تومان";
+});
+
+useEffect(() => {
+  if (storeSettings?.currency && !editingInvoiceId) {
+    setInvoiceCurrency(storeSettings.currency);
+  }
+}, [storeSettings?.currency, editingInvoiceId]);
 
 const [exchangeRate, setExchangeRate] = useState<number>(1);
 

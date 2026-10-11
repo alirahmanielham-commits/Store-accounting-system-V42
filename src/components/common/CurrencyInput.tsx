@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useImperativeHandle, forwardRef } from "react";
 import { addCommas, numberToWords, getActiveStoreSettings, toPersianDigits } from "../../utils/format";
-import { ArrowLeftRight, Coins, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 
 const persianToEnglish = (str: string) => {
   const persianNumbers = [/۰/g, /۱/g, /۲/g, /۳/g, /۴/g, /۵/g, /۶/g, /۷/g, /۸/g, /۹/g];
@@ -19,7 +19,8 @@ export interface CurrencyInputProps extends Omit<React.InputHTMLAttributes<HTMLI
   placeholder?: string;
   className?: string;
   hideWords?: boolean;
-  currencyLabel?: string;
+  currencyLabel?: string | null;
+  showCurrencyBadge?: boolean;
   showConversion?: boolean;
   storeSettings?: any;
   enableFastZeroes?: boolean; // typing 'k' adds 000, 'm' adds 000000
@@ -34,7 +35,8 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(({
   className = "",
   hideWords = false,
   currencyLabel,
-  showConversion = true,
+  showCurrencyBadge,
+  showConversion = false,
   storeSettings,
   enableFastZeroes = true,
   showQuickChips = false,
@@ -42,11 +44,14 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(({
   ...props
 }, ref) => {
   const activeSettings = storeSettings || getActiveStoreSettings();
-  const baseCurrency = currencyLabel || activeSettings?.currency || "تومان";
-  const isToman = baseCurrency.includes("تومان");
+  const baseCurrency = (currencyLabel !== undefined && currencyLabel !== null && currencyLabel !== "")
+    ? currencyLabel
+    : (activeSettings?.currency || "تومان");
+
+  // Determine if a currency badge should be rendered inside input
+  const hasCurrencyBadge = showCurrencyBadge !== false && currencyLabel !== "" && currencyLabel !== null;
 
   const [localVal, setLocalVal] = useState(value !== undefined && value !== null ? addCommas(value) : "");
-  const [showRialEquivalent, setShowRialEquivalent] = useState(false);
   const internalInputRef = useRef<HTMLInputElement>(null);
 
   useImperativeHandle(ref, () => internalInputRef.current as HTMLInputElement);
@@ -61,10 +66,6 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(({
   }, [value]);
 
   const numericValue = Number(persianToEnglish(localVal).replace(/,/g, "")) || 0;
-
-  // Real-time conversion: 1 Toman = 10 Rials, 1 Rial = 0.1 Toman
-  const convertedAmount = isToman ? numericValue * 10 : Math.round(numericValue / 10);
-  const convertedLabel = isToman ? "ریال" : "تومان";
 
   const triggerChange = (cleanNumStr: string) => {
     setLocalVal(addCommas(cleanNumStr));
@@ -124,23 +125,22 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(({
           value={localVal}
           onChange={handleChange}
           placeholder={placeholder}
-          className={`${className} text-left font-mono font-bold pl-3 pr-12 transition-all ${
+          className={`${className} text-left font-mono font-bold ${hasCurrencyBadge ? 'pl-3 pr-12' : 'px-2.5'} transition-all ${
             error ? 'border-rose-500 ring-1 ring-rose-500/30' : ''
           }`}
           {...props}
         />
 
-        {/* Currency Badge inside input with click-to-convert tooltip */}
-        <div 
-          onClick={() => setShowRialEquivalent(prev => !prev)}
-          className="absolute right-2.5 flex items-center gap-1 select-none cursor-pointer hover:bg-slate-100/80 px-1 py-0.5 rounded transition-colors"
-          title="جهت مشاهده برخط به واحد دیگر کلیک کنید"
-        >
-          <span className="text-[11px] font-bold text-slate-500">
-            {showRialEquivalent ? convertedLabel : baseCurrency}
-          </span>
-          <ArrowLeftRight className="w-2.5 h-2.5 text-slate-400 opacity-60 group-hover:opacity-100" />
-        </div>
+        {/* Currency Badge inside input (strictly chosen system currency) */}
+        {hasCurrencyBadge && (
+          <div 
+            className="absolute right-2.5 flex items-center select-none pointer-events-none px-1 py-0.5 rounded"
+          >
+            <span className="text-[11px] font-bold text-slate-500">
+              {baseCurrency}
+            </span>
+          </div>
+        )}
       </div>
 
       {/* Quick Add Chips (Optional) */}
@@ -174,19 +174,8 @@ export const CurrencyInput = forwardRef<HTMLInputElement, CurrencyInputProps>(({
         <div className="flex flex-wrap items-center justify-between text-[11px] text-slate-500 mt-1 px-1 gap-2 leading-tight">
           {/* Spelled-out Persian words */}
           {!hideWords && (
-            <span className="text-slate-600 font-medium truncate max-w-[65%]" title={numberToWords(numericValue)}>
+            <span className="text-slate-600 font-medium truncate max-w-full" title={numberToWords(numericValue)}>
               {numberToWords(numericValue)} {baseCurrency}
-            </span>
-          )}
-
-          {/* Real-time Toman/Rial equivalence */}
-          {showConversion && (
-            <span 
-              className="text-slate-500 font-mono text-[10px] flex items-center gap-1 ml-auto shrink-0 bg-slate-100/80 px-1.5 py-0.5 rounded border border-slate-200 font-semibold"
-              title="تبدیل برخط ریال / تومان بر مبنای نرخ رسمی"
-            >
-              <Coins className="w-2.5 h-2.5 text-amber-500" />
-              <span>معادل {addCommas(convertedAmount)} {convertedLabel}</span>
             </span>
           )}
         </div>

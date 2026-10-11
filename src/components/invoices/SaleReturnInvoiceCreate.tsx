@@ -363,19 +363,6 @@ export default function SaleReturnInvoiceCreate(props: any) {
                     </button>
                   )}
                 </div>
-
-                <FastItemEntryBar
-                  products={products}
-                  onAddProduct={(pid, prod, qty) => handleFastAddProduct(pid, prod, qty)}
-                  onAddBlankRow={handleAddBlankRow}
-                  onOpenScanner={() => setIsScannerOpen(true)}
-                  onOpenNewProductModal={() => setIsProductModalOpen(true)}
-                  formatNumber={formatNumber}
-                  formatCurrency={formatCurrency}
-                  invoiceCurrency={invoiceCurrency}
-                  themeColor="indigo"
-                  toPersianDigits={toPersianDigits}
-                />
               </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-right min-w-[950px] border-collapse">
@@ -489,18 +476,18 @@ export default function SaleReturnInvoiceCreate(props: any) {
                               <Minus className="w-3.5 h-3.5" />
                             </button>
                             <div className="w-20 min-w-0">
-                              <CurrencyInput
-                                hideWords={true}
-                                storeSettings={storeSettings}
-                                value={item.quantity}
-                                onChange={(e: any) =>
-                                  handleItemChange(
-                                    item.id,
-                                    "quantity",
-                                    e.target.value,
-                                  )
-                                }
-                                className="w-full h-8 px-1 bg-white border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-sans text-center font-black text-slate-800 outline-none text-sm transition-all"
+                              <input
+                                type="text"
+                                dir="ltr"
+                                value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ""}
+                                onChange={(e) => {
+                                  const raw = e.target.value
+                                    .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
+                                    .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString())
+                                    .replace(/[^0-9.]/g, "");
+                                  handleItemChange(item.id, "quantity", raw);
+                                }}
+                                className="w-full h-8 px-1.5 bg-white border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 font-mono text-center font-black text-slate-800 outline-none text-sm transition-all"
                               />
                             </div>
                             <button
@@ -585,6 +572,8 @@ export default function SaleReturnInvoiceCreate(props: any) {
                         <td className="py-2 px-3 align-middle">
                           <CurrencyInput
                             currencyLabel=""
+                            showCurrencyBadge={false}
+                            storeSettings={storeSettings}
                             value={item.unitPrice}
                             onChange={(e: any) =>
                               handleItemChange(
