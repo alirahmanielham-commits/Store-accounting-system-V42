@@ -1052,6 +1052,9 @@ export default function InvoicesList(props: any) {
         </div>
       </div>
 
+      {/* Helper functions for row actions */}
+      {(() => null)()}
+
       {/* Main Table Card */}
       <div id="invoices-table-container" className="bg-white rounded-3xl border border-slate-200/80 shadow-sm overflow-hidden">
         {/* Printable Header */}
@@ -1066,26 +1069,24 @@ export default function InvoicesList(props: any) {
 
         <div className="overflow-x-auto max-h-[720px] overflow-y-auto custom-scrollbar">
           <table className="w-full text-sm text-right">
-            <thead className="bg-slate-50/95 text-slate-600 border-b border-slate-200 uppercase font-black text-xs sticky top-0 z-10 backdrop-blur-xs shadow-xs">
+            <thead className="bg-slate-50/95 text-slate-700 border-b border-slate-200 uppercase font-black text-xs sticky top-0 z-10 backdrop-blur-xs shadow-2xs">
               <tr>
-                <th className="p-4 whitespace-nowrap">شماره</th>
-                <th className="p-4 whitespace-nowrap">عنوان / شرح سند</th>
-                <th className="p-4 whitespace-nowrap">طرف حساب</th>
-                <th className="p-4 whitespace-nowrap">تاریخ و زمان</th>
-                {activeTab.includes("warehouse") ? (
-                  <th className="p-4 text-center whitespace-nowrap">انبار مربوطه</th>
-                ) : (
-                  <th className="p-4 text-left whitespace-nowrap">مبلغ کل</th>
-                )}
+                <th className="p-3.5 text-center whitespace-nowrap w-12 text-slate-500">ردیف</th>
+                <th className="p-3.5 whitespace-nowrap">شماره و نوع</th>
+                <th className="p-3.5 whitespace-nowrap">عنوان و اقلام سند</th>
+                <th className="p-3.5 whitespace-nowrap">طرف حساب</th>
+                <th className="p-3.5 whitespace-nowrap">تاریخ و سررسید</th>
+                <th className="p-3.5 text-center whitespace-nowrap">انبار</th>
+                <th className="p-3.5 text-left whitespace-nowrap">مبلغ کل</th>
                 {!activeTab.includes("warehouse") && (
                   <>
-                    <th className="p-4 text-left whitespace-nowrap">دریافتی/پرداختی</th>
-                    <th className="p-4 text-left whitespace-nowrap">مانده فاکتور</th>
-                    <th className="p-4 text-center whitespace-nowrap">وضعیت تسویه</th>
-                    <th className="p-4 text-center whitespace-nowrap">وضعیت انبار</th>
+                    <th className="p-3.5 text-left whitespace-nowrap">دریافتی/پرداختی</th>
+                    <th className="p-3.5 text-left whitespace-nowrap">مانده</th>
+                    <th className="p-3.5 text-center whitespace-nowrap">وضعیت تسویه</th>
+                    <th className="p-3.5 text-center whitespace-nowrap">وضعیت انبار</th>
                   </>
                 )}
-                <th className="p-4 text-center whitespace-nowrap print:hidden">عملیات</th>
+                <th className="p-3.5 text-center whitespace-nowrap print:hidden w-36">عملیات</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
@@ -1093,7 +1094,7 @@ export default function InvoicesList(props: any) {
                 <React.Fragment key={group.groupName}>
                   {invoiceGroupMode !== "none" && group.invoices.length > 0 && (
                     <tr className="bg-slate-100/70 border-y border-slate-200">
-                      <td colSpan={10} className="p-3">
+                      <td colSpan={activeTab.includes("warehouse") ? 8 : 12} className="p-3">
                         <div className="flex justify-between items-center px-2">
                           <div className="flex items-center gap-2">
                             <CalendarIcon className="w-4 h-4 text-indigo-600" />
@@ -1121,66 +1122,155 @@ export default function InvoicesList(props: any) {
                     const whStatus = getInvoiceWarehouseStatus(inv);
                     const remainingBalance = Math.max((inv.totalAmount || 0) - (inv.paidAmount || 0), 0);
 
+                    // Quick print helper
+                    const triggerInvoicePrint = () => {
+                      if (setViewingInvoice) {
+                        setViewingInvoice(inv);
+                        setTimeout(() => {
+                          safePrint("#invoice-sheet-to-print", {
+                            timeoutMs: 4000,
+                            documentTitle: `فاکتور شماره ${inv.invoiceNumber || inv.id || ""}`
+                          });
+                        }, 250);
+                      }
+                    };
+
+                    // Pricing wizard launcher
+                    const launchPricingWizard = () => {
+                      const newWizardItems = (inv.items || [])
+                        .filter((it: any) => {
+                          const prod = products.find((p: any) => String(p.id) === String(it.productId));
+                          return prod && prod.type !== "service";
+                        })
+                        .map((it: any) => {
+                          const prod = products.find((p: any) => String(p.id) === String(it.productId));
+                          const prodDir = prod?.unitRatioDirection || getUnitRatioDirection(prod);
+                          let basePurchasePrice = Number(it.unitPrice) || 0;
+                          const isSecUnit = Boolean(it.isSecondaryUnit);
+                          if (isSecUnit && prod?.unitRatio && prod.unitRatio > 0) {
+                            basePurchasePrice = convertPriceToBaseUnit(basePurchasePrice, true, prod.unitRatio, prodDir);
+                          }
+                          return {
+                            productId: it.productId,
+                            productName: it.productName,
+                            purchasePrice: Math.round(basePurchasePrice),
+                            originalUnitPrice: Number(it.unitPrice) || 0,
+                            isSecondaryUnit: isSecUnit,
+                            invoiceUnit: isSecUnit ? (prod?.secondaryUnit || 'واحد فرعی') : (prod?.unit || 'واحد اصلی'),
+                            mainUnit: prod?.unit || 'عدد',
+                            secondaryUnit: prod?.secondaryUnit || '',
+                            unitRatio: prod?.unitRatio || 1,
+                            unitRatioDirection: prodDir,
+                            marginPercent: 0,
+                            salePrice: prod ? Number(prod.price) : 0,
+                          };
+                        });
+                      if (newWizardItems.length > 0) {
+                        if (setPricingWizardItems) setPricingWizardItems(newWizardItems);
+                        if (setPricingWizardInvoice) setPricingWizardInvoice(inv);
+                      } else if (setSuccessMsg) {
+                        setSuccessMsg("هیچ کالای فیزیکی قابل قیمت‌گذاری در این فاکتور وجود ندارد.");
+                      }
+                    };
+
                     return (
                       <tr
                         key={inv.id ? `inv-${inv.id}` : `inv-row-${invIdx}`}
                         className={`transition-colors ${isVoided ? "bg-rose-50/40 opacity-75" : "hover:bg-slate-50/80"}`}
                       >
-                        {/* Column 1: Number & Status Badges */}
-                        <td className="p-4 font-sans font-black text-slate-800 text-sm whitespace-nowrap">
-                          <div className="flex items-center gap-1.5">
-                            <span
-                              onClick={() => setViewingInvoice && setViewingInvoice(inv)}
-                              className="cursor-pointer hover:text-indigo-600 hover:underline transition-colors decoration-dashed underline-offset-4"
-                              title="مشاهده پیش‌نمایش فاکتور"
-                            >
-                              #{toPersianDigits(inv.invoiceNumber || inv.id)}
-                            </span>
-                            {isDraft && (
-                              <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-amber-200">
-                                پیش‌نویس
+                        {/* Column 1: Row index */}
+                        <td className="p-3.5 text-center text-xs font-bold text-slate-400 whitespace-nowrap">
+                          {toPersianDigits((invoiceSafeCurrentPage - 1) * invoicePageSize + invIdx + 1)}
+                        </td>
+
+                        {/* Column 2: Number, Type Badge & State Badges */}
+                        <td className="p-3.5 whitespace-nowrap">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex items-center gap-1.5 font-sans font-black text-slate-900 text-sm">
+                              <span
+                                onClick={() => setViewingInvoice && setViewingInvoice(inv)}
+                                className="cursor-pointer hover:text-indigo-600 hover:underline transition-colors decoration-dashed underline-offset-4"
+                                title="مشاهده پیش‌نمایش فاکتور"
+                              >
+                                #{toPersianDigits(inv.invoiceNumber || inv.id)}
                               </span>
-                            )}
-                            {isProforma && (
-                              <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-slate-200">
-                                پیش‌فاکتور
-                              </span>
-                            )}
-                            {isVoided && (
-                              <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-1.5 py-0.5 rounded-md border border-rose-200">
-                                ابطال شده
-                              </span>
-                            )}
+                            </div>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {inv.type === "purchase" && (
+                                <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-blue-200">
+                                  خرید
+                                </span>
+                              )}
+                              {inv.type === "sale" && (
+                                <span className="bg-indigo-50 text-indigo-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-indigo-200">
+                                  فروش
+                                </span>
+                              )}
+                              {inv.type === "sale_return" && (
+                                <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-200">
+                                  برگشت فروش
+                                </span>
+                              )}
+                              {inv.type === "purchase_return" && (
+                                <span className="bg-rose-50 text-rose-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-rose-200">
+                                  برگشت خرید
+                                </span>
+                              )}
+                              {isProforma && (
+                                <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-slate-200">
+                                  پیش‌فاکتور
+                                </span>
+                              )}
+                              {isDraft && (
+                                <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-200">
+                                  پیش‌نویس
+                                </span>
+                              )}
+                              {isVoided && (
+                                <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-1.5 py-0.5 rounded border border-rose-200">
+                                  ابطال شده
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
 
-                        {/* Column 2: Title / Note / Seller Number */}
-                        <td className="p-4 font-bold text-slate-800 text-xs max-w-[200px]">
-                          <div className="truncate font-black text-slate-800" title={inv.title || pageConfig.title}>
+                        {/* Column 3: Title, Items count, Seller Number & Note */}
+                        <td className="p-3.5 max-w-[220px]">
+                          <div className="font-extrabold text-slate-800 text-xs truncate" title={inv.title || pageConfig.title}>
                             {inv.title || pageConfig.title}
                           </div>
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100/90 px-1.5 py-0.5 rounded">
+                              <Package className="w-3 h-3 text-slate-400" />
+                              <span>{toPersianDigits(inv.items?.length || 0)} قلم</span>
+                            </span>
+                            {(inv.type === "purchase" || inv.type === "purchase_return") && inv.sellerInvoiceNumber && (
+                              <span className="text-[10px] text-emerald-700 bg-emerald-50 font-mono px-1.5 py-0.5 rounded border border-emerald-200 font-bold">
+                                ش.فروشنده: {toPersianDigits(inv.sellerInvoiceNumber)}
+                              </span>
+                            )}
+                          </div>
                           {inv.note && (
-                            <div className="text-[10px] text-slate-500 font-normal mt-0.5 truncate" title={inv.note}>
+                            <div className="text-[10px] text-slate-400 font-normal mt-0.5 truncate max-w-[200px]" title={inv.note}>
                               {inv.note}
                             </div>
                           )}
-                          {(inv.type === "purchase" || inv.type === "purchase_return") && inv.sellerInvoiceNumber && (
-                            <div className="text-[10px] text-emerald-600 font-mono mt-0.5">
-                              ش.فروشنده: {toPersianDigits(inv.sellerInvoiceNumber)}
-                            </div>
-                          )}
                         </td>
 
-                        {/* Column 3: Customer / Person */}
-                        <td className="p-4 text-xs font-bold text-slate-800">
+                        {/* Column 4: Counterparty / Person */}
+                        <td className="p-3.5 text-xs font-bold text-slate-800 whitespace-nowrap">
                           {renderPersonLink(
                             inv.customerId || inv.personId,
                             persons.find((p: any) => String(p.id) === String(inv.customerId || inv.personId))?.name || inv.customerName || 'نامشخص'
                           )}
+                          <div className="text-[10px] text-slate-400 font-normal mt-0.5">
+                            {pageConfig.personRoleLabel}
+                          </div>
                         </td>
 
-                        {/* Column 4: Date & Due Date */}
-                        <td className="p-4">
+                        {/* Column 5: Date & Due Date */}
+                        <td className="p-3.5 whitespace-nowrap">
                           <div className="flex items-center gap-1.5 text-xs font-bold text-slate-700">
                             <CalendarIcon className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
                             <span className="font-sans font-black text-xs text-slate-800">
@@ -1197,73 +1287,77 @@ export default function InvoicesList(props: any) {
                           )}
                         </td>
 
-                        {/* Column 5: Warehouse or Total Amount */}
-                        {activeTab.includes("warehouse") ? (
-                          <td className="p-4 text-center">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-800 text-xs font-bold border border-purple-100">
-                              <Warehouse className="w-3.5 h-3.5 text-purple-600" />
-                              <span>{getDocWarehouseName(inv)}</span>
-                            </span>
-                          </td>
-                        ) : (
-                          <td className="p-4 text-left">
-                            <span className="font-sans font-black text-sm text-slate-900 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200/80 inline-block">
-                              {toPersianDigits(formatCurrency(inv.totalAmount || 0))}{" "}
-                              <span className="text-[10px] text-slate-500 font-bold mr-0.5">{currency}</span>
-                            </span>
-                          </td>
-                        )}
+                        {/* Column 6: Warehouse */}
+                        <td className="p-3.5 text-center whitespace-nowrap">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 text-purple-800 text-xs font-bold border border-purple-100">
+                            <Warehouse className="w-3 h-3 text-purple-600 shrink-0" />
+                            <span className="truncate max-w-[120px]">{getDocWarehouseName(inv)}</span>
+                          </span>
+                        </td>
+
+                        {/* Column 7: Total Amount */}
+                        <td className="p-3.5 text-left whitespace-nowrap">
+                          <span className="font-sans font-black text-sm text-slate-900 bg-slate-50 px-2.5 py-1 rounded-xl border border-slate-200/80 inline-block shadow-2xs">
+                            {toPersianDigits(formatCurrency(inv.totalAmount || 0))}{" "}
+                            <span className="text-[10px] text-slate-500 font-bold mr-0.5">{currency}</span>
+                          </span>
+                        </td>
 
                         {/* Financial and Fulfillment Columns */}
                         {!activeTab.includes("warehouse") && (
                           <>
                             {/* Paid Amount */}
-                            <td className="p-4 text-left">
-                              <span className="font-sans font-bold text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg inline-block">
+                            <td className="p-3.5 text-left whitespace-nowrap">
+                              <span className="font-sans font-bold text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg inline-block border border-emerald-100">
                                 {toPersianDigits(formatCurrency(inv.paidAmount || 0))}{" "}
                                 <span className="text-[9px] text-emerald-600 mr-0.5">{currency}</span>
                               </span>
                             </td>
 
                             {/* Remaining Balance */}
-                            <td className="p-4 text-left">
-                              <span className={`font-sans font-bold text-xs px-2.5 py-1 rounded-lg inline-block ${
-                                remainingBalance > 0 ? 'text-rose-700 bg-rose-50' : 'text-slate-500 bg-slate-50'
-                              }`}>
-                                {toPersianDigits(formatCurrency(remainingBalance))}{" "}
-                                <span className="text-[9px] mr-0.5">{currency}</span>
-                              </span>
+                            <td className="p-3.5 text-left whitespace-nowrap">
+                              {remainingBalance <= 0 ? (
+                                <span className="font-bold text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 inline-flex items-center gap-1">
+                                  <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+                                  <span>تسویه کامل</span>
+                                </span>
+                              ) : (
+                                <span className="font-sans font-black text-xs text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 inline-block">
+                                  {toPersianDigits(formatCurrency(remainingBalance))}{" "}
+                                  <span className="text-[9px] text-rose-500 mr-0.5">{currency}</span>
+                                </span>
+                              )}
                             </td>
 
                             {/* Payment Status Badge */}
-                            <td className="p-4 text-center whitespace-nowrap">
-                              {inv.paymentStatus === "paid" ? (
-                                <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-emerald-200">
+                            <td className="p-3.5 text-center whitespace-nowrap">
+                              {inv.paymentStatus === "paid" || remainingBalance <= 0 ? (
+                                <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-emerald-200 inline-block">
                                   تسویه کامل
                                 </span>
                               ) : inv.paymentStatus === "partial" ? (
-                                <span className="bg-amber-100 text-amber-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-amber-200">
+                                <span className="bg-amber-100 text-amber-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-amber-200 inline-block">
                                   علی‌الحساب
                                 </span>
                               ) : (
-                                <span className="bg-rose-100 text-rose-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-rose-200">
+                                <span className="bg-rose-100 text-rose-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-rose-200 inline-block">
                                   پرداخت نشده
                                 </span>
                               )}
                             </td>
 
                             {/* Warehouse Status Badge */}
-                            <td className="p-4 text-center whitespace-nowrap">
+                            <td className="p-3.5 text-center whitespace-nowrap">
                               {whStatus === "completed" ? (
-                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-[10px] font-black px-2.5 py-1 rounded-lg">
+                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-[10px] font-black px-2.5 py-1 rounded-lg inline-block">
                                   {inv.type === "purchase" || inv.type === "sale_return" ? "رسید شده" : "حواله شده"}
                                 </span>
                               ) : whStatus === "partial" ? (
-                                <span className="text-blue-700 bg-blue-50 border border-blue-200 text-[10px] font-black px-2.5 py-1 rounded-lg">
+                                <span className="text-blue-700 bg-blue-50 border border-blue-200 text-[10px] font-black px-2.5 py-1 rounded-lg inline-block">
                                   {inv.type === "purchase" || inv.type === "sale_return" ? "تعدادی رسید" : "تعدادی حواله"}
                                 </span>
                               ) : (
-                                <span className="text-amber-700 bg-amber-50 border border-amber-200 text-[10px] font-black px-2.5 py-1 rounded-lg">
+                                <span className="text-amber-700 bg-amber-50 border border-amber-200 text-[10px] font-black px-2.5 py-1 rounded-lg inline-block">
                                   {inv.type === "purchase" || inv.type === "sale_return" ? "در انتظار رسید" : "در انتظار حواله"}
                                 </span>
                               )}
@@ -1271,186 +1365,81 @@ export default function InvoicesList(props: any) {
                           </>
                         )}
 
-                        {/* Action Buttons Column */}
-                        <td className="p-4 print:hidden text-center whitespace-nowrap">
-                          {activeTab === "list_purchase" ? (
-                            <div className="flex items-center justify-center gap-1.5 w-max mx-auto">
-                              {/* Quick View Button */}
-                              <button
-                                type="button"
-                                onClick={() => setViewingInvoice && setViewingInvoice(inv)}
-                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 bg-white border border-slate-200/90 rounded-xl cursor-pointer transition-colors shadow-2xs"
-                                title="مشاهده پیش‌نمایش فاکتور خرید"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
+                        {/* Action Buttons Column: Compact and uniform for all invoice types */}
+                        <td className="p-3.5 print:hidden text-center whitespace-nowrap">
+                          <div className="flex items-center justify-center gap-1.5 w-max mx-auto">
+                            {/* Quick View Button */}
+                            <button
+                              type="button"
+                              onClick={() => setViewingInvoice && setViewingInvoice(inv)}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 bg-white border border-slate-200/90 rounded-xl cursor-pointer transition-colors shadow-2xs"
+                              title="مشاهده پیش‌نمایش فاکتور"
+                            >
+                              <Eye className="w-4 h-4" />
+                            </button>
 
-                              {/* Dropdown containing all operations */}
-                              <InvoiceRowActionsDropdown
-                                invoice={inv}
-                                activeTab={activeTab}
-                                products={products}
-                                warehouses={warehouses}
-                                currency={currency}
-                                isVoided={isVoided}
-                                whStatus={whStatus}
-                                onView={() => setViewingInvoice && setViewingInvoice(inv)}
-                                onDirectPrint={() => {
-                                  if (setViewingInvoice) {
-                                    setViewingInvoice(inv);
-                                    setTimeout(() => {
-                                      safePrint("#invoice-sheet-to-print", {
-                                        timeoutMs: 4000,
-                                        documentTitle: `فاکتور خرید شماره ${inv.invoiceNumber || inv.id || ""}`
-                                      });
-                                    }, 250);
-                                  }
-                                }}
-                                onOpenPricingWizard={() => {
-                                  const newWizardItems = (inv.items || [])
-                                    .filter((it: any) => {
-                                      const prod = products.find((p: any) => String(p.id) === String(it.productId));
-                                      return prod && prod.type !== "service";
-                                    })
-                                    .map((it: any) => {
-                                      const prod = products.find((p: any) => String(p.id) === String(it.productId));
-                                      const prodDir = prod?.unitRatioDirection || getUnitRatioDirection(prod);
-                                      let basePurchasePrice = Number(it.unitPrice) || 0;
-                                      const isSecUnit = Boolean(it.isSecondaryUnit);
-                                      if (isSecUnit && prod?.unitRatio && prod.unitRatio > 0) {
-                                        basePurchasePrice = convertPriceToBaseUnit(basePurchasePrice, true, prod.unitRatio, prodDir);
-                                      }
-                                      return {
-                                        productId: it.productId,
-                                        productName: it.productName,
-                                        purchasePrice: Math.round(basePurchasePrice),
-                                        originalUnitPrice: Number(it.unitPrice) || 0,
-                                        isSecondaryUnit: isSecUnit,
-                                        invoiceUnit: isSecUnit ? (prod?.secondaryUnit || 'واحد فرعی') : (prod?.unit || 'واحد اصلی'),
-                                        mainUnit: prod?.unit || 'عدد',
-                                        secondaryUnit: prod?.secondaryUnit || '',
-                                        unitRatio: prod?.unitRatio || 1,
-                                        unitRatioDirection: prodDir,
-                                        marginPercent: 0,
-                                        salePrice: prod ? Number(prod.price) : 0,
-                                      };
-                                    });
-                                  if (newWizardItems.length > 0) {
-                                    if (setPricingWizardItems) setPricingWizardItems(newWizardItems);
-                                    if (setPricingWizardInvoice) setPricingWizardInvoice(inv);
-                                  } else if (setSuccessMsg) {
-                                    setSuccessMsg("هیچ کالای قابل قیمت‌گذاری در این فاکتور وجود ندارد.");
-                                  }
-                                }}
-                                onFastReceipt={
-                                  !isVoided && whStatus !== "completed"
-                                    ? () => {
-                                        setFastReceiptInvoice(inv);
-                                        const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses?.[0]?.id || "");
-                                        setFastReceiptWarehouseId(defaultWh ? String(defaultWh) : "");
-                                      }
-                                    : undefined
-                                }
-                                onPaymentReceipt={
-                                  !isVoided
-                                    ? () => {
-                                        if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
+                            {/* Quick Direct Print Button */}
+                            <button
+                              type="button"
+                              onClick={triggerInvoicePrint}
+                              className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 bg-white border border-slate-200/90 rounded-xl cursor-pointer transition-colors shadow-2xs"
+                              title="چاپ مستقیم فاکتور"
+                            >
+                              <Printer className="w-4 h-4" />
+                            </button>
+
+                            {/* Dropdown containing all operations */}
+                            <InvoiceRowActionsDropdown
+                              invoice={inv}
+                              activeTab={activeTab}
+                              products={products}
+                              warehouses={warehouses}
+                              currency={currency}
+                              isVoided={isVoided}
+                              whStatus={whStatus}
+                              onView={() => setViewingInvoice && setViewingInvoice(inv)}
+                              onDirectPrint={triggerInvoicePrint}
+                              onOpenPricingWizard={
+                                (inv.type === "purchase" || activeTab === "list_purchase")
+                                  ? launchPricingWizard
+                                  : undefined
+                              }
+                              onFastReceipt={
+                                !isVoided && whStatus !== "completed" && (inv.type === "purchase" || inv.type === "sale_return" || activeTab === "list_purchase")
+                                  ? () => {
+                                      setFastReceiptInvoice(inv);
+                                      const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses?.[0]?.id || "");
+                                      setFastReceiptWarehouseId(defaultWh ? String(defaultWh) : "");
+                                    }
+                                  : undefined
+                              }
+                              onPaymentReceipt={
+                                !isVoided
+                                  ? () => {
+                                      if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
+                                      if (inv.type === "sale" || inv.type === "purchase_return") {
+                                        if (setActiveTab) setActiveTab("create_receive_receipt");
+                                      } else {
                                         if (setActiveTab) setActiveTab("create_pay_receipt");
                                       }
-                                    : undefined
-                                }
-                                onEdit={!isVoided && handleEditInvoiceAction ? () => handleEditInvoiceAction(inv) : undefined}
-                                onVoid={!isVoided && handleVoidInvoice ? () => handleVoidInvoice(inv.id) : undefined}
-                                onDelete={!isVoided && handleDeleteInvoice ? () => handleDeleteInvoice(inv.id) : undefined}
-                              />
-                            </div>
-                          ) : (
-                            <div className="flex items-center justify-center gap-1 bg-slate-50/90 p-1 rounded-xl border border-slate-200/60 w-max mx-auto">
-                              {/* Financial Receipt (Receive/Pay) */}
-                              {!isVoided && !activeTab.includes("warehouse") && (
-                                <button
-                                  onClick={() => {
-                                    if (inv.type === "sale" || inv.type === "purchase_return") {
-                                      if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
-                                      if (setActiveTab) setActiveTab("create_receive_receipt");
-                                    } else if (inv.type === "purchase" || inv.type === "sale_return") {
-                                      if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
-                                      if (setActiveTab) setActiveTab("create_pay_receipt");
                                     }
-                                  }}
-                                  className="p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg cursor-pointer transition-colors"
-                                  title={
-                                    inv.type === "sale" || inv.type === "purchase_return"
-                                      ? "ثبت دریافت وجه"
-                                      : "ثبت پرداخت وجه"
-                                  }
-                                >
-                                  <Wallet className="w-4 h-4" />
-                                </button>
-                              )}
-
-                              {/* View Invoice Modal */}
-                              <button
-                                onClick={() => setViewingInvoice && setViewingInvoice(inv)}
-                                className="p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg cursor-pointer transition-colors"
-                                title="مشاهده پیش‌نمایش و چاپ فاکتور"
-                              >
-                                <Eye className="w-4 h-4" />
-                              </button>
-
-                              {/* Direct Print Button */}
-                              <button
-                                onClick={() => {
-                                  if (setViewingInvoice) {
-                                    setViewingInvoice(inv);
-                                    setTimeout(() => {
-                                      safePrint("#invoice-sheet-to-print", {
-                                        timeoutMs: 4000,
-                                        documentTitle: `فاکتور شماره ${inv.invoiceNumber || inv.id || ""}`
-                                      });
-                                    }, 250);
-                                  }
-                                }}
-                                className="p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg cursor-pointer transition-colors"
-                                title="چاپ مستقیم فاکتور"
-                              >
-                                <Printer className="w-4 h-4" />
-                              </button>
-
-                              {/* Edit Invoice */}
-                              {!isVoided && handleEditInvoiceAction && (
-                                <button
-                                  onClick={() => handleEditInvoiceAction(inv)}
-                                  className="p-1.5 text-slate-400 hover:bg-amber-50 hover:text-amber-600 rounded-lg cursor-pointer transition-colors"
-                                  title="ویرایش فاکتور (بازگشت به پیش‌نویس)"
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
-                              )}
-
-                              {/* Void Invoice */}
-                              {!isVoided && handleVoidInvoice && (
-                                <button
-                                  onClick={() => handleVoidInvoice(inv.id)}
-                                  className="p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-lg cursor-pointer transition-colors"
-                                  title="ابطال سند"
-                                >
-                                  <Ban className="w-4 h-4" />
-                                </button>
-                              )}
-
-                              {/* Delete Invoice */}
-                              {!isVoided && handleDeleteInvoice && (
-                                <button
-                                  onClick={() => handleDeleteInvoice(inv.id)}
-                                  className="p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg cursor-pointer transition-colors"
-                                  title="حذف دائمی"
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              )}
-                            </div>
-                          )}
+                                  : undefined
+                              }
+                              onConvertProformaToSale={
+                                isProforma && handleConvertProformaToSale
+                                  ? () => handleConvertProformaToSale(inv)
+                                  : undefined
+                              }
+                              onReturnInvoice={
+                                !isVoided && (inv.type === "sale" ? handleReturnSale : handleReturnPurchase)
+                                  ? () => (inv.type === "sale" ? handleReturnSale(inv) : handleReturnPurchase(inv))
+                                  : undefined
+                              }
+                              onEdit={!isVoided && handleEditInvoiceAction ? () => handleEditInvoiceAction(inv) : undefined}
+                              onVoid={!isVoided && handleVoidInvoice ? () => handleVoidInvoice(inv.id) : undefined}
+                              onDelete={!isVoided && handleDeleteInvoice ? () => handleDeleteInvoice(inv.id) : undefined}
+                            />
+                          </div>
                         </td>
                       </tr>
                     );
@@ -1458,7 +1447,7 @@ export default function InvoicesList(props: any) {
 
                   {filteredInvoicesList.length === 0 && (
                     <tr>
-                      <td colSpan={10} className="p-12 text-center text-slate-400">
+                      <td colSpan={activeTab.includes("warehouse") ? 8 : 12} className="p-12 text-center text-slate-400">
                         <div className="flex flex-col items-center justify-center gap-2">
                           <FileText className="w-8 h-8 text-slate-300" />
                           <span className="text-sm font-bold text-slate-500">هیچ سندی با فیلترهای جاری یافت نشد.</span>

@@ -12,7 +12,10 @@ import {
   ChevronDown,
   SlidersHorizontal,
   CheckCircle2,
-  Barcode
+  Barcode,
+  RotateCcw,
+  FilePlus,
+  Truck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -28,7 +31,10 @@ interface InvoiceRowActionsDropdownProps {
   onDirectPrint: () => void;
   onOpenPricingWizard?: () => void;
   onFastReceipt?: () => void;
+  onFastRemittance?: () => void;
   onPaymentReceipt?: () => void;
+  onConvertProformaToSale?: () => void;
+  onReturnInvoice?: () => void;
   onEdit?: () => void;
   onVoid?: () => void;
   onDelete?: () => void;
@@ -46,7 +52,10 @@ export default function InvoiceRowActionsDropdown({
   onDirectPrint,
   onOpenPricingWizard,
   onFastReceipt,
+  onFastRemittance,
   onPaymentReceipt,
+  onConvertProformaToSale,
+  onReturnInvoice,
   onEdit,
   onVoid,
   onDelete
@@ -208,8 +217,8 @@ export default function InvoiceRowActionsDropdown({
                 </button>
               </div>
 
-              {/* Group 2: Pricing & Warehouse (Especially for purchase invoices) */}
-              {(isPurchase || (whStatus !== "completed" && onFastReceipt)) && (
+              {/* Group 2: Pricing & Warehouse */}
+              {(isPurchase || onFastReceipt || onFastRemittance) && (
                 <div className="py-1 space-y-0.5">
                   {isPurchase && onOpenPricingWizard && (
                     <button
@@ -246,30 +255,89 @@ export default function InvoiceRowActionsDropdown({
                       <span className="text-[10px] text-blue-600 font-bold">ورود</span>
                     </button>
                   )}
+
+                  {!isVoided && whStatus !== "completed" && onFastRemittance && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onFastRemittance();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-purple-50/80 hover:text-purple-700 rounded-xl transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Truck className="w-4 h-4 text-purple-500 group-hover:text-purple-600" />
+                        <span>حواله خروج سریع انبار</span>
+                      </div>
+                      <span className="text-[10px] text-purple-600 font-bold">خروج</span>
+                    </button>
+                  )}
                 </div>
               )}
 
-              {/* Group 3: Financial Settlement */}
-              {!isVoided && onPaymentReceipt && (
+              {/* Group 3: Financial Settlement & Special Workflow (Convert / Return) */}
+              {(!isVoided && (onPaymentReceipt || onConvertProformaToSale || onReturnInvoice)) && (
                 <div className="py-1 space-y-0.5">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setIsOpen(false);
-                      onPaymentReceipt();
-                    }}
-                    className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-xl transition-colors cursor-pointer group"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Wallet className="w-4 h-4 text-emerald-500 group-hover:text-emerald-600" />
-                      <span>
-                        {invoice.type === "sale" || invoice.type === "purchase_return"
-                          ? "ثبت دریافت وجه"
-                          : "ثبت پرداخت وجه"}
+                  {onConvertProformaToSale && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onConvertProformaToSale();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-black text-indigo-800 bg-indigo-50/80 hover:bg-indigo-100 rounded-xl transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <FilePlus className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform" />
+                        <span>تبدیل به فاکتور فروش</span>
+                      </div>
+                      <span className="text-[9px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded-md">
+                        فروش
                       </span>
-                    </div>
-                    <span className="text-[10px] text-emerald-600">تسویه</span>
-                  </button>
+                    </button>
+                  )}
+
+                  {onReturnInvoice && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onReturnInvoice();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-amber-800 bg-amber-50/70 hover:bg-amber-100/80 rounded-xl transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RotateCcw className="w-4 h-4 text-amber-600 group-hover:rotate-45 transition-transform" />
+                        <span>
+                          {invoice.type === "purchase" ? "ثبت برگشت از خرید" : "ثبت برگشت از فروش"}
+                        </span>
+                      </div>
+                      <span className="text-[9px] bg-amber-600 text-white font-bold px-1.5 py-0.5 rounded-md">
+                        مرجوعی
+                      </span>
+                    </button>
+                  )}
+
+                  {onPaymentReceipt && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onPaymentReceipt();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-emerald-50 hover:text-emerald-700 rounded-xl transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Wallet className="w-4 h-4 text-emerald-500 group-hover:text-emerald-600" />
+                        <span>
+                          {invoice.type === "sale" || invoice.type === "purchase_return"
+                            ? "ثبت دریافت وجه"
+                            : "ثبت پرداخت وجه"}
+                        </span>
+                      </div>
+                      <span className="text-[10px] text-emerald-600">تسویه</span>
+                    </button>
+                  )}
                 </div>
               )}
 

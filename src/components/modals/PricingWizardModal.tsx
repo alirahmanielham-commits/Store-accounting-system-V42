@@ -68,14 +68,19 @@ export default function PricingWizardModal(props: any) {
   const selectedFormat = PRINT_FORMATS.find(f => f.id === printFormatId) || PRINT_FORMATS[0];
 
   const getCleanBarcode = (prod: any, item: any) => {
-    const raw = String(prod?.barcode || item?.barcode || prod?.code || item?.productId || item?.id || '1000').trim();
+    const raw = String(prod?.barcode || item?.barcode || prod?.code || '').trim();
     // Convert Persian and Arabic digits to English digits
     const en = raw
       .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
       .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
     // Strip non-ASCII characters to keep CODE128 100% valid
-    const clean = en.replace(/[^\x20-\x7E]/g, '').trim();
-    return clean || String(item?.productId || item?.id || '1000');
+    const clean = en.replace(/[^a-zA-Z0-9\-_]/g, '').trim();
+    if (clean && clean.length > 0) return clean;
+
+    // Numeric fallback using product or item ID to guarantee valid CODE128
+    const fallbackId = String(item?.productId || prod?.id || item?.id || '10001');
+    const digitsOnly = fallbackId.replace(/\D/g, '');
+    return digitsOnly || '10001';
   };
 
   const handleSavePrices = async (shouldPrint?: "list" | "labels") => {
@@ -102,10 +107,14 @@ export default function PricingWizardModal(props: any) {
         // Allow state to update and SVG barcodes to render
         setTimeout(async () => {
           try {
-            await safePrint("#pricing-wizard-barcode-print-area", {
+            const targetId = shouldPrint === "labels" 
+              ? "#pricing-wizard-barcode-print-area" 
+              : "#pricing-wizard-list-print-area";
+
+            await safePrint(targetId, {
               useIframe: true,
-              paperSize: selectedFormat.paperSize,
-              extraCss: `
+              paperSize: shouldPrint === "labels" ? selectedFormat.paperSize : "a4",
+              extraCss: shouldPrint === "labels" ? `
                 ${selectedFormat.layoutCss}
                 #pricing-wizard-barcode-print-area {
                   display: block !important;
@@ -114,6 +123,7 @@ export default function PricingWizardModal(props: any) {
                   left: auto !important;
                   top: auto !important;
                   opacity: 1 !important;
+                  z-index: 100 !important;
                   width: 100% !important;
                   margin: 0 auto !important;
                   padding: 4px !important;
@@ -125,15 +135,31 @@ export default function PricingWizardModal(props: any) {
                 }
                 .print-labels-container {
                   width: 100% !important;
+                  visibility: visible !important;
+                  opacity: 1 !important;
                 }
                 .label-item {
                   box-sizing: border-box !important;
                   page-break-inside: avoid !important;
                   break-inside: avoid !important;
+                  visibility: visible !important;
+                  opacity: 1 !important;
+                }
+                .label-item svg {
+                  display: block !important;
+                  visibility: visible !important;
+                  opacity: 1 !important;
+                }
+              ` : `
+                #pricing-wizard-list-print-area {
+                  display: block !important;
+                  visibility: visible !important;
+                  position: static !important;
+                  width: 100% !important;
                 }
               `,
               documentTitle: shouldPrint === "labels" ? "چاپ لیبل بارکد کالاها" : "لیست قیمت فروش کالاها",
-              timeoutMs: 1500,
+              timeoutMs: 2000,
             });
           } catch (printErr) {
             console.warn("Print error fallback:", printErr);
@@ -681,173 +707,165 @@ export default function PricingWizardModal(props: any) {
             </div>
           </motion.div>
 
-          {/* Dedicated Print-Only Layout */}
+          {/* Dedicated Barcode Labels Print Area */}
           <div
             id="pricing-wizard-barcode-print-area"
-            className="p-3 w-full mx-auto bg-white font-sans text-slate-800 print-section"
-            style={{
-              position: 'fixed',
-              left: '-99999px',
-              top: '0',
-              width: '100%',
-              opacity: 0,
-              pointerEvents: 'none',
-              zIndex: -1,
-            }}
+            className="hidden print:block p-2 w-full mx-auto bg-white font-sans text-slate-800 print-section"
             dir="rtl"
           >
-            {pricingPrintMode === "list" && (
-              <>
-                <div className="flex flex-col items-center justify-center pb-6 border-b border-slate-200 mb-6">
-                  <h2 className="text-3xl font-black text-slate-900 mb-3">
-                    {storeSettings?.storeName || "لیست قیمت فروش کالاها"}
-                  </h2>
-                  <div className="flex gap-8 text-lg font-bold text-slate-600">
-                    <span>
-                      مرجع: فاکتور خرید{" "}
-                      {toPersianDigits(
-                        pricingWizardInvoice?.invoiceNumber || "",
-                      )}
-                    </span>
-                    <span>
-                      تاریخ فاکتور:{" "}
-                      {formatDateDisplay(
-                        pricingWizardInvoice?.date || pricingWizardInvoice?.jalaliDate,
-                      )}
-                    </span>
-                    <span>
-                      تاریخ قیمت‌گذاری: {formatDateDisplay(new Date())}
-                    </span>
-                  </div>
-                </div>
+            <div className="print-labels-container w-full" dir="rtl">
+              {pricingWizardItems.map((item: any, idx: number) => {
+                const prod = products.find((p: any) => String(p.id) === String(item.productId));
+                const barcodeVal = getCleanBarcode(prod, item);
+                const mainUnit = item.mainUnit || prod?.unit || 'عدد';
+                const hasSecondary = Boolean(prod?.secondaryUnit && prod?.unitRatio && prod.unitRatio > 0);
+                const dir = prod?.unitRatioDirection || item.unitRatioDirection || getUnitRatioDirection(prod);
+                const secSalePrice = hasSecondary 
+                  ? getPriceForSelectedUnit(item.salePrice, true, prod.unitRatio, dir)
+                  : null;
 
-                <table className="w-full text-base text-right border-collapse border border-slate-300">
-                  <thead className="bg-slate-100">
-                    <tr>
-                      <th className="p-3 border border-slate-300 font-extrabold w-16 text-center">ردیف</th>
-                      <th className="p-3 border border-slate-300 font-extrabold">نام کالا</th>
-                      <th className="p-3 border border-slate-300 font-extrabold w-32 text-center">واحد اصلی</th>
-                      <th className="p-3 border border-slate-300 font-extrabold w-48 text-center">قیمت خرید واحد اصلی</th>
-                      <th className="p-3 border border-slate-300 font-extrabold w-48 text-center bg-slate-200">
-                        قیمت فروش واحد اصلی ({currency})
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-300">
-                    {pricingWizardItems.map((item: any, idx: number) => {
-                      const prod = products.find((p: any) => String(p.id) === String(item.productId));
-                      const mainUnit = item.mainUnit || prod?.unit || 'عدد';
-                      return (
-                        <tr key={idx}>
-                          <td className="p-3 border border-slate-300 text-center font-bold">
-                            {toPersianDigits(idx + 1)}
-                          </td>
-                          <td className="p-3 border border-slate-300 font-bold">
-                            {item.productName}
-                          </td>
-                          <td className="p-3 border border-slate-300 text-center font-bold text-slate-600">
-                            {mainUnit}
-                          </td>
-                          <td className="p-3 border border-slate-300 text-center font-bold" dir="ltr">
-                            {toPersianDigits(formatNumber(item.purchasePrice))} {currency}
-                          </td>
-                          <td
-                            className="p-3 border border-slate-300 text-center font-black text-xl text-slate-900"
-                            dir="ltr"
-                          >
-                            {item.salePrice
-                              ? toPersianDigits(formatNumber(item.salePrice))
-                              : "---"}{" "}
-                            {currency}
-                          </td>
-                        </tr>
-                      );
-                    })}
-                  </tbody>
-                </table>
-              </>
-            )}
-
-            {pricingPrintMode === "labels" && (
-              <div className="print-labels-container w-full" dir="rtl">
-                {pricingWizardItems.map((item: any, idx: number) => {
-                  const prod = products.find((p: any) => String(p.id) === String(item.productId));
-                  const barcodeVal = getCleanBarcode(prod, item);
-                  const mainUnit = item.mainUnit || prod?.unit || 'عدد';
-                  const hasSecondary = Boolean(prod?.secondaryUnit && prod?.unitRatio && prod.unitRatio > 0);
-                  const dir = prod?.unitRatioDirection || item.unitRatioDirection || getUnitRatioDirection(prod);
-                  const secSalePrice = hasSecondary 
-                    ? getPriceForSelectedUnit(item.salePrice, true, prod.unitRatio, dir)
-                    : null;
-
-                  return (
-                    <div
-                      key={idx}
-                      className="label-item border border-black p-2 bg-white flex flex-col justify-center items-center overflow-hidden rounded-lg box-border"
-                      style={printFormatId.includes('label_') ? {} : { borderRadius: '1rem', border: '2px solid black' }}
-                    >
-                      {labelShowStoreName && (
-                        <div 
-                          className="font-bold text-black mb-0.5 truncate px-1 w-full text-center leading-tight"
-                          style={{ fontSize: `11px` }}
-                        >
-                          {storeSettings?.storeName || 'فروشگاه'}
-                        </div>
-                      )}
-                      
-                      {labelShowTitle && (
-                        <div 
-                          className="font-bold text-black mb-1 truncate px-1 w-full text-center leading-tight"
-                          style={{ fontSize: `${labelTitleFontSize}px` }}
-                        >
-                          {item.productName}
-                        </div>
-                      )}
-                      
+                return (
+                  <div
+                    key={idx}
+                    className="label-item border border-black p-2 bg-white flex flex-col justify-center items-center overflow-hidden rounded-lg box-border"
+                    style={printFormatId.includes('label_') ? {} : { borderRadius: '1rem', border: '2px solid black' }}
+                  >
+                    {labelShowStoreName && (
                       <div 
-                        className="flex justify-center text-center items-center overflow-hidden origin-top w-full"
-                        style={{ transform: `scale(${labelBarcodeScale / 100})`, marginTop: labelShowTitle ? '0' : '4px', marginBottom: labelShowPrice ? '0' : '4px' }}
+                        className="font-bold text-black mb-0.5 truncate px-1 w-full text-center leading-tight"
+                        style={{ fontSize: `11px` }}
                       >
-                        {barcodeVal ? (
-                          <Barcode
-                            value={barcodeVal}
-                            format="CODE128"
-                            width={printFormatId === 'label_50x30' ? 1.3 : 1.5}
-                            height={printFormatId === 'label_50x30' ? 26 : 34}
-                            fontSize={printFormatId === 'label_50x30' ? 10 : 11}
-                            textMargin={1}
-                            margin={0}
-                            background="#ffffff"
-                            lineColor="#000000"
-                            displayValue={true}
-                          />
-                        ) : (
-                          <div className="text-[10px] text-slate-500 py-1 font-bold">بدون بارکد</div>
-                        )}
+                        {storeSettings?.storeName || 'فروشگاه'}
                       </div>
-
-                      {labelShowPrice && (
-                        <div 
-                          className="font-black text-black w-full text-center mt-1 leading-tight"
-                          style={{ fontSize: `${labelPriceFontSize}px` }}
-                        >
-                          <span className="text-[10px] font-bold ml-1">
-                            هر {mainUnit}:
-                          </span>
-                          {item.salePrice ? toPersianDigits(formatNumber(item.salePrice)) : "---"} {currency}
-                        </div>
-                      )}
-
-                      {labelShowSecondaryPrice && hasSecondary && secSalePrice !== null && (
-                        <div className="text-[9px] font-bold text-black w-full text-center mt-0.5 leading-none">
-                          هر {prod?.secondaryUnit || 'فرعی'}: {toPersianDigits(formatNumber(secSalePrice))} {currency}
-                        </div>
+                    )}
+                    
+                    {labelShowTitle && (
+                      <div 
+                        className="font-bold text-black mb-1 truncate px-1 w-full text-center leading-tight"
+                        style={{ fontSize: `${labelTitleFontSize}px` }}
+                      >
+                        {item.productName}
+                      </div>
+                    )}
+                    
+                    <div 
+                      className="flex justify-center text-center items-center overflow-hidden origin-top w-full"
+                      style={{ transform: `scale(${labelBarcodeScale / 100})`, marginTop: labelShowTitle ? '0' : '4px', marginBottom: labelShowPrice ? '0' : '4px' }}
+                    >
+                      {barcodeVal ? (
+                        <Barcode
+                          value={barcodeVal}
+                          format="CODE128"
+                          width={printFormatId === 'label_50x30' ? 1.3 : 1.5}
+                          height={printFormatId === 'label_50x30' ? 26 : 34}
+                          fontSize={printFormatId === 'label_50x30' ? 10 : 11}
+                          textMargin={1}
+                          margin={0}
+                          background="#ffffff"
+                          lineColor="#000000"
+                          displayValue={true}
+                        />
+                      ) : (
+                        <div className="text-[10px] text-slate-500 py-1 font-bold">بدون بارکد</div>
                       )}
                     </div>
+
+                    {labelShowPrice && (
+                      <div 
+                        className="font-black text-black w-full text-center mt-1 leading-tight"
+                        style={{ fontSize: `${labelPriceFontSize}px` }}
+                      >
+                        <span className="text-[10px] font-bold ml-1">
+                          هر {mainUnit}:
+                        </span>
+                        {item.salePrice ? toPersianDigits(formatNumber(item.salePrice)) : "---"} {currency}
+                      </div>
+                    )}
+
+                    {labelShowSecondaryPrice && hasSecondary && secSalePrice !== null && (
+                      <div className="text-[9px] font-bold text-black w-full text-center mt-0.5 leading-none">
+                        هر {prod?.secondaryUnit || 'فرعی'}: {toPersianDigits(formatNumber(secSalePrice))} {currency}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* Dedicated A4 Price List Print Area */}
+          <div
+            id="pricing-wizard-list-print-area"
+            className="hidden print:block p-4 w-full mx-auto bg-white font-sans text-slate-800 print-section"
+            dir="rtl"
+          >
+            <div className="flex flex-col items-center justify-center pb-6 border-b border-slate-200 mb-6">
+              <h2 className="text-3xl font-black text-slate-900 mb-3">
+                {storeSettings?.storeName || "لیست قیمت فروش کالاها"}
+              </h2>
+              <div className="flex gap-8 text-lg font-bold text-slate-600">
+                <span>
+                  مرجع: فاکتور خرید{" "}
+                  {toPersianDigits(
+                    pricingWizardInvoice?.invoiceNumber || "",
+                  )}
+                </span>
+                <span>
+                  تاریخ فاکتور:{" "}
+                  {formatDateDisplay(
+                    pricingWizardInvoice?.date || pricingWizardInvoice?.jalaliDate,
+                  )}
+                </span>
+                <span>
+                  تاریخ قیمت‌گذاری: {formatDateDisplay(new Date())}
+                </span>
+              </div>
+            </div>
+
+            <table className="w-full text-base text-right border-collapse border border-slate-300">
+              <thead className="bg-slate-100">
+                <tr>
+                  <th className="p-3 border border-slate-300 font-extrabold w-16 text-center">ردیف</th>
+                  <th className="p-3 border border-slate-300 font-extrabold">نام کالا</th>
+                  <th className="p-3 border border-slate-300 font-extrabold w-32 text-center">واحد اصلی</th>
+                  <th className="p-3 border border-slate-300 font-extrabold w-48 text-center">قیمت خرید واحد اصلی</th>
+                  <th className="p-3 border border-slate-300 font-extrabold w-48 text-center bg-slate-200">
+                    قیمت فروش واحد اصلی ({currency})
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-300">
+                {pricingWizardItems.map((item: any, idx: number) => {
+                  const prod = products.find((p: any) => String(p.id) === String(item.productId));
+                  const mainUnit = item.mainUnit || prod?.unit || 'عدد';
+                  return (
+                    <tr key={idx}>
+                      <td className="p-3 border border-slate-300 text-center font-bold">
+                        {toPersianDigits(idx + 1)}
+                      </td>
+                      <td className="p-3 border border-slate-300 font-bold">
+                        {item.productName}
+                      </td>
+                      <td className="p-3 border border-slate-300 text-center font-bold text-slate-600">
+                        {mainUnit}
+                      </td>
+                      <td className="p-3 border border-slate-300 text-center font-bold" dir="ltr">
+                        {toPersianDigits(formatNumber(item.purchasePrice))} {currency}
+                      </td>
+                      <td
+                        className="p-3 border border-slate-300 text-center font-black text-xl text-slate-900"
+                        dir="ltr"
+                      >
+                        {item.salePrice
+                          ? toPersianDigits(formatNumber(item.salePrice))
+                          : "---"}{" "}
+                        {currency}
+                      </td>
+                    </tr>
                   );
                 })}
-              </div>
-            )}
+              </tbody>
+            </table>
           </div>
         </div>
       )}

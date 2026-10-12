@@ -226,17 +226,19 @@ export async function printViaIframe(
 
     // Ensure cloned root element is visible and positioned normally in print iframe
     cloned.classList.remove("hidden");
-    cloned.style.removeProperty("display");
-    cloned.style.removeProperty("position");
-    cloned.style.removeProperty("left");
-    cloned.style.removeProperty("top");
-    cloned.style.removeProperty("opacity");
-    cloned.style.removeProperty("visibility");
-    cloned.style.removeProperty("pointer-events");
+    cloned.removeAttribute("style");
+    cloned.style.cssText = "display: block !important; visibility: visible !important; opacity: 1 !important; position: static !important; width: 100% !important; margin: 0 auto !important; z-index: 1 !important; pointer-events: auto !important;";
 
     // Remove any screen-only interactive controls inside target
     cloned.querySelectorAll(".no-print, [data-no-print='true'], .print\\:hidden").forEach((el) => {
       el.remove();
+    });
+
+    // Ensure all SVGs and barcode images inside cloned element are explicitly visible
+    cloned.querySelectorAll("svg").forEach((svg) => {
+      (svg as SVGElement).style.display = "block";
+      (svg as SVGElement).style.visibility = "visible";
+      (svg as SVGElement).style.opacity = "1";
     });
 
     const targetHtml = cloned.outerHTML;
@@ -412,12 +414,14 @@ export async function printViaIframe(
     const iframe = document.createElement("iframe");
     iframe.id = "app-dedicated-print-iframe";
     iframe.style.position = "fixed";
-    iframe.style.right = "0";
-    iframe.style.bottom = "0";
-    iframe.style.width = "1024px";
-    iframe.style.height = "768px";
+    iframe.style.left = "0";
+    iframe.style.top = "0";
+    iframe.style.width = "100%";
+    iframe.style.height = "100%";
     iframe.style.border = "none";
-    iframe.style.opacity = "0";
+    iframe.style.zIndex = "-99999";
+    iframe.style.background = "#ffffff";
+    iframe.style.opacity = "0.01"; // Must NOT be 0: Chrome discards print painting on opacity: 0 elements
     iframe.style.pointerEvents = "none";
     iframe.setAttribute("aria-hidden", "true");
     iframe.setAttribute("tabindex", "-1");
