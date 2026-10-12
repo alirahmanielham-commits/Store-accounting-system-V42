@@ -75,7 +75,7 @@ async function waitForElement(
       }
 
       if (el && document.body.contains(el)) {
-        if (el.offsetHeight > 0 || el.scrollHeight > 0 || (el.innerText || "").trim().length > 0) {
+        if (el.offsetHeight > 0 || el.scrollHeight > 0 || (el.innerText || "").trim().length > 0 || el.children.length > 0) {
           return resolve(el);
         }
       }
@@ -224,6 +224,16 @@ export async function printViaIframe(
     // Step 4: Clone the exact content
     const cloned = targetElement.cloneNode(true) as HTMLElement;
 
+    // Ensure cloned root element is visible and positioned normally in print iframe
+    cloned.classList.remove("hidden");
+    cloned.style.removeProperty("display");
+    cloned.style.removeProperty("position");
+    cloned.style.removeProperty("left");
+    cloned.style.removeProperty("top");
+    cloned.style.removeProperty("opacity");
+    cloned.style.removeProperty("visibility");
+    cloned.style.removeProperty("pointer-events");
+
     // Remove any screen-only interactive controls inside target
     cloned.querySelectorAll(".no-print, [data-no-print='true'], .print\\:hidden").forEach((el) => {
       el.remove();
@@ -311,7 +321,15 @@ export async function printViaIframe(
           margin: 0 auto !important;
           padding: 0 !important;
           background: #ffffff !important;
+          display: block !important;
+          visibility: visible !important;
+          opacity: 1 !important;
           font-family: 'IRANYekanXFaNum', 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif !important;
+        }
+        #print-root > * {
+          display: block !important;
+          visibility: visible !important;
+          opacity: 1 !important;
         }
         /* Override desktop preview bounds to allow natural multi-page flow */
         .invoice-print-container,
@@ -475,8 +493,8 @@ export async function printViaIframe(
       iframe.contentWindow.addEventListener("afterprint", cleanup, { once: true });
     }
 
-    // Fallback cleanup timer in case afterprint does not fire
-    setTimeout(cleanup, 3500);
+    // Fallback cleanup timer in case afterprint does not fire (wait 60s so user can print safely)
+    setTimeout(cleanup, 60000);
 
     // Step 10: Trigger print in iframe
     if (iframe.contentWindow) {

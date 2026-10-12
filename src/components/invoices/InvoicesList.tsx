@@ -1309,11 +1309,11 @@ export default function InvoicesList(props: any) {
                                 onOpenPricingWizard={() => {
                                   const newWizardItems = (inv.items || [])
                                     .filter((it: any) => {
-                                      const prod = products.find((p: any) => p.id === it.productId);
+                                      const prod = products.find((p: any) => String(p.id) === String(it.productId));
                                       return prod && prod.type !== "service";
                                     })
                                     .map((it: any) => {
-                                      const prod = products.find((p: any) => p.id === it.productId);
+                                      const prod = products.find((p: any) => String(p.id) === String(it.productId));
                                       const prodDir = prod?.unitRatioDirection || getUnitRatioDirection(prod);
                                       let basePurchasePrice = Number(it.unitPrice) || 0;
                                       const isSecUnit = Boolean(it.isSecondaryUnit);

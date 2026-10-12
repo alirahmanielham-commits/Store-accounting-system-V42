@@ -32,37 +32,57 @@ export default function PricingWizardModal(props: any) {
   const [labelShowSecondaryPrice, setLabelShowSecondaryPrice] = useState(false);
   const [labelBarcodeScale, setLabelBarcodeScale] = useState(90);
   const [isSaving, setIsSaving] = useState(false);
+  const [isPrinting, setIsPrinting] = useState(false);
 
   const PRINT_FORMATS = [
     { 
       id: 'a4', 
       name: 'برگه A4 (۴ ستونه)', 
-      css: `@page { size: A4; margin: 10mm; } .print-labels-container { display: grid; grid-template-columns: repeat(4, 1fr); gap: 3mm; } .label-item { height: 52mm; page-break-inside: avoid; }`
+      paperSize: 'a4',
+      pageCss: `@page { size: A4 portrait; margin: 8mm; }`,
+      layoutCss: `.print-labels-container { display: grid !important; grid-template-columns: repeat(4, 1fr) !important; gap: 3.5mm !important; width: 100% !important; } .label-item { height: 50mm !important; page-break-inside: avoid !important; break-inside: avoid !important; }`
     },
     { 
       id: 'a5', 
       name: 'برگه A5 (۲ ستونه)', 
-      css: `@page { size: A5; margin: 5mm; } .print-labels-container { display: grid; grid-template-columns: repeat(2, 1fr); gap: 3mm; } .label-item { height: 37mm; page-break-inside: avoid; }`
+      paperSize: 'a5',
+      pageCss: `@page { size: A5 portrait; margin: 5mm; }`,
+      layoutCss: `.print-labels-container { display: grid !important; grid-template-columns: repeat(2, 1fr) !important; gap: 3.5mm !important; width: 100% !important; } .label-item { height: 38mm !important; page-break-inside: avoid !important; break-inside: avoid !important; }`
     },
     { 
       id: 'label_50x30', 
       name: 'لیبل پرینتر (۵۰x۳۰ میلی‌متر)', 
-      css: `@page { size: 50mm 30mm; margin: 0; } .print-labels-container { display: block; } .label-item { width: 48mm; height: 28mm; margin: 1mm auto; page-break-after: always; border: none !important; }`
+      paperSize: 'pos80',
+      pageCss: `@page { size: 50mm 30mm; margin: 0; }`,
+      layoutCss: `.print-labels-container { display: block !important; width: 48mm !important; margin: 0 auto !important; } .label-item { width: 48mm !important; height: 28mm !important; margin: 1mm auto !important; page-break-after: always !important; border: none !important; } .label-item:last-child { page-break-after: auto !important; }`
     },
     { 
       id: 'label_80x40', 
       name: 'لیبل پرینتر (۸۰x۴۰ میلی‌متر)', 
-      css: `@page { size: 80mm 40mm; margin: 0; } .print-labels-container { display: block; } .label-item { width: 78mm; height: 38mm; margin: 1mm auto; page-break-after: always; border: none !important; }`
+      paperSize: 'pos80',
+      pageCss: `@page { size: 80mm 40mm; margin: 0; }`,
+      layoutCss: `.print-labels-container { display: block !important; width: 78mm !important; margin: 0 auto !important; } .label-item { width: 78mm !important; height: 38mm !important; margin: 1mm auto !important; page-break-after: always !important; border: none !important; } .label-item:last-child { page-break-after: auto !important; }`
     },
   ];
   
   const selectedFormat = PRINT_FORMATS.find(f => f.id === printFormatId) || PRINT_FORMATS[0];
 
+  const getCleanBarcode = (prod: any, item: any) => {
+    const raw = String(prod?.barcode || item?.barcode || prod?.code || item?.productId || item?.id || '1000').trim();
+    // Convert Persian and Arabic digits to English digits
+    const en = raw
+      .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
+      .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
+    // Strip non-ASCII characters to keep CODE128 100% valid
+    const clean = en.replace(/[^\x20-\x7E]/g, '').trim();
+    return clean || String(item?.productId || item?.id || '1000');
+  };
+
   const handleSavePrices = async (shouldPrint?: "list" | "labels") => {
     setIsSaving(true);
     try {
       for (const item of pricingWizardItems) {
-        const p = products.find((prod: any) => prod.id === item.productId);
+        const p = products.find((prod: any) => String(prod.id) === String(item.productId));
         if (p) {
           await updateProduct(p.id.toString(), {
             ...p,
@@ -77,22 +97,49 @@ export default function PricingWizardModal(props: any) {
 
       if (shouldPrint) {
         setPricingPrintMode(shouldPrint);
-        // Allow state to update and render the dedicated print DOM
+        setIsPrinting(true);
+
+        // Allow state to update and SVG barcodes to render
         setTimeout(async () => {
           try {
             await safePrint("#pricing-wizard-barcode-print-area", {
               useIframe: true,
+              paperSize: selectedFormat.paperSize,
               extraCss: `
-                ${selectedFormat.css}
-                #pricing-wizard-barcode-print-area { display: block !important; visibility: visible !important; width: 100% !important; margin: 0 !important; }
-                body { background: white !important; margin: 0 !important; padding: 0 !important; }
+                ${selectedFormat.layoutCss}
+                #pricing-wizard-barcode-print-area {
+                  display: block !important;
+                  visibility: visible !important;
+                  position: static !important;
+                  left: auto !important;
+                  top: auto !important;
+                  opacity: 1 !important;
+                  width: 100% !important;
+                  margin: 0 auto !important;
+                  padding: 4px !important;
+                }
+                body {
+                  background: #ffffff !important;
+                  margin: 0 !important;
+                  padding: 0 !important;
+                }
+                .print-labels-container {
+                  width: 100% !important;
+                }
+                .label-item {
+                  box-sizing: border-box !important;
+                  page-break-inside: avoid !important;
+                  break-inside: avoid !important;
+                }
               `,
               documentTitle: shouldPrint === "labels" ? "چاپ لیبل بارکد کالاها" : "لیست قیمت فروش کالاها",
-              timeoutMs: 800,
+              timeoutMs: 1500,
             });
           } catch (printErr) {
             console.warn("Print error fallback:", printErr);
             window.print();
+          } finally {
+            setIsPrinting(false);
           }
         }, 150);
       } else {
@@ -117,6 +164,7 @@ export default function PricingWizardModal(props: any) {
           className="fixed inset-0 z-[999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 print:p-0 print:bg-white print:block print:overflow-visible overflow-y-auto print-barcode-section print-section print-modal-active"
         >
           <style>{`
+            ${selectedFormat.pageCss}
             @media print {
               .main-app-layout-wrapper,
               #invoices-table-container,
@@ -130,16 +178,28 @@ export default function PricingWizardModal(props: any) {
                 max-height: 0 !important;
                 overflow: hidden !important;
               }
-              body > *:not([data-print-modal="true"]) {
-                display: none !important;
+              .print-modal-active,
+              .print-barcode-section {
+                position: static !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 0 !important;
+                background: white !important;
+                overflow: visible !important;
+                height: auto !important;
               }
-              .print-barcode-section { position: relative !important; width: 100%; margin: 0; padding: 0; }
               #pricing-wizard-barcode-print-area {
                 display: block !important;
                 visibility: visible !important;
+                position: static !important;
+                left: auto !important;
+                top: auto !important;
+                opacity: 1 !important;
                 width: 100% !important;
+                margin: 0 auto !important;
+                padding: 0 !important;
               }
-              ${selectedFormat.css}
+              ${selectedFormat.layoutCss}
             }
           `}</style>
           {/* Interactive UI */}
@@ -488,8 +548,8 @@ export default function PricingWizardModal(props: any) {
                   {/* Grid of Preview Cards */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
                     {pricingWizardItems.map((item: any, idx: number) => {
-                      const prod = products.find((p: any) => p.id === item.productId);
-                      const barcodeVal = prod?.barcode || prod?.code || String(item.productId);
+                      const prod = products.find((p: any) => String(p.id) === String(item.productId));
+                      const barcodeVal = getCleanBarcode(prod, item);
                       const mainUnit = item.mainUnit || prod?.unit || 'عدد';
                       const hasSecondary = Boolean(prod?.secondaryUnit && prod?.unitRatio && prod.unitRatio > 0);
                       const dir = prod?.unitRatioDirection || item.unitRatioDirection || getUnitRatioDirection(prod);
@@ -624,7 +684,16 @@ export default function PricingWizardModal(props: any) {
           {/* Dedicated Print-Only Layout */}
           <div
             id="pricing-wizard-barcode-print-area"
-            className="hidden print:block p-4 w-full mx-auto bg-white font-sans text-slate-800 print-section"
+            className="p-3 w-full mx-auto bg-white font-sans text-slate-800 print-section"
+            style={{
+              position: 'fixed',
+              left: '-99999px',
+              top: '0',
+              width: '100%',
+              opacity: 0,
+              pointerEvents: 'none',
+              zIndex: -1,
+            }}
             dir="rtl"
           >
             {pricingPrintMode === "list" && (
@@ -666,7 +735,7 @@ export default function PricingWizardModal(props: any) {
                   </thead>
                   <tbody className="divide-y divide-slate-300">
                     {pricingWizardItems.map((item: any, idx: number) => {
-                      const prod = products.find((p: any) => p.id === item.productId);
+                      const prod = products.find((p: any) => String(p.id) === String(item.productId));
                       const mainUnit = item.mainUnit || prod?.unit || 'عدد';
                       return (
                         <tr key={idx}>
@@ -702,8 +771,8 @@ export default function PricingWizardModal(props: any) {
             {pricingPrintMode === "labels" && (
               <div className="print-labels-container w-full" dir="rtl">
                 {pricingWizardItems.map((item: any, idx: number) => {
-                  const prod = products.find((p: any) => p.id === item.productId);
-                  const barcodeVal = prod?.barcode || prod?.code || String(item.productId);
+                  const prod = products.find((p: any) => String(p.id) === String(item.productId));
+                  const barcodeVal = getCleanBarcode(prod, item);
                   const mainUnit = item.mainUnit || prod?.unit || 'عدد';
                   const hasSecondary = Boolean(prod?.secondaryUnit && prod?.unitRatio && prod.unitRatio > 0);
                   const dir = prod?.unitRatioDirection || item.unitRatioDirection || getUnitRatioDirection(prod);
@@ -736,16 +805,16 @@ export default function PricingWizardModal(props: any) {
                       )}
                       
                       <div 
-                        className="flex justify-center text-center items-center overflow-hidden origin-top"
+                        className="flex justify-center text-center items-center overflow-hidden origin-top w-full"
                         style={{ transform: `scale(${labelBarcodeScale / 100})`, marginTop: labelShowTitle ? '0' : '4px', marginBottom: labelShowPrice ? '0' : '4px' }}
                       >
                         {barcodeVal ? (
                           <Barcode
                             value={barcodeVal}
                             format="CODE128"
-                            width={1.5}
-                            height={34}
-                            fontSize={11}
+                            width={printFormatId === 'label_50x30' ? 1.3 : 1.5}
+                            height={printFormatId === 'label_50x30' ? 26 : 34}
+                            fontSize={printFormatId === 'label_50x30' ? 10 : 11}
                             textMargin={1}
                             margin={0}
                             background="#ffffff"
@@ -753,7 +822,7 @@ export default function PricingWizardModal(props: any) {
                             displayValue={true}
                           />
                         ) : (
-                          <div className="text-[10px]">بدون بارکد</div>
+                          <div className="text-[10px] text-slate-500 py-1 font-bold">بدون بارکد</div>
                         )}
                       </div>
 
@@ -771,7 +840,7 @@ export default function PricingWizardModal(props: any) {
 
                       {labelShowSecondaryPrice && hasSecondary && secSalePrice !== null && (
                         <div className="text-[9px] font-bold text-black w-full text-center mt-0.5 leading-none">
-                          هر {prod.secondaryUnit}: {toPersianDigits(formatNumber(secSalePrice))} {currency}
+                          هر {prod?.secondaryUnit || 'فرعی'}: {toPersianDigits(formatNumber(secSalePrice))} {currency}
                         </div>
                       )}
                     </div>
