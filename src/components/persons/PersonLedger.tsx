@@ -499,15 +499,18 @@ export default function PersonLedger(props: any) {
                           if (isInvoiceSource || (doc.sourceId && (invoices || []).some(inv => String(inv.id) === String(doc.sourceId) || String(inv.invoiceNumber) === String(doc.sourceId)))) {
                             entryType = "invoice";
                             matchedInvoice = (invoices || []).find(inv => 
-                              String(inv?.id) === String(doc.sourceId) || 
+                              !String(inv?.type || '').startsWith('warehouse_') &&
+                              inv?.type !== 'warehouse_receipt' &&
+                              inv?.type !== 'warehouse_remittance' &&
+                              (String(inv?.id) === String(doc.sourceId) || 
                               String(inv?.invoiceNumber) === String(doc.sourceId) ||
-                              String(inv?.invoiceNumber) === String(doc.documentNumber)
+                              String(inv?.invoiceNumber) === String(doc.documentNumber))
                             );
                             if (matchedInvoice) {
                                 if (matchedInvoice.type === "sale" || !matchedInvoice.type) typeName = "فاکتور فروش";
                                 else if (matchedInvoice.type === "purchase") typeName = "فاکتور خرید";
-                                else if (matchedInvoice.type === "sale_return") typeName = "برگشت از فروش";
-                                else if (matchedInvoice.type === "purchase_return") typeName = "برگشت از خرید";
+                                else if (matchedInvoice.type === "sale_return" || matchedInvoice.type === "return_sale") typeName = "برگشت از فروش";
+                                else if (matchedInvoice.type === "purchase_return" || matchedInvoice.type === "return_purchase") typeName = "برگشت از خرید";
                             } else {
                                 if (doc.sourceType === "invoice_purchase" || doc.sourceType === "purchase") typeName = "فاکتور خرید";
                                 else if (doc.sourceType === "invoice_sale_return" || doc.sourceType === "sale_return") typeName = "برگشت از فروش";
@@ -543,9 +546,19 @@ export default function PersonLedger(props: any) {
                           .map((d: any) => String(d.sourceId))
                       );
 
+                      const FINANCIAL_INVOICE_TYPES = new Set([
+                        'sale', 'purchase', 'sale_return', 'purchase_return',
+                        'return_sale', 'return_purchase'
+                      ]);
+
                       const directInvoiceEntries = (invoices || [])
                         .filter((inv: any) => 
                           inv && !inv.isDeleted && !inv.isDraft && inv.status !== 'draft' && inv.status !== 'voided' &&
+                          (!inv.type || FINANCIAL_INVOICE_TYPES.has(inv.type)) &&
+                          !String(inv.type || '').startsWith('warehouse_') &&
+                          inv.type !== 'warehouse_receipt' &&
+                          inv.type !== 'warehouse_remittance' &&
+                          inv.type !== 'proforma' &&
                           (String(inv.customerId) === String(selectedPerson.id) || String(inv.personId) === String(selectedPerson.id)) &&
                           !coveredInvoiceIds.has(String(inv.id)) &&
                           !coveredInvoiceIds.has(String(inv.invoiceNumber))
@@ -553,11 +566,12 @@ export default function PersonLedger(props: any) {
                         .map((inv: any) => {
                           const isSale = inv.type === 'sale' || !inv.type;
                           const isPurchase = inv.type === 'purchase';
-                          const isSaleReturn = inv.type === 'sale_return';
+                          const isSaleReturn = inv.type === 'sale_return' || inv.type === 'return_sale';
+                          const isPurchaseReturn = inv.type === 'purchase_return' || inv.type === 'return_purchase';
                           
-                          let typeName = isSale ? 'فاکتور فروش' : isPurchase ? 'فاکتور خرید' : isSaleReturn ? 'برگشت از فروش' : 'برگشت از خرید';
+                          let typeName = isSale ? 'فاکتور فروش' : isPurchase ? 'فاکتور خرید' : isSaleReturn ? 'برگشت از فروش' : isPurchaseReturn ? 'برگشت از خرید' : 'فاکتور';
                           const total = Number(inv.totalPrice || inv.totalAmount || inv.finalAmount || 0);
-                          const debit = (isSale || inv.type === 'purchase_return') ? total : 0;
+                          const debit = (isSale || isPurchaseReturn) ? total : 0;
                           const credit = (isPurchase || isSaleReturn) ? total : 0;
                           
                           return {
@@ -1568,9 +1582,12 @@ export default function PersonLedger(props: any) {
                                                     const targetId = String(entry.rawItem?.sourceId || entry.rawItem?.id || entry.id || '').replace(/^inv-/, '');
                                                     const targetRef = String(entry.refId || '').trim();
                                                     actualInvoice = (invoices || []).find((i: any) => 
-                                                      (targetId && (String(i?.id) === targetId || String(i?.invoiceNumber) === targetId)) ||
+                                                      !String(i?.type || '').startsWith('warehouse_') &&
+                                                      i?.type !== 'warehouse_receipt' &&
+                                                      i?.type !== 'warehouse_remittance' &&
+                                                      ((targetId && (String(i?.id) === targetId || String(i?.invoiceNumber) === targetId)) ||
                                                       (targetRef && targetRef !== '-' && (String(i?.invoiceNumber) === targetRef || String(i?.id) === targetRef)) ||
-                                                      (entry.rawItem?.documentNumber && String(i?.invoiceNumber) === String(entry.rawItem.documentNumber))
+                                                      (entry.rawItem?.documentNumber && String(i?.invoiceNumber) === String(entry.rawItem.documentNumber)))
                                                     );
                                                   }
                                                   if (!actualInvoice && entry.rawItem && Array.isArray(entry.rawItem.items)) {

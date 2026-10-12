@@ -12,7 +12,7 @@ import {
   DollarSign, RefreshCw, XCircle, Warehouse, TrendingUp, TrendingDown,
   RotateCcw, AlertCircle, Calendar as CalendarIcon, Tag, Wallet, Ban, Percent,
   ArrowUpDown, Filter, ChevronDown, CheckCircle as CheckCircleIcon, Building2,
-  ShoppingCart
+  ShoppingCart, Phone
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import { convertToGregorian, formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, formatNumber, getActiveStoreSettings } from "../../utils/format";
@@ -285,6 +285,20 @@ export default function InvoicesList(props: any) {
     return hasRemaining ? "partial" : "completed";
   };
 
+  const isInvoiceOverdue = (dueDateStr: any) => {
+    if (!dueDateStr) return false;
+    try {
+      const gregStr = convertToGregorian(dueDateStr);
+      const target = new Date(gregStr).getTime();
+      if (isNaN(target)) return false;
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      return target < now.getTime();
+    } catch {
+      return false;
+    }
+  };
+
   // Dynamic Page Configuration based on activeTab
   const pageConfig = useMemo(() => {
     switch (activeTab) {
@@ -406,6 +420,16 @@ export default function InvoicesList(props: any) {
         if (invoiceTabFilter === "pending_receive" && isRemittedOrReceived) return false;
         if (invoiceTabFilter === "paid" && inv.paymentStatus !== "paid") return false;
         if (invoiceTabFilter === "unpaid" && (inv.paymentStatus !== "unpaid" && inv.paymentStatus !== "partial")) return false;
+      } else if (activeTab === "list_sale_return") {
+        if (invoiceTabFilter === "paid" && inv.paymentStatus !== "paid") return false;
+        if (invoiceTabFilter === "unpaid" && (inv.paymentStatus !== "unpaid" && inv.paymentStatus !== "partial")) return false;
+        if (invoiceTabFilter === "received" && !isRemittedOrReceived) return false;
+        if (invoiceTabFilter === "pending_receive" && isRemittedOrReceived) return false;
+      } else if (activeTab === "list_purchase_return") {
+        if (invoiceTabFilter === "paid" && inv.paymentStatus !== "paid") return false;
+        if (invoiceTabFilter === "unpaid" && (inv.paymentStatus !== "unpaid" && inv.paymentStatus !== "partial")) return false;
+        if (invoiceTabFilter === "remitted" && !isRemittedOrReceived) return false;
+        if (invoiceTabFilter === "pending_remit" && isRemittedOrReceived) return false;
       } else if (activeTab === "list_warehouse_docs") {
         if (listFilter === "receipt" && inv.type !== "warehouse_receipt") return false;
         if (listFilter === "remittance" && inv.type !== "warehouse_remittance") return false;
@@ -774,6 +798,76 @@ export default function InvoicesList(props: any) {
           </div>
         )}
 
+        {activeTab === "list_sale_return" && (
+          <div className="flex items-center gap-1.5 mt-5 p-1 bg-amber-100/50 rounded-2xl overflow-x-auto">
+            {[
+              { id: 'all', label: 'همه مرجوعی‌های فروش', count: baseInvoices.length },
+              { id: 'paid', label: 'مسترد شده (تسویه)', count: baseInvoices.filter((i: any) => i.paymentStatus === 'paid').length },
+              { id: 'unpaid', label: 'مانده‌دار / در انتظار تسویه', count: baseInvoices.filter((i: any) => i.paymentStatus !== 'paid').length },
+              { id: 'received', label: 'ورود به انبار شده', count: baseInvoices.filter((i: any) => getInvoiceWarehouseStatus(i) !== 'pending').length },
+              { id: 'pending_receive', label: 'در انتظار ورود به انبار', count: baseInvoices.filter((i: any) => getInvoiceWarehouseStatus(i) === 'pending').length },
+            ].map(tab => {
+              const isActive = invoiceTabFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setInvoiceTabFilter(tab.id);
+                    if (setInvoiceCurrentPage) setInvoiceCurrentPage(1);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-white text-amber-800 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                    isActive ? 'bg-amber-100 text-amber-800' : 'bg-slate-200/70 text-slate-600'
+                  }`}>
+                    {toPersianDigits(tab.count)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
+        {activeTab === "list_purchase_return" && (
+          <div className="flex items-center gap-1.5 mt-5 p-1 bg-rose-100/40 rounded-2xl overflow-x-auto">
+            {[
+              { id: 'all', label: 'همه مرجوعی‌های خرید', count: baseInvoices.length },
+              { id: 'paid', label: 'وجه بازپس گرفته شده', count: baseInvoices.filter((i: any) => i.paymentStatus === 'paid').length },
+              { id: 'unpaid', label: 'مانده طلب از تامین‌کننده', count: baseInvoices.filter((i: any) => i.paymentStatus !== 'paid').length },
+              { id: 'remitted', label: 'حواله خروج صادر شده', count: baseInvoices.filter((i: any) => getInvoiceWarehouseStatus(i) !== 'pending').length },
+              { id: 'pending_remit', label: 'در انتظار حواله خروج', count: baseInvoices.filter((i: any) => getInvoiceWarehouseStatus(i) === 'pending').length },
+            ].map(tab => {
+              const isActive = invoiceTabFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setInvoiceTabFilter(tab.id);
+                    if (setInvoiceCurrentPage) setInvoiceCurrentPage(1);
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer whitespace-nowrap ${
+                    isActive
+                      ? 'bg-white text-rose-700 shadow-xs'
+                      : 'text-slate-600 hover:text-slate-900 hover:bg-white/50'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[10px] font-bold ${
+                    isActive ? 'bg-rose-100 text-rose-700' : 'bg-slate-200/70 text-slate-600'
+                  }`}>
+                    {toPersianDigits(tab.count)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {activeTab === "list_warehouse_docs" && (
           <div className="flex items-center gap-1.5 mt-5 p-1 bg-slate-100/80 rounded-2xl overflow-x-auto">
             {[
@@ -1072,18 +1166,26 @@ export default function InvoicesList(props: any) {
             <thead className="bg-slate-50/95 text-slate-700 border-b border-slate-200 uppercase font-black text-xs sticky top-0 z-10 backdrop-blur-xs shadow-2xs">
               <tr>
                 <th className="p-3.5 text-center whitespace-nowrap w-12 text-slate-500">ردیف</th>
-                <th className="p-3.5 whitespace-nowrap">شماره و نوع</th>
+                <th className="p-3.5 whitespace-nowrap">شماره و مشخصات سند</th>
                 <th className="p-3.5 whitespace-nowrap">عنوان و اقلام سند</th>
-                <th className="p-3.5 whitespace-nowrap">طرف حساب</th>
+                <th className="p-3.5 whitespace-nowrap">طرف حساب ({pageConfig.personRoleLabel})</th>
                 <th className="p-3.5 whitespace-nowrap">تاریخ و سررسید</th>
                 <th className="p-3.5 text-center whitespace-nowrap">انبار</th>
-                <th className="p-3.5 text-left whitespace-nowrap">مبلغ کل</th>
+                <th className="p-3.5 text-left whitespace-nowrap">مبلغ کل فاکتور</th>
                 {!activeTab.includes("warehouse") && (
                   <>
-                    <th className="p-3.5 text-left whitespace-nowrap">دریافتی/پرداختی</th>
-                    <th className="p-3.5 text-left whitespace-nowrap">مانده</th>
-                    <th className="p-3.5 text-center whitespace-nowrap">وضعیت تسویه</th>
-                    <th className="p-3.5 text-center whitespace-nowrap">وضعیت انبار</th>
+                    <th className="p-3.5 text-left whitespace-nowrap">
+                      {activeTab === 'list_sale' ? 'مبلغ دریافتی' : activeTab === 'list_purchase' ? 'مبلغ پرداختی' : activeTab === 'list_sale_return' ? 'استرداد شده' : 'بازپس‌گرفته'}
+                    </th>
+                    <th className="p-3.5 text-left whitespace-nowrap">
+                      {activeTab === 'list_sale' ? 'مانده طلب' : activeTab === 'list_purchase' ? 'مانده بدهی' : activeTab === 'list_sale_return' ? 'مانده بستانکاری' : 'مانده طلبکار'}
+                    </th>
+                    <th className="p-3.5 text-center whitespace-nowrap">
+                      {activeTab === 'list_sale_return' ? 'وضعیت استرداد' : activeTab === 'list_purchase_return' ? 'وضعیت وصول' : 'وضعیت تسویه'}
+                    </th>
+                    <th className="p-3.5 text-center whitespace-nowrap">
+                      {activeTab === 'list_sale' ? 'وضعیت حواله خروج' : activeTab === 'list_purchase' ? 'وضعیت رسید انبار' : activeTab === 'list_sale_return' ? 'ورود به انبار (مرجوعی)' : 'خروج از انبار (مرجوعی)'}
+                    </th>
                   </>
                 )}
                 <th className="p-3.5 text-center whitespace-nowrap print:hidden w-36">عملیات</th>
@@ -1183,9 +1285,9 @@ export default function InvoicesList(props: any) {
                           {toPersianDigits((invoiceSafeCurrentPage - 1) * invoicePageSize + invIdx + 1)}
                         </td>
 
-                        {/* Column 2: Number, Type Badge & State Badges */}
+                        {/* Column 2: Number, Type Badge & Reference/Seller tags */}
                         <td className="p-3.5 whitespace-nowrap">
-                          <div className="flex flex-col gap-1">
+                          <div className="flex flex-col gap-1.5">
                             <div className="flex items-center gap-1.5 font-sans font-black text-slate-900 text-sm">
                               <span
                                 onClick={() => setViewingInvoice && setViewingInvoice(inv)}
@@ -1194,28 +1296,6 @@ export default function InvoicesList(props: any) {
                               >
                                 #{toPersianDigits(inv.invoiceNumber || inv.id)}
                               </span>
-                            </div>
-                            <div className="flex items-center gap-1 flex-wrap">
-                              {inv.type === "purchase" && (
-                                <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-blue-200">
-                                  خرید
-                                </span>
-                              )}
-                              {inv.type === "sale" && (
-                                <span className="bg-indigo-50 text-indigo-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-indigo-200">
-                                  فروش
-                                </span>
-                              )}
-                              {inv.type === "sale_return" && (
-                                <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-200">
-                                  برگشت فروش
-                                </span>
-                              )}
-                              {inv.type === "purchase_return" && (
-                                <span className="bg-rose-50 text-rose-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-rose-200">
-                                  برگشت خرید
-                                </span>
-                              )}
                               {isProforma && (
                                 <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-1.5 py-0.5 rounded border border-slate-200">
                                   پیش‌فاکتور
@@ -1232,41 +1312,86 @@ export default function InvoicesList(props: any) {
                                 </span>
                               )}
                             </div>
+                            <div className="flex items-center gap-1 flex-wrap">
+                              {inv.type === "purchase" && (
+                                <span className="bg-blue-50 text-blue-700 text-[10px] font-black px-2 py-0.5 rounded-md border border-blue-200">
+                                  خرید کالا
+                                </span>
+                              )}
+                              {inv.type === "sale" && (
+                                <span className="bg-indigo-50 text-indigo-700 text-[10px] font-black px-2 py-0.5 rounded-md border border-indigo-200">
+                                  فروش کالا
+                                </span>
+                              )}
+                              {inv.type === "sale_return" && (
+                                <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-200">
+                                  برگشت فروش
+                                </span>
+                              )}
+                              {inv.type === "purchase_return" && (
+                                <span className="bg-rose-50 text-rose-700 text-[10px] font-black px-2 py-0.5 rounded-md border border-rose-200">
+                                  برگشت خرید
+                                </span>
+                              )}
+                              {(inv.type === "sale_return" || inv.type === "purchase_return") && inv.sourceInvoiceId && (
+                                <span className="text-[10px] text-indigo-700 bg-indigo-50/80 px-1.5 py-0.5 rounded border border-indigo-200 font-bold" title={`فاکتور مرجع: ${inv.sourceInvoiceId}`}>
+                                  مرجع: #{toPersianDigits(inv.sourceInvoiceId)}
+                                </span>
+                              )}
+                              {(inv.type === "purchase" || inv.type === "purchase_return") && inv.sellerInvoiceNumber && (
+                                <span className="text-[10px] text-emerald-800 bg-emerald-50 font-mono px-1.5 py-0.5 rounded border border-emerald-200 font-bold" title="شماره فاکتور صادر شده توسط فروشنده">
+                                  ش.فروشنده: {toPersianDigits(inv.sellerInvoiceNumber)}
+                                </span>
+                              )}
+                            </div>
                           </div>
                         </td>
 
-                        {/* Column 3: Title, Items count, Seller Number & Note */}
-                        <td className="p-3.5 max-w-[220px]">
+                        {/* Column 3: Title, Items count, & Note */}
+                        <td className="p-3.5 max-w-[240px]">
                           <div className="font-extrabold text-slate-800 text-xs truncate" title={inv.title || pageConfig.title}>
                             {inv.title || pageConfig.title}
                           </div>
                           <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100/90 px-1.5 py-0.5 rounded">
-                              <Package className="w-3 h-3 text-slate-400" />
-                              <span>{toPersianDigits(inv.items?.length || 0)} قلم</span>
+                            <span className="inline-flex items-center gap-1 text-[10px] font-black text-slate-600 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200/60">
+                              <Package className="w-3 h-3 text-slate-500" />
+                              <span>{toPersianDigits(inv.items?.length || 0)} قلم کالا</span>
                             </span>
-                            {(inv.type === "purchase" || inv.type === "purchase_return") && inv.sellerInvoiceNumber && (
-                              <span className="text-[10px] text-emerald-700 bg-emerald-50 font-mono px-1.5 py-0.5 rounded border border-emerald-200 font-bold">
-                                ش.فروشنده: {toPersianDigits(inv.sellerInvoiceNumber)}
-                              </span>
-                            )}
                           </div>
                           {inv.note && (
-                            <div className="text-[10px] text-slate-400 font-normal mt-0.5 truncate max-w-[200px]" title={inv.note}>
-                              {inv.note}
+                            <div className="flex items-center gap-1 text-[10px] text-slate-500 font-medium mt-1 truncate max-w-[220px]" title={inv.note}>
+                              <FileText className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                              <span className="truncate">{inv.note}</span>
                             </div>
                           )}
                         </td>
 
                         {/* Column 4: Counterparty / Person */}
                         <td className="p-3.5 text-xs font-bold text-slate-800 whitespace-nowrap">
-                          {renderPersonLink(
-                            inv.customerId || inv.personId,
-                            persons.find((p: any) => String(p.id) === String(inv.customerId || inv.personId))?.name || inv.customerName || 'نامشخص'
-                          )}
-                          <div className="text-[10px] text-slate-400 font-normal mt-0.5">
-                            {pageConfig.personRoleLabel}
-                          </div>
+                          {(() => {
+                            const personObj = persons.find((p: any) => String(p.id) === String(inv.customerId || inv.personId));
+                            const personDisplayName = personObj ? (personObj.alias || personObj.name || `${personObj.firstName || ''} ${personObj.lastName || ''}`.trim()) : (inv.customerName || 'نامشخص');
+                            const phone = personObj?.mobile || personObj?.phone || inv.customerPhone;
+
+                            return (
+                              <div className="flex flex-col gap-0.5">
+                                <div className="font-black text-slate-900 text-xs hover:text-indigo-600 transition-colors">
+                                  {renderPersonLink(inv.customerId || inv.personId, personDisplayName)}
+                                </div>
+                                <div className="flex items-center gap-2 mt-0.5">
+                                  <span className="text-[10px] text-slate-400 font-bold">
+                                    {personObj?.role ? getRoleName(personObj.role) : pageConfig.personRoleLabel}
+                                  </span>
+                                  {phone && (
+                                    <span className="inline-flex items-center gap-0.5 text-[10px] text-slate-500 font-mono font-medium" title="شماره تماس">
+                                      <Phone className="w-2.5 h-2.5 text-slate-400" />
+                                      <span>{toPersianDigits(phone)}</span>
+                                    </span>
+                                  )}
+                                </div>
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Column 5: Date & Due Date */}
@@ -1277,19 +1402,29 @@ export default function InvoicesList(props: any) {
                               {formatInvoiceDate(inv.date || inv.jalaliDate || inv.createdAt, storeSettings?.calendarType, { showTime: false })}
                             </span>
                           </div>
-                          {(inv.dueDate || inv.jalaliDueDate) && (
-                            <div className="flex items-center gap-1 text-[10px] text-rose-600 font-bold mt-1">
-                              <span>سررسید:</span>
-                              <span className="font-sans font-black">
-                                {formatInvoiceDate(inv.dueDate || inv.jalaliDueDate, storeSettings?.calendarType, { showTime: false })}
-                              </span>
-                            </div>
-                          )}
+                          {(inv.dueDate || inv.jalaliDueDate) && (() => {
+                            const isOverdue = remainingBalance > 0 && isInvoiceOverdue(inv.dueDate);
+                            const dueFormatted = formatInvoiceDate(inv.dueDate || inv.jalaliDueDate, storeSettings?.calendarType, { showTime: false });
+                            return (
+                              <div className="mt-1">
+                                {isOverdue ? (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-black text-rose-700 bg-rose-50 px-1.5 py-0.5 rounded border border-rose-200">
+                                    <Clock className="w-2.5 h-2.5 text-rose-600" />
+                                    <span>سررسید گذشته: {dueFormatted}</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500">
+                                    <span>سررسید: {dueFormatted}</span>
+                                  </span>
+                                )}
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Column 6: Warehouse */}
                         <td className="p-3.5 text-center whitespace-nowrap">
-                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg bg-purple-50 text-purple-800 text-xs font-bold border border-purple-100">
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl bg-purple-50 text-purple-800 text-xs font-bold border border-purple-100">
                             <Warehouse className="w-3 h-3 text-purple-600 shrink-0" />
                             <span className="truncate max-w-[120px]">{getDocWarehouseName(inv)}</span>
                           </span>
@@ -1308,7 +1443,7 @@ export default function InvoicesList(props: any) {
                           <>
                             {/* Paid Amount */}
                             <td className="p-3.5 text-left whitespace-nowrap">
-                              <span className="font-sans font-bold text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg inline-block border border-emerald-100">
+                              <span className="font-sans font-bold text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl inline-block border border-emerald-100">
                                 {toPersianDigits(formatCurrency(inv.paidAmount || 0))}{" "}
                                 <span className="text-[9px] text-emerald-600 mr-0.5">{currency}</span>
                               </span>
@@ -1317,12 +1452,12 @@ export default function InvoicesList(props: any) {
                             {/* Remaining Balance */}
                             <td className="p-3.5 text-left whitespace-nowrap">
                               {remainingBalance <= 0 ? (
-                                <span className="font-bold text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200 inline-flex items-center gap-1">
+                                <span className="font-bold text-xs text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-xl border border-emerald-200 inline-flex items-center gap-1">
                                   <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
                                   <span>تسویه کامل</span>
                                 </span>
                               ) : (
-                                <span className="font-sans font-black text-xs text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200 inline-block">
+                                <span className="font-sans font-black text-xs text-rose-700 bg-rose-50 px-2.5 py-1 rounded-xl border border-rose-200 inline-block">
                                   {toPersianDigits(formatCurrency(remainingBalance))}{" "}
                                   <span className="text-[9px] text-rose-500 mr-0.5">{currency}</span>
                                 </span>
@@ -1332,16 +1467,16 @@ export default function InvoicesList(props: any) {
                             {/* Payment Status Badge */}
                             <td className="p-3.5 text-center whitespace-nowrap">
                               {inv.paymentStatus === "paid" || remainingBalance <= 0 ? (
-                                <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-emerald-200 inline-block">
+                                <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2.5 py-1 font-black rounded-xl border border-emerald-200 inline-block">
                                   تسویه کامل
                                 </span>
                               ) : inv.paymentStatus === "partial" ? (
-                                <span className="bg-amber-100 text-amber-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-amber-200 inline-block">
+                                <span className="bg-amber-100 text-amber-800 text-[10px] px-2.5 py-1 font-black rounded-xl border border-amber-200 inline-block">
                                   علی‌الحساب
                                 </span>
                               ) : (
-                                <span className="bg-rose-100 text-rose-800 text-[10px] px-2.5 py-1 font-black rounded-lg border border-rose-200 inline-block">
-                                  پرداخت نشده
+                                <span className="bg-rose-100 text-rose-800 text-[10px] px-2.5 py-1 font-black rounded-xl border border-rose-200 inline-block">
+                                  {activeTab === 'list_sale' ? 'تسویه نشده' : activeTab === 'list_purchase' ? 'پرداخت نشده' : activeTab === 'list_sale_return' ? 'در انتظار استرداد' : 'در انتظار دریافت'}
                                 </span>
                               )}
                             </td>
@@ -1349,16 +1484,16 @@ export default function InvoicesList(props: any) {
                             {/* Warehouse Status Badge */}
                             <td className="p-3.5 text-center whitespace-nowrap">
                               {whStatus === "completed" ? (
-                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-[10px] font-black px-2.5 py-1 rounded-lg inline-block">
-                                  {inv.type === "purchase" || inv.type === "sale_return" ? "رسید شده" : "حواله شده"}
+                                <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-[10px] font-black px-2.5 py-1 rounded-xl inline-block">
+                                  {inv.type === "purchase" ? "رسید شده" : inv.type === "sale_return" ? "تحویل انبار شده" : inv.type === "purchase_return" ? "خارج شده از انبار" : "حواله شده"}
                                 </span>
                               ) : whStatus === "partial" ? (
-                                <span className="text-blue-700 bg-blue-50 border border-blue-200 text-[10px] font-black px-2.5 py-1 rounded-lg inline-block">
-                                  {inv.type === "purchase" || inv.type === "sale_return" ? "تعدادی رسید" : "تعدادی حواله"}
+                                <span className="text-blue-700 bg-blue-50 border border-blue-200 text-[10px] font-black px-2.5 py-1 rounded-xl inline-block">
+                                  {inv.type === "purchase" ? "تعدادی رسید" : inv.type === "sale_return" ? "تعدادی تحویل" : inv.type === "purchase_return" ? "تعدادی خارج شده" : "تعدادی حواله"}
                                 </span>
                               ) : (
-                                <span className="text-amber-700 bg-amber-50 border border-amber-200 text-[10px] font-black px-2.5 py-1 rounded-lg inline-block">
-                                  {inv.type === "purchase" || inv.type === "sale_return" ? "در انتظار رسید" : "در انتظار حواله"}
+                                <span className="text-amber-700 bg-amber-50 border border-amber-200 text-[10px] font-black px-2.5 py-1 rounded-xl inline-block">
+                                  {inv.type === "purchase" ? "در انتظار رسید" : inv.type === "sale_return" ? "در انتظار ورود به انبار" : inv.type === "purchase_return" ? "در انتظار حواله خروج" : "در انتظار حواله"}
                                 </span>
                               )}
                             </td>

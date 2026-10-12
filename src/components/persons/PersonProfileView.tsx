@@ -191,12 +191,32 @@ export default function PersonProfileView({
   }, [person, accountingDocuments, personId]);
 
   const recentInvoices = useMemo(() => {
-    return (invoices || []).filter(inv => String(inv?.customerId) === String(personId) && inv?.status !== 'draft' && inv?.status !== 'voided')
+    return (invoices || [])
+      .filter(inv => 
+        String(inv?.customerId) === String(personId) && 
+        inv?.status !== 'draft' && 
+        inv?.status !== 'voided' &&
+        !String(inv?.type || '').startsWith('warehouse_') &&
+        inv?.type !== 'warehouse_receipt' &&
+        inv?.type !== 'warehouse_remittance' &&
+        inv?.type !== 'proforma'
+      )
       .sort((a, b) => new Date(convertToGregorian(b?.date)).getTime() - new Date(convertToGregorian(a?.date)).getTime())
       .slice(0, 5);
   }, [invoices, personId]);
 
-  const totalInvoices = useMemo(() => (invoices || []).filter(i => String(i?.customerId) === String(personId) && i?.status !== 'draft' && i?.status !== 'voided').length, [invoices, personId]);
+  const totalInvoices = useMemo(() => 
+    (invoices || []).filter(i => 
+      String(i?.customerId) === String(personId) && 
+      i?.status !== 'draft' && 
+      i?.status !== 'voided' &&
+      !String(i?.type || '').startsWith('warehouse_') &&
+      i?.type !== 'warehouse_receipt' &&
+      i?.type !== 'warehouse_remittance' &&
+      i?.type !== 'proforma'
+    ).length, 
+    [invoices, personId]
+  );
   
   const pendingChecksCount = useMemo(() => {
     const issued = (issuedChecks || []).filter((c: any) => String(c?.payeeId) === String(personId) && c?.status !== "cancelled" && c?.status !== "bounced" && c?.status !== "cashed").length;
