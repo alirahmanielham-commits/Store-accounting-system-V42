@@ -124,7 +124,7 @@ router.post('/api/db/logs', async (req, res) => {
 
   const uploadToGoogleDrive = async (fileName: string, fileContent: string, config: any) => {
     const token = config.gdriveToken;
-    if (!token) throw new Error('توکن دسترسی گوگل درایو یافت نشد. لطفاً ابتدا حساب گوگل خود را متصل فرمایید.');
+    if (!token) throw new Error('توکن دسترسی گوگل درایو یافت نشد. لطفاً ابتدا حساب گوگل خود را در بخش تنظیمات متصل فرمایید.');
 
     const folderName = config.gdriveFolder || 'Taraz_Backups';
     let folderId = '';
@@ -186,6 +186,9 @@ router.post('/api/db/logs', async (req, res) => {
 
     if (!uploadRes.ok) {
       const errText = await uploadRes.text();
+      if (uploadRes.status === 401) {
+        throw new Error('توکن دسترسی گوگل درایو منقضی شده است. لطفاً در بخش تنظیمات ذخیره‌سازی، مجدداً حساب گوگل خود را متصل نمایید.');
+      }
       throw new Error(`Google Drive API error (${uploadRes.status}): ${errText}`);
     }
 
@@ -268,9 +271,21 @@ router.post('/api/db/logs', async (req, res) => {
     const provider = backupConfig.cloudProvider || backupConfig.remoteProvider || 'gdrive';
     try {
       if (provider === 'gdrive') {
+        const token = backupConfig.gdriveToken;
+        if (!token) {
+          console.warn('پشتیبان‌گیری ابری گوگل درایو: حساب گوگل متصل نشده است.');
+          await appendDbLog('پشتیبان‌گیری ابری', 'warning', 'اتصال گوگل درایو برقرار نیست. نسخه پشتیبان محلی با موفقیت ذخیره شد، ولی برای آپلود ابری باید از بخش تنظیمات ذخیره‌سازی به حساب گوگل متصل شوید.');
+          return;
+        }
         await uploadToGoogleDrive(fileName, fileContent, backupConfig);
         await appendDbLog('پشتیبان‌گیری ابری گوگل درایو', 'success', `فایل ${fileName} با موفقیت در Google Drive ذخیره شد.`);
       } else if (provider === 'onedrive') {
+        const token = backupConfig.onedriveToken;
+        if (!token) {
+          console.warn('پشتیبان‌گیری ابری وان‌درایو: حساب مایکروسافت متصل نشده است.');
+          await appendDbLog('پشتیبان‌گیری ابری', 'warning', 'اتصال وان‌درایو برقرار نیست. نسخه پشتیبان محلی با موفقیت ذخیره شد، ولی برای آپلود ابری باید از بخش تنظیمات ذخیره‌سازی به حساب مایکروسافت متصل شوید.');
+          return;
+        }
         await uploadToOneDrive(fileName, fileContent, backupConfig);
         await appendDbLog('پشتیبان‌گیری ابری وان‌درایو', 'success', `فایل ${fileName} با موفقیت در OneDrive ذخیره شد.`);
       } else if (provider === 's3') {
@@ -278,8 +293,8 @@ router.post('/api/db/logs', async (req, res) => {
         await appendDbLog('پشتیبان‌گیری ابری S3', 'success', `فایل ${fileName} با موفقیت در فضای ابری S3 ذخیره شد.`);
       }
     } catch(cloudErr: any) {
-      console.error('Cloud auto-upload error:', cloudErr);
-      await appendDbLog('پشتیبان‌گیری ابری', 'error', `خطا در ذخیره ابری (${provider}): ${cloudErr.message}`);
+      console.warn('Cloud auto-upload warning:', cloudErr.message || cloudErr);
+      await appendDbLog('پشتیبان‌گیری ابری', 'warning', `خطا در ذخیره ابری (${provider}): ${cloudErr.message || cloudErr}`);
     }
   };
 
