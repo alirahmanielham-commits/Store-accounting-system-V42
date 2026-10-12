@@ -11,6 +11,7 @@ import {
   getPriceForSelectedUnit, 
   formatUnitConversionFormula 
 } from "../../utils/unitConversion";
+import { safePrint } from "../../utils/printHelper";
 
 export default function PricingWizardModal(props: any) {
   const {
@@ -73,9 +74,27 @@ export default function PricingWizardModal(props: any) {
       }
       await fetchProducts();
       setSuccessMsg("قیمت‌های خرید و فروش کالاها بر اساس واحد اصلی با موفقیت ذخیره شدند.");
+
       if (shouldPrint) {
         setPricingPrintMode(shouldPrint);
-        setTimeout(() => window.print(), 350);
+        // Allow state to update and render the dedicated print DOM
+        setTimeout(async () => {
+          try {
+            await safePrint("#pricing-wizard-barcode-print-area", {
+              useIframe: true,
+              extraCss: `
+                ${selectedFormat.css}
+                #pricing-wizard-barcode-print-area { display: block !important; visibility: visible !important; width: 100% !important; margin: 0 !important; }
+                body { background: white !important; margin: 0 !important; padding: 0 !important; }
+              `,
+              documentTitle: shouldPrint === "labels" ? "چاپ لیبل بارکد کالاها" : "لیست قیمت فروش کالاها",
+              timeoutMs: 800,
+            });
+          } catch (printErr) {
+            console.warn("Print error fallback:", printErr);
+            window.print();
+          }
+        }, 150);
       } else {
         setPricingWizardInvoice(null);
         setPricingWizardItems([]);
@@ -94,11 +113,32 @@ export default function PricingWizardModal(props: any) {
       {pricingWizardInvoice && (
         <div 
           key="pricingWizardInvoice-modal"
-          className="fixed inset-0 z-[999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 print:p-0 print:bg-white print:block print:overflow-visible overflow-y-auto print-barcode-section print-section"
+          data-print-modal="true"
+          className="fixed inset-0 z-[999] bg-slate-900/60 backdrop-blur-sm flex items-center justify-center p-4 print:p-0 print:bg-white print:block print:overflow-visible overflow-y-auto print-barcode-section print-section print-modal-active"
         >
           <style>{`
             @media print {
+              .main-app-layout-wrapper,
+              #invoices-table-container,
+              header,
+              nav,
+              aside,
+              .pricing-wizard-interactive-card {
+                display: none !important;
+                visibility: hidden !important;
+                height: 0 !important;
+                max-height: 0 !important;
+                overflow: hidden !important;
+              }
+              body > *:not([data-print-modal="true"]) {
+                display: none !important;
+              }
               .print-barcode-section { position: relative !important; width: 100%; margin: 0; padding: 0; }
+              #pricing-wizard-barcode-print-area {
+                display: block !important;
+                visibility: visible !important;
+                width: 100% !important;
+              }
               ${selectedFormat.css}
             }
           `}</style>
@@ -107,7 +147,7 @@ export default function PricingWizardModal(props: any) {
             initial={{ opacity: 0, scale: 0.96, y: 15 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.96, y: 15 }}
-            className="bg-white rounded-3xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl ring-1 ring-slate-900/5 print:hidden m-auto"
+            className="pricing-wizard-interactive-card bg-white rounded-3xl w-full max-w-5xl max-h-[92vh] overflow-hidden flex flex-col shadow-2xl ring-1 ring-slate-900/5 print:hidden m-auto"
             dir="rtl"
           >
             {/* Header */}
@@ -583,7 +623,8 @@ export default function PricingWizardModal(props: any) {
 
           {/* Dedicated Print-Only Layout */}
           <div
-            className="hidden print:block p-8 w-full mx-auto bg-white font-sans text-slate-800"
+            id="pricing-wizard-barcode-print-area"
+            className="hidden print:block p-4 w-full mx-auto bg-white font-sans text-slate-800 print-section"
             dir="rtl"
           >
             {pricingPrintMode === "list" && (

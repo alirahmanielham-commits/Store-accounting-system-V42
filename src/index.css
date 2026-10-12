@@ -429,10 +429,12 @@ td,
 
   /* CRITICAL: Completely hide background main layout and invoices list when printing invoice or modal */
   body.printing-modal-overlay .main-app-layout-wrapper,
+  body.printing-in-progress .main-app-layout-wrapper,
   body:has([data-print-modal="true"]) .main-app-layout-wrapper,
   body:has(#invoice-sheet-to-print) .main-app-layout-wrapper,
   body:has(.invoice-print-container) .main-app-layout-wrapper,
   body:has(.receipt-print-container) .main-app-layout-wrapper,
+  body:has(#pricing-wizard-barcode-print-area) .main-app-layout-wrapper,
   body:has(.print-modal-active) .main-app-layout-wrapper {
     display: none !important;
     height: 0 !important;

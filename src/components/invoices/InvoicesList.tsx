@@ -19,6 +19,7 @@ import { convertToGregorian, formatDateDisplay, formatInvoiceDate, toPersianDigi
 import { formatDecimalForExcel } from "../../utils/exportUtils";
 import { getUnitRatioDirection, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../../utils/unitConversion";
 import { safePrint } from "../../utils/printHelper";
+import InvoiceRowActionsDropdown from "./InvoiceRowActionsDropdown";
 
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_year' | 'all' | 'custom';
 
@@ -1271,12 +1272,41 @@ export default function InvoicesList(props: any) {
                         )}
 
                         {/* Action Buttons Column */}
-                        <td className="p-4 print:hidden">
-                          <div className="flex items-center justify-center gap-1 bg-slate-50/90 p-1 rounded-xl border border-slate-200/60 w-max mx-auto">
-                            {/* Fast Pricing for purchase invoices */}
-                            {activeTab === "list_purchase" && (
+                        <td className="p-4 print:hidden text-center whitespace-nowrap">
+                          {activeTab === "list_purchase" ? (
+                            <div className="flex items-center justify-center gap-1.5 w-max mx-auto">
+                              {/* Quick View Button */}
                               <button
-                                onClick={() => {
+                                type="button"
+                                onClick={() => setViewingInvoice && setViewingInvoice(inv)}
+                                className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 bg-white border border-slate-200/90 rounded-xl cursor-pointer transition-colors shadow-2xs"
+                                title="مشاهده پیش‌نمایش فاکتور خرید"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+
+                              {/* Dropdown containing all operations */}
+                              <InvoiceRowActionsDropdown
+                                invoice={inv}
+                                activeTab={activeTab}
+                                products={products}
+                                warehouses={warehouses}
+                                currency={currency}
+                                isVoided={isVoided}
+                                whStatus={whStatus}
+                                onView={() => setViewingInvoice && setViewingInvoice(inv)}
+                                onDirectPrint={() => {
+                                  if (setViewingInvoice) {
+                                    setViewingInvoice(inv);
+                                    setTimeout(() => {
+                                      safePrint("#invoice-sheet-to-print", {
+                                        timeoutMs: 4000,
+                                        documentTitle: `فاکتور خرید شماره ${inv.invoiceNumber || inv.id || ""}`
+                                      });
+                                    }, 250);
+                                  }
+                                }}
+                                onOpenPricingWizard={() => {
                                   const newWizardItems = (inv.items || [])
                                     .filter((it: any) => {
                                       const prod = products.find((p: any) => p.id === it.productId);
@@ -1312,112 +1342,115 @@ export default function InvoicesList(props: any) {
                                     setSuccessMsg("هیچ کالای قابل قیمت‌گذاری در این فاکتور وجود ندارد.");
                                   }
                                 }}
-                                className="p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg cursor-pointer transition-colors"
-                                title="ثبت و چاپ قیمت فروش"
-                              >
-                                <Tag className="w-4 h-4" />
-                              </button>
-                            )}
+                                onFastReceipt={
+                                  !isVoided && whStatus !== "completed"
+                                    ? () => {
+                                        setFastReceiptInvoice(inv);
+                                        const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses?.[0]?.id || "");
+                                        setFastReceiptWarehouseId(defaultWh ? String(defaultWh) : "");
+                                      }
+                                    : undefined
+                                }
+                                onPaymentReceipt={
+                                  !isVoided
+                                    ? () => {
+                                        if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
+                                        if (setActiveTab) setActiveTab("create_pay_receipt");
+                                      }
+                                    : undefined
+                                }
+                                onEdit={!isVoided && handleEditInvoiceAction ? () => handleEditInvoiceAction(inv) : undefined}
+                                onVoid={!isVoided && handleVoidInvoice ? () => handleVoidInvoice(inv.id) : undefined}
+                                onDelete={!isVoided && handleDeleteInvoice ? () => handleDeleteInvoice(inv.id) : undefined}
+                              />
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-center gap-1 bg-slate-50/90 p-1 rounded-xl border border-slate-200/60 w-max mx-auto">
+                              {/* Financial Receipt (Receive/Pay) */}
+                              {!isVoided && !activeTab.includes("warehouse") && (
+                                <button
+                                  onClick={() => {
+                                    if (inv.type === "sale" || inv.type === "purchase_return") {
+                                      if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
+                                      if (setActiveTab) setActiveTab("create_receive_receipt");
+                                    } else if (inv.type === "purchase" || inv.type === "sale_return") {
+                                      if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
+                                      if (setActiveTab) setActiveTab("create_pay_receipt");
+                                    }
+                                  }}
+                                  className="p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg cursor-pointer transition-colors"
+                                  title={
+                                    inv.type === "sale" || inv.type === "purchase_return"
+                                      ? "ثبت دریافت وجه"
+                                      : "ثبت پرداخت وجه"
+                                  }
+                                >
+                                  <Wallet className="w-4 h-4" />
+                                </button>
+                              )}
 
-                            {/* Financial Receipt (Receive/Pay) */}
-                            {!isVoided && !activeTab.includes("warehouse") && (
+                              {/* View Invoice Modal */}
+                              <button
+                                onClick={() => setViewingInvoice && setViewingInvoice(inv)}
+                                className="p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg cursor-pointer transition-colors"
+                                title="مشاهده پیش‌نمایش و چاپ فاکتور"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
+
+                              {/* Direct Print Button */}
                               <button
                                 onClick={() => {
-                                  if (inv.type === "sale" || inv.type === "purchase_return") {
-                                    if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
-                                    if (setActiveTab) setActiveTab("create_receive_receipt");
-                                  } else if (inv.type === "purchase" || inv.type === "sale_return") {
-                                    if (setReceiptPersonId) setReceiptPersonId(inv.customerId || inv.personId);
-                                    if (setActiveTab) setActiveTab("create_pay_receipt");
+                                  if (setViewingInvoice) {
+                                    setViewingInvoice(inv);
+                                    setTimeout(() => {
+                                      safePrint("#invoice-sheet-to-print", {
+                                        timeoutMs: 4000,
+                                        documentTitle: `فاکتور شماره ${inv.invoiceNumber || inv.id || ""}`
+                                      });
+                                    }, 250);
                                   }
                                 }}
-                                className="p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg cursor-pointer transition-colors"
-                                title={
-                                  inv.type === "sale" || inv.type === "purchase_return"
-                                    ? "ثبت دریافت وجه"
-                                    : "ثبت پرداخت وجه"
-                                }
+                                className="p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg cursor-pointer transition-colors"
+                                title="چاپ مستقیم فاکتور"
                               >
-                                <Wallet className="w-4 h-4" />
+                                <Printer className="w-4 h-4" />
                               </button>
-                            )}
 
-                            {/* Fast Warehouse Receipt for Purchase */}
-                            {inv.type === "purchase" && !isVoided && whStatus !== "completed" && (
-                              <button
-                                onClick={() => {
-                                  setFastReceiptInvoice(inv);
-                                  const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses?.[0]?.id || "");
-                                  setFastReceiptWarehouseId(defaultWh ? String(defaultWh) : "");
-                                }}
-                                className="p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg cursor-pointer transition-colors"
-                                title="رسید سریع به انبار"
-                              >
-                                <Package className="w-4 h-4" />
-                              </button>
-                            )}
+                              {/* Edit Invoice */}
+                              {!isVoided && handleEditInvoiceAction && (
+                                <button
+                                  onClick={() => handleEditInvoiceAction(inv)}
+                                  className="p-1.5 text-slate-400 hover:bg-amber-50 hover:text-amber-600 rounded-lg cursor-pointer transition-colors"
+                                  title="ویرایش فاکتور (بازگشت به پیش‌نویس)"
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
+                              )}
 
-                            {/* View Invoice Modal */}
-                            <button
-                              onClick={() => setViewingInvoice && setViewingInvoice(inv)}
-                              className="p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg cursor-pointer transition-colors"
-                              title="مشاهده پیش‌نمایش و چاپ فاکتور"
-                            >
-                              <Eye className="w-4 h-4" />
-                            </button>
+                              {/* Void Invoice */}
+                              {!isVoided && handleVoidInvoice && (
+                                <button
+                                  onClick={() => handleVoidInvoice(inv.id)}
+                                  className="p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-lg cursor-pointer transition-colors"
+                                  title="ابطال سند"
+                                >
+                                  <Ban className="w-4 h-4" />
+                                </button>
+                              )}
 
-                            {/* Direct Print Button */}
-                            <button
-                              onClick={() => {
-                                if (setViewingInvoice) {
-                                  setViewingInvoice(inv);
-                                  setTimeout(() => {
-                                    safePrint("#invoice-sheet-to-print", {
-                                      timeoutMs: 4000,
-                                      documentTitle: `فاکتور شماره ${inv.invoiceNumber || inv.id || ""}`
-                                    });
-                                  }, 250);
-                                }
-                              }}
-                              className="p-1.5 text-slate-400 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg cursor-pointer transition-colors"
-                              title="چاپ مستقیم فاکتور"
-                            >
-                              <Printer className="w-4 h-4" />
-                            </button>
-
-                            {/* Edit Invoice */}
-                            {!isVoided && handleEditInvoiceAction && (
-                              <button
-                                onClick={() => handleEditInvoiceAction(inv)}
-                                className="p-1.5 text-slate-400 hover:bg-amber-50 hover:text-amber-600 rounded-lg cursor-pointer transition-colors"
-                                title="ویرایش فاکتور (بازگشت به پیش‌نویس)"
-                              >
-                                <Edit2 className="w-4 h-4" />
-                              </button>
-                            )}
-
-                            {/* Void Invoice */}
-                            {!isVoided && handleVoidInvoice && (
-                              <button
-                                onClick={() => handleVoidInvoice(inv.id)}
-                                className="p-1.5 text-slate-400 hover:bg-slate-200 hover:text-slate-700 rounded-lg cursor-pointer transition-colors"
-                                title="ابطال سند"
-                              >
-                                <Ban className="w-4 h-4" />
-                              </button>
-                            )}
-
-                            {/* Delete Invoice */}
-                            {!isVoided && handleDeleteInvoice && (
-                              <button
-                                onClick={() => handleDeleteInvoice(inv.id)}
-                                className="p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg cursor-pointer transition-colors"
-                                title="حذف دائمی"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                            )}
-                          </div>
+                              {/* Delete Invoice */}
+                              {!isVoided && handleDeleteInvoice && (
+                                <button
+                                  onClick={() => handleDeleteInvoice(inv.id)}
+                                  className="p-1.5 text-slate-400 hover:bg-rose-50 hover:text-rose-600 rounded-lg cursor-pointer transition-colors"
+                                  title="حذف دائمی"
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              )}
+                            </div>
+                          )}
                         </td>
                       </tr>
                     );
