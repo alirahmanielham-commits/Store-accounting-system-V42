@@ -302,6 +302,21 @@ export default function ReceiptPrintModal({
             <span>تنظیم فیلدهای چاپی</span>
             <ChevronDown className={`w-3.5 h-3.5 transition-transform ${showCustomizer ? 'rotate-180' : ''}`} />
           </button>
+
+          {/* Quick Studio Link */}
+          <a
+            href="/print_studio"
+            onClick={(e) => {
+              e.preventDefault();
+              window.location.href = '/print_studio';
+              onClose();
+            }}
+            className="px-3 py-2 rounded-xl text-xs font-bold flex items-center gap-1.5 border border-indigo-200 bg-indigo-50 text-indigo-700 hover:bg-indigo-100 transition-all cursor-pointer"
+            title="ورود به استودیو طراحی چاپ سیستم"
+          >
+            <Printer className="w-3.5 h-3.5 text-indigo-600" />
+            <span>استودیو چاپ</span>
+          </a>
         </div>
 
         {/* Right side: Print & Close */}

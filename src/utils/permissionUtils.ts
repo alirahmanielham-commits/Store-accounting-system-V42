@@ -203,6 +203,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     iconName: 'Settings',
     description: 'تنظیمات سیستم، سطوح دسترسی، نگهداری دیتابیس و عیب‌یابی',
     items: [
+      { id: 'print_studio', label: 'مرکز مدیریت و طراحی چاپ', defaultRoles: ['admin', 'manager', 'accountant', 'cashier'] },
       { id: 'settings', label: 'تنظیمات عمومی، فروشگاه و فاکتور', defaultRoles: ['admin'] },
       { id: 'users_manager', label: 'مدیریت کاربران و سطوح دسترسی', defaultRoles: ['admin'] },
       { id: 'system_diagnostics', label: 'پایش سلامت و عیب‌یابی سیستم', defaultRoles: ['admin'] },

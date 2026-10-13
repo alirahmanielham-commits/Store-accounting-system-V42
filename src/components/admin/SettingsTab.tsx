@@ -35,8 +35,7 @@ export default function SettingsTab(props: any) {
   // Destruct icons
   const { 
     Settings, Save, Upload, Info, Bell, Shield, PaintBucket,
-    Store, DollarSign, FileText, CheckCircle, Smartphone, MapPin, Printer, Key, Mail, Building, Calculator, Plus, X, List, Hash, Tag, Activity, ArrowRight, ArrowLeft, Download
-
+    Store, DollarSign, FileText, CheckCircle, Smartphone, MapPin, Printer, Key, Mail, Building, Calculator, Plus, X, List, Hash, Tag, Activity, ArrowRight, ArrowLeft, Download, Sparkles
   } = lucide;
 
   const [smsCategoryFilter, setSmsCategoryFilter] = useState<'all' | 'invoices' | 'treasury' | 'warehouse' | 'checks' | 'loans'>('all');
@@ -1062,10 +1061,31 @@ export default function SettingsTab(props: any) {
 
                           {settingsTab === "printing" && (
                             <div>
-                              <h3 className="text-lg font-black text-gray-800 mb-6 flex items-center gap-2">
+                              <h3 className="text-lg font-black text-gray-800 mb-4 flex items-center gap-2">
                                 <Printer className="w-5 h-5 text-indigo-500" />
-                                تنظیمات قالب چاپ
+                                تنظیمات و استودیوی طراحی چاپ
                               </h3>
+
+                              {/* Print Studio Hub Banner */}
+                              <div className="bg-gradient-to-l from-indigo-900 to-indigo-700 text-white rounded-2xl p-5 mb-8 shadow-sm flex flex-col sm:flex-row items-center justify-between gap-4">
+                                <div className="space-y-1 text-right">
+                                  <div className="flex items-center gap-2">
+                                    <Sparkles className="w-4 h-4 text-indigo-200" />
+                                    <h4 className="font-black text-sm">مرکز متمرکز مدیریت و طراحی چاپ سیستم</h4>
+                                  </div>
+                                  <p className="text-xs text-indigo-100/90 leading-relaxed max-w-xl font-medium">
+                                    برای طراحی بصری قالب‌ها با پیش‌نمایش زنده در انواع قطع کاغذ (A4، A5، فیش حرارتی ۸۰mm)، روشن/خاموش کردن ستون‌ها، تنظیم کادرهای امضا و مدیریت قالب‌های پیش‌فرض، وارد استودیوی چاپ شوید.
+                                  </p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab ? props.setActiveTab("print_studio") : (window.location.href = "/print_studio")}
+                                  className="px-5 py-2.5 bg-white text-indigo-700 hover:bg-indigo-50 rounded-xl font-black text-xs transition-all shadow-sm flex items-center gap-2 shrink-0 cursor-pointer"
+                                >
+                                  <Printer className="w-4 h-4 text-indigo-600" />
+                                  <span>ورود به استودیو طراحی چاپ</span>
+                                </button>
+                              </div>
 
                               <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
                                 <div className="space-y-6">

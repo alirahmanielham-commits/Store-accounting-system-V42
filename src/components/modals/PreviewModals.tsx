@@ -351,6 +351,24 @@ export default function PreviewModals(props: any) {
                 <span>تنظیمات چاپ:</span>
               </div>
 
+              <a
+                href="/print_studio"
+                onClick={(e) => {
+                  e.preventDefault();
+                  if (props.setActiveTab) {
+                    props.setActiveTab('print_studio');
+                  } else {
+                    window.location.href = '/print_studio';
+                  }
+                  handleCloseModal();
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 text-xs font-black text-indigo-700 bg-indigo-50 border border-indigo-200 hover:bg-indigo-100 rounded-lg transition-colors shadow-3xs shrink-0 cursor-pointer"
+                title="ورود به استودیوی جامع طراحی و ویرایش قالب‌های چاپ"
+              >
+                <Printer className="w-3.5 h-3.5 text-indigo-600" />
+                <span>استودیوی طراحی چاپ</span>
+              </a>
+
                   {/* Auto-save notification badge */}
                   {justSavedNotification && (
                     <span className="text-[10px] text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-md font-bold flex items-center gap-1 animate-pulse">

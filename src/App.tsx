@@ -360,6 +360,7 @@ const OpeningBalances = React.lazy(() => import('./components/accounting/Opening
 const FinancialYearManager = React.lazy(() => import('./components/accounting/FinancialYearManager'));
 const WarehousePrintTemplate = React.lazy(() => import('./components/print/WarehousePrintTemplate'));
 const InvoicePrintTemplate = React.lazy(() => import('./components/print/InvoicePrintTemplate'));
+const PrintStudioHub = React.lazy(() => import('./components/print/PrintStudioHub'));
 const AIProductSearchModal = React.lazy(() => import('./components/products/AIProductSearchModal'));
 const BulkProductImportModal = React.lazy(() => import('./components/products/BulkProductImportModal'));
 const FastProductCreateModal = React.lazy(() => import('./components/products/FastProductCreateModal'));
@@ -1114,6 +1115,17 @@ export default function App() {
   storeSettings={storeSettings}
 />} />
 <Route path="/users_manager" element={<UserManager />} />
+<Route path="/print_studio" element={<PrintStudioHub
+  storeSettings={storeSettings}
+  invoices={invoices}
+  persons={persons}
+  warehouses={warehouses}
+  transactions={transactions}
+  checks={[...(issuedChecks || []), ...(receivedChecks || [])]}
+  formatCurrency={formatCurrency}
+  showNotification={showNotification}
+  confirmAction={confirmAction}
+/>} />
 <Route path="/settings" element={<SettingsTab storeSettings={storeSettings} 
                         
                         user={user}

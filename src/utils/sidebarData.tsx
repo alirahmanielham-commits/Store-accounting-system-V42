@@ -25,6 +25,7 @@ import {
   Receipt,
   RotateCcw,
   ClipboardList,
+  Printer,
   Tags,
   QrCode,
   Globe,
@@ -966,6 +967,16 @@ export const allSidebarGroups: SidebarGroup[] = [
     icon: <Settings className="w-5 h-5" />,
     description: "تنظیمات کسب‌وکار، سطح دسترسی کاربران، لاگ‌ها و نگهداری دیتابیس",
     items: [
+      {
+        id: "print_studio",
+        label: "مرکز مدیریت و طراحی چاپ",
+        shortLabel: "استودیو چاپ",
+        icon: <Printer className="w-4 h-4 text-indigo-600" />,
+        roles: ["admin", "accountant", "manager", "cashier"],
+        badge: "جدید",
+        badgeColor: "indigo",
+        description: "شخصی‌سازی ابعاد، قالب‌ها و ستون‌های چاپ فاکتورها و اسناد",
+      },
       {
         id: "settings",
         label: "تنظیمات عمومی، فروشگاه و فاکتور",
