@@ -914,6 +914,8 @@ export default function App() {
                         personId={profilePersonId}
                         persons={persons}
                         invoices={invoices}
+                        products={products}
+                        fetchPersons={fetchPersons}
                         transactions={transactions}
                         issuedChecks={issuedChecks}
                         receivedChecks={receivedChecks}
