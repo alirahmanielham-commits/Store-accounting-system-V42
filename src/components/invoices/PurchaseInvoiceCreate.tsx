@@ -9,8 +9,8 @@ import persian_fa from 'react-date-object/locales/persian_fa';
 import {  
   History, CheckCircle, RefreshCw, Info, Save, Trash2, Plus, Minus, Copy, LayoutGrid,
   ShoppingCart, Building2, UserCircle, Hash, Percent,
-  Calendar, CreditCard, Banknote, FileText, Truck, ShieldCheck, Zap
-, UserPlus } from 'lucide-react';
+  Calendar, CreditCard, Banknote, FileText, Truck, ShieldCheck, Zap,
+  Clock, UserPlus } from 'lucide-react';
 import BulkProductPickerModal from './BulkProductPickerModal';
 import { useDirtyForm } from "../../hooks/useDirtyForm";
 import { UnsavedChangesPrompt } from "../common/UnsavedChangesPrompt";
@@ -426,28 +426,21 @@ import { purchaseInvoiceFormSchema } from "../../schemas/validation";
                     )}
                 </div>
                 
-                {storeSettings.requireWarehouse && (
-                  <div className="lg:col-span-1">
-                    <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                      <Box className="w-4 h-4 text-emerald-500" /> انبار ورود
-                      کالا
-                    </label>
-                    <select
-                      value={invoiceWarehouseId}
-                      onChange={(e) => setInvoiceWarehouseId(e.target.value)}
-                      className="w-full p-3 border border-emerald-100 rounded-xl focus:ring-2 focus:ring-emerald-500 bg-emerald-50/30 text-base font-bold text-emerald-900 outline-none"
-                    >
-                      <option value="">-- لطفاً انبار را انتخاب کنید --</option>
-                      {warehouses
-                        .filter((w) => w.isActive !== false)
-                        .map((v, index) => (
-                          <option key={`${v.id}-${index}`} value={v.id}>
-                            {v.name}
-                          </option>
-                        ))}
-                    </select>
+                <div className="lg:col-span-1 bg-emerald-50/70 border border-emerald-200/80 rounded-2xl p-3.5 flex flex-col justify-between shadow-2xs">
+                  <div>
+                    <div className="flex items-center gap-1.5 text-xs font-black text-emerald-900 mb-1">
+                      <Box className="w-4 h-4 text-emerald-600" />
+                      <span>انبار مقصد ورود کالا:</span>
+                    </div>
+                    <p className="text-[11px] text-emerald-800 leading-relaxed font-medium">
+                      در ثبت فاکتور خرید نیازی به انتخاب انبار نیست؛ تعیین انبار و ورود قطعی به کاردکس، منحصراً در مرحله «صدور رسید انبار» انجام می‌پذیرد.
+                    </p>
                   </div>
-                )}
+                  <div className="text-[10px] text-emerald-700 font-bold mt-2 flex items-center gap-1.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse"></span>
+                    <span>تخصیص انبار در مرحله رسید انبار</span>
+                  </div>
+                </div>
               </div>
             </div>
 
@@ -944,14 +937,34 @@ import { purchaseInvoiceFormSchema } from "../../schemas/validation";
                           "آیا از ذخیره این فاکتور خرید به عنوان پیش‌نویس اطمینان دارید؟",
                         )
                       ) {
-                        saveInvoiceData(null, true);
+                        saveInvoiceData({ status: "draft", isDraft: true }, true);
                       }
                     }}
-                    className="px-6 py-4 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm outline-none cursor-pointer"
+                    className="px-5 py-3.5 bg-slate-100 hover:bg-slate-200 disabled:bg-slate-50 text-slate-700 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors border border-slate-300 shadow-2xs outline-none cursor-pointer"
                   >
-                    <FileText className="w-5 h-5" />
-                    ذخیره به عنوان پیش‌نویس
+                    <FileText className="w-4 h-4 text-slate-500" />
+                    ذخیره پیش‌نویس
                   </button>
+
+                  <button
+                    type="button"
+                    disabled={submitting || (items || []).length === 0 || !customerId}
+                    onClick={() => {
+                      if (!validatePurchase(false)) return;
+                      if (
+                        confirm(
+                          "آیا از ثبت اولیه فاکتور خرید (جهت بررسی و تایید بعدی سرپرست/مدیر) اطمینان دارید؟\nدر این مرحله سند حسابداری صادر نمی‌شود و صدور رسید انبار پس از تایید نهایی فعال خواهد شد.",
+                        )
+                      ) {
+                        saveInvoiceData({ status: "pending_approval", isDraft: false }, false);
+                      }
+                    }}
+                    className="px-5 py-3.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-950 rounded-2xl font-black flex items-center justify-center gap-2 transition-colors shadow-sm outline-none cursor-pointer"
+                  >
+                    <Clock className="w-4 h-4 text-slate-900" />
+                    ثبت اولیه (در انتظار تایید)
+                  </button>
+
                   <button
                     type="button"
                     onClick={() => {
@@ -960,14 +973,14 @@ import { purchaseInvoiceFormSchema } from "../../schemas/validation";
                       }
                     }}
                     disabled={submitting || (items || []).length === 0 || !customerId}
-                    className="px-10 py-4 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-200 text-white rounded-2xl font-black flex items-center justify-center gap-3 transition-colors shadow-sm outline-none focus:ring-4 focus:ring-emerald-500/20 cursor-pointer"
+                    className="px-8 py-3.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-200 text-white rounded-2xl font-black flex items-center justify-center gap-2.5 transition-colors shadow-md outline-none focus:ring-4 focus:ring-emerald-500/20 cursor-pointer"
                   >
                     {submitting ? (
                       <RefreshCw className="w-5 h-5 animate-spin" />
                     ) : (
-                      <Save className="w-6 h-6" />
+                      <CheckCircle className="w-5 h-5" />
                     )}
-                    ثبت نهایی خرید (F2)
+                    ثبت و تایید نهایی خرید (F2)
                   </button>
                 </div>
               </div>

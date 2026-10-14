@@ -1,7 +1,7 @@
 
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
-import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
+import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations, invalidateKvCache } from '../db/kv-store';
 
 const getFormattedBackupDate = () => {
    return new Intl.DateTimeFormat('fa-IR-u-nu-latn', {
@@ -34,7 +34,7 @@ import { z } from 'zod';
 import { requireRole } from '../middleware/auth.middleware';
 import { validateData } from '../schemas/validation';
 import { encryptBackupData, decryptBackupData, isEncryptedBackup } from '../utils/backupCrypto';
-import { performDryRunAnalysis, createSafetySnapshot, saveSecondaryReplica } from '../services/backupEngine';
+import { performDryRunAnalysis, createSafetySnapshot, saveSecondaryReplica, verifyBackupIntegrity, BACKUP_MODULES } from '../services/backupEngine';
 import { extractRequestUser } from './data.routes';
 
 const router = Router();
@@ -526,6 +526,25 @@ router.post('/api/backup/export', requireRole(['admin']), async (req, res) => {
   }
 });
 
+// Verify file integrity endpoint
+router.post('/api/db/backups/verify-integrity/:filename', requireRole(['admin']), async (req, res) => {
+    try {
+        const { filename } = req.params;
+        if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename) || filename.includes('..')) {
+          return res.status(400).json({ valid: false, error: 'نام فایل نامعتبر است.' });
+        }
+        const dir = path.resolve(await getBackupsDir());
+        const filePath = path.resolve(dir, filename);
+        if (!filePath.startsWith(dir)) return res.status(403).json({ valid: false, error: 'مسیر غیرمجاز' });
+
+        const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+        const result = verifyBackupIntegrity(fileContent);
+        res.json(result);
+    } catch(err: any) {
+        res.status(500).json({ valid: false, error: err.message });
+    }
+});
+
 // Dry-run preview endpoint for verifying schema compatibility and row diffs before restoring
 router.post('/api/db/backups/dry-run/:filename', requireRole(['admin']), async (req, res) => {
     try {
@@ -546,7 +565,17 @@ router.post('/api/db/backups/dry-run/:filename', requireRole(['admin']), async (
           });
         }
 
-        const analysis = await performDryRunAnalysis(decryptResult.data, decryptResult.isEncrypted);
+        let envelopeStoreId: string | undefined = undefined;
+        let backupDateStr: string | undefined = undefined;
+        if (decryptResult.isEncrypted) {
+          try {
+            const parsed = JSON.parse(fileContent);
+            envelopeStoreId = parsed.storeId;
+            backupDateStr = parsed.dateStr;
+          } catch {}
+        }
+
+        const analysis = await performDryRunAnalysis(decryptResult.data, decryptResult.isEncrypted, envelopeStoreId, backupDateStr);
         res.json({
           success: true,
           filename,
@@ -580,7 +609,17 @@ router.post('/api/backup/dry-run', requireRole(['admin']), async (req, res) => {
           });
         }
 
-        const analysis = await performDryRunAnalysis(decryptResult.data, decryptResult.isEncrypted);
+        let envelopeStoreId: string | undefined = undefined;
+        let backupDateStr: string | undefined = undefined;
+        if (decryptResult.isEncrypted) {
+          try {
+            const parsed = JSON.parse(fileContent);
+            envelopeStoreId = parsed.storeId;
+            backupDateStr = parsed.dateStr;
+          } catch {}
+        }
+
+        const analysis = await performDryRunAnalysis(decryptResult.data, decryptResult.isEncrypted, envelopeStoreId, backupDateStr);
         res.json({
           success: true,
           isEncrypted: decryptResult.isEncrypted,
@@ -591,7 +630,7 @@ router.post('/api/backup/dry-run', requireRole(['admin']), async (req, res) => {
     }
 });
 
-// Restore backup with automatic safety snapshot & decryption
+// Restore backup with automatic safety snapshot & decryption (Full Restore)
 router.post('/api/db/backups/restore/:filename', requireRole(['admin']), async (req, res) => {
      try {
          const { filename } = req.params;
@@ -628,14 +667,31 @@ router.post('/api/db/backups/restore/:filename', requireRole(['admin']), async (
                  } catch (e) {}
                }
              } else {
-               try { getDb().prepare('DELETE FROM store').run(); } catch(e) { }
+               // Safe JSON store reset without broken SQLite call
+               try { 
+                 const dbFile = storeId === 'default' 
+                   ? path.join(process.cwd(), 'data.json') 
+                   : path.join(process.cwd(), `data_${storeId.replace(/[^a-zA-Z0-9_-]/g, '')}.json`);
+                 await fsPromises.writeFile(dbFile, JSON.stringify({}, null, 2), 'utf-8');
+               } catch(e) { }
              }
 
-             for (const [key, value] of Object.entries(backupData)) {
-                 if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile') {
+             // Restore in clean dependency order (parents before children)
+             const sortedKeys = Object.keys(backupData).sort((a, b) => {
+               if (a.includes('item') && !b.includes('item')) return 1;
+               if (!a.includes('item') && b.includes('item')) return -1;
+               return 0;
+             });
+
+             for (const key of sortedKeys) {
+                 const value = backupData[key];
+                 if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile' || key === 'sms_settings') {
                     await setDbData(key, value);
                  }
              }
+
+             // Invalidate in-memory cache so subsequent reads see the restored data immediately
+             invalidateKvCache(storeId);
          }
          
          const userInfo = extractRequestUser(req);
@@ -664,7 +720,7 @@ router.post('/api/db/backups/restore/:filename', requireRole(['admin']), async (
          res.json({ 
            success: true, 
            safetySnapshot: safetySnapshot.fileName,
-           message: `نسخه ${filename} با موفقیت بازیابی شد.` 
+           message: `نسخه ${filename} با موفقیت به طور کامل بازیابی شد.` 
          });
      } catch(e: any) {
          await appendDbLog('بازیابی اطلاعات', 'error', `خطا در بازیابی: ${e.message}`);
@@ -672,6 +728,109 @@ router.post('/api/db/backups/restore/:filename', requireRole(['admin']), async (
          res.status(500).json({ success: false, error: e.message });
      }
   });
+
+// Selective Restore endpoint
+router.post('/api/db/backups/restore-selective/:filename', requireRole(['admin']), async (req, res) => {
+  try {
+    const { filename } = req.params;
+    const { selectedModules, selectedTables } = req.body;
+    
+    if (!/^[a-zA-Z0-9_\-\.]+$/.test(filename) || filename.includes('..')) {
+      return res.status(400).json({ success: false, error: 'نام فایل پشتیبان نامعتبر است' });
+    }
+
+    const dir = path.resolve(await getBackupsDir());
+    const filePath = path.resolve(dir, filename);
+    if (!filePath.startsWith(dir)) return res.status(403).json({ success: false, error: 'مسیر غیرمجاز' });
+
+    const fileContent = await fsPromises.readFile(filePath, 'utf-8');
+    const decryptResult = decryptBackupData(fileContent);
+    if (!decryptResult.success || !decryptResult.data) {
+      return res.status(400).json({
+        success: false,
+        error: decryptResult.error || 'رمزگشایی یا اعتبارسنجی فایل پشتیبان ناموفق بود.'
+      });
+    }
+
+    // Determine target tables
+    const targetTablesSet = new Set<string>();
+    if (Array.isArray(selectedTables)) {
+      selectedTables.forEach(t => targetTablesSet.add(t));
+    }
+    if (Array.isArray(selectedModules)) {
+      BACKUP_MODULES.filter(m => selectedModules.includes(m.id)).forEach(m => {
+        m.tables.forEach(t => targetTablesSet.add(t));
+      });
+    }
+
+    if (targetTablesSet.size === 0) {
+      return res.status(400).json({ success: false, error: 'حداقل یک بخش یا جدول برای بازیابی انتخابی باید مشخص شود.' });
+    }
+
+    const storeId = storeContext.getStore() || 'default';
+    const safetySnapshot = await createSafetySnapshot(storeId);
+    const backupData = decryptResult.data;
+
+    // Truncate only selected tables in PostgreSQL or remove from JSON file
+    if (isPgActive() && getActivePgPool()) {
+      for (const table of targetTablesSet) {
+        if (KNOWN_TABLES.includes(table)) {
+          try {
+            await getActivePgPool().query(`TRUNCATE TABLE "${table}" CASCADE`);
+          } catch (e) {}
+        }
+      }
+    } else {
+      try {
+        const dbFile = storeId === 'default' 
+          ? path.join(process.cwd(), 'data.json') 
+          : path.join(process.cwd(), `data_${storeId.replace(/[^a-zA-Z0-9_-]/g, '')}.json`);
+        let currentJson: any = {};
+        try {
+          currentJson = JSON.parse(await fsPromises.readFile(dbFile, 'utf-8'));
+        } catch {}
+        targetTablesSet.forEach(t => delete currentJson[t]);
+        await fsPromises.writeFile(dbFile, JSON.stringify(currentJson, null, 2), 'utf-8');
+      } catch (e) {}
+    }
+
+    // Restore only selected keys
+    let restoredCount = 0;
+    const sortedTargetKeys = Array.from(targetTablesSet).sort((a, b) => {
+      if (a.includes('item') && !b.includes('item')) return 1;
+      if (!a.includes('item') && b.includes('item')) return -1;
+      return 0;
+    });
+
+    for (const key of sortedTargetKeys) {
+      if (key in backupData) {
+        await setDbData(key, backupData[key]);
+        restoredCount++;
+      }
+    }
+
+    // Invalidate in-memory cache
+    invalidateKvCache(storeId);
+
+    const userInfo = extractRequestUser(req);
+    await appendDbLog(
+      'بازیابی انتخابی اطلاعات', 
+      'success', 
+      `بازیابی انتخابی ${restoredCount} بخش از نسخه «${filename}» توسط کاربر «${userInfo.userName || userInfo.username}» با موفقیت انجام شد. نسخه ایمنی: ${safetySnapshot.fileName}`
+    );
+
+    res.json({
+      success: true,
+      restoredTables: Array.from(targetTablesSet),
+      restoredCount,
+      safetySnapshot: safetySnapshot.fileName,
+      message: `تعداد ${restoredCount} بخش به صورت تفکیکی با موفقیت بازیابی شدند.`
+    });
+  } catch (err: any) {
+    console.error('Selective restore error:', err);
+    res.status(500).json({ success: false, error: err.message });
+  }
+});
 
 // Alias for Roadmap import specification
 router.post('/api/backup/import', requireRole(['admin']), async (req, res) => {
@@ -708,14 +867,21 @@ router.post('/api/backup/import', requireRole(['admin']), async (req, res) => {
         try { await getActivePgPool().query(`TRUNCATE TABLE "${key}" CASCADE`); } catch (e) {}
       }
     } else {
-      try { getDb().prepare('DELETE FROM store').run(); } catch(e) {}
+      try {
+        const dbFile = storeId === 'default' 
+          ? path.join(process.cwd(), 'data.json') 
+          : path.join(process.cwd(), `data_${storeId.replace(/[^a-zA-Z0-9_-]/g, '')}.json`);
+        await fsPromises.writeFile(dbFile, JSON.stringify({}, null, 2), 'utf-8');
+      } catch (e) {}
     }
 
     for (const [key, value] of Object.entries(decryptResult.data)) {
-      if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile') {
+      if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile' || key === 'sms_settings') {
         await setDbData(key, value);
       }
     }
+
+    invalidateKvCache(storeId);
 
     const userInfo = extractRequestUser(req);
     await appendDbLog('بازیابی اطلاعات', 'success', `فایل ${fileToRestore} بازیابی شد.`);
@@ -728,6 +894,7 @@ router.post('/api/backup/import', requireRole(['admin']), async (req, res) => {
 // Revert to emergency safety snapshot
 router.post('/api/db/backups/revert-safety', requireRole(['admin']), async (req, res) => {
     try {
+        const storeId = storeContext.getStore() || 'default';
         const safetyDir = path.join(process.cwd(), 'backups', 'safety-snapshots');
         const files = await fsPromises.readdir(safetyDir).catch(() => []);
         const safetyFiles = files.filter(f => f.startsWith('safety-pre-restore-') && f.endsWith('.json'));
@@ -753,14 +920,21 @@ router.post('/api/db/backups/revert-safety', requireRole(['admin']), async (req,
             try { await getActivePgPool().query(`TRUNCATE TABLE "${key}" CASCADE`); } catch (e) {}
           }
         } else {
-          try { getDb().prepare('DELETE FROM store').run(); } catch(e) {}
+          try {
+            const dbFile = storeId === 'default' 
+              ? path.join(process.cwd(), 'data.json') 
+              : path.join(process.cwd(), `data_${storeId.replace(/[^a-zA-Z0-9_-]/g, '')}.json`);
+            await fsPromises.writeFile(dbFile, JSON.stringify({}, null, 2), 'utf-8');
+          } catch (e) {}
         }
 
         for (const [key, value] of Object.entries(decrypted.data)) {
-          if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile') {
+          if (KNOWN_TABLES.includes(key) || key === 'store_settings' || key === 'company_profile' || key === 'sms_settings') {
             await setDbData(key, value);
           }
         }
+
+        invalidateKvCache(storeId);
 
         const userInfo = extractRequestUser(req);
         await appendDbLog('بازگشت اضطراری به نسخه ایمنی', 'success', `سیستم با موفقیت به آخرین نسخه ایمنی (${latestSafety}) بازگردانی شد.`);
@@ -1154,6 +1328,102 @@ router.delete('/api/db/cloud/backups/:filename', requireRole(['admin']), async (
     res.json({ success: true });
   } catch(e: any) {
     res.status(500).json({ error: e.message });
+  }
+});
+
+router.post('/api/db/cloud/restore-direct', requireRole(['admin']), async (req, res) => {
+  try {
+    const { filename, provider: reqProvider } = req.body;
+    if (!filename) return res.status(400).json({ success: false, error: 'نام فایل ابری الزامی است.' });
+
+    const dir = path.resolve(await getBackupsDir());
+    await fsPromises.mkdir(dir, { recursive: true });
+
+    // Check if the file already exists locally in backups dir
+    const localFilePath = path.join(dir, filename);
+    let fileContent = '';
+    let foundLocally = false;
+    try {
+      fileContent = await fsPromises.readFile(localFilePath, 'utf-8');
+      foundLocally = true;
+    } catch (_) {}
+
+    if (!foundLocally) {
+      // Find in cloudBackups entry
+      const cloudList = (await getDbData('cloudBackups')) || [];
+      const cloudEntry = Array.isArray(cloudList) ? cloudList.find((b: any) => b.file === filename) : null;
+      const provider = reqProvider || cloudEntry?.provider || backupConfig.cloudProvider || 'gdrive';
+
+      if (provider === 'gdrive') {
+        const token = backupConfig.gdriveToken;
+        if (!token) throw new Error('توکن دسترسی گوگل درایو یافت نشد. لطفاً ابتدا حساب گوگل را در تنظیمات ذخیره‌سازی متصل کنید.');
+        let fileId = cloudEntry?.id;
+        if (!fileId) {
+          const searchRes = await fetch(`https://www.googleapis.com/drive/v3/files?q=name='${encodeURIComponent(filename)}'+and+trashed=false&fields=files(id,name)`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+          });
+          const searchData = await searchRes.json();
+          fileId = searchData.files?.[0]?.id;
+        }
+        if (!fileId) throw new Error('فایل در Google Drive یافت نشد.');
+        const dlRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!dlRes.ok) throw new Error('خطا در دریافت فایل از گوگل درایو: ' + (await dlRes.text()));
+        fileContent = await dlRes.text();
+      } else if (provider === 'onedrive') {
+        const token = backupConfig.onedriveToken;
+        if (!token) throw new Error('توکن OneDrive یافت نشد.');
+        const folder = backupConfig.onedriveFolder || 'Taraz_Backups';
+        const dlRes = await fetch(`https://graph.microsoft.com/v1.0/me/drive/root:/${encodeURIComponent(folder)}/${encodeURIComponent(filename)}:/content`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        if (!dlRes.ok) throw new Error('خطا در دریافت فایل از OneDrive: ' + (await dlRes.text()));
+        fileContent = await dlRes.text();
+      } else if (provider === 's3') {
+        const { S3Client, GetObjectCommand } = await import('@aws-sdk/client-s3');
+        const s3 = new S3Client({
+          region: backupConfig.region || 'default',
+          endpoint: backupConfig.cloudAuthUrl.startsWith('http') ? backupConfig.cloudAuthUrl : `https://${backupConfig.cloudAuthUrl}`,
+          credentials: { accessKeyId: backupConfig.cloudUser, secretAccessKey: backupConfig.cloudPass }
+        });
+        const bucket = backupConfig.cloudBucket || 'taraz-backups';
+        const obj = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: filename }));
+        fileContent = await obj.Body?.transformToString('utf-8') || '';
+      } else {
+        throw new Error('ارائه‌دهنده ابری نامعتبر است.');
+      }
+
+      // Save locally to backups dir
+      await fsPromises.writeFile(localFilePath, fileContent, 'utf-8');
+    }
+
+    const decryptResult = decryptBackupData(fileContent);
+    if (!decryptResult.success || !decryptResult.data) {
+      return res.status(400).json({ success: false, error: decryptResult.error || 'رمزگشایی فایل ابری ناموفق بود.' });
+    }
+
+    let envelopeStoreId: string | undefined = undefined;
+    let backupDateStr: string | undefined = undefined;
+    if (decryptResult.isEncrypted) {
+      try {
+        const parsed = JSON.parse(fileContent);
+        envelopeStoreId = parsed.storeId;
+        backupDateStr = parsed.dateStr;
+      } catch {}
+    }
+
+    const analysis = await performDryRunAnalysis(decryptResult.data, decryptResult.isEncrypted, envelopeStoreId, backupDateStr);
+
+    res.json({
+      success: true,
+      filename,
+      isEncrypted: decryptResult.isEncrypted,
+      ...analysis
+    });
+  } catch (err: any) {
+    console.error('Cloud restore direct error:', err);
+    res.status(500).json({ success: false, error: err.message });
   }
 });
 

@@ -215,6 +215,9 @@ export type Warehouse = {
   isActive: boolean;
 };
 
+export type InvoiceStatus = 'draft' | 'pending_approval' | 'approved' | 'final' | 'voided';
+export type WarehouseDocStatus = 'draft' | 'pending_approval' | 'approved' | 'final' | 'voided';
+
 export type InvoiceItem = {
   id: string;
   productId: string | number | '';
@@ -231,6 +234,36 @@ export type InvoiceItem = {
   baseQuantity?: number; // Quantity converted to base unit
   warehouseId?: string | number;
   maxQuantity?: number;
+};
+
+export type Invoice = {
+  id: string | number;
+  invoiceNumber: string;
+  sellerInvoiceNumber?: string;
+  title?: string;
+  description?: string;
+  note?: string;
+  warehouseId?: string | number;
+  type: 'sale' | 'purchase' | 'proforma' | 'sale_return' | 'purchase_return' | 'warehouse_receipt' | 'warehouse_remittance' | 'waste';
+  currency?: string;
+  allowNegativeStock?: boolean;
+  date: string;
+  dueDate?: string | null;
+  customerId?: string | number;
+  customerName?: string;
+  personId?: string | number;
+  sourceInvoiceId?: string | number;
+  sourceInvoiceNumber?: string;
+  items: InvoiceItem[];
+  overallDiscountPercent?: number;
+  totalAmount: number;
+  paymentStatus?: 'paid' | 'partial' | 'unpaid';
+  paidAmount?: number;
+  isDraft?: boolean;
+  status?: InvoiceStatus;
+  isDeleted?: boolean;
+  createdAt?: number;
+  updatedAt?: number;
 };
 
 export type UserRole = 'admin' | 'manager' | 'employee' | 'customer' | 'guest' | 'accountant' | 'cashier' | 'warehouseman' | 'viewer';

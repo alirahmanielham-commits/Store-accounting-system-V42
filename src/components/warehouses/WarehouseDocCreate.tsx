@@ -179,6 +179,7 @@ export default function WarehouseDocCreate(props: any) {
     handleAddItem,
     handleVoidInvoice,
     getProductStockInfo,
+    saveInvoiceData,
   } = props;
 
   const isReceipt = [
@@ -196,6 +197,7 @@ export default function WarehouseDocCreate(props: any) {
 
     (invoices || []).forEach((inv: any) => {
       if (inv.status === "voided" || inv.status === "draft" || inv.isDraft || inv.isDeleted) return;
+      if (inv.type === "purchase" && inv.status === "pending_approval") return;
 
       const physicalItems = (inv.items || []).filter((it: any) => {
         const prod = products.find((p: any) => p.id?.toString() === it.productId?.toString());
@@ -1323,6 +1325,35 @@ export default function WarehouseDocCreate(props: any) {
               >
                 مرحله قبل
               </button>
+
+              {isReceipt && saveInvoiceData && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    if ((items || []).length === 0) {
+                      if (customAlert) customAlert("هیچ کالایی به این سند اضافه نشده است.");
+                      return;
+                    }
+                    const hasZeroQty = (items || []).some((it: any) => (Number(it.quantity) || 0) <= 0);
+                    if (hasZeroQty) {
+                      if (customAlert) customAlert("لطفاً مقادیر تعداد تمامی سطرهای کالا را بزرگتر از صفر وارد نمایید.");
+                      return;
+                    }
+                    if (
+                      confirm(
+                        "آیا از ثبت اولیه رسید انبار (در انتظار تایید سرپرست انبار) اطمینان دارید؟\nدر این وضعیت مقادیر در کاردکس و موجودی فیزیکی انبار اعمال نمی‌شود تا پس از تایید نهایی صورت پذیرد.",
+                      )
+                    ) {
+                      saveInvoiceData({ status: "pending_approval", isDraft: false }, false);
+                    }
+                  }}
+                  disabled={submitting || (items || []).length === 0}
+                  className="flex-1 sm:flex-none px-6 py-3.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-950 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
+                >
+                  <Clock className="w-4 h-4 text-slate-900" />
+                  <span>ثبت اولیه رسید (در انتظار تایید)</span>
+                </button>
+              )}
 
               <button
                 type="button"

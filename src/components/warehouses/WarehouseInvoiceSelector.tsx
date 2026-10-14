@@ -120,14 +120,14 @@ export default function WarehouseInvoiceSelector({
   const enrichedInvoices = useMemo(() => {
     if (!expectedType) return [];
 
-    const candidates = invoices.filter(
-      (inv) =>
-        inv.type === expectedType &&
-        inv.status !== "voided" &&
-        inv.status !== "draft" &&
-        !inv.isDraft &&
-        !inv.isDeleted
-    );
+    const candidates = invoices.filter((inv) => {
+      if (!inv || inv.isDeleted) return false;
+      if (inv.type !== expectedType) return false;
+      if (inv.status === "voided" || inv.status === "draft" || inv.isDraft) return false;
+      // Purchase invoices must be approved before issuing warehouse receipt
+      if (inv.type === "purchase" && inv.status === "pending_approval") return false;
+      return true;
+    });
 
     return candidates.map((inv) => {
       // Find past warehouse docs linked to this invoice

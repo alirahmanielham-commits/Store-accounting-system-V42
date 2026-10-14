@@ -5,7 +5,8 @@ import {
   Trash2, Shield, ShieldCheck, Calendar, Settings, FileText, CheckCircle, CheckCircle2,
   AlertTriangle, XCircle, Search, Save, FolderOpen, Mail, Key,
   Upload, Check, Play, Clock, Server, Eye, ToggleLeft, ToggleRight,
-  Info, Lock, AlertCircle, X, LogIn
+  Info, Lock, AlertCircle, X, LogIn,
+  Package, Users, BookOpen, CreditCard, Coins, CheckSquare, Square, Layers, Sparkles
 } from 'lucide-react';
 
 interface DatabaseDashboardProps {
@@ -281,6 +282,20 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
 
   // Restore Modal State
   const [isRestoreModalOpen, setIsRestoreModalOpen] = useState(false);
+  const [restoreMode, setRestoreMode] = useState<'full' | 'selective'>('full');
+  const [selectedRestoreModules, setSelectedRestoreModules] = useState<string[]>([
+    'inventory', 'persons', 'invoices', 'accounting', 'treasury'
+  ]);
+  const [integrityCheckResult, setIntegrityCheckResult] = useState<{
+    checking: boolean;
+    checked: boolean;
+    valid?: boolean;
+    format?: string;
+    tablesCount?: number;
+    totalRecords?: number;
+    error?: string;
+  }>({ checking: false, checked: false });
+  const [isRestoringFromCloud, setIsRestoringFromCloud] = useState<string | null>(null);
 
   const fileInputRef = React.useRef<HTMLInputElement>(null);
   const [restoreState, setRestoreState] = useState<'confirm' | 'progress' | 'success' | 'error'>('confirm');
@@ -292,9 +307,75 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
   const [isLoadingDryRun, setIsLoadingDryRun] = useState(false);
   const [isRevertingSafety, setIsRevertingSafety] = useState(false);
 
+  const handleIntegrityCheck = async (filename: string) => {
+    setIntegrityCheckResult({ checking: true, checked: false });
+    try {
+      const res = await fetch(`/api/db/backups/verify-integrity/${encodeURIComponent(filename)}`, { method: 'POST' });
+      const data = await res.json();
+      setIntegrityCheckResult({
+        checking: false,
+        checked: true,
+        valid: data.valid,
+        format: data.format,
+        tablesCount: data.tablesCount,
+        totalRecords: data.totalRecords,
+        error: data.error
+      });
+      if (data.valid) {
+        showNotification(`سلامت ساختار تأیید شد: ${data.totalRecords?.toLocaleString('fa-IR')} رکورد در قالب ${data.format}`, 'success');
+      } else {
+        showNotification(`خطا در ارزیابی سلامت: ${data.error || 'فایل نامعتبر است'}`, 'error');
+      }
+    } catch (err: any) {
+      setIntegrityCheckResult({ checking: false, checked: true, valid: false, error: err.message });
+      showNotification('خطا در تست سلامت فایل', 'error');
+    }
+  };
+
+  const handleRestoreDirectFromCloud = async (filename: string, provider: string) => {
+    setIsRestoringFromCloud(filename);
+    showNotification('در حال دریافت و ارزیابی مستقیم نسخه از فضای ابری...', 'info');
+    try {
+      const res = await fetch('/api/db/cloud/restore-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ filename, provider })
+      });
+      const data = await res.json();
+      if (!res.ok || !data.success) {
+        throw new Error(data.error || 'خطا در واکشی فایل از فضای ابری');
+      }
+      
+      const d = new Date(data.backupDate || Date.now());
+      const backupObj = {
+        id: data.filename,
+        date: new Intl.DateTimeFormat('fa-IR').format(d),
+        time: d.toLocaleTimeString('fa-IR'),
+        size: `${data.totalBackupRecords?.toLocaleString('fa-IR') || 0} رکورد`,
+        type: data.isEncrypted ? 'ابری رمزنگاری‌شده (AES-256)' : 'ابری (Cloud)',
+        isEncrypted: data.isEncrypted,
+        status: 'success',
+        file: data.filename,
+        fromCloud: true
+      };
+
+      setSelectedBackupForRestore(backupObj);
+      setDryRunData(data);
+      setRestoreMode('full');
+      setIntegrityCheckResult({ checking: false, checked: false });
+      setIsRestoreModalOpen(true);
+      showNotification('نسخه ابری با موفقیت دریافت و آماده ارزیابی و بازیابی شد.', 'success');
+    } catch (err: any) {
+      showNotification('خطا در بازیابی نسخه ابری: ' + err.message, 'error');
+    } finally {
+      setIsRestoringFromCloud(null);
+    }
+  };
+
   const fetchDryRunPreview = async (filename: string, content?: string) => {
     setIsLoadingDryRun(true);
     setDryRunData(null);
+    setIntegrityCheckResult({ checking: false, checked: false });
     try {
       let res;
       if (content) {
@@ -415,13 +496,18 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
 
   
   const executeRestore = async () => {
+    if (restoreMode === 'selective' && selectedRestoreModules.length === 0) {
+      showNotification('لطفاً حداقل یک بخش را برای بازیابی انتخابی مشخص فرمایید.', 'warning');
+      return;
+    }
+
     setRestoreState('progress');
     setRestoreProgress(0);
     
     // Simulate some nice progress phases before actual request
     const phases = [10, 35, 60, 85];
     for(const phase of phases) {
-      await new Promise(r => setTimeout(r, 400));
+      await new Promise(r => setTimeout(r, 250));
       setRestoreProgress(phase);
     }
     
@@ -446,7 +532,18 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
       }
       
       setRestoreProgress(95);
-      const res = await fetch(`/api/db/backups/restore/${filename}`, { method: 'POST' });
+
+      let res;
+      if (restoreMode === 'selective') {
+        res = await fetch(`/api/db/backups/restore-selective/${encodeURIComponent(filename)}`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ selectedModules: selectedRestoreModules })
+        });
+      } else {
+        res = await fetch(`/api/db/backups/restore/${encodeURIComponent(filename)}`, { method: 'POST' });
+      }
+
       if (!res.ok) {
          const errorData = await res.json().catch(() => ({}));
          throw new Error(errorData.error || 'بازیابی ناموفق بود.');
@@ -562,6 +659,19 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     window.open(`/api/db/backups/download/${filename}?storeId=${storeId}`, '_blank');
   };
   
+  const renderModuleIcon = (iconName: string) => {
+    switch (iconName) {
+      case 'Package': return <Package className="w-4 h-4 text-emerald-600" />;
+      case 'Users': return <Users className="w-4 h-4 text-blue-600" />;
+      case 'FileText': return <FileText className="w-4 h-4 text-indigo-600" />;
+      case 'BookOpen': return <BookOpen className="w-4 h-4 text-purple-600" />;
+      case 'CreditCard': return <CreditCard className="w-4 h-4 text-amber-600" />;
+      case 'Coins': return <Coins className="w-4 h-4 text-yellow-600" />;
+      case 'Settings': return <Settings className="w-4 h-4 text-slate-600" />;
+      default: return <Layers className="w-4 h-4 text-slate-600" />;
+    }
+  };
+
   const tabs = [
     { id: 'health', label: 'سلامت و فضا', icon: Server },
     { id: 'manual', label: 'بک‌آپ دستی', icon: Play },
@@ -1447,12 +1557,22 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                                   <td className="py-3.5 px-4 font-semibold text-slate-600">{sizeMb}</td>
                                   <td className="py-3.5 px-4 text-left">
                                     <div className="flex items-center justify-end gap-1.5">
+                                      <button
+                                        type="button"
+                                        disabled={isRestoringFromCloud === cb.file}
+                                        onClick={() => handleRestoreDirectFromCloud(cb.file, cb.provider)}
+                                        className="px-2.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-lg transition-colors inline-flex items-center gap-1.5 font-bold text-xs cursor-pointer disabled:opacity-50"
+                                        title="بررسی و بازیابی مستقیم از این نسخه ابری"
+                                      >
+                                        <RefreshCw className={`w-3.5 h-3.5 ${isRestoringFromCloud === cb.file ? 'animate-spin' : ''}`} />
+                                        <span>بازیابی مستقیم</span>
+                                      </button>
                                       {cb.url && (
                                         <a
                                           href={cb.url}
                                           target="_blank"
                                           rel="noreferrer"
-                                          className="p-1.5 text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors inline-flex items-center gap-1 font-bold text-xs"
+                                          className="p-1.5 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors inline-flex items-center gap-1 font-bold text-xs"
                                           title="مشاهده یا دانلود از ابر"
                                         >
                                           <Download className="w-3.5 h-3.5" />
@@ -1987,45 +2107,176 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
               {restoreState === 'confirm' && (
                 <>
                   <div className="bg-rose-50 p-5 text-center border-b border-rose-100 flex-shrink-0">
-                    <div className="w-14 h-14 bg-rose-100 rounded-full flex items-center justify-center mx-auto mb-3 border-4 border-white shadow-sm">
-                      <AlertCircle className="w-7 h-7 text-rose-600" />
+                    <div className="w-12 h-12 bg-rose-100 rounded-2xl flex items-center justify-center mx-auto mb-2 border-2 border-white shadow-xs">
+                      <AlertCircle className="w-6 h-6 text-rose-600" />
                     </div>
-                    <h3 className="text-xl font-black text-rose-700 mb-1">پیش‌نمایش و تأیید بازیابی اطلاعات (Restore)</h3>
-                    <p className="text-xs text-rose-600/90 font-bold">بررسی تفاوت‌ها و سازگاری ساختار قبل از جایگزینی داده‌ها</p>
+                    <h3 className="text-lg font-black text-rose-800 mb-0.5">مرکز پیش‌نمایش و اجرای بازیابی (Restore Hub)</h3>
+                    <p className="text-xs text-rose-700/80 font-bold">آنالیز تفاوت‌ها، تست یکپارچگی داده و انتخاب شیوه بازیابی</p>
+
+                    {dryRunData?.storeMismatch && (
+                      <div className="mt-3 p-2.5 bg-amber-100/80 border border-amber-300 rounded-xl text-xs font-bold text-amber-900 flex items-center justify-center gap-2">
+                        <AlertTriangle className="w-4 h-4 text-amber-700 flex-shrink-0" />
+                        <span>
+                          توجه: این نسخه متعلق به فروشگاه «{dryRunData.storeId}» است، اما شعبه جاری «{dryRunData.activeStoreId}» می‌باشد.
+                        </span>
+                      </div>
+                    )}
                   </div>
                   
                   <div className="p-6 space-y-4 overflow-y-auto flex-1">
-                    <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    {/* File info and Integrity Check Bar */}
+                    <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-3">
                       <div>
-                        <div className="text-base font-black text-slate-800" dir="ltr">{selectedBackupForRestore?.date} - {selectedBackupForRestore?.time}</div>
-                        <div className="text-xs font-bold text-slate-500 mt-1">حجم: {selectedBackupForRestore?.size} | نام فایل: {selectedBackupForRestore?.file}</div>
+                        <div className="text-sm font-black text-slate-800" dir="ltr">{selectedBackupForRestore?.date} - {selectedBackupForRestore?.time}</div>
+                        <div className="text-xs font-semibold text-slate-500 mt-0.5" dir="ltr">
+                          فایل: {selectedBackupForRestore?.file}
+                        </div>
                       </div>
-                      <div className="flex items-center gap-2">
+
+                      <div className="flex flex-wrap items-center gap-2">
                         {selectedBackupForRestore?.isEncrypted ? (
                           <span className="inline-flex items-center gap-1 text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 px-2.5 py-1 rounded-lg">
-                            <ShieldCheck className="w-4 h-4 text-emerald-600" /> رمزنگاری‌شده AES-256-GCM
+                            <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> AES-256-GCM
                           </span>
                         ) : (
                           <span className="text-xs font-medium text-slate-500 bg-white border border-slate-200 px-2 py-1 rounded-lg">
                             فرمت عادی
                           </span>
                         )}
+
+                        <button
+                          type="button"
+                          disabled={integrityCheckResult.checking}
+                          onClick={() => handleIntegrityCheck(selectedBackupForRestore.file)}
+                          className="px-3 py-1 bg-white hover:bg-slate-100 text-slate-700 border border-slate-300 rounded-lg text-xs font-bold transition-colors flex items-center gap-1.5 shadow-2xs cursor-pointer disabled:opacity-50"
+                        >
+                          <Shield className={`w-3.5 h-3.5 ${integrityCheckResult.checking ? 'animate-spin text-indigo-600' : 'text-slate-500'}`} />
+                          <span>
+                            {integrityCheckResult.checking ? 'در حال تست...' : integrityCheckResult.checked ? (integrityCheckResult.valid ? 'تست سلامت: سالم' : 'تست سلامت: خطا') : 'بررسی سلامت فایل'}
+                          </span>
+                        </button>
                       </div>
+                    </div>
+
+                    {/* Mode Selector: Full vs Selective */}
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-100 rounded-xl">
+                      <button
+                        type="button"
+                        onClick={() => setRestoreMode('full')}
+                        className={`py-2 px-3 text-xs font-black rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          restoreMode === 'full' 
+                            ? 'bg-white text-slate-900 shadow-xs' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Database className="w-4 h-4 text-indigo-600" />
+                        <span>بازیابی کامل سیستم (Full)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setRestoreMode('selective')}
+                        className={`py-2 px-3 text-xs font-black rounded-lg transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                          restoreMode === 'selective' 
+                            ? 'bg-white text-slate-900 shadow-xs' 
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Layers className="w-4 h-4 text-emerald-600" />
+                        <span>بازیابی تفکیکی و انتخابی (Selective)</span>
+                      </button>
                     </div>
 
                     {/* Dry-run Analysis section */}
                     {isLoadingDryRun && (
-                      <div className="p-6 bg-indigo-50/50 border border-indigo-100 rounded-xl text-center space-y-2">
+                      <div className="p-6 bg-indigo-50/50 border border-indigo-100 rounded-2xl text-center space-y-2">
                         <RefreshCw className="w-6 h-6 text-indigo-600 animate-spin mx-auto" />
-                        <p className="text-sm font-bold text-indigo-900">در حال آنالیز ساختار و سنجش تفاوت داده‌های فایل پشتیبان...</p>
+                        <p className="text-sm font-bold text-indigo-900">در حال آنالیز ساختار و محاسبه تفاوت رکوردهای فایل پشتیبان...</p>
                       </div>
                     )}
 
-                    {!isLoadingDryRun && dryRunData && (
+                    {!isLoadingDryRun && dryRunData && restoreMode === 'selective' && (
+                      <div className="space-y-3">
+                        <div className="flex items-center justify-between">
+                          <p className="text-xs text-slate-500 font-bold">
+                            بخش‌های مورد نظر برای بازیابی را انتخاب فرمایید (سایر اطلاعات حفظ خواهند شد):
+                          </p>
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRestoreModules(dryRunData.modules?.map((m: any) => m.id) || [])}
+                              className="text-xs text-indigo-600 hover:text-indigo-800 font-bold cursor-pointer"
+                            >
+                              انتخاب همه
+                            </button>
+                            <span className="text-slate-300">|</span>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedRestoreModules([])}
+                              className="text-xs text-slate-500 hover:text-slate-700 font-bold cursor-pointer"
+                            >
+                              لغو همه
+                            </button>
+                          </div>
+                        </div>
+
+                        {/* Module cards list */}
+                        <div className="space-y-2 max-h-56 overflow-y-auto pr-1">
+                          {(dryRunData.modules || []).map((mod: any) => {
+                            const isChecked = selectedRestoreModules.includes(mod.id);
+                            return (
+                              <div
+                                key={mod.id}
+                                onClick={() => {
+                                  setSelectedRestoreModules(prev => 
+                                    prev.includes(mod.id) ? prev.filter(x => x !== mod.id) : [...prev, mod.id]
+                                  );
+                                }}
+                                className={`p-3 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                                  isChecked 
+                                    ? 'bg-indigo-50/50 border-indigo-300 shadow-2xs' 
+                                    : 'bg-white border-slate-200 hover:border-slate-300'
+                                }`}
+                              >
+                                <div className="flex items-center gap-3">
+                                  <div className="mt-0.5">
+                                    {isChecked ? (
+                                      <CheckSquare className="w-4 h-4 text-indigo-600" />
+                                    ) : (
+                                      <Square className="w-4 h-4 text-slate-400" />
+                                    )}
+                                  </div>
+                                  <div className="p-2 bg-white rounded-lg border border-slate-100 shadow-2xs">
+                                    {renderModuleIcon(mod.iconName)}
+                                  </div>
+                                  <div>
+                                    <h4 className="text-xs font-black text-slate-800">{mod.label}</h4>
+                                    <p className="text-[11px] text-slate-500 mt-0.5">{mod.description}</p>
+                                  </div>
+                                </div>
+
+                                <div className="text-left flex-shrink-0" dir="ltr">
+                                  <div className="text-xs font-mono font-bold text-slate-700">
+                                    {mod.backupRecords?.toLocaleString('fa-IR')} رکورد
+                                  </div>
+                                  <div className={`text-[10px] font-mono font-bold ${
+                                    mod.diff > 0 ? 'text-emerald-600' : mod.diff < 0 ? 'text-rose-600' : 'text-slate-400'
+                                  }`}>
+                                    {mod.diff > 0 ? `+${mod.diff}` : mod.diff}
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {!isLoadingDryRun && dryRunData && restoreMode === 'full' && (
                       <div className="space-y-3">
                         <div className="flex items-center justify-between text-xs font-bold bg-slate-100/70 p-3 rounded-xl border border-slate-200">
-                          <span className="text-slate-600">تعداد رکوردهای موجود در فایل پشتیبان: <strong className="text-slate-900 font-black">{dryRunData.totalBackupRecords?.toLocaleString('fa-IR')}</strong></span>
-                          <span className="text-slate-600">تعداد رکوردهای کنونی پایگاه داده: <strong className="text-slate-900 font-black">{dryRunData.totalCurrentRecords?.toLocaleString('fa-IR')}</strong></span>
+                          <span className="text-slate-600">رکوردهای فایل پشتیبان: <strong className="text-slate-900 font-black">{dryRunData.totalBackupRecords?.toLocaleString('fa-IR')}</strong></span>
+                          <span className="text-slate-600">رکوردهای فعلی سیستم: <strong className="text-slate-900 font-black">{dryRunData.totalCurrentRecords?.toLocaleString('fa-IR')}</strong></span>
                         </div>
 
                         {/* Warnings if any */}
@@ -2047,8 +2298,8 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                         {dryRunData.comparison && dryRunData.comparison.length > 0 && (
                           <div className="border border-slate-200 rounded-xl overflow-hidden">
                             <div className="bg-slate-100/80 px-3 py-2 text-xs font-black text-slate-700 border-b border-slate-200 flex justify-between">
-                              <span>جدول و نوع داده</span>
-                              <span>تعداد در بک‌آپ / فعلی / تفاوت</span>
+                              <span>جدول و بخش سیستم</span>
+                              <span>بک‌آپ / فعلی / تفاضل</span>
                             </div>
                             <div className="max-h-44 overflow-y-auto divide-y divide-slate-100 text-xs">
                               {dryRunData.comparison.map((c: any) => (
@@ -2072,28 +2323,38 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
                             </div>
                           </div>
                         )}
-
-                        <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
-                          <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0" />
-                          <span>
-                            <strong>تضمین تاب‌آوری:</strong> یک نسخه ایمنی اضطراری (Safety Snapshot) به صورت کاملاً خودکار قبل از بازنویسی دیتابیس ایجاد می‌شود تا در صورت نیاز به سرعت بازگردانی شود.
-                          </span>
-                        </div>
                       </div>
                     )}
+
+                    <div className="bg-emerald-50 border border-emerald-200 p-3 rounded-xl text-xs text-emerald-800 flex items-center gap-2">
+                      <ShieldCheck className="w-5 h-5 text-emerald-600 flex-shrink-0" />
+                      <span>
+                        <strong>تضمین تاب‌آوری:</strong> یک نسخه ایمنی اضطراری (Safety Snapshot) به صورت کاملاً خودکار قبل از اجرای بازیابی ذخیره می‌شود و امکان بازگشت آنی همیشه محفوظ است.
+                      </span>
+                    </div>
 
                     <div className="pt-2 flex gap-3 flex-shrink-0">
                       <button 
                         onClick={() => setIsRestoreModalOpen(false)}
-                        className="flex-1 py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-colors"
+                        className="flex-1 py-3 bg-white border-2 border-slate-200 hover:bg-slate-50 text-slate-700 rounded-xl font-bold text-sm transition-colors cursor-pointer"
                       >
                         انصراف
                       </button>
                       <button 
                         onClick={executeRestore}
-                        className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-rose-200 flex items-center justify-center gap-2"
+                        className="flex-1 py-3 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-sm transition-colors shadow-lg shadow-rose-200 flex items-center justify-center gap-2 cursor-pointer"
                       >
-                        تأیید و اجرای بازیابی
+                        {restoreMode === 'selective' ? (
+                          <>
+                            <Layers className="w-4 h-4" />
+                            <span>تأیید و اجرای بازیابی انتخابی ({selectedRestoreModules.length} بخش)</span>
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="w-4 h-4" />
+                            <span>تأیید و اجرای بازیابی کامل</span>
+                          </>
+                        )}
                       </button>
                     </div>
                   </div>

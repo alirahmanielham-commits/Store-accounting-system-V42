@@ -4662,6 +4662,11 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
       customAlert("انتخاب انبار الزامی است.");
       return null;
     }
+
+    if (inv.type === "purchase" && (inv.status === "pending_approval" || inv.status === "draft" || inv.isDraft)) {
+      customAlert("صدور رسید انبار برای فاکتورهای پیش‌نویس یا تایید نشده امکان‌پذیر نیست. لطفاً ابتدا فاکتور خرید را تایید نهایی نمایید.");
+      return null;
+    }
     
     // Check if receipt already exists
     const existing = invoices.find(i => i.type === "warehouse_receipt" && i.sourceInvoiceId?.toString() === inv.id?.toString() && i.status !== "voided" && !i.isDeleted);
@@ -4704,7 +4709,7 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
                     baseQuantity,
                 };
             }),
-            status: "final",
+            status: "approved",
             isDraft: false,
             totalAmount: inv.totalAmount,
             overallDiscountPercent: inv.overallDiscountPercent,
@@ -4715,7 +4720,7 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
         await recalculateAllWarehouseStocks();
         await fetchInvoices();
         await fetchProducts();
-        setSuccessMsg("رسید انبار با موفقیت ثبت شد و کاردکس کالاها به‌روزرسانی گردید.");
+        setSuccessMsg("رسید انبار با موفقیت ثبت شد و مقادیر در کاردکس انبار اعمال گردید.");
         setTimeout(() => setSuccessMsg(""), 3000);
 
         const createdReceipt = added || payload;
@@ -4729,6 +4734,107 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
         return null;
     } finally {
         stopAppProcessing();
+    }
+};
+
+const handleApprovePurchaseInvoice = async (inv: any) => {
+    if (!inv || !inv.id) return;
+    if (inv.status === "approved") {
+      customAlert("این فاکتور خرید قبلاً تایید نهایی شده است.");
+      return;
+    }
+
+    startAppProcessing("در حال تایید نهایی فاکتور خرید و صدور سند حسابداری...");
+    try {
+      const updatedInvoiceData = {
+        ...inv,
+        status: "approved",
+        isDraft: false,
+        updatedAt: Date.now()
+      };
+
+      await updateInvoice(inv.id.toString(), updatedInvoiceData as any, false, false);
+      await syncInvoiceAccountingDocument(updatedInvoiceData);
+      
+      // If invoice had payment information, process financial payment transaction
+      if ((inv.paymentStatus === "paid" || (inv.paymentStatus === "partial" && Number(inv.paidAmount) > 0)) && inv.paymentAccountId) {
+        const invoiceTotalAmt = Number(inv.totalAmount) || 0;
+        const paidAmt = inv.paymentStatus === "paid" ? invoiceTotalAmt : Number(inv.paidAmount);
+        const paymentAccount = accounts.find((a: any) => a.id === inv.paymentAccountId);
+
+        if (paymentAccount && paidAmt > 0) {
+          const payTxPayload = {
+            type: "pay",
+            amount: paidAmt,
+            date: inv.date || new Date().toISOString().split("T")[0],
+            personId: inv.customerId,
+            resourceType: (paymentAccount as any).type === "bank" ? "bank" : "cashbox",
+            resourceId: inv.paymentAccountId,
+            method: "cash",
+            description: `بابت تسویه فاکتور خرید شماره ${inv.invoiceNumber || inv.id}`,
+            currency: inv.currency || "تومان",
+            linkedInvoices: { [inv.id]: paidAmt }
+          };
+          await addTransaction(payTxPayload);
+        }
+      }
+
+      await addSystemLog(
+        "APPROVE_PURCHASE_INVOICE",
+        `تایید نهایی فاکتور خرید شماره ${inv.invoiceNumber || inv.id} و صدور سند حسابداری`,
+        "purchase_invoices",
+        inv.id
+      );
+
+      await fetchInvoices();
+      await fetchAccountingDocuments();
+      await fetchTransactions();
+      setSuccessMsg(`فاکتور خرید شماره ${inv.invoiceNumber || inv.id} با موفقیت تایید نهایی گردید و سند حسابداری آن صادر شد.`);
+      setTimeout(() => setSuccessMsg(""), 3500);
+    } catch (e: any) {
+      console.error("Error approving purchase invoice:", e);
+      customAlert(`خطا در تایید فاکتور خرید: ${e.message || "خطای ناشناخته"}`);
+    } finally {
+      stopAppProcessing();
+    }
+};
+
+const handleApproveWarehouseReceipt = async (receiptDoc: any) => {
+    if (!receiptDoc || !receiptDoc.id) return;
+    if (receiptDoc.status === "approved" || receiptDoc.status === "final") {
+      customAlert("این رسید انبار قبلاً تایید نهایی شده است.");
+      return;
+    }
+
+    startAppProcessing("در حال تایید نهایی رسید انبار و اعمال در کاردکس...");
+    try {
+      const updatedReceiptData = {
+        ...receiptDoc,
+        status: "approved",
+        isDraft: false,
+        updatedAt: Date.now()
+      };
+
+      await updateInvoice(receiptDoc.id.toString(), updatedReceiptData as any, false, false);
+      await recalculateAllWarehouseStocks();
+      
+      await addSystemLog(
+        "APPROVE_WAREHOUSE_RECEIPT",
+        `تایید نهایی رسید انبار شماره ${receiptDoc.invoiceNumber || receiptDoc.id} و ورود قطعی به کاردکس`,
+        "warehouse_receipts",
+        receiptDoc.id
+      );
+
+      await fetchInvoices();
+      await fetchWarehouses();
+      await fetchProducts();
+      setSuccessMsg(`رسید انبار شماره ${receiptDoc.invoiceNumber || receiptDoc.id} با موفقیت تایید نهایی شد و مقادیر در کاردکس و موجودی انبار اعمال گردید.`);
+      setTimeout(() => setSuccessMsg(""), 3500);
+    } catch (e: any) {
+      console.error("Error approving warehouse receipt:", e);
+      customAlert(`خطا در تایید رسید انبار: ${e.message || "خطای ناشناخته"}`);
+    } finally {
+      stopAppProcessing();
     }
 };
 
@@ -4998,17 +5104,22 @@ const getInvoiceNumber = (typeOverride?: string) => {
       return;
     }
 
+    const actualCustomerId = customPayload?.customerId || customerId;
+    const actualType = customPayload?.type || invoiceType;
+
     if (
       storeSettings.requireWarehouse &&
       !activeTab.includes("warehouse") &&
       activeTab !== "create_sale" &&
+      activeTab !== "create_purchase" &&
+      actualType !== "purchase" &&
       items.some(
         (i) => products.find((p) => p.id === i.productId)?.type !== "service",
       ) &&
       !invoiceWarehouseId
     ) {
       customAlert(
-        "لطفاً برای فاکتور فروش/خریدِ شامل کالا، انبار را انتخاب کنید.",
+        "لطفاً برای فاکتور فروش شامل کالا، انبار را انتخاب کنید.",
       );
       setSubmitting(false);
       stopAppProcessing();
@@ -5021,9 +5132,6 @@ const getInvoiceNumber = (typeOverride?: string) => {
         item.productId ||
         (item.quantity > 0 && item.unitPrice > 0),
     );
-
-    const actualCustomerId = customPayload?.customerId || customerId;
-    const actualType = customPayload?.type || invoiceType;
 
     // ---- Sale Invoice Validation Gates ----
     if (!isDraft && actualType === "sale") {
@@ -5389,20 +5497,55 @@ const getInvoiceNumber = (typeOverride?: string) => {
       storeSettings?.allowNegativeStock === 1
     );
 
+    const baseItems = cleanItems.map((item) => ({
+      ...mapItemWithBase(item),
+      warehouseId:
+        (storeSettings.requireWarehouse ||
+          activeTab.includes("warehouse") ||
+          activeTab === "create_sale" ||
+          invoiceType === "sale") &&
+        invoiceWarehouseId
+          ? invoiceWarehouseId
+          : item.warehouseId,
+    }));
+
+    const rawItems = (customPayload && Array.isArray(customPayload.items) && customPayload.items.length > 0)
+      ? customPayload.items.map(mapItemWithBase)
+      : baseItems;
+
+    const determinedStatus = isDraft
+      ? "draft"
+      : (customPayload?.status || (invoiceType === "purchase" || customPayload?.type === "purchase" ? "approved" : "final"));
+
     const payload = customPayload
       ? {
-          ...customPayload,
-          allowNegativeStock: isNegativeStockAllowed,
-          items: (customPayload.items || []).map(mapItemWithBase),
-          isDraft,
-          status: isDraft ? "draft" : "final",
           invoiceNumber: (function () {
-            let num = customPayload.invoiceNumber;
+            let num = customPayload.invoiceNumber !== undefined ? customPayload.invoiceNumber : finalInvoiceNumber;
             if (!num || num.includes("خودکار") || num.includes("تولید خودکار")) {
                 num = ""; // allow backend to generate
             }
             return num;
           })(),
+          sellerInvoiceNumber: customPayload.sellerInvoiceNumber !== undefined ? customPayload.sellerInvoiceNumber : (sellerInvoiceNumber || ""),
+          title: customPayload.title !== undefined ? customPayload.title : invoiceTitle,
+          description: customPayload.description !== undefined ? customPayload.description : invoiceDescription,
+          note: customPayload.note !== undefined ? customPayload.note : invoiceNote,
+          warehouseId: customPayload.warehouseId !== undefined ? customPayload.warehouseId : invoiceWarehouseId,
+          type: customPayload.type !== undefined ? customPayload.type : invoiceType,
+          currency: customPayload.currency !== undefined ? customPayload.currency : invoiceCurrency,
+          allowNegativeStock: isNegativeStockAllowed,
+          date: customPayload.date !== undefined ? convertToGregorian(customPayload.date) : convertToGregorian(date),
+          dueDate: (customPayload.dueDate !== undefined ? convertToGregorian(customPayload.dueDate) : (invoiceDueDate ? convertToGregorian(invoiceDueDate) : null)),
+          customerId: customPayload.customerId !== undefined ? customPayload.customerId : customerId,
+          sourceInvoiceId: customPayload.sourceInvoiceId !== undefined ? customPayload.sourceInvoiceId : sourceInvoiceId,
+          items: rawItems,
+          overallDiscountPercent: customPayload.overallDiscountPercent !== undefined ? customPayload.overallDiscountPercent : overallDiscountPercent,
+          totalAmount: customPayload.totalAmount !== undefined ? customPayload.totalAmount : calculateFinalTotal(),
+          paymentStatus: customPayload.paymentStatus !== undefined ? customPayload.paymentStatus : invoicePaymentStatus,
+          paidAmount: customPayload.paidAmount !== undefined ? Number(customPayload.paidAmount) || 0 : (Number(invoicePaidAmount) || 0),
+          isDraft,
+          status: determinedStatus,
+          ...customPayload,
         }
       : {
           invoiceNumber: finalInvoiceNumber,
@@ -5420,23 +5563,13 @@ const getInvoiceNumber = (typeOverride?: string) => {
                       
           customerId,
           sourceInvoiceId,
-          items: cleanItems.map((item) => ({
-            ...mapItemWithBase(item),
-            warehouseId:
-              (storeSettings.requireWarehouse ||
-                activeTab.includes("warehouse") ||
-                activeTab === "create_sale" ||
-                invoiceType === "sale") &&
-              invoiceWarehouseId
-                ? invoiceWarehouseId
-                : item.warehouseId,
-          })),
+          items: baseItems,
           overallDiscountPercent,
           totalAmount: calculateFinalTotal(),
           paymentStatus: invoicePaymentStatus,
           paidAmount: Number(invoicePaidAmount) || 0,
           isDraft,
-          status: isDraft ? "draft" : "final",
+          status: determinedStatus,
         };
     // 1. If it's a sale and not a draft, perform the Sales Warehouse check and identify shortages
     if (payload.type === "sale" && !isDraft) {
@@ -5653,7 +5786,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
         addedInvoice = await updateInvoice(autoSaveInvoiceId, {
           ...savePayload,
           isDraft: isDraftOverride ? true : false,
-          status: isDraftOverride ? "draft" : "approved"
+          status: isDraftOverride ? "draft" : (savePayload.status || "approved")
         } as any, true, true);
         setAutoSaveInvoiceId(null);
         if (isDraftOverride) {
@@ -5700,45 +5833,51 @@ const getInvoiceNumber = (typeOverride?: string) => {
         updateAppProcessing("مرحله ۷ از ۷: تثبیت نهایی و تغییر وضعیت فاکتور (COMMIT)...");
         await new Promise(r => setTimeout(r, 20));
       } else if (payload.type === "purchase") {
-        updateAppProcessing("مرحله ۳ از ۶: به‌روزرسانی تاریخچه قیمت‌ها و کاردکس کالا...");
-        await new Promise(r => setTimeout(r, 40));
+        const isApproved = !isDraft && savePayload.status === "approved";
+        if (isApproved) {
+          updateAppProcessing("مرحله ۳ از ۶: به‌روزرسانی تاریخچه قیمت‌ها...");
+          await new Promise(r => setTimeout(r, 40));
 
-        updateAppProcessing("مرحله ۴ از ۶: ثبت سند حسابداری (بدهکار موجودی کالا - بستانکار تامین‌کننده)...");
-        if (!isDraft && addedInvoice) {
-          await syncInvoiceAccountingDocument(addedInvoice);
-        }
-        await new Promise(r => setTimeout(r, 40));
+          updateAppProcessing("مرحله ۴ از ۶: ثبت سند حسابداری (بدهکار موجودی کالا - بستانکار تامین‌کننده)...");
+          if (addedInvoice) {
+            await syncInvoiceAccountingDocument(addedInvoice);
+          }
+          await new Promise(r => setTimeout(r, 40));
 
-        const invoiceTotalAmt = Number(payload.totalAmount) || 0;
-        if ((payload.paymentStatus === "paid" || (payload.paymentStatus === "partial" && Number(payload.paidAmount) > 0)) && invoicePaymentAccountId) {
-          const paidAmt = payload.paymentStatus === "paid" ? invoiceTotalAmt : Number(payload.paidAmount);
-          const paymentAccount = accounts.find((a: any) => a.id === invoicePaymentAccountId);
+          const invoiceTotalAmt = Number(payload.totalAmount) || 0;
+          if ((payload.paymentStatus === "paid" || (payload.paymentStatus === "partial" && Number(payload.paidAmount) > 0)) && invoicePaymentAccountId) {
+            const paidAmt = payload.paymentStatus === "paid" ? invoiceTotalAmt : Number(payload.paidAmount);
+            const paymentAccount = accounts.find((a: any) => a.id === invoicePaymentAccountId);
 
-          if (paymentAccount) {
-            updateAppProcessing("مرحله ۵ از ۶: ثبت رسید پرداخت نقدی فاکتور...");
-            await new Promise(r => setTimeout(r, 40));
+            if (paymentAccount) {
+              updateAppProcessing("مرحله ۵ از ۶: ثبت رسید پرداخت نقدی فاکتور...");
+              await new Promise(r => setTimeout(r, 40));
 
-            const payTxPayload = {
-              type: "pay",
-              amount: paidAmt,
-              date: payload.date || new Date().toISOString().split("T")[0],
-              personId: payload.customerId,
-              resourceType: (paymentAccount as any).type === "bank" ? "bank" : "cashbox",
-              resourceId: invoicePaymentAccountId,
-              method: "cash",
-              description: `بابت تسویه فاکتور خرید شماره ${addedInvoice?.invoiceNumber || payload.invoiceNumber || invId}`,
-              currency: payload.currency || "تومان",
-              linkedInvoices: { [invId]: paidAmt }
-            };
-            const createdPayTx = await addTransaction(payTxPayload);
-            if (createdPayTx?.id) {
-              rollbackActions.push(async () => {
-                await deleteTransaction(createdPayTx.id.toString());
-              });
+              const payTxPayload = {
+                type: "pay",
+                amount: paidAmt,
+                date: payload.date || new Date().toISOString().split("T")[0],
+                personId: payload.customerId,
+                resourceType: (paymentAccount as any).type === "bank" ? "bank" : "cashbox",
+                resourceId: invoicePaymentAccountId,
+                method: "cash",
+                description: `بابت تسویه فاکتور خرید شماره ${addedInvoice?.invoiceNumber || payload.invoiceNumber || invId}`,
+                currency: payload.currency || "تومان",
+                linkedInvoices: { [invId]: paidAmt }
+              };
+              const createdPayTx = await addTransaction(payTxPayload);
+              if (createdPayTx?.id) {
+                rollbackActions.push(async () => {
+                  await deleteTransaction(createdPayTx.id.toString());
+                });
+              }
             }
+          } else {
+            updateAppProcessing("مرحله ۵ از ۶: به‌روزرسانی وضعیت مانده حساب تامین‌کننده...");
+            await new Promise(r => setTimeout(r, 30));
           }
         } else {
-          updateAppProcessing("مرحله ۵ از ۶: به‌روزرسانی وضعیت مانده حساب تامین‌کننده...");
+          updateAppProcessing("ثبت اولیه فاکتور خرید در انتظار تایید سرپرست/مدیر...");
           await new Promise(r => setTimeout(r, 30));
         }
 
@@ -6340,13 +6479,15 @@ const submitInvoice = async (e: React.FormEvent) => {
     if (
       storeSettings.requireWarehouse &&
       !activeTab.includes("warehouse") &&
+      activeTab !== "create_purchase" &&
+      invoiceType !== "purchase" &&
       items.some(
         (i) => products.find((p) => p.id === i.productId)?.type !== "service",
       ) &&
       !invoiceWarehouseId
     ) {
       customAlert(
-        "لطفاً برای فاکتور فروش/خریدِ شامل کالا، انبار را انتخاب کنید.",
+        "لطفاً برای فاکتور فروش شامل کالا، انبار را انتخاب کنید.",
       );
       return;
     }
@@ -6371,13 +6512,15 @@ const handleInvoicePreviewTrigger = () => {
     if (
       storeSettings.requireWarehouse &&
       !activeTab.includes("warehouse") &&
+      activeTab !== "create_purchase" &&
+      invoiceType !== "purchase" &&
       items.some(
         (i) => products.find((p) => p.id === i.productId)?.type !== "service",
       ) &&
       !invoiceWarehouseId
     ) {
       customAlert(
-        "لطفاً برای فاکتور فروش/خریدِ شامل کالا، انبار را انتخاب کنید.",
+        "لطفاً برای فاکتور فروش شامل کالا، انبار را انتخاب کنید.",
       );
       return;
     }
@@ -6899,7 +7042,7 @@ const renderTabContent = () => {
 
       case "create_warehouse_doc":
         return (
-          <WarehouseDocCreate setIsPersonModalOpen={setIsPersonModalOpen} invoiceNumber={invoiceNumber} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} storeSettings={storeSettings} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} formatCurrency={formatCurrency} submitting={submitting} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} Plus={Plus} Trash2={Trash2} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Tag={Tag} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} formatProductStockDetails={formatProductStockDetails} warehouseOperationType={warehouseOperationType} setWarehouseOperationType={setWarehouseOperationType} warehouseWizardStep={warehouseWizardStep} setWarehouseWizardStep={setWarehouseWizardStep} setSourceInvoiceId={setSourceInvoiceId} customAlert={customAlert} invoices={invoices} hasRemainingWarehouseItems={hasRemainingWarehouseItems} sourceInvoiceId={sourceInvoiceId} deletePreviousDocs={deletePreviousDocs} setDeletePreviousDocs={setDeletePreviousDocs} setInvoiceCurrency={setInvoiceCurrency} setExchangeRate={setExchangeRate} setExchangeRateInput={setExchangeRateInput} deleteInvoice={deleteInvoice} handleVoidInvoice={handleVoidInvoice} setInvoices={setInvoices} fetchInvoices={fetchInvoices} generateId={generateId} handleAddItem={handleAddItem} getProductStockInfo={getProductStockInfo} />
+          <WarehouseDocCreate setIsPersonModalOpen={setIsPersonModalOpen} invoiceNumber={invoiceNumber} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} storeSettings={storeSettings} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} formatCurrency={formatCurrency} submitting={submitting} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} Plus={Plus} Trash2={Trash2} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Tag={Tag} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} formatProductStockDetails={formatProductStockDetails} warehouseOperationType={warehouseOperationType} setWarehouseOperationType={setWarehouseOperationType} warehouseWizardStep={warehouseWizardStep} setWarehouseWizardStep={setWarehouseWizardStep} setSourceInvoiceId={setSourceInvoiceId} customAlert={customAlert} invoices={invoices} hasRemainingWarehouseItems={hasRemainingWarehouseItems} sourceInvoiceId={sourceInvoiceId} deletePreviousDocs={deletePreviousDocs} setDeletePreviousDocs={setDeletePreviousDocs} setInvoiceCurrency={setInvoiceCurrency} setExchangeRate={setExchangeRate} setExchangeRateInput={setExchangeRateInput} deleteInvoice={deleteInvoice} handleVoidInvoice={handleVoidInvoice} setInvoices={setInvoices} fetchInvoices={fetchInvoices} generateId={generateId} handleAddItem={handleAddItem} getProductStockInfo={getProductStockInfo} saveInvoiceData={saveInvoiceData} />
         );
 
       case "create_purchase_return":
@@ -6908,7 +7051,7 @@ const renderTabContent = () => {
         );
       case "create_purchase":
         return (
-          <PurchaseInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} sellerInvoiceNumber={sellerInvoiceNumber} setSellerInvoiceNumber={setSellerInvoiceNumber} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} />
+          <PurchaseInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} sellerInvoiceNumber={sellerInvoiceNumber} setSellerInvoiceNumber={setSellerInvoiceNumber} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} handleApprovePurchaseInvoice={handleApprovePurchaseInvoice} />
         );
       case "create_sale_return":
         return (
@@ -6940,7 +7083,7 @@ const renderTabContent = () => {
       case "list_warehouse_docs": {
         return (
           <InvoicesList
-             invoices={invoices} fetchInvoices={fetchInvoices} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} persons={persons} activeTab={activeTab} setActiveTab={setActiveTab} purchaseFilter={purchaseFilter} setPurchaseFilter={setPurchaseFilter} formatCurrency={formatCurrency} getPersonDisplayName={getPersonDisplayName} formatDateDisplay={formatDateDisplay}  numToPersianWords={numToPersianWords} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} setCustomerId={setCustomerId}  getRoleName={getRoleName} setEditingInvoiceId={setEditingInvoiceId} handleDeleteInvoice={handleDeleteInvoice}     storeSettings={storeSettings} invoiceCurrentPage={invoiceCurrentPage} setInvoiceCurrentPage={setInvoiceCurrentPage} invoicePageSize={invoicePageSize} setInvoicePageSize={setInvoicePageSize} toPersianDigits={toPersianDigits} listFilter={listFilter} setListFilter={setListFilter} invoiceGroupMode={invoiceGroupMode} setInvoiceGroupMode={setInvoiceGroupMode} List={List} clearDraft={clearDraft} setInvoiceType={setInvoiceType} setWarehouseOperationType={setWarehouseOperationType} Calendar={Calendar} renderPersonLink={renderPersonLink} products={products} setPricingWizardItems={setPricingWizardItems} setPricingWizardInvoice={setPricingWizardInvoice} setSuccessMsg={setSuccessMsg} setReceiptPersonId={setReceiptPersonId} setViewingInvoice={setViewingInvoice} handleEditInvoiceAction={handleEditInvoiceAction} handleFastWarehouseReceipt={handleFastWarehouseReceipt} handleVoidInvoice={handleVoidInvoice}
+             invoices={invoices} fetchInvoices={fetchInvoices} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} persons={persons} activeTab={activeTab} setActiveTab={setActiveTab} purchaseFilter={purchaseFilter} setPurchaseFilter={setPurchaseFilter} formatCurrency={formatCurrency} getPersonDisplayName={getPersonDisplayName} formatDateDisplay={formatDateDisplay}  numToPersianWords={numToPersianWords} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} setCustomerId={setCustomerId}  getRoleName={getRoleName} setEditingInvoiceId={setEditingInvoiceId} handleDeleteInvoice={handleDeleteInvoice}     storeSettings={storeSettings} invoiceCurrentPage={invoiceCurrentPage} setInvoiceCurrentPage={setInvoiceCurrentPage} invoicePageSize={invoicePageSize} setInvoicePageSize={setInvoicePageSize} toPersianDigits={toPersianDigits} listFilter={listFilter} setListFilter={setListFilter} invoiceGroupMode={invoiceGroupMode} setInvoiceGroupMode={setInvoiceGroupMode} List={List} clearDraft={clearDraft} setInvoiceType={setInvoiceType} setWarehouseOperationType={setWarehouseOperationType} Calendar={Calendar} renderPersonLink={renderPersonLink} products={products} setPricingWizardItems={setPricingWizardItems} setPricingWizardInvoice={setPricingWizardInvoice} setSuccessMsg={setSuccessMsg} setReceiptPersonId={setReceiptPersonId} setViewingInvoice={setViewingInvoice} handleEditInvoiceAction={handleEditInvoiceAction} handleFastWarehouseReceipt={handleFastWarehouseReceipt} handleVoidInvoice={handleVoidInvoice} handleApprovePurchaseInvoice={handleApprovePurchaseInvoice} handleApproveWarehouseReceipt={handleApproveWarehouseReceipt}
           />
         );
       }
@@ -7326,6 +7469,8 @@ const renderTabContent = () => {
     formatCurrency,
     toPersianDigits,
     formatNumber,
+    handleApprovePurchaseInvoice,
+    handleApproveWarehouseReceipt,
     renderTabContent
   };
 }

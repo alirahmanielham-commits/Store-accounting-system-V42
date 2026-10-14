@@ -8,10 +8,24 @@ import { encryptBackupData, decryptBackupData, isEncryptedBackup } from '../util
 export interface TableDiffComparison {
   table: string;
   label: string;
+  moduleId?: string;
+  moduleLabel?: string;
   backupCount: number;
   currentCount: number;
   diff: number; // backupCount - currentCount
   status: 'match' | 'added' | 'reduced' | 'new_table' | 'missing_in_backup';
+}
+
+export interface ModuleDiffSummary {
+  id: string;
+  label: string;
+  description: string;
+  iconName: string;
+  tables: string[];
+  backupRecords: number;
+  currentRecords: number;
+  diff: number;
+  hasData: boolean;
 }
 
 export interface DryRunResult {
@@ -19,15 +33,78 @@ export interface DryRunResult {
   canRestore: boolean;
   isEncrypted: boolean;
   storeId?: string;
+  activeStoreId?: string;
+  storeMismatch?: boolean;
   backupDate?: string;
   totalBackupRecords: number;
   totalCurrentRecords: number;
   tablesCount: number;
   comparison: TableDiffComparison[];
+  modules: ModuleDiffSummary[];
   warnings: string[];
   recommendations: string[];
   safetySnapshotAvailable: boolean;
 }
+
+export interface BackupModuleDefinition {
+  id: string;
+  label: string;
+  description: string;
+  iconName: string;
+  tables: string[];
+}
+
+export const BACKUP_MODULES: BackupModuleDefinition[] = [
+  {
+    id: 'inventory',
+    label: 'کالاها و انبارداری',
+    description: 'محصولات، انبارها، دسته‌بندی کالاها، قیمت‌گذاری و گردش انبار',
+    iconName: 'Package',
+    tables: ['products', 'warehouses', 'product_categories', 'warehouse_stocks', 'inventory_transactions', 'stocktakings', 'stocktaking_items', 'product_price_history', 'kardex']
+  },
+  {
+    id: 'persons',
+    label: 'طرف‌حساب‌ها و اشخاص',
+    description: 'اشخاص، مانده‌حساب‌های افتتاحیه، اطلاعات تماس، حساب‌های بانکی و سوابق ارتباطی',
+    iconName: 'Users',
+    tables: ['persons', 'person_contacts', 'person_bank_accounts', 'person_groups', 'person_roles', 'person_categories', 'person_opening_balances', 'debtors_trackings', 'person_follow_ups']
+  },
+  {
+    id: 'invoices',
+    label: 'فاکتورها و بازرگانی',
+    description: 'فاکتورهای فروش و خرید، پیش‌فاکتورها، برگشت از فروش و خرید و ضایعات',
+    iconName: 'FileText',
+    tables: ['invoices', 'invoice_items', 'sales_invoices', 'sales_invoice_items', 'purchase_invoices', 'purchase_invoice_items', 'proforma_invoices', 'proforma_invoice_items', 'sale_returns', 'sale_return_items', 'purchase_returns', 'purchase_return_items', 'wastes', 'waste_items', 'sales_invoice_payments', 'purchase_invoice_payments', 'warehouse_receipts', 'warehouse_receipt_items', 'warehouse_remittances', 'warehouse_remittance_items']
+  },
+  {
+    id: 'accounting',
+    label: 'اسناد و دفاتر حسابداری',
+    description: 'اسناد دوبل حسابداری، آرتیکل‌ها، دفاتر معین، کدینگ و سال‌های مالی',
+    iconName: 'BookOpen',
+    tables: ['accounting_documents', 'accounting_document_items', 'ledger_accounts', 'financial_years']
+  },
+  {
+    id: 'treasury',
+    label: 'خزانه‌داری، چک‌ها و نقدینگی',
+    description: 'چک‌های صیادی پرداختی و دریافتی، دسته‌چک‌ها، تراکنش‌ها، صندوق‌ها و بانک‌ها',
+    iconName: 'CreditCard',
+    tables: ['accounts', 'cashboxes', 'transactions', 'receipt_transactions', 'payment_transactions', 'issued_checks', 'received_checks', 'checkbooks', 'check_history', 'check_audit_logs', 'refundRequests']
+  },
+  {
+    id: 'loans',
+    label: 'وام‌ها و اقساط',
+    description: 'پرونده‌های تسهیلات، جداول اقساط، وثایق و سوابق بازپرداخت',
+    iconName: 'Coins',
+    tables: ['loans', 'installments', 'loan_accounts', 'loan_types', 'loan_applications', 'collaterals', 'repayment_schedules', 'repayment_transactions', 'loan_history']
+  },
+  {
+    id: 'settings',
+    label: 'تنظیمات و اطلاعات پایه',
+    description: 'مشخصات شرکت و کسب‌وکار، تنظیمات فروشگاه، الگوها و کاربران',
+    iconName: 'Settings',
+    tables: ['store_settings', 'company_profile', 'businesses', 'users', 'roles', 'sms_settings', 'sms_templates', 'sms_providers']
+  }
+];
 
 const TABLE_LABELS: Record<string, string> = {
   invoices: 'فاکتورهای خرید و فروش',
@@ -83,13 +160,24 @@ export async function getCurrentDatabaseStats(): Promise<Record<string, number>>
 
 /**
  * Performs deep dry-run analysis on backup data before restoring.
- * Validates schema, checks row count diffs, verifies integrity and flags potential data loss.
+ * Validates schema, checks row count diffs, computes module breakdowns, verifies integrity and flags potential data loss.
  */
-export async function performDryRunAnalysis(backupData: Record<string, any>, isEncrypted: boolean = false): Promise<DryRunResult> {
+export async function performDryRunAnalysis(
+  backupData: Record<string, any>, 
+  isEncrypted: boolean = false,
+  envelopeStoreId?: string,
+  backupDateStr?: string
+): Promise<DryRunResult> {
   const currentStats = await getCurrentDatabaseStats();
   const comparison: TableDiffComparison[] = [];
   const warnings: string[] = [];
   const recommendations: string[] = [];
+
+  const activeStoreId = storeContext.getStore() || 'default';
+  const storeMismatch = !!(envelopeStoreId && envelopeStoreId !== activeStoreId);
+  if (storeMismatch) {
+    warnings.push(`توجه مهم: این فایل متعلق به فروشگاه «${envelopeStoreId}» است، اما شما در حال حاضر در شعبه «${activeStoreId}» قرار دارید. در صورت بازیابی، داده‌های این شعبه بازنویسی خواهند شد.`);
+  }
 
   const backupTables = Object.keys(backupData);
   let totalBackupRecords = 0;
@@ -97,6 +185,12 @@ export async function performDryRunAnalysis(backupData: Record<string, any>, isE
 
   // Track tables in both
   const allTables = Array.from(new Set([...KNOWN_TABLES, ...backupTables]));
+
+  // Helper map from table to module
+  const tableToModuleMap = new Map<string, { id: string; label: string }>();
+  BACKUP_MODULES.forEach(mod => {
+    mod.tables.forEach(tbl => tableToModuleMap.set(tbl, { id: mod.id, label: mod.label }));
+  });
 
   for (const table of allTables) {
     const backupVal = backupData[table];
@@ -120,11 +214,15 @@ export async function performDryRunAnalysis(backupData: Record<string, any>, isE
       status = 'reduced';
     }
 
+    const modInfo = tableToModuleMap.get(table);
+
     // Only include in comparison table if has data in either current or backup
     if (backupCount > 0 || currentCount > 0) {
       comparison.push({
         table,
         label: TABLE_LABELS[table] || table,
+        moduleId: modInfo?.id || 'other',
+        moduleLabel: modInfo?.label || 'سایر موارد',
         backupCount,
         currentCount,
         diff,
@@ -134,7 +232,7 @@ export async function performDryRunAnalysis(backupData: Record<string, any>, isE
 
     // Specific critical checks
     if (table === 'invoices' && diff < 0) {
-      warnings.push(`هشدار: تعداد فاکتورهای فعلی سیستم (${currentCount}) بیشتر از فایل پشتیبان (${backupCount}) است. بازیابی باعث حذف ${Math.abs(diff)} فاکتور جدیدتر خواهد شد.`);
+      warnings.push(`هشدار: تعداد فاکتورهای فعلی سیستم (${currentCount}) بیشتر از فایل پشتیبان (${backupCount}) است. بازیابی کامل باعث حذف ${Math.abs(diff)} فاکتور جدیدتر خواهد شد.`);
     }
 
     if (table === 'accounting_documents' && diff < 0) {
@@ -146,10 +244,33 @@ export async function performDryRunAnalysis(backupData: Record<string, any>, isE
     }
   }
 
+  // Calculate Module summaries for Selective Restore
+  const modulesSummary: ModuleDiffSummary[] = BACKUP_MODULES.map(mod => {
+    let bCount = 0;
+    let cCount = 0;
+    mod.tables.forEach(t => {
+      const bVal = backupData[t];
+      const count = Array.isArray(bVal) ? bVal.length : (bVal && typeof bVal === 'object' ? Object.keys(bVal).length : 0);
+      bCount += count;
+      cCount += (currentStats[t] || 0);
+    });
+    return {
+      id: mod.id,
+      label: mod.label,
+      description: mod.description,
+      iconName: mod.iconName,
+      tables: mod.tables,
+      backupRecords: bCount,
+      currentRecords: cCount,
+      diff: bCount - cCount,
+      hasData: bCount > 0 || cCount > 0
+    };
+  });
+
   // Schema compatibility validation
   const unknownTables = backupTables.filter(t => !KNOWN_TABLES.includes(t) && t !== 'databaseLogs' && t !== 'backupConfig');
   if (unknownTables.length > 0) {
-    recommendations.push(`فایل پشتیبان شامل جداول سفارشی یا قدیمی است که در ساختار جدید به صورت کلید/مقدار حفظ می‌شوند: ${unknownTables.join(', ')}`);
+    recommendations.push(`فایل پشتیبان شامل جداول سفارشی است که در ساختار سیستم به صورت کلید/مقدار حفظ می‌شوند: ${unknownTables.join(', ')}`);
   }
 
   // Check financial double-entry balance in backup accounting docs
@@ -167,20 +288,84 @@ export async function performDryRunAnalysis(backupData: Record<string, any>, isE
     }
   }
 
-  recommendations.push('قبل از اجرای قطعی بازیابی، یک نسخه ایمنی (Safety Snapshot) به صورت خودکار از دیتابیس فعلی ذخیره خواهد شد.');
+  recommendations.push('قبل از اجرای قطعی بازیابی (کامل یا انتخابی)، یک نسخه ایمنی خودکار (Safety Snapshot) از دیتابیس فعلی ذخیره خواهد شد.');
 
   return {
     compatible: true,
     canRestore: true,
     isEncrypted,
+    storeId: envelopeStoreId,
+    activeStoreId,
+    storeMismatch,
+    backupDate: backupDateStr,
     totalBackupRecords,
     totalCurrentRecords,
     tablesCount: backupTables.length,
     comparison: comparison.sort((a, b) => Math.abs(b.diff) - Math.abs(a.diff)),
+    modules: modulesSummary,
     warnings,
     recommendations,
     safetySnapshotAvailable: true
   };
+}
+
+/**
+ * Validates integrity of a backup file content string without touching the database
+ */
+export function verifyBackupIntegrity(content: string): {
+  valid: boolean;
+  isEncrypted: boolean;
+  storeId?: string;
+  date?: string;
+  tablesCount?: number;
+  totalRecords?: number;
+  format?: string;
+  error?: string;
+} {
+  try {
+    const decryptResult = decryptBackupData(content);
+    if (!decryptResult.success || !decryptResult.data) {
+      return {
+        valid: false,
+        isEncrypted: isEncryptedBackup(content),
+        error: decryptResult.error || 'رمزگشایی یا بازخوانی ساختار فایل ناموفق بود.'
+      };
+    }
+
+    const data = decryptResult.data;
+    const tables = Object.keys(data);
+    let totalRecords = 0;
+    tables.forEach(t => {
+      const val = data[t];
+      totalRecords += Array.isArray(val) ? val.length : (val && typeof val === 'object' ? Object.keys(val).length : 0);
+    });
+
+    let storeId: string | undefined = undefined;
+    let date: string | undefined = undefined;
+    if (decryptResult.isEncrypted) {
+      try {
+        const parsed = JSON.parse(content.trim());
+        storeId = parsed.storeId;
+        date = parsed.dateStr || (parsed.timestamp ? new Date(parsed.timestamp).toISOString() : undefined);
+      } catch {}
+    }
+
+    return {
+      valid: true,
+      isEncrypted: decryptResult.isEncrypted,
+      storeId,
+      date,
+      tablesCount: tables.length,
+      totalRecords,
+      format: decryptResult.isEncrypted ? 'AES-256-GCM Envelope' : 'Plain JSON'
+    };
+  } catch (err: any) {
+    return {
+      valid: false,
+      isEncrypted: false,
+      error: err.message || 'خطا در ارزیابی سلامت فایل'
+    };
+  }
 }
 
 /**

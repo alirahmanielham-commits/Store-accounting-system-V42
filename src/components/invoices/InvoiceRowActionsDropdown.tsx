@@ -38,6 +38,8 @@ interface InvoiceRowActionsDropdownProps {
   onEdit?: () => void;
   onVoid?: () => void;
   onDelete?: () => void;
+  onApprovePurchase?: () => void;
+  onApproveWarehouseReceipt?: () => void;
 }
 
 export default function InvoiceRowActionsDropdown({
@@ -58,7 +60,9 @@ export default function InvoiceRowActionsDropdown({
   onReturnInvoice,
   onEdit,
   onVoid,
-  onDelete
+  onDelete,
+  onApprovePurchase,
+  onApproveWarehouseReceipt
 }: InvoiceRowActionsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; openUp: boolean }>({
@@ -217,7 +221,51 @@ export default function InvoiceRowActionsDropdown({
                 </button>
               </div>
 
-              {/* Group 2: Pricing & Warehouse */}
+              {/* Group 2: Approvals & Workflow Actions */}
+              {((isPurchase && onApprovePurchase && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft)) ||
+                (invoice.type === "warehouse_receipt" && onApproveWarehouseReceipt && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft))) && (
+                <div className="py-1 space-y-0.5">
+                  {isPurchase && onApprovePurchase && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onApprovePurchase();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-black text-emerald-900 bg-emerald-100/80 hover:bg-emerald-200/90 border border-emerald-300 rounded-xl transition-all cursor-pointer group shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-700 group-hover:scale-110 transition-transform" />
+                        <span>تایید نهایی فاکتور خرید</span>
+                      </div>
+                      <span className="text-[9px] bg-emerald-700 text-white font-black px-1.5 py-0.5 rounded-md">
+                        تایید
+                      </span>
+                    </button>
+                  )}
+
+                  {invoice.type === "warehouse_receipt" && onApproveWarehouseReceipt && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft) && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onApproveWarehouseReceipt();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-black text-emerald-900 bg-emerald-100/80 hover:bg-emerald-200/90 border border-emerald-300 rounded-xl transition-all cursor-pointer group shadow-2xs"
+                    >
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-700 group-hover:scale-110 transition-transform" />
+                        <span>تایید نهایی رسید ورود به انبار</span>
+                      </div>
+                      <span className="text-[9px] bg-emerald-700 text-white font-black px-1.5 py-0.5 rounded-md">
+                        ورود
+                      </span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Group 3: Pricing & Warehouse Operations */}
               {(isPurchase || onFastReceipt || onFastRemittance) && (
                 <div className="py-1 space-y-0.5">
                   {isPurchase && onOpenPricingWizard && (
@@ -240,20 +288,27 @@ export default function InvoiceRowActionsDropdown({
                   )}
 
                   {!isVoided && whStatus !== "completed" && onFastReceipt && (
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setIsOpen(false);
-                        onFastReceipt();
-                      }}
-                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-blue-50/80 hover:text-blue-700 rounded-xl transition-colors cursor-pointer group"
-                    >
-                      <div className="flex items-center gap-2">
-                        <Package className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
-                        <span>رسید سریع به انبار</span>
+                    isPurchase && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft) ? (
+                      <div className="px-2.5 py-1.5 text-[10px] text-amber-800 bg-amber-50/80 border border-amber-200/70 rounded-xl font-bold flex items-center gap-1.5">
+                        <Package className="w-3.5 h-3.5 text-amber-600 shrink-0" />
+                        <span>رسید انبار نیازمند تایید فاکتور است</span>
                       </div>
-                      <span className="text-[10px] text-blue-600 font-bold">ورود</span>
-                    </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIsOpen(false);
+                          onFastReceipt();
+                        }}
+                        className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-blue-50/80 hover:text-blue-700 rounded-xl transition-colors cursor-pointer group"
+                      >
+                        <div className="flex items-center gap-2">
+                          <Package className="w-4 h-4 text-blue-500 group-hover:text-blue-600" />
+                          <span>رسید سریع به انبار</span>
+                        </div>
+                        <span className="text-[10px] text-blue-600 font-bold">ورود</span>
+                      </button>
+                    )
                   )}
 
                   {!isVoided && whStatus !== "completed" && onFastRemittance && (

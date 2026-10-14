@@ -75,6 +75,8 @@ export default function InvoicesList(props: any) {
     handleEditInvoiceAction,
     handleVoidInvoice,
     handleFastWarehouseReceipt,
+    handleApprovePurchaseInvoice,
+    handleApproveWarehouseReceipt,
     fetchInvoices,
     ...rest
   } = props;
@@ -422,8 +424,10 @@ export default function InvoicesList(props: any) {
         if (invoiceTabFilter === "paid" && (inv.type !== "sale" || inv.paymentStatus !== "paid")) return false;
         if (invoiceTabFilter === "unpaid" && (inv.type !== "sale" || (inv.paymentStatus !== "unpaid" && inv.paymentStatus !== "partial"))) return false;
       } else if (activeTab === "list_purchase") {
+        if (invoiceTabFilter === "pending_approval" && inv.status !== "pending_approval") return false;
+        if (invoiceTabFilter === "approved" && (inv.status === "pending_approval" || inv.isDraft || inv.status === "draft")) return false;
         if (invoiceTabFilter === "received" && !isRemittedOrReceived) return false;
-        if (invoiceTabFilter === "pending_receive" && isRemittedOrReceived) return false;
+        if (invoiceTabFilter === "pending_receive" && (isRemittedOrReceived || inv.status === "pending_approval" || inv.isDraft || inv.status === "draft")) return false;
         if (invoiceTabFilter === "paid" && inv.paymentStatus !== "paid") return false;
         if (invoiceTabFilter === "unpaid" && (inv.paymentStatus !== "unpaid" && inv.paymentStatus !== "partial")) return false;
       } else if (activeTab === "list_sale_return") {
@@ -437,7 +441,8 @@ export default function InvoicesList(props: any) {
         if (invoiceTabFilter === "remitted" && !isRemittedOrReceived) return false;
         if (invoiceTabFilter === "pending_remit" && isRemittedOrReceived) return false;
       } else if (activeTab === "list_warehouse_docs") {
-        if (listFilter === "receipt" && inv.type !== "warehouse_receipt") return false;
+        if (listFilter === "pending_approval" && (inv.type !== "warehouse_receipt" || inv.status !== "pending_approval")) return false;
+        if (listFilter === "receipt" && (inv.type !== "warehouse_receipt" || inv.status === "pending_approval")) return false;
         if (listFilter === "remittance" && inv.type !== "warehouse_remittance") return false;
       }
 
@@ -738,10 +743,12 @@ export default function InvoicesList(props: any) {
     } else if (activeTab === "list_purchase") {
       tabs = [
         { id: 'all', label: 'همه خریدها', count: baseInvoices.length },
+        { id: 'pending_approval', label: 'در انتظار تایید فاکتور', count: baseInvoices.filter((i: any) => i.status === 'pending_approval').length },
+        { id: 'approved', label: 'فاکتورهای تایید شده', count: baseInvoices.filter((i: any) => i.status !== 'pending_approval' && !i.isDraft && i.status !== 'draft').length },
         { id: 'paid', label: 'تسویه شده', count: baseInvoices.filter((i: any) => i.paymentStatus === 'paid').length },
         { id: 'unpaid', label: 'مانده‌دار / بدهی', count: baseInvoices.filter((i: any) => i.paymentStatus !== 'paid').length },
         { id: 'received', label: 'رسید انبار شده', count: baseInvoices.filter((i: any) => getInvoiceWarehouseStatus(i) !== 'pending').length },
-        { id: 'pending_receive', label: 'در انتظار رسید', count: baseInvoices.filter((i: any) => getInvoiceWarehouseStatus(i) === 'pending').length },
+        { id: 'pending_receive', label: 'در انتظار رسید', count: baseInvoices.filter((i: any) => getInvoiceWarehouseStatus(i) === 'pending' && i.status !== 'pending_approval' && !i.isDraft && i.status !== 'draft').length },
       ];
     } else if (activeTab === "list_sale_return") {
       tabs = [
@@ -762,7 +769,8 @@ export default function InvoicesList(props: any) {
     } else if (activeTab === "list_warehouse_docs") {
       tabs = [
         { id: 'all', label: 'همه اسناد انبار', count: baseInvoices.length },
-        { id: 'receipt', label: 'رسیدهای ورود کالا', count: baseInvoices.filter((i: any) => i.type === 'warehouse_receipt').length },
+        { id: 'pending_approval', label: 'رسیدهای در انتظار تایید', count: baseInvoices.filter((i: any) => i.type === 'warehouse_receipt' && i.status === 'pending_approval').length },
+        { id: 'receipt', label: 'رسیدهای تایید شده', count: baseInvoices.filter((i: any) => i.type === 'warehouse_receipt' && i.status !== 'pending_approval').length },
         { id: 'remittance', label: 'حواله‌های خروج کالا', count: baseInvoices.filter((i: any) => i.type === 'warehouse_remittance').length },
       ];
     }
@@ -1315,6 +1323,11 @@ export default function InvoicesList(props: any) {
                                       پیش‌نویس
                                     </span>
                                   )}
+                                  {inv.status === "pending_approval" && (
+                                    <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-300">
+                                      در انتظار تایید
+                                    </span>
+                                  )}
                                   {isVoided && (
                                     <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-rose-200">
                                       ابطال
@@ -1448,7 +1461,15 @@ export default function InvoicesList(props: any) {
                                 )}
 
                                 {/* Warehouse Status */}
-                                {whStatus === "completed" ? (
+                                {inv.type === "purchase" && (inv.status === "pending_approval" || inv.isDraft) ? (
+                                  <span className="text-amber-800 bg-amber-50 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                    نیازمند تایید فاکتور
+                                  </span>
+                                ) : inv.type === "warehouse_receipt" && inv.status === "pending_approval" ? (
+                                  <span className="text-amber-800 bg-amber-50 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                    در انتظار تایید ورود
+                                  </span>
+                                ) : whStatus === "completed" ? (
                                   <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-[10px] font-black px-2 py-0.5 rounded-lg whitespace-nowrap">
                                     {inv.type === "purchase" ? "رسید شده" : inv.type === "sale_return" ? "تحویل انبار" : inv.type === "purchase_return" ? "خارج شده" : "حواله شده"}
                                   </span>
@@ -1498,8 +1519,18 @@ export default function InvoicesList(props: any) {
                                       ? () => launchPricingWizard(inv)
                                       : undefined
                                   }
+                                  onApprovePurchase={
+                                    handleApprovePurchaseInvoice && (inv.type === "purchase" || activeTab === "list_purchase")
+                                      ? () => handleApprovePurchaseInvoice(inv)
+                                      : undefined
+                                  }
+                                  onApproveWarehouseReceipt={
+                                    handleApproveWarehouseReceipt && (inv.type === "warehouse_receipt" || activeTab === "list_warehouse_docs")
+                                      ? () => handleApproveWarehouseReceipt(inv)
+                                      : undefined
+                                  }
                                   onFastReceipt={
-                                    !isVoided && whStatus !== "completed" && (inv.type === "purchase" || inv.type === "sale_return" || activeTab === "list_purchase")
+                                    !isVoided && whStatus !== "completed" && (inv.type === "purchase" || inv.type === "sale_return" || activeTab === "list_purchase") && !(inv.type === "purchase" && (inv.status === "pending_approval" || inv.isDraft))
                                       ? () => {
                                           setFastReceiptInvoice(inv);
                                           const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses?.[0]?.id || "");
@@ -1701,6 +1732,11 @@ export default function InvoicesList(props: any) {
                                   پیش‌نویس
                                 </span>
                               )}
+                              {inv.status === "pending_approval" && (
+                                <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-300">
+                                  در انتظار تایید
+                                </span>
+                              )}
                               {isVoided && (
                                 <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-rose-200">
                                   ابطال
@@ -1737,8 +1773,18 @@ export default function InvoicesList(props: any) {
                                   ? () => launchPricingWizard(inv)
                                   : undefined
                               }
+                              onApprovePurchase={
+                                handleApprovePurchaseInvoice && (inv.type === "purchase" || activeTab === "list_purchase")
+                                  ? () => handleApprovePurchaseInvoice(inv)
+                                  : undefined
+                              }
+                              onApproveWarehouseReceipt={
+                                handleApproveWarehouseReceipt && (inv.type === "warehouse_receipt" || activeTab === "list_warehouse_docs")
+                                  ? () => handleApproveWarehouseReceipt(inv)
+                                  : undefined
+                              }
                               onFastReceipt={
-                                !isVoided && whStatus !== "completed" && (inv.type === "purchase" || inv.type === "sale_return" || activeTab === "list_purchase")
+                                !isVoided && whStatus !== "completed" && (inv.type === "purchase" || inv.type === "sale_return" || activeTab === "list_purchase") && !(inv.type === "purchase" && (inv.status === "pending_approval" || inv.isDraft))
                                   ? () => {
                                       setFastReceiptInvoice(inv);
                                       const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses?.[0]?.id || "");
@@ -1822,7 +1868,15 @@ export default function InvoicesList(props: any) {
 
                         <div className="flex items-center justify-between text-xs">
                           <span className="text-slate-400 font-bold">وضعیت انبار:</span>
-                          {whStatus === "completed" ? (
+                          {inv.type === "purchase" && (inv.status === "pending_approval" || inv.isDraft) ? (
+                            <span className="text-amber-800 bg-amber-50 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200">
+                              نیازمند تایید فاکتور
+                            </span>
+                          ) : inv.type === "warehouse_receipt" && inv.status === "pending_approval" ? (
+                            <span className="text-amber-800 bg-amber-50 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200">
+                              در انتظار تایید ورود
+                            </span>
+                          ) : whStatus === "completed" ? (
                             <span className="text-emerald-700 bg-emerald-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-emerald-200">
                               {inv.type === "purchase" ? "رسید شده" : "حواله شده"}
                             </span>

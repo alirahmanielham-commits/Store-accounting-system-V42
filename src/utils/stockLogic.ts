@@ -139,11 +139,12 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
     return 'sale';
   };
 
-  // Filter valid documents (not deleted, not voided, not draft)
+  // Filter valid documents (not deleted, not voided, not draft, not pending approval)
   const validDocs = (allDocs || []).filter((d: any) => {
     if (!d || d.isDeleted) return false;
     if (d.status === 'draft' || d.isDraft) return false;
     if (d.status === 'voided') return false;
+    if (d.status === 'pending_approval' || d.status === 'pending') return false;
     return true;
   });
 
