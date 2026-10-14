@@ -17,21 +17,23 @@ import {
     Activity,
     X,
     RefreshCw,
-    Download
+    Download,
+    LayoutDashboard,
+    FileText,
+    BarChart3
 } from "lucide-react";
 import { exportToExcel, formatDecimalForExcel } from "../../utils/exportUtils";
 import { getActiveStoreSettings } from "../../utils/format";
+import WarehouseDedicatedDashboard from "./WarehouseDedicatedDashboard";
 
 export default function WarehouseManager(props: any) {
   const {
-
     warehouseSubTab,
     setWarehouseSubTab,
-    warehouses,
-    products,
+    warehouses = [],
+    products = [],
     setEditingWarehouseId,
-    setIsWarehouseModalOpen
-  ,
+    setIsWarehouseModalOpen,
     setNewWarehouseName,
     setNewWarehouseManager,
     setNewWarehouseLocation,
@@ -43,9 +45,52 @@ export default function WarehouseManager(props: any) {
     handleDeleteWarehouse,
     whStockSearch,
     setWhStockSearch,
-    warehouseStocks,
-    formatNumber
+    warehouseStocks = [],
+    formatNumber,
+    // Additional data passed from parent
+    invoices = [],
+    persons = [],
+    productCategories = [],
+    storeSettings,
+    formatCurrency,
+    setViewingInvoice,
+    setActiveTab,
+    handleApproveWarehouseReceipt,
+    showNotification
   } = props;
+
+  const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | number | null>(null);
+
+  // If a warehouse is selected, render its dedicated dashboard!
+  const activeSelectedWarehouse = useMemo(() => {
+    if (!selectedWarehouseId) return null;
+    return warehouses.find((w: any) => String(w.id) === String(selectedWarehouseId));
+  }, [warehouses, selectedWarehouseId]);
+
+  if (activeSelectedWarehouse) {
+    return (
+      <WarehouseDedicatedDashboard
+        warehouse={activeSelectedWarehouse}
+        warehouses={warehouses}
+        onSelectWarehouse={(id) => setSelectedWarehouseId(id)}
+        onBack={() => setSelectedWarehouseId(null)}
+        products={products}
+        invoices={invoices}
+        persons={persons}
+        warehouseStocks={warehouseStocks}
+        storeSettings={storeSettings}
+        productCategories={productCategories}
+        formatNumber={formatNumber || ((v: any) => String(v))}
+        formatCurrency={formatCurrency || formatNumber || ((v: any) => String(v))}
+        setViewingInvoice={setViewingInvoice}
+        setActiveTab={setActiveTab}
+        handleApproveWarehouseReceipt={handleApproveWarehouseReceipt}
+        handleRecalculateStocks={handleRecalculateStocks}
+        recalculating={recalculating}
+        showNotification={showNotification}
+      />
+    );
+  }
 
   return (
     <>
@@ -226,7 +271,7 @@ export default function WarehouseManager(props: any) {
                                 <th className="py-4 px-6 font-semibold">
                                   وضعیت فعالیت
                                 </th>
-                                <th className="py-4 px-6 font-semibold text-center w-24">
+                                <th className="py-4 px-6 font-semibold text-center w-56">
                                   عملیات
                                 </th>
                               </tr>
@@ -241,10 +286,15 @@ export default function WarehouseManager(props: any) {
                                     {index + 1}
                                   </td>
                                   <td className="py-4 px-6 font-semibold text-gray-950">
-                                    <span className="flex items-center gap-2">
-                                      <Box className="w-4 h-4 text-indigo-500" />
-                                      {wh.name}
-                                    </span>
+                                    <button
+                                      type="button"
+                                      onClick={() => setSelectedWarehouseId(wh.id)}
+                                      className="flex items-center gap-2 hover:text-indigo-600 font-extrabold text-right transition-colors cursor-pointer group"
+                                      title="مشاهده داشبورد، اسناد و موجودی این انبار"
+                                    >
+                                      <Box className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
+                                      <span>{wh.name}</span>
+                                    </button>
                                   </td>
                                   <td className="py-4 px-6 text-sm">
                                     {wh.manager || "-"}
@@ -267,8 +317,17 @@ export default function WarehouseManager(props: any) {
                                     <div className="flex items-center justify-center gap-2">
                                       <button
                                         type="button"
+                                        onClick={() => setSelectedWarehouseId(wh.id)}
+                                        className="px-3 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200/80 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-all cursor-pointer shadow-3xs"
+                                        title="ورود به داشبورد، مشاهده اسناد، کاردکس و موجودی این انبار"
+                                      >
+                                        <LayoutDashboard className="w-3.5 h-3.5 text-indigo-600" />
+                                        <span>داشبورد و اسناد انبار</span>
+                                      </button>
+                                      <button
+                                        type="button"
                                         onClick={() => handleEditWarehouse(wh)}
-                                        className="p-2 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors inline-block cursor-pointer"
+                                        className="p-1.5 text-gray-400 hover:text-indigo-500 hover:bg-indigo-50 rounded-lg transition-colors inline-block cursor-pointer"
                                         title="ویرایش انبار"
                                       >
                                         <Edit2 className="w-4 h-4" />
@@ -284,7 +343,7 @@ export default function WarehouseManager(props: any) {
   </div>
 )
                                         }
-                                        className="p-2 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors inline-block cursor-pointer"
+                                        className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-lg transition-colors inline-block cursor-pointer"
                                         title="حذف انبار"
                                       >
                                         <Trash2 className="w-4 h-4" />
@@ -449,11 +508,22 @@ export default function WarehouseManager(props: any) {
                                           </span>
                                         </td>
                                         <td className="py-4 px-6 text-indigo-900">
-                                          <span className="flex items-center gap-1.5 text-xs text-indigo-950">
-                                            <Box className="w-3.5 h-3.5 text-indigo-500" />
-                                            {associatedWh?.name ||
-                                              "انبار صادرکننده"}
-                                          </span>
+                                          {associatedWh ? (
+                                            <button
+                                              type="button"
+                                              onClick={() => setSelectedWarehouseId(associatedWh.id)}
+                                              className="flex items-center gap-1.5 text-xs text-indigo-950 hover:text-indigo-600 font-extrabold transition-colors cursor-pointer group"
+                                              title="مشاهده داشبورد، اسناد و موجودی این انبار"
+                                            >
+                                              <Box className="w-3.5 h-3.5 text-indigo-500 group-hover:scale-110 transition-transform" />
+                                              <span className="underline decoration-indigo-200 underline-offset-4">{associatedWh.name}</span>
+                                            </button>
+                                          ) : (
+                                            <span className="flex items-center gap-1.5 text-xs text-slate-500">
+                                              <Box className="w-3.5 h-3.5 text-slate-400" />
+                                              انبار صادرکننده
+                                            </span>
+                                          )}
                                         </td>
                                         <td className="py-4 px-6 text-center bg-gray-100/10 font-bold text-gray-800 text-sm">
                                           {formatNumber(stock.physicalStock)}

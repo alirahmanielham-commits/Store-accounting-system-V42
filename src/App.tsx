@@ -755,6 +755,8 @@ export default function App() {
         formatCurrency,
         toPersianDigits,
         formatNumber,
+        handleApprovePurchaseInvoice,
+        handleApproveWarehouseReceipt,
         renderTabContent,
       } = appState;
 
@@ -869,7 +871,15 @@ export default function App() {
                         whStockSearch={whStockSearch}
                         setWhStockSearch={setWhStockSearch}
                         warehouseStocks={warehouseStocks}
-                        formatNumber={formatNumber} />} />
+                        formatNumber={formatNumber}
+                        invoices={invoices}
+                        persons={persons}
+                        productCategories={productCategories}
+                        storeSettings={storeSettings}
+                        formatCurrency={formatCurrency}
+                        setViewingInvoice={setViewingInvoice}
+                        setActiveTab={setActiveTab}
+                        handleApproveWarehouseReceipt={handleApproveWarehouseReceipt} />} />
 <Route path="/account_ledger" element={<AccountLedgerReport
                         showNotification={showNotification}
                         onNavigateToDoc={(docId: any) => {
