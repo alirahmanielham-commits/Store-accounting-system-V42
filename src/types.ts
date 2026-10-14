@@ -164,6 +164,7 @@ export type Product = {
   salePrice?: number;
   discountPercent?: number;
   minStockLevel?: number;
+  maxStock?: number;
   description?: string;
   // Steel & Pipe specific properties (for online scrapers & pricing by weight/branch/meter)
   pipeDiameterInch?: string;
