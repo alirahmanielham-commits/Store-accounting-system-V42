@@ -1115,9 +1115,9 @@ export const executeFiscalYearClosing = async (
   const sysSettings = await getStoreSettings();
   const currency = sysSettings?.currency || 'تومان';
 
-  const yearStart = new Date(currentYear.startDate).getTime();
-  const yearEnd = new Date(currentYear.endDate).getTime();
-  const closingDate = currentYear.endDate || new Date().toISOString();
+  const yearStart = new Date(convertToGregorian(currentYear.startDate)).getTime();
+  const yearEnd = new Date(convertToGregorian(currentYear.endDate)).getTime();
+  const closingDate = convertToGregorian(currentYear.endDate) || new Date().toISOString();
 
   // Find all approved/permanent documents in this fiscal year
   const yearDocs = docs.filter(d => {
@@ -1409,8 +1409,10 @@ export const executeFiscalYearClosing = async (
   let nextYear = null;
   let openingDoc = null;
   if (options?.createNextYear && openingItemsForNextYear.length > 0) {
-    const nextStart = options.nextYearStartDate || new Date(yearEnd + 86400000).toISOString();
-    const nextEnd = options.nextYearEndDate || new Date(yearEnd + 365 * 86400000).toISOString();
+    const rawNextStart = options.nextYearStartDate || new Date(yearEnd + 86400000).toISOString();
+    const rawNextEnd = options.nextYearEndDate || new Date(yearEnd + 365 * 86400000).toISOString();
+    const nextStart = convertToGregorian(rawNextStart);
+    const nextEnd = convertToGregorian(rawNextEnd);
     const nextName = options.nextYearName || `سال مالی جدید (${new Date(nextStart).getFullYear()})`;
 
     nextYear = {

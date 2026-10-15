@@ -17,6 +17,7 @@ import { exec } from 'child_process';
 import { validateData } from '../schemas/validation';
 
 import { requireRole } from '../middleware/auth.middleware';
+import { convertToGregorian } from '../utils/format';
 
 const router = Router();
 
@@ -282,8 +283,10 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
     // 4. Financial Year
     const fyName = fiscalYear?.name?.trim() || 'سال مالی ۱۴۰۴';
     const fyCode = fiscalYear?.code?.trim() || 'FY-1404';
-    const fyStartDate = fiscalYear?.startDate?.trim() || '1404/01/01';
-    const fyEndDate = fiscalYear?.endDate?.trim() || '1404/12/29';
+    const rawStartDate = fiscalYear?.startDate?.trim() || '1404/01/01';
+    const rawEndDate = fiscalYear?.endDate?.trim() || '1404/12/29';
+    const fyStartDate = convertToGregorian(rawStartDate);
+    const fyEndDate = convertToGregorian(rawEndDate);
     const newFiscalYear = {
       id: 'fy-' + Date.now(),
       name: fyName,
@@ -301,6 +304,8 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
       financialYears.push(newFiscalYear);
     } else {
       financialYears[0].status = 'open';
+      financialYears[0].startDate = fyStartDate;
+      financialYears[0].endDate = fyEndDate;
     }
     await setDbData('financial_years', financialYears);
 

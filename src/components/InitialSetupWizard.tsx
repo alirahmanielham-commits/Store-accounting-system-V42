@@ -9,7 +9,7 @@ import {
   FileText, Percent, Globe, AlertTriangle, PlusCircle, Layers,
   Plus, Clock, User, Building, Package, Shield, Lock, Radio
 } from 'lucide-react';
-import { numberToWords, toPersianDigits, toEnglishDigits } from '../utils/format';
+import { numberToWords, toPersianDigits, toEnglishDigits, convertToGregorian, formatDateDisplay } from '../utils/format';
 import DatePickerModule from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -482,8 +482,8 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           fiscalYear: {
             name: fiscalYearName.trim(),
             code: fiscalYearCode.trim(),
-            startDate: fiscalYearStart.trim(),
-            endDate: fiscalYearEnd.trim(),
+            startDate: convertToGregorian(fiscalYearStart.trim()),
+            endDate: convertToGregorian(fiscalYearEnd.trim()),
             description: fiscalYearDesc.trim()
           },
           bankAccount: {
@@ -583,8 +583,8 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           fiscalYear: {
             name: fiscalYearName.trim(),
             code: fiscalYearCode.trim(),
-            startDate: fiscalYearStart.trim(),
-            endDate: fiscalYearEnd.trim(),
+            startDate: convertToGregorian(fiscalYearStart.trim()),
+            endDate: convertToGregorian(fiscalYearEnd.trim()),
             description: fiscalYearDesc.trim()
           },
           bankAccount: {
@@ -1392,6 +1392,9 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                         {formattedDateRangeDescription.startText} تا {formattedDateRangeDescription.endText}
                       </span>
                     )}
+                    <span className="text-[10px] text-slate-400 font-mono block mt-1" dir="ltr">
+                      ذخیره میلادی در دیتابیس: {new Date(convertToGregorian(fiscalYearStart)).toISOString().split('T')[0]} تا {new Date(convertToGregorian(fiscalYearEnd)).toISOString().split('T')[0]}
+                    </span>
                   </div>
                   <div className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-3.5">
                     <span className="text-xs font-bold text-slate-400 block mb-1">نوع تقویم و کد دوره</span>
@@ -2690,6 +2693,9 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                   </div>
                   <div className="text-sm font-black text-slate-900">{fiscalYearName}</div>
                   <div className="text-[11px] text-slate-500 mt-1 font-mono">از {fiscalYearStart} تا {fiscalYearEnd}</div>
+                  <div className="text-[10px] text-slate-400 mt-0.5 font-mono" dir="ltr">
+                    (میلادی در دیتابیس: {new Date(convertToGregorian(fiscalYearStart)).toISOString().split('T')[0]} تا {new Date(convertToGregorian(fiscalYearEnd)).toISOString().split('T')[0]})
+                  </div>
                 </div>
 
                 <div className="bg-slate-50/80 p-4 rounded-2xl border border-slate-200">

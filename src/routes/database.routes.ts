@@ -8,6 +8,7 @@ import { requireRole, requireAuth } from '../middleware/auth.middleware';
 import { decryptValue } from '../utils/crypto';
 import { getDbData, setDbData, invalidateKvCache } from '../db/kv-store';
 import { ensurePostgresTables, ensureBusinessesTable } from '../db/schema-sync';
+import { convertToGregorian } from '../utils/format';
 
 const router = Router();
 const BUSINESSES_FILE = path.join(process.cwd(), 'businesses.json');
@@ -273,8 +274,10 @@ router.post('/api/databases', async (req, res) => {
     // Prepare default fiscal year based on calendar type
     const now = new Date();
     const defaultYear = calType === 'jalali' ? (now.getFullYear() - 621) : now.getFullYear();
-    const fyStartDate = fiscalYear?.startDate?.trim() || (calType === 'jalali' ? `${defaultYear}/01/01` : `${defaultYear}-01-01`);
-    const fyEndDate = fiscalYear?.endDate?.trim() || (calType === 'jalali' ? `${defaultYear}/12/29` : `${defaultYear}-12-31`);
+    const rawStartDate = fiscalYear?.startDate?.trim() || (calType === 'jalali' ? `${defaultYear}/01/01` : `${defaultYear}-01-01`);
+    const rawEndDate = fiscalYear?.endDate?.trim() || (calType === 'jalali' ? `${defaultYear}/12/29` : `${defaultYear}-12-31`);
+    const fyStartDate = convertToGregorian(rawStartDate);
+    const fyEndDate = convertToGregorian(rawEndDate);
     const fyName = fiscalYear?.name?.trim() || (calType === 'jalali' ? `سال مالی ${defaultYear}` : `Fiscal Year ${defaultYear}`);
     const fyCode = fiscalYear?.code?.trim() || `FY-${defaultYear}`;
     const fyDesc = fiscalYear?.description?.trim() || 'سال مالی افتتاحیه کسب و کار';

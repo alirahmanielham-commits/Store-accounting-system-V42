@@ -16,7 +16,7 @@ import {
   ensureFiscalYearId
 } from './coreService';
 import { CompanySettings } from '../types';
-import { convertToGregorian } from '../utils/format';
+import { convertToGregorian, formatDateDisplay } from '../utils/format';
 import { logActivity, createDiffSummary } from '../utils/auditLogger';
 
 
@@ -43,21 +43,53 @@ export const saveStoreSettings = async (settings: CompanySettings): Promise<void
 };
 
 export const getFinancialYears = async () => {
-  return getLocalData<any[]>('financial_years', []);
+  const years = await getLocalData<any[]>('financial_years', []);
+  if (!Array.isArray(years) || years.length === 0) return [];
+
+  // Migration/normalization check: ensure any legacy Jalali date strings are normalized to Gregorian ISO
+  let needsSave = false;
+  const normalized = years.map(y => {
+    if (!y) return y;
+    let s = y.startDate;
+    let e = y.endDate;
+    if (typeof s === 'string' && (s.startsWith('13') || s.startsWith('14')) && !s.includes('T')) {
+      s = convertToGregorian(s);
+      needsSave = true;
+    }
+    if (typeof e === 'string' && (e.startsWith('13') || e.startsWith('14')) && !e.includes('T')) {
+      e = convertToGregorian(e);
+      needsSave = true;
+    }
+    return { ...y, startDate: s, endDate: e };
+  });
+
+  if (needsSave) {
+    try {
+      await saveLocalData('financial_years', normalized);
+    } catch (_) {}
+  }
+
+  return normalized;
 };
 
 export const saveFinancialYears = async (years: any[]) => {
   const oldYears = await getFinancialYears();
-  await saveLocalData('financial_years', years);
+  // Ensure every year's startDate and endDate are stored strictly in Gregorian format
+  const normalizedYears = (years || []).map(y => ({
+    ...y,
+    startDate: y.startDate ? convertToGregorian(y.startDate) : y.startDate,
+    endDate: y.endDate ? convertToGregorian(y.endDate) : y.endDate
+  }));
+  await saveLocalData('financial_years', normalizedYears);
   try {
     await logActivity({
       action: 'SETTINGS_CHANGE',
       entityType: 'financial_years',
       entityId: 'financial_years',
-      details: `بروزرسانی و تغییر در سال‌های مالی (${years.length} سال مالی)`,
+      details: `بروزرسانی و تغییر در سال‌های مالی (${normalizedYears.length} سال مالی)`,
       diffSummary: 'تغییر در پیکربندی سال‌های مالی سیستم',
       oldData: oldYears,
-      newData: years
+      newData: normalizedYears
     });
   } catch (_) {}
 };
@@ -74,9 +106,14 @@ export const addFinancialYear = async (year: any) => {
     throw new Error('تا زمانیکه یک سال مالی باز و فعال وجود دارد، نمی‌توان سال مالی جدیدی تعریف کرد.');
   }
   const now = Date.now();
+  // Strictly enforce Gregorian format in database storage
+  const gregorianStartDate = convertToGregorian(year.startDate);
+  const gregorianEndDate = convertToGregorian(year.endDate);
   const newYear = {
     ...year,
     id: generateId(),
+    startDate: gregorianStartDate,
+    endDate: gregorianEndDate,
     status: 'open',
     createdAt: now,
     updatedAt: now
@@ -121,20 +158,21 @@ export const checkFinancialYear = async (dateStr: string | number) => {
   
   checkDate.setHours(0,0,0,0);
   
-  const startDate = parseToGregorianDate(activeYear.startDate, calendarType);
-  const endDate = parseToGregorianDate(activeYear.endDate, calendarType);
+  // activeYear.startDate and endDate are stored in Gregorian ISO format
+  const startDate = parseToGregorianDate(activeYear.startDate, 'gregorian') || parseToGregorianDate(activeYear.startDate, calendarType);
+  const endDate = parseToGregorianDate(activeYear.endDate, 'gregorian') || parseToGregorianDate(activeYear.endDate, calendarType);
   
   if (startDate) {
     startDate.setHours(0,0,0,0);
     if (checkDate < startDate) {
-      throw new Error(`تاریخ وارد شده (${dateStr}) قبل از شروع سال مالی فعال (${activeYear.startDate}) است.`);
+      throw new Error(`تاریخ وارد شده (${formatDateDisplay(dateStr, calendarType)}) قبل از شروع سال مالی فعال (${formatDateDisplay(activeYear.startDate, calendarType)}) است.`);
     }
   }
   
   if (endDate) {
     endDate.setHours(23,59,59,999);
     if (checkDate > endDate) {
-      throw new Error(`تاریخ وارد شده (${dateStr}) بعد از پایان سال مالی فعال (${activeYear.endDate}) است.`);
+      throw new Error(`تاریخ وارد شده (${formatDateDisplay(dateStr, calendarType)}) بعد از پایان سال مالی فعال (${formatDateDisplay(activeYear.endDate, calendarType)}) است.`);
     }
   }
   

@@ -1,7 +1,8 @@
 import React, { useState, useEffect } from "react";
 import { Calendar as CalendarIcon, Save, Trash2, Edit2, AlertTriangle, Building2, CheckCircle, X, Check, Lock, Unlock, RefreshCw, Plus } from "lucide-react";
 import { getFinancialYears, getStoreSettings, addFinancialYear, closeFinancialYear } from "../../services/dataService";
-import { formatDateDisplay } from "../../utils/format";
+import { formatDateDisplay, convertToGregorian } from "../../utils/format";
+import DateObject from "react-date-object";
 import { motion, AnimatePresence } from "motion/react";
 import YearClosingChecklistModal from "./YearClosingChecklistModal";
 import DatePickerModule from "react-multi-date-picker";
@@ -45,14 +46,22 @@ export default function FinancialYearManager({ showNotification }: any) {
       
       // Auto pre-fill name for convenience
       if (calType === 'jalali') {
-        setName('سال مالی ۱۴۰۵');
-        setStartDate(new Date("2026-03-21T00:00:00Z").toISOString());
-        setEndDate(new Date("2027-03-20T00:00:00Z").toISOString());
+        const obj = new DateObject({ calendar: persian, locale: persian_fa });
+        const yr = obj.year || 1404;
+        setName(`سال مالی ${yr}`);
+        const startObj = new DateObject({ year: yr, month: 1, day: 1, calendar: persian, locale: persian_fa });
+        const endObj = new DateObject({ year: yr, month: 12, day: 29, calendar: persian, locale: persian_fa });
+        startObj.setHour(12);
+        endObj.setHour(12);
+        setStartDate(startObj.toDate().toISOString());
+        setEndDate(endObj.toDate().toISOString());
       } else {
         const yr = new Date().getFullYear();
         setName(`Financial Year ${yr}`);
-        setStartDate(new Date(yr, 0, 1).toISOString());
-        setEndDate(new Date(yr, 11, 31).toISOString());
+        const s = new Date(yr, 0, 1, 12, 0, 0);
+        const e = new Date(yr, 11, 31, 12, 0, 0);
+        setStartDate(s.toISOString());
+        setEndDate(e.toISOString());
       }
     } catch (e) {
       console.error(e);
@@ -78,10 +87,10 @@ export default function FinancialYearManager({ showNotification }: any) {
     setSubmitting(true);
     try {
       const newYear = {
-        name,
-        startDate,
-        endDate,
-        description,
+        name: name.trim(),
+        startDate: convertToGregorian(startDate),
+        endDate: convertToGregorian(endDate),
+        description: description.trim(),
         status: 'open'
       };
       await addFinancialYear(newYear);
@@ -225,7 +234,15 @@ export default function FinancialYearManager({ showNotification }: any) {
                       {calendarType === 'jalali' ? (
                         <DatePicker
                           value={startDate ? new Date(startDate) : ""}
-                          onChange={(d: any) => setStartDate(d?.toDate?.()?.toISOString() || '')}
+                          onChange={(d: any) => {
+                            if (!d) {
+                              setStartDate('');
+                              return;
+                            }
+                            const jsDate = d?.toDate ? d.toDate() : new Date(d);
+                            jsDate.setHours(12, 0, 0, 0);
+                            setStartDate(jsDate.toISOString());
+                          }}
                           calendar={persian}
                           locale={persian_fa}
                           calendarPosition="bottom-right"
@@ -238,12 +255,25 @@ export default function FinancialYearManager({ showNotification }: any) {
                           type="date"
                           required
                           value={startDate ? new Date(startDate).toISOString().split("T")[0] : ""}
-                          onChange={e => setStartDate(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                          onChange={e => {
+                            if (!e.target.value) {
+                              setStartDate('');
+                              return;
+                            }
+                            const d = new Date(e.target.value + 'T12:00:00Z');
+                            setStartDate(d.toISOString());
+                          }}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-left"
                           dir="ltr"
                         />
                       )}
                     </div>
+                    {startDate && (
+                      <div className="text-[11px] text-slate-500 mt-1 font-mono flex items-center justify-between">
+                        <span>نمایش ({calendarType === 'jalali' ? 'شمسی' : 'میلادی'}): {formatDateDisplay(startDate, calendarType)}</span>
+                        <span dir="ltr" className="text-slate-400">ذخیره میلادی: {new Date(convertToGregorian(startDate)).toISOString().split('T')[0]}</span>
+                      </div>
+                    )}
                   </div>
 
                   {/* End Date */}
@@ -253,7 +283,15 @@ export default function FinancialYearManager({ showNotification }: any) {
                       {calendarType === 'jalali' ? (
                         <DatePicker
                           value={endDate ? new Date(endDate) : ""}
-                          onChange={(d: any) => setEndDate(d?.toDate?.()?.toISOString() || '')}
+                          onChange={(d: any) => {
+                            if (!d) {
+                              setEndDate('');
+                              return;
+                            }
+                            const jsDate = d?.toDate ? d.toDate() : new Date(d);
+                            jsDate.setHours(12, 0, 0, 0);
+                            setEndDate(jsDate.toISOString());
+                          }}
                           calendar={persian}
                           locale={persian_fa}
                           calendarPosition="bottom-right"
@@ -266,12 +304,25 @@ export default function FinancialYearManager({ showNotification }: any) {
                           type="date"
                           required
                           value={endDate ? new Date(endDate).toISOString().split("T")[0] : ""}
-                          onChange={e => setEndDate(e.target.value ? new Date(e.target.value).toISOString() : "")}
+                          onChange={e => {
+                            if (!e.target.value) {
+                              setEndDate('');
+                              return;
+                            }
+                            const d = new Date(e.target.value + 'T12:00:00Z');
+                            setEndDate(d.toISOString());
+                          }}
                           className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-sm focus:ring-2 focus:ring-indigo-500 text-left"
                           dir="ltr"
                         />
                       )}
                     </div>
+                    {endDate && (
+                      <div className="text-[11px] text-slate-500 mt-1 font-mono flex items-center justify-between">
+                        <span>نمایش ({calendarType === 'jalali' ? 'شمسی' : 'میلادی'}): {formatDateDisplay(endDate, calendarType)}</span>
+                        <span dir="ltr" className="text-slate-400">ذخیره میلادی: {new Date(convertToGregorian(endDate)).toISOString().split('T')[0]}</span>
+                      </div>
+                    )}
                   </div>
                 </div>
 
@@ -333,8 +384,22 @@ export default function FinancialYearManager({ showNotification }: any) {
                     {years.map(y => (
                       <tr key={y.id} className="hover:bg-slate-50 transition-colors">
                         <td className="p-3 font-black text-slate-700">{y.name}</td>
-                        <td className="p-3 text-slate-600 font-mono text-xs" dir="ltr">{formatDateDisplay(y.startDate, calendarType)}</td>
-                        <td className="p-3 text-slate-600 font-mono text-xs" dir="ltr">{formatDateDisplay(y.endDate, calendarType)}</td>
+                        <td className="p-3 text-slate-600 font-mono text-xs">
+                          <div className="font-bold text-slate-800">{formatDateDisplay(y.startDate, calendarType)}</div>
+                          {calendarType === 'jalali' && (
+                            <div className="text-[10px] text-slate-400 font-mono" dir="ltr">
+                              {new Date(convertToGregorian(y.startDate)).toISOString().split('T')[0]}
+                            </div>
+                          )}
+                        </td>
+                        <td className="p-3 text-slate-600 font-mono text-xs">
+                          <div className="font-bold text-slate-800">{formatDateDisplay(y.endDate, calendarType)}</div>
+                          {calendarType === 'jalali' && (
+                            <div className="text-[10px] text-slate-400 font-mono" dir="ltr">
+                              {new Date(convertToGregorian(y.endDate)).toISOString().split('T')[0]}
+                            </div>
+                          )}
+                        </td>
                         <td className="p-3 text-center">
                           <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-bold ${
                             y.status === 'open' 
