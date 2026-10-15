@@ -9,7 +9,16 @@ import {
   FileText, Percent, Globe, AlertTriangle, PlusCircle, Layers,
   Plus, Clock, User, Building, Package, Shield, Lock, Radio
 } from 'lucide-react';
-import { numberToWords } from '../utils/format';
+import { numberToWords, toPersianDigits, toEnglishDigits } from '../utils/format';
+import DatePickerModule from "react-multi-date-picker";
+import persian from "react-date-object/calendars/persian";
+import persian_fa from "react-date-object/locales/persian_fa";
+import gregorian from "react-date-object/calendars/gregorian";
+import gregorian_en from "react-date-object/locales/gregorian_en";
+import DateObjectModule from "react-date-object";
+
+const DatePicker = (DatePickerModule as any).default || DatePickerModule;
+const DateObject = (DateObjectModule as any).default || DateObjectModule;
 
 interface InitialSetupWizardProps {
   onComplete: () => void;
@@ -75,15 +84,19 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
   // Step 4 / 2: Fiscal Year
   const currentJalaliYear = useMemo(() => {
     try {
-      const d = new Date();
-      return d.getFullYear() - 621;
+      const obj = new DateObject({ calendar: persian, locale: persian_fa });
+      return obj.year || 1404;
     } catch {
       return 1404;
     }
   }, []);
 
   const currentGregorianYear = useMemo(() => {
-    return new Date().getFullYear();
+    try {
+      return new Date().getFullYear();
+    } catch {
+      return 2026;
+    }
   }, []);
 
   const [fiscalYearName, setFiscalYearName] = useState(`سال مالی ${currentJalaliYear}`);
@@ -114,6 +127,47 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
       }
     }
   }, [calendarType, currentJalaliYear, currentGregorianYear]);
+
+  // Dynamic calculated date range description and duration
+  const formattedDateRangeDescription = useMemo(() => {
+    try {
+      if (!fiscalYearStart || !fiscalYearEnd) return null;
+      if (calendarType === 'jalali') {
+        const cleanStart = toEnglishDigits(fiscalYearStart).replace(/-/g, '/');
+        const cleanEnd = toEnglishDigits(fiscalYearEnd).replace(/-/g, '/');
+        const startObj = new DateObject({ date: cleanStart, format: 'YYYY/MM/DD', calendar: persian, locale: persian_fa });
+        const endObj = new DateObject({ date: cleanEnd, format: 'YYYY/MM/DD', calendar: persian, locale: persian_fa });
+        if (startObj.isValid && endObj.isValid) {
+          const msDiff = endObj.toDate().getTime() - startObj.toDate().getTime();
+          const days = Math.round(msDiff / (1000 * 60 * 60 * 24)) + 1;
+          return {
+            startText: `${toPersianDigits(startObj.day)} ${startObj.month.name} ${toPersianDigits(startObj.year)}`,
+            endText: `${toPersianDigits(endObj.day)} ${endObj.month.name} ${toPersianDigits(endObj.year)}`,
+            days,
+            isReversed: days <= 0
+          };
+        }
+      } else {
+        const cleanStart = fiscalYearStart.replace(/\//g, '-');
+        const cleanEnd = fiscalYearEnd.replace(/\//g, '-');
+        const startObj = new DateObject({ date: cleanStart, format: 'YYYY-MM-DD', calendar: gregorian, locale: gregorian_en });
+        const endObj = new DateObject({ date: cleanEnd, format: 'YYYY-MM-DD', calendar: gregorian, locale: gregorian_en });
+        if (startObj.isValid && endObj.isValid) {
+          const msDiff = endObj.toDate().getTime() - startObj.toDate().getTime();
+          const days = Math.round(msDiff / (1000 * 60 * 60 * 24)) + 1;
+          return {
+            startText: `${startObj.month.name} ${startObj.day}, ${startObj.year}`,
+            endText: `${endObj.month.name} ${endObj.day}, ${endObj.year}`,
+            days,
+            isReversed: days <= 0
+          };
+        }
+      }
+    } catch {
+      return null;
+    }
+    return null;
+  }, [fiscalYearStart, fiscalYearEnd, calendarType]);
 
   // Step 5 / 3: Financial Infrastructure (Bank, Cashbox, Warehouse)
   const [bankName, setBankName] = useState('بانک ملت');
@@ -365,6 +419,10 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
       }
       if (!fiscalYearStart.trim() || !fiscalYearEnd.trim()) {
         setError('تاریخ شروع و پایان سال مالی الزامی است.');
+        return;
+      }
+      if (formattedDateRangeDescription?.isReversed) {
+        setError('تاریخ پایان سال مالی باید پس از تاریخ شروع باشد.');
         return;
       }
     } else if ((!isBusinessOnly && step === 5) || (isBusinessOnly && step === 3)) {
@@ -1298,11 +1356,13 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
           {activeStepType === 'fiscal' && (
             <div className="space-y-6 animate-in fade-in duration-300">
               
-              {/* Header Status Card - exactly like FinancialYearManager */}
+              {/* Header Status Card */}
               <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-xs">
                 <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-                  <div className="flex items-center gap-2">
-                    <Calendar className="w-5 h-5 text-indigo-600" />
+                  <div className="flex items-center gap-2.5">
+                    <div className="p-2.5 bg-indigo-50 border border-indigo-100 rounded-xl text-indigo-600">
+                      <Calendar className="w-5 h-5 text-indigo-600" />
+                    </div>
                     <div>
                       <h3 className="font-black text-slate-800 text-base">وضعیت دوره سال مالی سیستم</h3>
                       <p className="text-xs text-slate-500">مشخصات دوره افتتاحیه برای صدور اسناد حسابداری، فاکتورها و عملیات انبار</p>
@@ -1322,75 +1382,160 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <div className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-3.5">
                     <span className="text-xs font-bold text-slate-400 block mb-1">سال مالی فعال</span>
-                    <span className="font-black text-slate-800 text-sm">{fiscalYearName || `سال مالی ${currentJalaliYear}`}</span>
+                    <span className="font-black text-slate-800 text-sm truncate block">{fiscalYearName || `سال مالی ${currentJalaliYear}`}</span>
                   </div>
                   <div className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-3.5">
-                    <span className="text-xs font-bold text-slate-400 block mb-1">محدوده سال مالی فعال</span>
-                    <span className="font-mono font-bold text-slate-700 text-xs" dir="ltr">{fiscalYearStart} تا {fiscalYearEnd}</span>
+                    <span className="text-xs font-bold text-slate-400 block mb-1">محدوده دوره انتخابی</span>
+                    <span className="font-mono font-bold text-slate-800 text-xs block" dir="ltr">{fiscalYearStart} تا {fiscalYearEnd}</span>
+                    {formattedDateRangeDescription && (
+                      <span className="text-[11px] text-indigo-600 font-bold block mt-1 truncate">
+                        {formattedDateRangeDescription.startText} تا {formattedDateRangeDescription.endText}
+                      </span>
+                    )}
                   </div>
                   <div className="bg-slate-50/90 border border-slate-200/80 rounded-xl p-3.5">
-                    <span className="text-xs font-bold text-slate-400 block mb-1">کد شناسایی دوره</span>
-                    <span className="font-mono font-bold text-indigo-700 text-xs" dir="ltr">{fiscalYearCode}</span>
+                    <span className="text-xs font-bold text-slate-400 block mb-1">نوع تقویم و کد دوره</span>
+                    <div className="flex items-center justify-between gap-1 mt-0.5">
+                      <span className="font-mono font-bold text-indigo-700 text-xs" dir="ltr">{fiscalYearCode}</span>
+                      <span className={`px-2 py-0.5 rounded-md text-[10px] font-black ${calendarType === 'jalali' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'}`}>
+                        {calendarType === 'jalali' ? 'شمسی جلالی' : 'میلادی'}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
 
-              {/* Form panel titled "تعریف سال مالی جدید" - identical to FinancialYearManager form */}
+              {/* Form panel titled "تعریف سال مالی جدید" with Interactive DatePickers */}
               <div className="bg-white border border-slate-200 rounded-2xl p-6 shadow-sm">
-                <div className="flex items-center justify-between mb-5 pb-3 border-b border-slate-100">
-                  <h3 className="text-base font-bold text-slate-800 flex items-center gap-2">
+                
+                {/* Header row with Calendar Type Selector & Quick Presets */}
+                <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 mb-6 pb-4 border-b border-slate-100">
+                  <div className="flex items-center gap-2">
                     <Plus className="w-5 h-5 text-emerald-500" />
-                    تعریف سال مالی جدید
-                  </h3>
+                    <div>
+                      <h3 className="text-base font-bold text-slate-800">
+                        تنظیمات تقویم و دوره مالی
+                      </h3>
+                      <p className="text-xs text-slate-500">انتخاب تاریخ شروع و پایان با تقویم تعاملی هوشمند بر پایه {calendarType === 'jalali' ? 'هجری شمسی' : 'میلادی'}</p>
+                    </div>
+                  </div>
 
-                  {/* Quick Preset Buttons */}
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className="text-xs text-slate-400 font-bold ml-1 hidden sm:inline">انتخاب سریع:</span>
-                    {calendarType === 'jalali' ? (
-                      <>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFiscalYearName(`سال مالی ${currentJalaliYear}`);
-                            setFiscalYearCode(`FY-${currentJalaliYear}`);
-                            setFiscalYearStart(`${currentJalaliYear}/01/01`);
-                            setFiscalYearEnd(`${currentJalaliYear}/12/29`);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          سال مالی جاری ({currentJalaliYear})
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setFiscalYearName(`سال مالی ${currentJalaliYear + 1}`);
-                            setFiscalYearCode(`FY-${currentJalaliYear + 1}`);
-                            setFiscalYearStart(`${currentJalaliYear + 1}/01/01`);
-                            setFiscalYearEnd(`${currentJalaliYear + 1}/12/29`);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
-                        >
-                          سال مالی آینده ({currentJalaliYear + 1})
-                        </button>
-                      </>
-                    ) : (
+                  {/* Calendar Mode Switcher & Quick Presets */}
+                  <div className="flex flex-wrap items-center gap-2">
+                    {/* Calendar toggle */}
+                    <div className="inline-flex items-center p-1 bg-slate-100 rounded-xl border border-slate-200">
                       <button
                         type="button"
-                        onClick={() => {
-                          setFiscalYearName(`Fiscal Year ${currentGregorianYear}`);
-                          setFiscalYearCode(`FY-${currentGregorianYear}`);
-                          setFiscalYearStart(`${currentGregorianYear}-01-01`);
-                          setFiscalYearEnd(`${currentGregorianYear}-12-31`);
-                        }}
-                        className="px-2.5 py-1 rounded-lg bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
+                        onClick={() => setCalendarType('jalali')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          calendarType === 'jalali'
+                            ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-200'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
                       >
-                        Fiscal Year {currentGregorianYear}
+                        <Calendar className="w-3.5 h-3.5 text-amber-600" />
+                        <span>تقویم شمسی</span>
                       </button>
-                    )}
+                      <button
+                        type="button"
+                        onClick={() => setCalendarType('gregorian')}
+                        className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                          calendarType === 'gregorian'
+                            ? 'bg-white text-indigo-700 shadow-xs ring-1 ring-slate-200'
+                            : 'text-slate-600 hover:text-slate-900'
+                        }`}
+                      >
+                        <Globe className="w-3.5 h-3.5 text-blue-600" />
+                        <span>تقویم میلادی</span>
+                      </button>
+                    </div>
+
+                    {/* Quick Presets */}
+                    <div className="flex items-center gap-1">
+                      {calendarType === 'jalali' ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFiscalYearName(`سال مالی ${currentJalaliYear}`);
+                              setFiscalYearCode(`FY-${currentJalaliYear}`);
+                              setFiscalYearStart(`${currentJalaliYear}/01/01`);
+                              setFiscalYearEnd(`${currentJalaliYear}/12/29`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
+                            title="سال مالی جاری"
+                          >
+                            سال {toPersianDigits(currentJalaliYear)} کامل
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFiscalYearName(`سال مالی ${currentJalaliYear + 1}`);
+                              setFiscalYearCode(`FY-${currentJalaliYear + 1}`);
+                              setFiscalYearStart(`${currentJalaliYear + 1}/01/01`);
+                              setFiscalYearEnd(`${currentJalaliYear + 1}/12/29`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                            title="سال مالی آینده"
+                          >
+                            سال {toPersianDigits(currentJalaliYear + 1)}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFiscalYearStart(`${currentJalaliYear}/01/01`);
+                              setFiscalYearEnd(`${currentJalaliYear}/06/31`);
+                            }}
+                            className="hidden sm:inline-flex px-2 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-medium transition-colors cursor-pointer"
+                            title="شش‌ماهه اول سال"
+                          >
+                            ۶ ماهه اول
+                          </button>
+                        </>
+                      ) : (
+                        <>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFiscalYearName(`Fiscal Year ${currentGregorianYear}`);
+                              setFiscalYearCode(`FY-${currentGregorianYear}`);
+                              setFiscalYearStart(`${currentGregorianYear}-01-01`);
+                              setFiscalYearEnd(`${currentGregorianYear}-12-31`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            Full {currentGregorianYear}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFiscalYearName(`Fiscal Year ${currentGregorianYear + 1}`);
+                              setFiscalYearCode(`FY-${currentGregorianYear + 1}`);
+                              setFiscalYearStart(`${currentGregorianYear + 1}-01-01`);
+                              setFiscalYearEnd(`${currentGregorianYear + 1}-12-31`);
+                            }}
+                            className="px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 border border-slate-200 text-slate-700 text-xs font-bold transition-colors cursor-pointer"
+                          >
+                            Full {currentGregorianYear + 1}
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setFiscalYearStart(`${currentGregorianYear}-01-01`);
+                              setFiscalYearEnd(`${currentGregorianYear}-06-30`);
+                            }}
+                            className="hidden sm:inline-flex px-2 py-1.5 rounded-xl bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-xs font-medium transition-colors cursor-pointer"
+                          >
+                            H1 (First Half)
+                          </button>
+                        </>
+                      )}
+                    </div>
                   </div>
                 </div>
 
-                <div className="space-y-4">
+                <div className="space-y-5">
+                  {/* Name and Code */}
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-xs font-bold text-slate-700 mb-1.5">عنوان سال مالی *</label>
@@ -1417,32 +1562,116 @@ export default function InitialSetupWizard({ onComplete, onCancel, mode = 'initi
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">تاریخ شروع سال مالی *</label>
-                      <input
-                        type="text"
-                        value={fiscalYearStart}
-                        onChange={e => setFiscalYearStart(e.target.value)}
-                        placeholder={calendarType === 'jalali' ? `${currentJalaliYear}/01/01` : `${currentGregorianYear}-01-01`}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 text-left focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                        dir="ltr"
-                      />
+                  {/* Calendar DatePickers: Start Date and End Date */}
+                  <div className="p-4 bg-slate-50/70 rounded-2xl border border-slate-200/90 space-y-4">
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                        <Calendar className="w-4 h-4 text-indigo-600" />
+                        انتخاب تاریخ با تقویم ({calendarType === 'jalali' ? 'هجری شمسی' : 'میلادی'})
+                      </span>
+                      <span className="text-[11px] font-bold text-slate-400">
+                        برای باز شدن تقویم روی کادر کلیک فرمایید
+                      </span>
                     </div>
 
-                    <div>
-                      <label className="block text-xs font-bold text-slate-700 mb-1.5">تاریخ پایان سال مالی *</label>
-                      <input
-                        type="text"
-                        value={fiscalYearEnd}
-                        onChange={e => setFiscalYearEnd(e.target.value)}
-                        placeholder={calendarType === 'jalali' ? `${currentJalaliYear}/12/29` : `${currentGregorianYear}-12-31`}
-                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 text-left focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 focus:bg-white outline-none"
-                        dir="ltr"
-                      />
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      {/* Start Date Picker */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                          <span>تاریخ شروع دوره مالی *</span>
+                          <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                            {calendarType === 'jalali' ? 'تقویم خورشیدی' : 'Gregorian Calendar'}
+                          </span>
+                        </label>
+                        <div className="custom-datepicker-wrapper w-full">
+                          <DatePicker
+                            value={fiscalYearStart}
+                            onChange={(d: any) => {
+                              if (!d) return;
+                              const raw = d.format ? (calendarType === 'jalali' ? d.format('YYYY/MM/DD') : d.format('YYYY-MM-DD')) : String(d);
+                              setFiscalYearStart(toEnglishDigits(raw));
+                            }}
+                            calendar={calendarType === 'jalali' ? persian : gregorian}
+                            locale={calendarType === 'jalali' ? persian_fa : gregorian_en}
+                            format={calendarType === 'jalali' ? 'YYYY/MM/DD' : 'YYYY-MM-DD'}
+                            calendarPosition="bottom-right"
+                            className="w-full"
+                            containerClassName="w-full"
+                            inputClass="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 text-left focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none shadow-xs cursor-pointer"
+                            portal
+                            zIndex={100050}
+                          />
+                        </div>
+                        {formattedDateRangeDescription?.startText && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-indigo-700 font-bold mt-1.5 bg-indigo-50/60 px-2.5 py-1 rounded-lg border border-indigo-100/60">
+                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>شروع از: {formattedDateRangeDescription.startText}</span>
+                          </div>
+                        )}
+                      </div>
+
+                      {/* End Date Picker */}
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center justify-between">
+                          <span>تاریخ پایان دوره مالی *</span>
+                          <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-100">
+                            {calendarType === 'jalali' ? 'تقویم خورشیدی' : 'Gregorian Calendar'}
+                          </span>
+                        </label>
+                        <div className="custom-datepicker-wrapper w-full">
+                          <DatePicker
+                            value={fiscalYearEnd}
+                            onChange={(d: any) => {
+                              if (!d) return;
+                              const raw = d.format ? (calendarType === 'jalali' ? d.format('YYYY/MM/DD') : d.format('YYYY-MM-DD')) : String(d);
+                              setFiscalYearEnd(toEnglishDigits(raw));
+                            }}
+                            calendar={calendarType === 'jalali' ? persian : gregorian}
+                            locale={calendarType === 'jalali' ? persian_fa : gregorian_en}
+                            format={calendarType === 'jalali' ? 'YYYY/MM/DD' : 'YYYY-MM-DD'}
+                            calendarPosition="bottom-right"
+                            className="w-full"
+                            containerClassName="w-full"
+                            inputClass="w-full bg-white border border-slate-200 rounded-xl px-3.5 py-2.5 text-xs font-mono font-bold text-slate-900 text-left focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-600 outline-none shadow-xs cursor-pointer"
+                            portal
+                            zIndex={100050}
+                          />
+                        </div>
+                        {formattedDateRangeDescription?.endText && (
+                          <div className="flex items-center gap-1.5 text-[11px] text-indigo-700 font-bold mt-1.5 bg-indigo-50/60 px-2.5 py-1 rounded-lg border border-indigo-100/60">
+                            <Clock className="w-3.5 h-3.5 text-indigo-500" />
+                            <span>پایان در: {formattedDateRangeDescription.endText}</span>
+                          </div>
+                        )}
+                      </div>
                     </div>
+
+                    {/* Calculated Duration & Validation Badge */}
+                    {formattedDateRangeDescription && (
+                      <div className="pt-1">
+                        {formattedDateRangeDescription.isReversed ? (
+                          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl flex items-center gap-2 text-xs text-rose-800 font-bold animate-shake">
+                            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0" />
+                            <span>خطا در توالی زمانی: تاریخ پایان سال مالی باید پس از تاریخ شروع باشد.</span>
+                          </div>
+                        ) : (
+                          <div className="p-3 bg-indigo-50/70 border border-indigo-100 rounded-xl flex items-center justify-between text-xs text-indigo-900 font-bold">
+                            <div className="flex items-center gap-2">
+                              <Sparkles className="w-4 h-4 text-indigo-600 shrink-0" />
+                              <span>
+                                طول دوره سال مالی انتخابی: <span className="font-mono text-indigo-700 underline font-black">{formattedDateRangeDescription.days} روز</span> (تقریباً {Math.round(formattedDateRangeDescription.days / 30)} ماه)
+                              </span>
+                            </div>
+                            <span className="text-[11px] px-2 py-0.5 rounded-md bg-white border border-indigo-200 text-indigo-700 font-black">
+                              {formattedDateRangeDescription.days >= 360 && formattedDateRangeDescription.days <= 366 ? 'دوره استاندارد سالانه' : 'دوره مالی متغیر'}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                    )}
                   </div>
 
+                  {/* Description */}
                   <div>
                     <label className="block text-xs font-bold text-slate-700 mb-1.5">توضیحات (اختیاری)</label>
                     <textarea

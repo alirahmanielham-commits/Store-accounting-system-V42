@@ -2814,7 +2814,7 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                 })()}
                 <main className="flex-1 overflow-y-auto min-h-0 p-3 pb-32 md:p-8 md:pb-8 bg-slate-50/50 print:overflow-visible print:bg-white print:p-0">
                   <div
-                    className={`mx-auto transition-all duration-300 print:max-w-none print:w-full print:px-0 ${isFullWidth ? "max-w-full xl:px-14" : "max-w-6xl"}`}
+                    className={`mx-auto transition-all duration-300 print:max-w-none print:w-full print:px-0 ${isFullWidth || activeTab === "person_profile" || activeTab === "person_ledger" || activeTab === "product_card" ? "max-w-full xl:px-4" : "max-w-6xl"}`}
                   >
                     <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
                     {isMobileScreen && !MOBILE_ALLOWED_TABS.has(activeTab) ? (

@@ -887,7 +887,7 @@ export default function PersonProfileView({
     <motion.div
       initial={{ opacity: 0, y: 8 }}
       animate={{ opacity: 1, y: 0 }}
-      className="space-y-6 text-right pb-14 max-w-7xl mx-auto"
+      className="space-y-6 text-right pb-14 w-full"
       dir="rtl"
     >
       {/* 1. TOP HEADER & BREADCRUMB */}
@@ -939,15 +939,36 @@ export default function PersonProfileView({
           <button
             onClick={() => setIsQuickEditOpen(true)}
             className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
+            title="ویرایش سریع فیلدهای اصلی"
           >
             <Edit2 className="w-4 h-4 text-slate-500" />
             ویرایش سریع
           </button>
 
+          {/* Full Edit */}
+          <button
+            onClick={() => onEdit && onEdit(person)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl text-xs font-black transition-all cursor-pointer shadow-2xs"
+            title="ویرایش کامل، جامع و چند مرحله‌ای اطلاعات شخص (هویتی، مالی، تماس، دسته‌بندی و...)"
+          >
+            <Edit2 className="w-4 h-4 text-indigo-600" />
+            ویرایش کامل
+          </button>
+
+          {/* Person Ledger / Account Card Button */}
+          <button
+            onClick={() => onViewLedger && onViewLedger(person.id)}
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-sky-600 hover:bg-sky-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm shadow-sky-200"
+            title="مشاهده دفتر معین و کارت حساب تفصیلی شخص"
+          >
+            <FileText className="w-4 h-4" />
+            کارت حساب و دفتر معین
+          </button>
+
           {/* Official Print Dossier */}
           <button
             onClick={handlePrintDossier}
-            className="flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm shadow-indigo-200"
+            className="flex items-center gap-1.5 px-3.5 py-2 bg-slate-800 hover:bg-slate-900 text-white rounded-xl text-xs font-black transition-all cursor-pointer shadow-sm"
           >
             <Printer className="w-4 h-4" />
             چاپ رسمی پرونده
@@ -1086,6 +1107,14 @@ export default function PersonProfileView({
               <ArrowUpRight className="w-4 h-4" />
               پرداخت وجه
             </button>
+            <button
+              onClick={() => onViewLedger && onViewLedger(person.id)}
+              className="flex items-center gap-1.5 px-3 py-2 bg-sky-50 hover:bg-sky-100 text-sky-800 rounded-xl text-xs font-black transition-colors cursor-pointer border border-sky-200"
+              title="مشاهده دفتر معین و کارت حساب اختصاصی شخص"
+            >
+              <FileText className="w-4 h-4 text-sky-600" />
+              دفتر معین
+            </button>
           </div>
         </div>
 
@@ -1137,6 +1166,23 @@ export default function PersonProfileView({
               <span>کل پرداخت‌ها: </span>
               <span className="font-mono text-slate-700 block">{toPersianDigits(formatCurrency(totalCredits))}</span>
             </div>
+          </div>
+          <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between gap-2">
+            <button
+              onClick={() => onViewLedger && onViewLedger(person.id)}
+              className="flex items-center gap-1 text-xs font-black text-indigo-600 hover:text-indigo-800 transition-colors cursor-pointer group"
+              title="انتقال به صفحه اختصاصی دفتر معین"
+            >
+              <ExternalLink className="w-3.5 h-3.5 group-hover:-translate-x-0.5 transition-transform" />
+              <span>مشاهده دفتر معین و کارت حساب</span>
+            </button>
+            <button
+              onClick={() => setActiveTab('ledger')}
+              className="text-[11px] font-bold text-slate-500 hover:text-slate-800 bg-slate-100 hover:bg-slate-200 px-2.5 py-1 rounded-lg transition-colors cursor-pointer"
+              title="مشاهده ریز صورت‌حساب در همین صفحه"
+            >
+              گردش داخلی
+            </button>
           </div>
         </div>
 
@@ -1363,7 +1409,7 @@ export default function PersonProfileView({
             }`}
           >
             <FileText className="w-4 h-4" />
-            صورت‌حساب و ریز معین
+            کارت حساب و دفتر معین
           </button>
 
           <button
@@ -1868,7 +1914,15 @@ export default function PersonProfileView({
                   <FileText className="w-4 h-4 text-indigo-600" />
                   <span className="text-xs font-black text-slate-800">ریز صورت‌حساب معین و گردش رویدادها</span>
                 </div>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    onClick={() => onViewLedger && onViewLedger(person.id)}
+                    className="flex items-center gap-1.5 px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer shadow-xs"
+                    title="مشاهده صفحه اختصاصی دفتر معین شخص با امکانات پیشرفته و کامل"
+                  >
+                    <ExternalLink className="w-3.5 h-3.5" />
+                    ورود به دفتر معین اختصاصی
+                  </button>
                   <button
                     onClick={handleExportExcel}
                     className="flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer"
@@ -2298,20 +2352,34 @@ export default function PersonProfileView({
                   </label>
                 </div>
 
-                <div className="flex items-center justify-end gap-2 pt-4 border-t border-slate-100">
+                <div className="flex flex-wrap items-center justify-between gap-2 pt-4 border-t border-slate-100">
                   <button
                     type="button"
-                    onClick={() => setIsQuickEditOpen(false)}
-                    className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
+                    onClick={() => {
+                      setIsQuickEditOpen(false);
+                      if (onEdit) onEdit(person);
+                    }}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl cursor-pointer text-xs font-black transition-colors"
+                    title="انتقال به فرم چند مرحله‌ای ویرایش کامل شخص"
                   >
-                    انصراف
+                    <Edit2 className="w-3.5 h-3.5 text-indigo-600" />
+                    ویرایش کامل شخص
                   </button>
-                  <button
-                    type="submit"
-                    className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black cursor-pointer shadow-sm shadow-indigo-100"
-                  >
-                    ذخیره تغییرات
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsQuickEditOpen(false)}
+                      className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl cursor-pointer"
+                    >
+                      انصراف
+                    </button>
+                    <button
+                      type="submit"
+                      className="px-5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-black cursor-pointer shadow-sm shadow-indigo-100"
+                    >
+                      ذخیره تغییرات
+                    </button>
+                  </div>
                 </div>
               </form>
             </motion.div>

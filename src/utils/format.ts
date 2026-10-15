@@ -185,6 +185,13 @@ export function toPersianDigits(str: string | number | undefined | null): string
   });
 }
 
+export function toEnglishDigits(str: string | number | undefined | null): string {
+  if (str === undefined || str === null) return '';
+  return str.toString()
+    .replace(/[۰-۹]/g, (d) => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
+    .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
+}
+
 export function formatDateDisplay(dateInput: string | Date | number | undefined | null, calendarType?: string): string {
   if (!dateInput || dateInput === "-") return "-";
   try {
