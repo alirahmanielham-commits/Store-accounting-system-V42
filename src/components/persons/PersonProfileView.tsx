@@ -539,7 +539,8 @@ export default function PersonProfileView({
         docNumber: inv.invoiceNumber || inv.id,
         description: desc,
         debit,
-        credit
+        credit,
+        items: inv.items || []
       });
     });
 
@@ -585,7 +586,8 @@ export default function PersonProfileView({
         debit: ev.debit,
         credit: ev.credit,
         balance: runningBalance,
-        status: runningBalance > 0 ? 'بدهکار' : runningBalance < 0 ? 'بستانکار' : 'تسویه'
+        status: runningBalance > 0 ? 'بدهکار' : runningBalance < 0 ? 'بستانکار' : 'تسویه',
+        items: ev.items || []
       });
     });
 
@@ -1960,7 +1962,36 @@ export default function PersonProfileView({
                         <td className="py-2.5 px-3 font-mono text-slate-400">{toPersianDigits(idx + 1)}</td>
                         <td className="py-2.5 px-3 font-mono text-slate-600">{formatDateDisplay(row.date)}</td>
                         <td className="py-2.5 px-3 font-mono text-slate-700">{toPersianDigits(row.docNumber || '---')}</td>
-                        <td className="py-2.5 px-3 text-slate-800">{row.description}</td>
+                        <td className="py-2.5 px-3 text-slate-800">
+                          <div>{row.description}</div>
+                          {row.items && row.items.length > 0 && (
+                            <div className="mt-1.5 p-2 bg-slate-50 rounded-xl border border-slate-200 text-xs">
+                              <div className="font-black text-slate-700 mb-1 flex items-center gap-1 text-[11px]">
+                                <Package className="w-3.5 h-3.5 text-indigo-600" />
+                                <span>اقلام فاکتور ({toPersianDigits(row.items.length)} قلم):</span>
+                              </div>
+                              <div className="space-y-1">
+                                {row.items.map((it: any, i: number) => {
+                                  const itName = it.productName || it.name || it.title || "کالا";
+                                  const itQty = Number(it.quantity ?? it.count ?? 1);
+                                  const itUnit = it.selectedUnit || it.unit || "عدد";
+                                  const itPrice = Number(it.unitPrice ?? it.price ?? it.fee ?? 0);
+                                  const itTotal = Number(it.lineTotal ?? it.totalPrice ?? it.total ?? (itQty * itPrice));
+                                  return (
+                                    <div key={i} className="flex flex-wrap items-center justify-between gap-2 text-[11px] text-slate-600 border-b border-slate-100 last:border-0 pb-0.5">
+                                      <span className="font-bold text-slate-800">{toPersianDigits(i + 1)}. {itName}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-mono text-slate-500" dir="ltr">{toPersianDigits(itQty)} {itUnit}</span>
+                                        <span className="font-mono text-slate-500" dir="ltr">فی: {toPersianDigits(formatCurrency(itPrice))}</span>
+                                        <span className="font-mono font-bold text-indigo-700" dir="ltr">{toPersianDigits(formatCurrency(itTotal))}</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          )}
+                        </td>
                         <td className="py-2.5 px-3 text-left font-mono font-bold text-rose-600">
                           {row.debit > 0 ? toPersianDigits(formatCurrency(row.debit)) : '-'}
                         </td>

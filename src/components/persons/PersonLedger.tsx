@@ -65,7 +65,8 @@ export default function PersonLedger(props: any) {
   const { 
     Users, Plus, Search, Filter, ArrowUpDown, MoreVertical, Edit, Trash2, 
     X, Check, AlertCircle, ChevronDown, ChevronUp, Download, Upload, 
-    Copy, Barcode, Eye, FileText, Image, CheckCircle, Save, DollarSign, Calculator, CalculatorIcon, ArrowRight, Printer, Share2
+    Copy, Barcode, Eye, FileText, Image, CheckCircle, Save, DollarSign, Calculator, CalculatorIcon, ArrowRight, Printer, Share2,
+    Package
   } = lucide;
 
   const [filterStartDate, setFilterStartDate] = useState("");
@@ -159,6 +160,36 @@ export default function PersonLedger(props: any) {
         {formatted}
       </span>
     );
+  };
+
+  const resolveInvoiceItems = (entry: any): any[] => {
+    if (!entry) return [];
+    if (entry.items && Array.isArray(entry.items) && entry.items.length > 0) {
+      return entry.items;
+    }
+    if (entry.invoice?.items && Array.isArray(entry.invoice.items) && entry.invoice.items.length > 0) {
+      return entry.invoice.items;
+    }
+    const targetId = String(entry.rawItem?.sourceId || entry.rawItem?.id || entry.id || '').replace(/^inv-/, '');
+    const targetRef = String(entry.refId || '').trim();
+    const actualInvoice = (invoices || []).find((i: any) => 
+      !String(i?.type || '').startsWith('warehouse_') &&
+      i?.type !== 'warehouse_receipt' &&
+      i?.type !== 'warehouse_remittance' &&
+      ((targetId && (String(i?.id) === targetId || String(i?.invoiceNumber) === targetId)) ||
+      (targetRef && targetRef !== '-' && (String(i?.invoiceNumber) === targetRef || String(i?.id) === targetRef)) ||
+      (entry.rawItem?.documentNumber && String(i?.invoiceNumber) === String(entry.rawItem.documentNumber)))
+    );
+    if (actualInvoice?.items && Array.isArray(actualInvoice.items) && actualInvoice.items.length > 0) {
+      return actualInvoice.items;
+    }
+    if (entry.rawItem?.items && Array.isArray(entry.rawItem.items) && entry.rawItem.items.length > 0) {
+      const first = entry.rawItem.items[0];
+      if (first && (first.productId || first.productName || first.name || first.unitPrice != null || first.price != null || first.quantity != null)) {
+        return entry.rawItem.items;
+      }
+    }
+    return [];
   };
 
   const handleDownloadPdf = (size: 'A4' | 'A5') => {
@@ -504,7 +535,8 @@ export default function PersonLedger(props: any) {
                               inv?.type !== 'warehouse_remittance' &&
                               (String(inv?.id) === String(doc.sourceId) || 
                               String(inv?.invoiceNumber) === String(doc.sourceId) ||
-                              String(inv?.invoiceNumber) === String(doc.documentNumber))
+                              String(inv?.invoiceNumber) === String(doc.documentNumber) ||
+                              (doc.refNumber && String(inv?.invoiceNumber) === String(doc.refNumber)))
                             );
                             if (matchedInvoice) {
                                 if (matchedInvoice.type === "sale" || !matchedInvoice.type) typeName = "فاکتور فروش";
@@ -526,7 +558,7 @@ export default function PersonLedger(props: any) {
                           
                           return {
                             id: doc.id,
-                            refId: doc.documentNumber?.toString() || "-",
+                            refId: doc.documentNumber?.toString() || (matchedInvoice?.invoiceNumber ? String(matchedInvoice.invoiceNumber) : "-"),
                             date: doc.date || new Date().toISOString(),
                             
                             type: typeName,
@@ -535,6 +567,7 @@ export default function PersonLedger(props: any) {
                             credit,
                             rawItem: doc,
                             invoice: matchedInvoice,
+                            items: matchedInvoice?.items || (doc.items && doc.items[0]?.productId ? doc.items : []),
                             entryType,
                           };
                         });
@@ -584,6 +617,7 @@ export default function PersonLedger(props: any) {
                             credit,
                             rawItem: { ...inv, sourceId: inv.id },
                             invoice: inv,
+                            items: inv.items || [],
                             entryType: 'invoice',
                           };
                         });
@@ -1388,13 +1422,18 @@ export default function PersonLedger(props: any) {
                                         const isDeb = entry.runningBalance > 0;
                                         const isCred = entry.runningBalance < 0;
                                         const statusLabel = isDeb ? "بدهکار به ما" : isCred ? "بستانکار از ما" : "تسویه / بی‌حساب";
+                                        const invoiceItems = resolveInvoiceItems(entry);
+                                        const itemsSummary = invoiceItems && invoiceItems.length > 0
+                                          ? invoiceItems.map((it: any) => `${it.productName || it.name || "کالا"} (${it.quantity ?? it.count ?? 1} ${it.selectedUnit || it.unit || "عدد"} - فی: ${formatDecimalForExcel(it.unitPrice ?? it.price ?? it.fee ?? 0, activeSettings)} - کل: ${formatDecimalForExcel(it.lineTotal ?? it.totalPrice ?? it.total ?? ((it.quantity ?? 1) * (it.unitPrice ?? 0)), activeSettings)})`).join(" | ")
+                                          : "-";
 
                                         return {
                                           "ردیف": idx + 1,
                                           "تاریخ": getLedgerDateOnly(entry.date),
                                           "نوع رویداد": entry.type || "-",
-                                          "شماره سند/فاکتور": entry.number || entry.invoiceNumber || "-",
-                                          "شرح رویداد مالی": entry.description || "-",
+                                          "شماره سند/فاکتور": entry.refId || entry.number || entry.invoiceNumber || "-",
+                                          "شرح رویداد مالی": entry.desc || entry.description || "-",
+                                          "اقلام فاکتور (تعداد و مبلغ)": itemsSummary,
                                           [`بدهکار / افزایش تعهد (${curr})`]: formatDecimalForExcel(entry.debit || 0, activeSettings),
                                           [`بستانکار / کاهش تعهد (${curr})`]: formatDecimalForExcel(entry.credit || 0, activeSettings),
                                           [`مانده نهایی (${curr})`]: formatDecimalForExcel(Math.abs(entry.runningBalance || 0), activeSettings),
@@ -1500,6 +1539,47 @@ export default function PersonLedger(props: any) {
                                                   </span>
                                                 </div>
                                               </div>
+
+                                              {(ledgerTab === "detailed" || ledgerTab === "items") && entry.entryType === "invoice" && (() => {
+                                                const invoiceItems = resolveInvoiceItems(entry);
+                                                if (!invoiceItems || invoiceItems.length === 0) return null;
+                                                const activeSettings = storeSettings || getActiveStoreSettings();
+                                                const currency = activeSettings?.currency || "تومان";
+                                                return (
+                                                  <div className="mt-2 pt-2 border-t border-slate-100 flex flex-col gap-1.5">
+                                                    <div className="flex items-center justify-between text-[11px] font-black text-slate-700">
+                                                      <span className="flex items-center gap-1 text-indigo-600">
+                                                        <Package className="w-3.5 h-3.5" />
+                                                        <span>اقلام فاکتور ({toPersianDigits(invoiceItems.length)} قلم)</span>
+                                                      </span>
+                                                      <span className="text-[10px] text-slate-400 font-normal">مبالغ به {currency}</span>
+                                                    </div>
+                                                    <div className="space-y-1.5 bg-slate-50 p-2.5 rounded-xl border border-slate-100">
+                                                      {invoiceItems.map((item: any, i: number) => {
+                                                        const itemName = item.productName || item.name || item.title || "کالا";
+                                                        const itemQty = Number(item.quantity ?? item.count ?? 1);
+                                                        const itemUnit = item.selectedUnit || item.unit || "عدد";
+                                                        const itemUnitPrice = Number(item.unitPrice ?? item.price ?? item.fee ?? 0);
+                                                        const itemTotal = Number(item.lineTotal ?? item.totalPrice ?? item.total ?? (itemQty * itemUnitPrice));
+                                                        return (
+                                                          <div key={i} className="flex flex-col gap-1 pb-1.5 border-b border-slate-200/60 last:border-0 last:pb-0 text-xs">
+                                                            <div className="flex justify-between items-start font-bold text-slate-800">
+                                                              <span>{toPersianDigits(i + 1)}. {itemName}</span>
+                                                              <span className="font-mono text-indigo-700 font-black shrink-0 mr-2" dir="ltr">
+                                                                {toPersianDigits(formatNumber(itemTotal))}
+                                                              </span>
+                                                            </div>
+                                                            <div className="flex justify-between items-center text-[10.5px] text-slate-500 font-medium">
+                                                              <span>مقدار: <strong className="text-slate-700">{toPersianDigits(itemQty)} {itemUnit}</strong></span>
+                                                              <span dir="ltr">فی: {toPersianDigits(formatNumber(itemUnitPrice))}</span>
+                                                            </div>
+                                                          </div>
+                                                        );
+                                                      })}
+                                                    </div>
+                                                  </div>
+                                                );
+                                              })()}
                                               
 
                                             </div>
@@ -1709,7 +1789,7 @@ export default function PersonLedger(props: any) {
                                                   </span>
                                                 </div>
                                               </td>
-                                              <td className="border-2 border-slate-700 py-3 px-6 align-top max-w-sm print:py-3 print:px-2">
+                                              <td className="border-2 border-slate-700 py-3 px-6 align-top min-w-[340px] print:py-3 print:px-2">
                                                 <div className="flex flex-wrap items-center gap-2">
                                                   <span
                                                     className={`w-max px-2.5 py-0.5 rounded text-[11px] font-extrabold border shadow-sm whitespace-nowrap ${badgeColor}`}
@@ -1721,45 +1801,98 @@ export default function PersonLedger(props: any) {
                                                       cleanDescription(entry.desc, entry.type),
                                                     )}
                                                   </span>
-                                                  {ledgerTab === "detailed" &&
-                                                    entry.entryType ===
-                                                      "invoice" &&
-                                                    entry.rawItem?.items &&
-                                                    entry.rawItem.items.length >
-                                                      0 && (
-                                                      <div className="mt-1.5 w-full text-[11px] text-gray-500 bg-gray-50 p-2 rounded-lg border border-gray-100 text-right shadow-sm">
-                                                        <div className="font-bold mb-1 text-gray-700">
-                                                          اقلام رویداد مالی:
+                                                  {(ledgerTab === "detailed" || ledgerTab === "items") &&
+                                                    entry.entryType === "invoice" && (() => {
+                                                      const invoiceItems = resolveInvoiceItems(entry);
+                                                      if (!invoiceItems || invoiceItems.length === 0) return null;
+                                                      const activeSettings = storeSettings || getActiveStoreSettings();
+                                                      const currency = activeSettings?.currency || "تومان";
+                                                      const totalItemsCount = invoiceItems.reduce((acc: number, it: any) => acc + Number(it.quantity ?? it.count ?? 1), 0);
+                                                      const totalItemsSum = invoiceItems.reduce((acc: number, it: any) => {
+                                                        const q = Number(it.quantity ?? it.count ?? 1);
+                                                        const p = Number(it.unitPrice ?? it.price ?? it.fee ?? 0);
+                                                        return acc + Number(it.lineTotal ?? it.totalPrice ?? it.total ?? (q * p));
+                                                      }, 0);
+
+                                                      return (
+                                                        <div className="mt-2.5 w-full bg-slate-50/90 rounded-xl border border-slate-200/90 overflow-hidden shadow-2xs text-right">
+                                                          <div className="bg-slate-100/90 px-3 py-1.5 border-b border-slate-200 flex items-center justify-between text-[11px] font-black text-slate-700">
+                                                            <span className="flex items-center gap-1.5">
+                                                              <Package className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                                                              <span>اقلام فاکتور ({toPersianDigits(invoiceItems.length)} قلم - {toPersianDigits(totalItemsCount)} واحد)</span>
+                                                            </span>
+                                                            <span className="text-[10px] text-slate-500 font-bold">
+                                                              واحد مبالغ: {currency}
+                                                            </span>
+                                                          </div>
+                                                          <div className="overflow-x-auto">
+                                                            <table className="w-full text-right text-[11px] border-collapse">
+                                                              <thead>
+                                                                <tr className="bg-slate-100/70 text-slate-600 font-extrabold border-b border-slate-200 text-[10.5px]">
+                                                                  <th className="py-1.5 px-2 text-center w-8">#</th>
+                                                                  <th className="py-1.5 px-2 text-right">شرح کالا / خدمات</th>
+                                                                  <th className="py-1.5 px-2 text-center whitespace-nowrap">تعداد / مقدار</th>
+                                                                  <th className="py-1.5 px-2 text-left whitespace-nowrap">قیمت واحد (فی)</th>
+                                                                  <th className="py-1.5 px-2.5 text-left whitespace-nowrap">مبلغ کل</th>
+                                                                </tr>
+                                                              </thead>
+                                                              <tbody className="divide-y divide-slate-200/70 bg-white font-medium">
+                                                                {invoiceItems.map((item: any, i: number) => {
+                                                                  const itemName = item.productName || item.name || item.title || "کالای بدون عنوان";
+                                                                  const itemQty = Number(item.quantity ?? item.count ?? 1);
+                                                                  const itemUnit = item.selectedUnit || item.unit || "عدد";
+                                                                  const itemUnitPrice = Number(item.unitPrice ?? item.price ?? item.fee ?? 0);
+                                                                  const itemTotal = Number(item.lineTotal ?? item.totalPrice ?? item.total ?? (itemQty * itemUnitPrice));
+
+                                                                  return (
+                                                                    <tr key={i} className="hover:bg-indigo-50/30 transition-colors">
+                                                                      <td className="py-1.5 px-2 text-center text-slate-400 font-mono text-[10px]">
+                                                                        {toPersianDigits(i + 1)}
+                                                                      </td>
+                                                                      <td className="py-1.5 px-2 text-slate-800 font-bold text-[11.5px] leading-tight">
+                                                                        {itemName}
+                                                                        {item.description && (
+                                                                          <span className="block text-[10px] text-slate-400 font-normal mt-0.5">
+                                                                            {item.description}
+                                                                          </span>
+                                                                        )}
+                                                                      </td>
+                                                                      <td className="py-1.5 px-2 text-center whitespace-nowrap">
+                                                                        <span className="inline-flex items-center gap-1 font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[10.5px]" dir="ltr">
+                                                                          <span>{itemUnit}</span>
+                                                                          <span className="font-sans font-bold">{toPersianDigits(itemQty)}</span>
+                                                                        </span>
+                                                                      </td>
+                                                                      <td className="py-1.5 px-2 text-left whitespace-nowrap text-slate-700 font-mono font-bold text-[11px]" dir="ltr">
+                                                                        {itemUnitPrice > 0 ? toPersianDigits(formatNumber(itemUnitPrice)) : <span className="text-slate-300">۰</span>}
+                                                                      </td>
+                                                                      <td className="py-1.5 px-2.5 text-left whitespace-nowrap font-black text-indigo-700 font-mono text-[11.5px]" dir="ltr">
+                                                                        {itemTotal > 0 ? toPersianDigits(formatNumber(itemTotal)) : <span className="text-slate-300">۰</span>}
+                                                                      </td>
+                                                                    </tr>
+                                                                  );
+                                                                })}
+                                                              </tbody>
+                                                              {invoiceItems.length > 1 && (
+                                                                <tfoot>
+                                                                  <tr className="bg-slate-50 font-bold border-t border-slate-200 text-[10.5px]">
+                                                                    <td colSpan={3} className="py-1 px-2 text-slate-500">
+                                                                      مجموع اقلام: {toPersianDigits(invoiceItems.length)} سطر
+                                                                    </td>
+                                                                    <td className="py-1 px-2 text-left text-slate-500">
+                                                                      جمع:
+                                                                    </td>
+                                                                    <td className="py-1 px-2.5 text-left font-black text-slate-800 font-mono text-[11px]" dir="ltr">
+                                                                      {toPersianDigits(formatNumber(totalItemsSum))}
+                                                                    </td>
+                                                                  </tr>
+                                                                </tfoot>
+                                                              )}
+                                                            </table>
+                                                          </div>
                                                         </div>
-                                                        <ul className="list-disc list-inside space-y-1 marker:text-gray-400">
-                                                          {entry.rawItem.items.map(
-                                                            (
-                                                              item: any,
-                                                              i: number,
-                                                            ) => (
-                                                              <li
-                                                                key={i}
-                                                                className="flex justify-between items-center border-b border-gray-200/60 pb-1 last:border-0 last:pb-0"
-                                                              >
-                                                                <span className="font-medium text-gray-800">
-                                                                  {item.name}
-                                                                </span>
-                                                                <span
-                                                                  className="font-sans font-bold text-gray-500 text-[10px]"
-                                                                  dir="ltr"
-                                                                >
-                                                                  {toPersianDigits(
-                                                                    item.quantity,
-                                                                  )}{" "}
-                                                                  {item.selectedUnit || item.unit ||
-                                                                    "عدد"}
-                                                                </span>
-                                                              </li>
-                                                            ),
-                                                          )}
-                                                        </ul>
-                                                      </div>
-                                                    )}
+                                                      );
+                                                    })()}
                                                 </div>
                                               </td>
                                               <td className="border-2 border-slate-700 py-3 px-4 text-left align-top print:py-3 print:px-2">
