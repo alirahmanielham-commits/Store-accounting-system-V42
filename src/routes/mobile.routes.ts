@@ -8,6 +8,22 @@ const getMobilePermissionsMap = (): Record<string, any> => {
 };
 
 /**
+ * @route   GET /api/v1/mobile/download
+ * @desc    Get mobile application metadata / manifest download
+ */
+mobileRouter.get("/download", (req: Request, res: Response) => {
+  return res.json({
+    success: true,
+    appName: "سامانه همراه تراز - Standalone Mobile App",
+    version: "2.5.0",
+    packageType: "PWA / React Native Web App",
+    apiEndpoint: "/api/v1/mobile",
+    downloadUrl: "/manifest.json",
+    instructions: "برای نصب اپلیکیشن همراه، گزینه Add to Home Screen را در مرورگر انتخاب نمایید یا توکن API را در نرم‌افزار نیتیو وارد فرمایید.",
+  });
+});
+
+/**
  * @route   POST /api/v1/mobile/auth/login
  * @desc    Authenticate mobile app user and issue JWT bearer token
  */

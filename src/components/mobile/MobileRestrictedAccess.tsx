@@ -1,183 +1,106 @@
 import React from "react";
 import {
-  CreditCard,
-  BookOpen,
-  ShoppingBag,
-  Users,
-  Coins,
-  ArrowRight,
+  Smartphone,
   ShieldAlert,
+  Download,
   Laptop,
+  Lock,
+  ExternalLink,
   CheckCircle2,
-  Receipt,
-  Package,
-  UserCheck,
-  FileSpreadsheet,
+  Server,
+  Key,
 } from "lucide-react";
 
 interface MobileRestrictedAccessProps {
   currentTab?: string;
-  setActiveTab: (tab: string) => void;
+  setActiveTab?: (tab: string) => void;
 }
 
-export default function MobileRestrictedAccess({
-  currentTab,
-  setActiveTab,
-}: MobileRestrictedAccessProps) {
-  const allowedFeatures = [
-    {
-      id: "create_receive_receipt",
-      title: "ثبت دریافت و پرداخت",
-      subtitle: "رسیدهای نقدی، بانکی، کارتخوان و واریزی",
-      icon: Receipt,
-      gradient: "from-teal-600 to-emerald-600",
-      tag: "خزانه‌داری",
-      quickTabs: [
-        { id: "keyboard_receipt", label: "ثبت سریع کیبوردی" },
-        { id: "create_receive_receipt", label: "ثبت دریافت وجه" },
-        { id: "create_pay_receipt", label: "ثبت پرداخت وجه" },
-      ],
-    },
-    {
-      id: "receive_check_form",
-      title: "ثبت و مدیریت چک",
-      subtitle: "ثبت چک دریافتی، پرداختی و کارتابل چک‌ها",
-      icon: BookOpen,
-      gradient: "from-sky-600 to-blue-600",
-      tag: "اسناد تجاری",
-      quickTabs: [
-        { id: "receive_check_form", label: "ثبت چک جدید" },
-        { id: "received_checks_page", label: "کارتابل چک‌ها" },
-      ],
-    },
-    {
-      id: "create_sale",
-      title: "ثبت فاکتورها و ثبت کالا",
-      subtitle: "صدور سریع فاکتور فروش، خرید و تعریف کالا",
-      icon: ShoppingBag,
-      gradient: "from-emerald-600 to-teal-700",
-      tag: "بازرگانی",
-      quickTabs: [
-        { id: "create_sale", label: "فاکتور فروش" },
-        { id: "create_purchase", label: "فاکتور خرید" },
-        { id: "products", label: "ثبت کالا" },
-      ],
-    },
-    {
-      id: "persons",
-      title: "ثبت شخص، کارت حساب و پروفایل",
-      subtitle: "بانک اشخاص، گردش دفتر معین و پرونده مشتری",
-      icon: Users,
-      gradient: "from-purple-600 to-indigo-600",
-      tag: "طرف‌حساب‌ها",
-      quickTabs: [
-        { id: "persons", label: "لیست و ثبت شخص" },
-        { id: "person_ledger", label: "کارت حساب (معین)" },
-        { id: "person_profile", label: "پروفایل شخص" },
-      ],
-    },
-    {
-      id: "debts_credits",
-      title: "گزارش بدهکاران و بستانکاران",
-      subtitle: "مانده حساب اشخاص، مطالبات و اخطارهای معوق",
-      icon: Coins,
-      gradient: "from-rose-600 to-pink-600",
-      tag: "گزارشات مالی",
-      quickTabs: [
-        { id: "debts_credits", label: "گزارش بدهکار / بستانکار" },
-        { id: "debtors_showcase", label: "ویترین مطالبات" },
-      ],
-    },
-  ];
-
+export default function MobileRestrictedAccess({}: MobileRestrictedAccessProps) {
   return (
-    <div className="min-h-[70vh] flex flex-col items-center justify-center p-4 max-w-lg mx-auto text-right select-none pb-28" dir="rtl">
-      {/* Alert Header Box */}
-      <div className="w-full bg-gradient-to-br from-amber-500/10 via-amber-500/5 to-transparent border border-amber-500/30 rounded-3xl p-5 mb-5 shadow-sm text-center relative overflow-hidden">
-        <div className="w-14 h-14 bg-gradient-to-tr from-amber-500 to-amber-600 text-white rounded-2xl flex items-center justify-center mx-auto mb-3 shadow-md shadow-amber-500/20">
-          <Laptop className="w-7 h-7" />
+    <div
+      className="min-h-[80vh] flex flex-col items-center justify-center p-5 max-w-md mx-auto text-center select-none py-12"
+      dir="rtl"
+    >
+      {/* Central Lock Icon & Banner */}
+      <div className="relative mb-6">
+        <div className="w-20 h-20 rounded-3xl bg-gradient-to-tr from-rose-600 via-rose-500 to-amber-500 text-white flex items-center justify-center mx-auto shadow-xl shadow-rose-600/30">
+          <Smartphone className="w-10 h-10" />
         </div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-amber-500/15 text-amber-800 text-[11px] font-black mb-2 border border-amber-500/20">
-          <ShieldAlert className="w-3.5 h-3.5" />
-          <span>عملیات ویژه نسخه دسکتاپ</span>
+        <div className="absolute -bottom-2 -right-2 w-8 h-8 rounded-full bg-slate-900 text-amber-400 border-2 border-white flex items-center justify-center shadow-md">
+          <Lock className="w-4 h-4" />
         </div>
-        <h3 className="text-base font-black text-slate-900 mb-1.5">
-          این بخش صرفاً در نسخه رایانه (دسکتاپ) قابل دسترسی است
-        </h3>
-        <p className="text-xs text-slate-600 font-medium leading-relaxed">
-          برای حفظ دقت حسابداری و عملکرد بهینه در موبایل، دسترسی به این فرم یا گزارش کلان محدود شده است. لطفاً از یکی از ۵ عملیات پرکاربرد زیر استفاده نمایید:
-        </p>
       </div>
 
-      {/* 5 Permitted Mobile Operations */}
-      <div className="w-full space-y-3">
-        <div className="flex items-center justify-between px-1 mb-1">
-          <span className="text-xs font-black text-slate-800">
-            عملیات مجاز در حالت موبایل (۵ بخش اصلی):
-          </span>
-          <span className="text-[10px] font-bold text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full">
-            دسترسی سریع
-          </span>
-        </div>
+      {/* Security Tag */}
+      <div className="inline-flex items-center gap-1.5 px-3.5 py-1 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-xs font-black mb-3 shadow-3xs">
+        <ShieldAlert className="w-4 h-4 text-rose-600" />
+        <span>دسترسی مرورگر همراه غیرفعال است</span>
+      </div>
 
-        {allowedFeatures.map((feat) => {
-          const Icon = feat.icon;
-          return (
-            <div
-              key={feat.id}
-              className="bg-white border border-slate-200/90 hover:border-indigo-400/80 rounded-2xl p-3.5 shadow-xs transition-all active:scale-[0.99] group"
-            >
-              <div
-                onClick={() => setActiveTab(feat.id)}
-                className="flex items-center justify-between cursor-pointer"
-              >
-                <div className="flex items-center gap-3">
-                  <div
-                    className={`w-11 h-11 rounded-xl bg-gradient-to-tr ${feat.gradient} text-white flex items-center justify-center shadow-sm shrink-0`}
-                  >
-                    <Icon className="w-5 h-5" />
-                  </div>
-                  <div>
-                    <div className="flex items-center gap-2">
-                      <h4 className="text-xs font-black text-slate-900 group-hover:text-indigo-600 transition-colors">
-                        {feat.title}
-                      </h4>
-                      <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-600">
-                        {feat.tag}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 font-medium mt-0.5 line-clamp-1">
-                      {feat.subtitle}
-                    </p>
-                  </div>
-                </div>
+      {/* Main Title */}
+      <h2 className="text-lg font-black text-slate-900 mb-2 leading-snug">
+        ورود از مرورگر موبایل غیرفعال می‌باشد
+      </h2>
 
-                <div className="w-8 h-8 rounded-xl bg-slate-50 group-hover:bg-indigo-50 text-slate-400 group-hover:text-indigo-600 flex items-center justify-center transition-colors shrink-0">
-                  <ArrowRight className="w-4 h-4 transform rotate-180" />
-                </div>
+      {/* Description */}
+      <p className="text-xs text-slate-600 font-medium leading-relaxed mb-6 max-w-sm">
+        جهت حفظ امنیت حساب‌ها، جلوگیری از بروز خطاهای داده‌ای و انطباق با سیاست‌های امنیتی، دسترسی مستقیم مرورگر وب در موبایل مسدود شده است. ارتباط همراه صرفاً از طریق <strong className="text-slate-900 font-black">اپلیکیشن اختصاصی همراه (Mobile App)</strong> امکان‌پذیر است.
+      </p>
+
+      {/* Action Cards */}
+      <div className="w-full space-y-3.5 text-right mb-6">
+        {/* Card 1: Mobile App */}
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-indigo-900 to-slate-900 text-white shadow-md border border-indigo-700/50">
+          <div className="flex items-center justify-between mb-2">
+            <div className="flex items-center gap-2.5">
+              <div className="w-8 h-8 rounded-xl bg-indigo-500/30 text-indigo-300 flex items-center justify-center shrink-0">
+                <Download className="w-4 h-4" />
               </div>
-
-              {/* Sub tabs pills */}
-              <div className="mt-2.5 pt-2.5 border-t border-slate-100 flex items-center gap-1.5 flex-wrap">
-                {feat.quickTabs.map((q) => (
-                  <button
-                    key={q.id}
-                    type="button"
-                    onClick={() => setActiveTab(q.id)}
-                    className="text-[10px] font-bold px-2 py-1 rounded-lg bg-slate-50 hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 border border-slate-200/60 transition-colors cursor-pointer"
-                  >
-                    {q.label}
-                  </button>
-                ))}
+              <div>
+                <h4 className="text-xs font-black text-white">دانلود و نصب اپلیکیشن همراه</h4>
+                <p className="text-[10px] text-indigo-200/80 mt-0.5">ارتباط مستقیم آنلاین با دیتابیس سیستم</p>
               </div>
             </div>
-          );
-        })}
+            <span className="text-[9px] font-black px-2 py-0.5 rounded-md bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+              API آنلاین
+            </span>
+          </div>
+          <p className="text-[11px] text-indigo-100/90 font-medium leading-relaxed mb-3">
+            با نصب اپلیکیشن همراه، می‌توانید با احراز هویت توکن JWT و شناسه دستگاه، به فرم‌های مجاز دسترسی داشته باشید.
+          </p>
+          <a
+            href="/api/v1/mobile/download"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl font-black text-xs transition-colors flex items-center justify-center gap-1.5 shadow-sm text-center"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>دانلود فایل اپلیکیشن همراه (Android / iOS PWA)</span>
+          </a>
+        </div>
+
+        {/* Card 2: Desktop PC Access */}
+        <div className="p-4 rounded-2xl bg-white border border-slate-200 shadow-xs">
+          <div className="flex items-center gap-3 mb-1.5">
+            <div className="w-8 h-8 rounded-xl bg-slate-100 text-slate-700 flex items-center justify-center shrink-0">
+              <Laptop className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-xs font-black text-slate-900">استفاده از رایانه (دسکتاپ)</h4>
+              <p className="text-[10px] text-slate-500 mt-0.5">برای دسترسی به تمام امکانات وب‌سامانه</p>
+            </div>
+          </div>
+          <p className="text-[11px] text-slate-500 font-medium leading-relaxed">
+            برای ثبت اسناد کامل حسابداری، انبارگردانی، گزارشات کلان و مدیریت سیستم از رایانه استفاده فرمایید.
+          </p>
+        </div>
       </div>
 
-      {/* Footer Info */}
-      <div className="mt-6 text-center text-[11px] text-slate-400 font-medium leading-relaxed px-4">
-        جهت ثبت اسناد دوبل حسابداری، بستن حساب‌ها، انبارگردانی دوره‌ای و تغییر تنظیمات سامانه از رایانه استفاده نمایید.
+      {/* Security Footer Note */}
+      <div className="flex items-center justify-center gap-2 text-[11px] text-slate-400 font-medium">
+        <Server className="w-3.5 h-3.5 text-slate-400" />
+        <span>درگاه API همراه فعال و تحت نظر مدیریت سیستم می‌باشد</span>
       </div>
     </div>
   );

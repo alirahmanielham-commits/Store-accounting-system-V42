@@ -2817,7 +2817,7 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                     className={`mx-auto transition-all duration-300 print:max-w-none print:w-full print:px-0 ${isFullWidth || activeTab === "person_profile" || activeTab === "person_ledger" || activeTab === "product_card" ? "max-w-full xl:px-4" : "max-w-6xl"}`}
                   >
                     <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
-                    {isMobileScreen && !MOBILE_ALLOWED_TABS.has(activeTab) ? (
+                    {isMobileScreen ? (
                       <MobileRestrictedAccess currentTab={activeTab} setActiveTab={setActiveTab} />
                     ) : user && activeTab !== "welcome_page" && !hasPagePermission(user, activeTab) ? (
                       <AccessRestricted activeTab={activeTab} user={user} onGoHome={() => setActiveTab("welcome_page")} />
@@ -2888,14 +2888,6 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
 </div>
 </div>
 )}
-<Suspense fallback={null}>
-  <MobileRestrictedMenu
-    activeTab={activeTab}
-    setActiveTab={setActiveTab}
-    setIsPersonModalOpen={setIsPersonModalOpen}
-    setIsProductModalOpen={setIsProductModalOpen}
-  />
-</Suspense>
 <LiveAdminAlertToast user={user} setActiveTab={setActiveTab} />
 <Suspense fallback={null}><SalePaymentModal
       isOpen={appState.isSalePaymentModalOpen}
