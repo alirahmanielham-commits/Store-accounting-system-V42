@@ -5284,7 +5284,6 @@ const getInvoiceNumber = (typeOverride?: string) => {
     // ---- Sale Invoice Validation Gates ----
     if (!isDraft && actualType === "sale") {
       updateAppProcessing('بررسی گیت‌های ۷ گانه اعتبارسنجی فاکتور فروش...');
-      await new Promise(r => setTimeout(r, 20));
       const validationErrors: string[] = [];
 
       // 1. فعال و معتبر بودن مشتری
@@ -5452,8 +5451,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
         return false;
       }
       
-      updateAppProcessing('تمامی ۷ گیت اعتبارسنجی تایید شدند. شروع تراکنش (BEGIN TRANSACTION)...');
-      await new Promise(r => setTimeout(r, 20));
+      updateAppProcessing('تمامی ۷ گیت اعتبارسنجی تایید شدند. شروع ثبت فاکتور...');
     }
 
     // ---- Purchase Return Validation Gates (Partial) ----
@@ -5869,10 +5867,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
       // Step 1: Pre-save header & transaction begin
       if (payload.type === "sale") {
-        updateAppProcessing("مرحله ۱ از ۷ (BEGIN TRANSACTION): بررسی گیت‌های فروش و ثبت هدر فاکتور...");
-        await new Promise(r => setTimeout(r, 40));
-        updateAppProcessing(`مرحله ۲ از ۷: ثبت اقلام و ردیف‌های فاکتور فروش (${payload.items?.length || 0} قلم کالا)...`);
-        await new Promise(r => setTimeout(r, 20));
+        updateAppProcessing(`ثبت اقلام و ردیف‌های فاکتور فروش (${payload.items?.length || 0} قلم کالا)...`);
       } else if (payload.type === "purchase") {
         updateAppProcessing("مرحله ۱ از ۶ (BEGIN TRANSACTION): تایید گیت‌های ۵‌گانه و ثبت هدر فاکتور خرید...");
         await new Promise(r => setTimeout(r, 40));
@@ -5956,23 +5951,10 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
       // Type-specific follow-up steps:
       if (payload.type === "sale") {
-        updateAppProcessing("مرحله ۳ از ۷: به‌روزرسانی کاردکس کالا...");
-        await new Promise(r => setTimeout(r, 40));
-
-        updateAppProcessing("مرحله ۴ از ۷: ثبت سند حسابداری (بدهکار مشتری - بستانکار فروش)...");
+        updateAppProcessing("ثبت سند حسابداری و تثبیت نهایی فاکتور فروش...");
         if (!isDraft && addedInvoice) {
           await syncInvoiceAccountingDocument(addedInvoice);
         }
-        await new Promise(r => setTimeout(r, 40));
-
-        updateAppProcessing("مرحله ۵ از ۷: به‌روزرسانی کاردکس شخص (مشتری)...");
-        await new Promise(r => setTimeout(r, 30));
-
-        updateAppProcessing("مرحله ۶ از ۷: ثبت گزارش تغییرات (Audit Log)...");
-        await new Promise(r => setTimeout(r, 30));
-
-        updateAppProcessing("مرحله ۷ از ۷: تثبیت نهایی و تغییر وضعیت فاکتور (COMMIT)...");
-        await new Promise(r => setTimeout(r, 20));
       } else if (payload.type === "purchase") {
         const isApproved = !isDraft && savePayload.status === "approved";
         if (isApproved) {
@@ -6358,7 +6340,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
         }
         setSuccessMsg("");
         setPreviewInvoiceData(null); // Clear preview modal
-      }, 1500);
+      }, payload.type === "sale" ? 50 : 1500);
       return addedInvoice || true;
     } catch (error: any) {
       console.error("Error submitting invoice, rolling back operations...", error);

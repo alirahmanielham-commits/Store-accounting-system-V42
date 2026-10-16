@@ -2903,6 +2903,9 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
       }}
       persons={appState.persons}
       setViewingInvoice={appState.setViewingInvoice}
+      calculatePersonBalance={appState.calculatePersonBalance}
+      storeSettings={appState.storeSettings}
+      showNotification={appState.showNotification}
   /></Suspense>
   <PricingWizardModal
             pricingWizardInvoice={pricingWizardInvoice} setPricingWizardInvoice={setPricingWizardInvoice} pricingWizardItems={pricingWizardItems} setPricingWizardItems={setPricingWizardItems} products={products} storeSettings={storeSettings} toPersianDigits={toPersianDigits} formatDateDisplay={formatDateDisplay} formatNumber={formatNumber} setSuccessMsg={setSuccessMsg} fetchProducts={fetchProducts} updateProduct={updateProduct} List={List}

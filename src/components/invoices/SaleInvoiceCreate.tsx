@@ -437,17 +437,43 @@ export default function SaleInvoiceCreate(props: any) {
 
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if inside an active textarea unless it's Ctrl+S or Ctrl+Enter
+      const target = e.target as HTMLElement | null;
+      const isTextArea = target?.tagName?.toLowerCase() === "textarea";
+
       if (e.key === "F4") {
         e.preventDefault();
         setIsBulkModalOpen(true);
-      } else if (e.key === "F2") {
+      } else if (e.key === "F2" || (e.ctrlKey && e.key.toLowerCase() === "s") || (e.ctrlKey && e.key === "Enter")) {
         e.preventDefault();
         handleTriggerSaveWithValidation();
+      } else if (e.key === "F1" && !isTextArea) {
+        e.preventDefault();
+        const searchInput = document.querySelector<HTMLInputElement>(
+          'input[placeholder*="بارکد"], input[placeholder*="جستجو"], input[placeholder*="کالا"]'
+        );
+        if (searchInput) {
+          searchInput.focus();
+          searchInput.select();
+        }
+      } else if (e.key === "F3" && !isTextArea) {
+        e.preventDefault();
+        if (typeof handleAddBlankRow === "function") {
+          handleAddBlankRow();
+        }
+      } else if (e.key === "F8" && !isTextArea) {
+        e.preventDefault();
+        if (typeof setIsPersonModalOpen === "function") {
+          setIsPersonModalOpen(true);
+        }
+      } else if (e.key === "F9" && !isTextArea) {
+        e.preventDefault();
+        setInvoiceLayoutMode(prev => prev === "pos" ? "official" : "pos");
       }
     };
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [items, customerId, invoiceNumber, date, rowStockErrors, isNegativeStockAllowed, invoiceLayoutMode]);
+  }, [items, customerId, invoiceNumber, date, rowStockErrors, isNegativeStockAllowed, invoiceLayoutMode, handleTriggerSaveWithValidation, handleAddBlankRow, setIsPersonModalOpen]);
 
   return (
 <motion.div
@@ -567,20 +593,81 @@ export default function SaleInvoiceCreate(props: any) {
                 </div>
               </div>
 
-              {/* POS Keyboard Shortcut Banner */}
-              {invoiceLayoutMode === 'pos' && (
-                <div className="mb-6 p-3 bg-indigo-50/70 border border-indigo-100 rounded-2xl flex flex-wrap items-center justify-between text-xs text-indigo-950 font-bold gap-3">
-                  <div className="flex items-center gap-2">
-                    <Zap className="w-4 h-4 text-indigo-600 shrink-0" />
-                    <span>حالت فروش سریع بارکدی فعال است (ویژه دخل و سرعت عملکرد بالا)</span>
-                  </div>
-                  <div className="flex flex-wrap items-center gap-2.5 text-[11px] text-indigo-800">
-                    <span className="bg-white px-2 py-0.5 rounded-md border border-indigo-200 font-mono">F4: انتخاب گروهی</span>
-                    <span className="bg-white px-2 py-0.5 rounded-md border border-indigo-200 font-mono">F2: ثبت و تسویه</span>
-                    <span className="bg-white px-2 py-0.5 rounded-md border border-indigo-200 font-mono">Enter روی بارکد: ثبت خودکار</span>
+              {/* Ultra-Fast POS / Shortcut Quick Actions Banner */}
+              <div className="mb-6 p-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2.5 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="p-1.5 rounded-lg bg-amber-400/20 text-amber-300">
+                    <Zap className="w-4 h-4" />
+                  </span>
+                  <div>
+                    <span className="font-black text-amber-300 block">فروش سریع با کلیدهای میانبر:</span>
+                    <span className="text-[10px] text-slate-300">برای کارایی و سرعت حداکثری بدون نیاز به ماوس</span>
                   </div>
                 </div>
-              )}
+
+                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
+                  <button
+                    type="button"
+                    onClick={handleTriggerSaveWithValidation}
+                    className="inline-flex items-center gap-1 bg-indigo-600/60 hover:bg-indigo-600 text-white px-2.5 py-1 rounded-xl border border-indigo-400/30 transition-all cursor-pointer font-bold shadow-xs"
+                    title="ثبت و تسویه فاکتور (F2 یا Ctrl+S)"
+                  >
+                    <kbd className="font-mono bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded text-[10px] font-black">F2</kbd>
+                    <span>ثبت و تسویه</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const searchInput = document.querySelector<HTMLInputElement>(
+                        'input[placeholder*="بارکد"], input[placeholder*="جستجو"], input[placeholder*="کالا"]'
+                      );
+                      searchInput?.focus();
+                      searchInput?.select();
+                    }}
+                    className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-100 px-2 py-1 rounded-xl border border-white/10 transition-all cursor-pointer font-bold"
+                    title="جستجوی کالا / اسکن بارکد (F1)"
+                  >
+                    <kbd className="font-mono bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-black">F1</kbd>
+                    <span>جستجوی کالا</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleAddBlankRow}
+                    className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-100 px-2 py-1 rounded-xl border border-white/10 transition-all cursor-pointer font-bold"
+                    title="افزودن سطر خالی جدید (F3)"
+                  >
+                    <kbd className="font-mono bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-black">F3</kbd>
+                    <span>سطر جدید</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsBulkModalOpen(true)}
+                    className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-100 px-2 py-1 rounded-xl border border-white/10 transition-all cursor-pointer font-bold"
+                    title="انتخاب کاتالوگی و افزودن دسته‌ای (F4)"
+                  >
+                    <kbd className="font-mono bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-black">F4</kbd>
+                    <span>کاتالوگ گروهی</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsPersonModalOpen?.(true)}
+                    className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-100 px-2 py-1 rounded-xl border border-white/10 transition-all cursor-pointer font-bold"
+                    title="انتخاب یا ایجاد مشتری جدید (F8)"
+                  >
+                    <kbd className="font-mono bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-black">F8</kbd>
+                    <span>طرف حساب</span>
+                  </button>
+
+                  <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-xl border border-emerald-400/20 font-bold text-[10px]">
+                    <kbd className="font-mono bg-emerald-500/40 text-emerald-100 px-1.5 py-0.5 rounded font-black">Ctrl+Enter</kbd>
+                    <span>ثبت فوری</span>
+                  </span>
+                </div>
+              </div>
 
               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                 <div>
