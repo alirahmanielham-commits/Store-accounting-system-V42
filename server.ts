@@ -22,6 +22,7 @@ import migrationRoutes from './src/routes/migration.routes';
 import reportsRoutes from './src/routes/reports.routes';
 import systemRoutes from './src/routes/system.routes';
 import miscRoutes from './src/routes/misc.routes';
+import { mobileRouter } from './src/routes/mobile.routes';
 
 // Initialize Sentry only when DSN is provided to prevent 700ms+ startup penalty
 let sentryModule: any = null;
@@ -131,6 +132,7 @@ async function startServer() {
   app.use(reportsRoutes);
   app.use(systemRoutes);
   app.use(miscRoutes);
+  app.use('/api/v1/mobile', mobileRouter);
 
   if (sentryModule) {
     sentryModule.setupExpressErrorHandler(app);

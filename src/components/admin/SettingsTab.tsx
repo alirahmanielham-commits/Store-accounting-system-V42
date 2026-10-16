@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
 import { SmsTemplateEditor } from './SmsTemplateEditor';
 import ZyXelGsmSettings from '../messaging/ZyXelGsmSettings';
+import MobilePermissionsManager from './MobilePermissionsManager';
 import { setGlobalStoreSettings, formatNumber } from '../../utils/format';
 
 export default function SettingsTab(props: any) {
@@ -117,6 +118,11 @@ export default function SettingsTab(props: any) {
                             id: "notification",
                             label: "پیامک و ارتباطات",
                             icon: Bell,
+                          },
+                          {
+                            id: "mobile_permissions",
+                            label: "دسترسی‌های اپلیکیشن همراه",
+                            icon: Smartphone,
                           },
                           {
                             id: "inventory_control",
@@ -2501,6 +2507,13 @@ export default function SettingsTab(props: any) {
                           )}
                         </div>
                       )}
+
+                        {settingsTab === "mobile_permissions" && (
+                          <MobilePermissionsManager
+                            users={props.users || []}
+                            showNotification={props.showNotification}
+                          />
+                        )}
                         </div>
                       </div>
                     </div>

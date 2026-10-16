@@ -1,107 +1,147 @@
-# Mobile Optimization & Mobile Restricted Navigation Implementation Plan
+# Standalone Mobile App & Granular Mobile Permission Manager Specification
 
-Refine and optimize the application's mobile experience so that when opened on mobile screens, only the 5 mobile-ready modules are displayed via an enhanced, beautiful floating bottom navigation bar and sub-action sheet, with a friendly guide page for desktop-only features.
+A complete architectural blueprint and technical plan for building a standalone, online Mobile App (React Native / PWA) connected in real-time to the central accounting database server, complete with a granular Admin Mobile Access Control Manager in the main system.
 
-## User Review & Critical Decisions
+---
+
+## User Review & Confirmed Decisions
 
 > [!IMPORTANT]
-> The following choices were confirmed in Phase 1 clarification:
+> The following core architectural decisions were confirmed in Phase 1 clarification:
 
-- **Confirmed Decision 1 (Permitted Mobile Pages)**: Access in mobile view is strictly tailored to the 5 mobile-optimized modules:
-  1. **دریافت و پرداخت** (Receipts & Payments - Cash/Bank/POS/Keyboard entry)
-  2. **ثبت و مدیریت چک** (Checks - Receive, Pay, Checks Portfolio & Dashboard)
-  3. **فاکتورها و کالا** (Invoices & Products - Sales, Purchase, Products/Services list)
-  4. **اشخاص و حساب** (Persons & Accounts - Persons list, Ledger Card, Profile)
-  5. **بدهکاران و بستانکاران** (Debtors & Creditors - Debtors report, Receivables showcase)
-- **Confirmed Decision 2 (Mobile Menu Visual Design)**: Modern floating bottom navigation bar with prominent category icons, high-contrast active states, upper quick-action bar for rapid switching between sub-items, and smooth bottom sheet for category exploration.
-- **Confirmed Decision 3 (Desktop Page Restriction Behavior)**: When attempting to access desktop-only features (e.g. accounting double-entry vouchers, year closing, complex inventory stocktakes, or system settings) on mobile screens, render a beautiful, helpful guide screen (`MobileRestrictedAccess`) with instant shortcuts back to the 5 permitted mobile modules.
+- **Confirmed Decision 1 (Platform & Framework)**: Modern PWA / React Native mobile app client communicating via REST API / JSON endpoints directly with the central backend server (`server.ts`).
+- **Confirmed Decision 2 (Admin Mobile Access Manager)**: A dedicated Mobile Permissions Matrix in the desktop Admin Panel allowing system administrators to grant or revoke specific mobile operations (receipts, check entry, sales invoices, stock check, person ledger, debtor reports) per user and per role.
+- **Confirmed Decision 3 (Data Synchronization Policy)**: 100% Real-time Online API architecture with zero local stale state caching, ensuring immediate database consistency across desktop and mobile devices.
+- **Confirmed Decision 4 (Authentication & Security)**: Secure JWT token-based authentication paired with Device ID registration and hardware fingerprinting to prevent unauthorized mobile access.
 
 ---
 
 ## 1. Overview & Core Concept
 
-- **What It Does**: Automatically detects mobile viewports ($\le 768\text{px}$) and renders a sleek, thumb-friendly touch interface. Non-mobile-optimized views gracefully redirect to the `MobileRestrictedAccess` component, keeping mobile users focused on quick field operations (issuing receipts, recording checks, sales invoices, looking up debtors, or searching customer ledger cards).
-- **Target Audience / Persona**: Sales representatives, store clerks, accountants on mobile devices, and business owners doing quick field entries and debt checks on the go.
-- **Key Value**: Eliminates horizontal scroll clutter, broken wide tables, and tiny desktop buttons on mobile devices while providing a 100% operational mobile workflow for core daily tasks.
+- **What It Delivers**:
+  1. **Central Server API Endpoints (`/api/v1/mobile/*`)**: High-performance RESTful JSON endpoints protected by JWT bearer authentication, role-based middleware, and mobile permission verification.
+  2. **Desktop Admin Mobile Permissions Panel (`/admin/mobile-permissions`)**: A matrix interface for system administrators to configure mobile permissions for every user (e.g. enabling sales rep A to issue sales invoices and view debtor lists, but disabling check management or purchasing).
+  3. **Standalone Mobile Client Application**: A responsive touch-optimized mobile web client / PWA engineered for high-speed field operations with biometric/JWT login, fast barcode scanning, real-time product search, receipt generation, and customer ledger lookups.
 
 ---
 
-## 2. User Experience & Visual Design
-
-- **Key User Flows**:
-  1. **Mobile App Launch / Navigation**: User opens the app on a smartphone. A clean floating bottom navigation bar displays the 5 key module buttons (`دریافت/پرداخت`, `ثبت چک`, `فاکتور و کالا`, `شخص و حساب`, `بدهکار/بستانکار`).
-  2. **Sub-Item Quick Switcher**: Above the main bottom bar, a horizontal sub-action pill bar lets the user switch between views in the active module with 1 tap (e.g. switching between "ثبت دریافت" and "ثبت پرداخت").
-  3. **Expanded Bottom Sheet**: Tapping "بیشتر" or tapping an active bottom tab opens a smooth backdrop-blurred bottom sheet showing all available sub-tasks with descriptions, badges, and quick module switchers.
-  4. **Desktop Feature Redirection**: If a deep link or internal action triggers a desktop-only tab (e.g., `chart_of_accounts`), `App.tsx` displays `MobileRestrictedAccess`, explaining why the feature is desktop-optimized and providing 1-tap shortcuts back to the 5 allowed mobile hubs.
-
-- **Visual Identity & Theme**:
-  - **Color Palette**: High-contrast, domain-native Persian slate canvas with vivid module accent gradients (Teal for Receipts, Sky Blue for Checks, Emerald for Invoices, Indigo/Purple for Persons, Rose for Debts).
-  - **Typography**: IRANYekanX / Vazirmatn Persian fonts with tabular numerals (`tabular-nums`) for currency values and dates.
-  - **Ergonomics**: Touch hitboxes $\ge 44\text{px}$, aggregate sticky elements $\le 15\%$ of viewport height, zero two-line button text wrapping (`whitespace-nowrap shrink-0`).
-
----
-
-## 3. Key Product Decisions & Trade-Offs
-
-- **Decision 1: Strict Mobile Tab Whitelist vs. Desktop Layout Collapse**
-  - *Chosen Approach*: Enforce `MOBILE_ALLOWED_TABS` set in `MobileRestrictedMenu.tsx` and render `MobileRestrictedAccess` for unlisted tabs on mobile viewports.
-  - *Why*: Unoptimized complex desktop data grids (e.g. multi-column financial journal entries, ledger trees) distort viewports on mobile screens, leading to data entry errors and poor UX.
-- **Decision 2: Floating Bottom Navigation + Sub-Actions Bar**
-  - *Chosen Approach*: Two-tier bottom bar anchored to the bottom thumb zone with smooth Framer Motion transitions.
-  - *Why*: Leaves maximum screen area for input forms and lists while keeping all sub-pages accessible within 1–2 thumb taps.
-
----
-
-## 4. Technical Architecture & Component Structure
+## 2. Technical System Architecture
 
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│                          Mobile Viewport                        │
-│                   (window.innerWidth <= 768px)                   │
-└─────────────────────────────────────────────────────────────────┘
-                                 │
-                 ┌───────────────┴───────────────┐
-                 ▼                               ▼
-       [ Allowed Mobile Tab ]            [ Restricted Desktop Tab ]
-                 │                               │
-                 ▼                               ▼
-     Render Mobile Form / View        Render MobileRestrictedAccess
-    (Receipts, Checks, Invoices,      (Friendly guide & quick shortcuts)
-      Persons, Debtors Report)
-                 │                               │
-                 └───────────────┬───────────────┘
-                                 │
-                                 ▼
-                     MobileRestrictedMenu
-         ┌───────────────────────┴───────────────────────┐
-         ▼                                               ▼
-  Upper Quick-Action Bar                       Fixed Bottom Bar
-  (Fast sub-item switching)                  (5 Core Module Tabs)
-         │                                               │
-         └───────────────────────┬───────────────────────┘
-                                 ▼
-                       Expanded Bottom Sheet
-                    (Full list of sub-actions)
+┌─────────────────────────────────────────────────────────────────────────┐
+│                        Standalone Mobile App                            │
+│                 (PWA / React Native Mobile Client)                      │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   │ HTTPS / REST API
+                                   │ Bearer JWT Token + X-Device-ID
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                          Central Express Server                         │
+│                              (server.ts)                                │
+│  ┌────────────────────────┐    ┌─────────────────────────────────────┐  │
+│  │ Mobile Auth Middleware │ ──►│ Mobile Access Enforcement Middleware│  │
+│  │ (JWT & Device Check)   │    │  (Checks mobile_permissions table)  │  │
+│  └────────────────────────┘    └─────────────────────────────────────┘  │
+└─────────────────────────────────────────────────────────────────────────┘
+                                   │
+                                   ▼
+┌─────────────────────────────────────────────────────────────────────────┐
+│                       Central Database Storage                          │
+│               (PostgreSQL / SQLite / Local Store Data)                  │
+│   • users                     • mobile_permissions                      │
+│   • mobile_registered_devices • invoices, receipts, checks, persons    │
+└─────────────────────────────────────────────────────────────────────────┘
 ```
-
-- **Core Files & Changes**:
-  - `src/components/MobileRestrictedMenu.tsx`: Enhance categories, clean up sub-item lists, optimize touch target sizes ($\ge 44\text{px}$), refine Persian typography, ensure single-line text formatting, and adjust sticky heights.
-  - `src/components/mobile/MobileRestrictedAccess.tsx`: Polish layout, update shortcut cards to align perfectly with `MOBILE_ALLOWED_TABS`, and ensure clear visual feedback.
-  - `src/App.tsx` & Layouts: Ensure `MOBILE_ALLOWED_TABS` check correctly filters active tab when in mobile viewport, showing `MobileRestrictedAccess` for restricted tabs while hiding heavy desktop sidebars on mobile screens.
 
 ---
 
-## 5. Implementation Roadmap
+## 3. Mobile Permissions Matrix Schema & Admin Interface
 
-1. **Phase 1: Update Mobile Allowed Tabs & Permission Checks**
-   - Ensure `MOBILE_ALLOWED_TABS` contains all relevant mobile sub-items (including `keyboard_receipt`, `create_receive_receipt`, `create_pay_receipt`, `list_receive_receipt`, `list_pay_receipt`, `receive_check_form`, `received_checks_page`, `paid_checks_page`, `check_panel`, `create_sale`, `create_purchase`, `products`, `list_sale`, `list_purchase`, `persons`, `person_ledger`, `person_profile`, `debts_credits`, `debtors_showcase`).
+### A. Data Schema (`mobile_permissions` & `mobile_registered_devices`)
 
-2. **Phase 2: Polish Mobile Navigation & Bottom Sheet Components**
-   - Fine-tune `MobileRestrictedMenu.tsx` styling, Framer Motion animations, touch target hitboxes, font sizes, and contrast.
-   - Prevent layout shift and maintain sticky height caps within ergonomic thumb zones.
+```typescript
+// Mobile Permission Entity Structure
+export interface MobileUserPermission {
+  userId: string;
+  role: "admin" | "accountant" | "cashier" | "sales_rep" | "user";
+  
+  // Treasury Permissions
+  canCreateReceiveReceipt: boolean; // ثبت دریافت وجه
+  canCreatePayReceipt: boolean;     // ثبت پرداخت وجه
+  canViewReceiptsList: boolean;     // لیست رسیدها
+  canUseKeyboardReceipt: boolean;   // ثبت سریع کیبوردی
 
-3. **Phase 3: Refine MobileRestrictedAccess Component**
-   - Ensure the warning/guide component looks exceptional, with clear IRANYekanX typography, smooth gradient icons, and direct CTA buttons to allowed mobile routes.
+  // Commercial / Sales Permissions
+  canCreateSaleInvoice: boolean;    // صدور فاکتور فروش
+  canCreatePurchaseInvoice: boolean;// ثبت فاکتور خرید
+  canViewInvoicesList: boolean;     // مشاهده لیست فاکتورها
+  canQuickPriceInquiry: boolean;    // استعلام سریع قیمت
+  canManageProducts: boolean;       // ثبت و تعریف کالا
 
-4. **Phase 4: Verification & Compilation**
-   - Test build with `compile_applet` and verify zero syntax/type errors.
+  // Checks Permissions
+  canReceiveCheck: boolean;         // ثبت چک دریافتی
+  canPayCheck: boolean;             // ثبت چک پرداختی
+  canViewCheckDashboard: boolean;   // مشاهده داشبورد و کارتابل چک‌ها
+
+  // Persons & Ledger Permissions
+  canManagePersons: boolean;        // ثبت و ویرایش طرف‌حساب
+  canViewPersonLedger: boolean;     // مشاهده دفتر معین و کارت حساب
+  canViewPersonProfile: boolean;    // مشاهده پرونده شخص
+
+  // Reports & CRM
+  canViewDebtorsReport: boolean;    // مشاهده گزارش بدهکاران/بستانکاران
+  canViewDebtorsShowcase: boolean;  // مشاهده ویترین مطالبات معوق
+
+  // Device & Security Rules
+  allowedDeviceIds?: string[];      // شناسه دستگاه‌های مجاز
+  maxActiveSessions?: number;       // حداکثر نشست‌های همزمان
+  updatedAt: string;
+  updatedBy: string;
+}
+```
+
+### B. Admin Mobile Control Panel Features (`src/components/admin/MobilePermissionsManager.tsx`)
+
+1. **User Selection Drawer**: Select any registered user from the system.
+2. **Preset Role Templates**:
+   - *فروشنده میدانی (Field Sales Rep)*: Sale Invoice Creation, Customer Search, Ledger View, Debtors List, Receive Receipt.
+   - *تحویل‌دار / صندوق‌دار سیار (Mobile Cashier)*: Cash/Bank Receive & Pay Receipts, Check Entry, Daily Transactions.
+   - *انباردار همراه (Mobile Warehouse Operator)*: Product Stock Inquiry, Purchase Invoice Entry, Fast Barcode Scanner.
+   - *مدیر کل (Super Admin)*: Full access across all mobile endpoints.
+3. **Toggle Matrix UI**: Switch permissions individually with instant visual feedback and audit logs.
+4. **Device Registration Hub**: View registered smartphone models, IP addresses, last active timestamps, and option to remotely revoke device access.
+
+---
+
+## 4. Mobile API Endpoints Specification (`/api/v1/mobile`)
+
+### A. Auth & Security Endpoints
+- `POST /api/v1/mobile/auth/login`: Validates credentials, checks active device ID, issues JWT token with embedded mobile claims.
+- `POST /api/v1/mobile/auth/device-register`: Registers new smartphone hardware fingerprint for admin approval.
+- `GET  /api/v1/mobile/auth/my-permissions`: Fetches current user's active mobile permissions.
+
+### B. Core Operational Endpoints
+- `GET  /api/v1/mobile/products/search?q=...`: Real-time barcode & title product lookup.
+- `GET  /api/v1/mobile/persons/search?q=...`: Instant customer search with live balance.
+- `POST /api/v1/mobile/invoices/sale`: Real-time sale invoice issue & automatic stock/account debit.
+- `POST /api/v1/mobile/receipts/receive`: Issue cash/POS/bank receive receipt with auto journal entry.
+- `POST /api/v1/mobile/checks/receive`: Register incoming Sayad check.
+- `GET  /api/v1/mobile/reports/debtors`: Real-time list of customer balances and overdue debts.
+
+---
+
+## 5. Security & Device Binding Specification
+
+1. **JWT Auth Header**: `Authorization: Bearer <jwt_token>` containing user ID, store ID, and signature.
+2. **Device Header Verification**: `X-Device-Fingerprint: <sha256_hash>` checked against `allowedDeviceIds` in admin settings.
+3. **Session Revocation**: Admin panel includes a 1-tap "خروج اضطراری تمام نشست‌های همراه" (Force Revoke All Mobile Sessions) button.
+
+---
+
+## 6. Implementation Milestones
+
+1. **Milestone 1**: Implement `mobile_permissions` database store and Admin Control Panel component in the main desktop web app (`/admin/mobile-permissions`).
+2. **Milestone 2**: Build central backend express router `/api/v1/mobile/*` with JWT authentication and permission enforcement middleware.
+3. **Milestone 3**: Create mobile client application structure with touch-optimized forms (Sales Invoice, Receive Receipt, Check Entry, Person Ledger, Debtors Report).
+4. **Milestone 4**: Conduct end-to-end testing, compile verification, and generate final deployment package.
