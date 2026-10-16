@@ -11,6 +11,7 @@ export interface Warehouse {
   phone?: string;
   managerName?: string;
   isDefault?: boolean;
+  isDefaultSales?: boolean;
   isActive?: boolean;
   createdAt?: number | string;
 }

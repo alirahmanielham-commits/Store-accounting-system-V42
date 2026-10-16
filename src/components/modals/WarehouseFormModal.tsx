@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from "react";
 import { startAppProcessing, stopAppProcessing } from "../../utils/processingHelper";
 import { motion } from "motion/react";
-import { Store, X, Check, Plus, Box } from "lucide-react";
+import { Store, X, Check, Plus, Box, Star } from "lucide-react";
 import { addWarehouse, updateWarehouse } from "../../services/dataService";
 
 interface WarehouseFormModalProps {
@@ -29,6 +29,7 @@ export default function WarehouseFormModal({
   const [newWarehouseManager, setNewWarehouseManager] = useState("");
   const [newWarehouseLocation, setNewWarehouseLocation] = useState("");
   const [newWarehouseIsActive, setNewWarehouseIsActive] = useState(true);
+  const [newWarehouseIsDefaultSales, setNewWarehouseIsDefaultSales] = useState(false);
   const [newWarehouseStatus, setNewWarehouseStatus] = useState(true);
   const [submittingWarehouse, setSubmittingWarehouse] = useState(false);
 
@@ -42,12 +43,16 @@ export default function WarehouseFormModal({
           setNewWarehouseName(wh.name || "");
           setNewWarehouseManager(wh.manager || "");
           setNewWarehouseLocation(wh.location || "");
+          setNewWarehouseIsActive(wh.isActive !== false);
+          setNewWarehouseIsDefaultSales(Boolean(wh.isDefault || wh.isDefaultSales));
           setNewWarehouseStatus(wh.status !== false);
         }
       } else {
         setNewWarehouseName("");
         setNewWarehouseManager("");
         setNewWarehouseLocation("");
+        setNewWarehouseIsActive(true);
+        setNewWarehouseIsDefaultSales(warehouses.length === 0);
         setNewWarehouseStatus(true);
       }
     }
@@ -66,6 +71,8 @@ const handleSubmitWarehouse = async (e?: React.FormEvent) => {
         manager: newWarehouseManager,
         location: newWarehouseLocation,
         isActive: newWarehouseIsActive,
+        isDefault: newWarehouseIsDefaultSales,
+        isDefaultSales: newWarehouseIsDefaultSales,
       };
 
       if (isEdit) {
@@ -195,6 +202,33 @@ const handleSubmitWarehouse = async (e?: React.FormEvent) => {
                             >
                               <div
                                 className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${newWarehouseIsActive ? "-translate-x-[24px]" : "translate-x-0"}`}
+                              />
+                            </div>
+                          </div>
+
+                          <div className="w-full text-right flex items-center justify-between border border-amber-200/80 p-4 rounded-xl mt-1 bg-amber-50/50">
+                            <div className="flex flex-col pr-1">
+                              <label
+                                className="text-sm font-bold text-amber-950 cursor-pointer select-none flex items-center gap-1.5"
+                                onClick={() =>
+                                  setNewWarehouseIsDefaultSales(!newWarehouseIsDefaultSales)
+                                }
+                              >
+                                <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+                                <span>انبار پیش‌فرض فروش فاکتورها</span>
+                              </label>
+                              <span className="text-[11px] text-slate-500 mt-1">
+                                در فاکتورهای جدید، هدر و سطرهای کالا به‌طور خودکار روی این انبار تنظیم می‌شوند.
+                              </span>
+                            </div>
+                            <div
+                              className={`w-12 h-6 rounded-full p-1 cursor-pointer transition-colors flex items-center shrink-0 ${newWarehouseIsDefaultSales ? "bg-amber-500" : "bg-gray-300"}`}
+                              onClick={() =>
+                                setNewWarehouseIsDefaultSales(!newWarehouseIsDefaultSales)
+                              }
+                            >
+                              <div
+                                className={`bg-white w-4 h-4 rounded-full shadow-sm transform transition-transform ${newWarehouseIsDefaultSales ? "-translate-x-[24px]" : "translate-x-0"}`}
                               />
                             </div>
                           </div>

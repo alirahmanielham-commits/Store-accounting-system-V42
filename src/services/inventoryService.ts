@@ -30,15 +30,67 @@ export const getWarehouses = async () => {
   return (warehouses || []).filter(w => !w.isDeleted).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
 };
 
+export const setDefaultSalesWarehouse = async (id: string) => {
+  const warehouses = await getLocalData<any[]>('warehouses', []);
+  const updated = (warehouses || []).map((w: any) => ({
+    ...w,
+    isDefault: String(w.id) === String(id),
+    isDefaultSales: String(w.id) === String(id),
+    updatedAt: Date.now()
+  }));
+  await saveLocalData('warehouses', updated);
+  return updated;
+};
+
 export const addWarehouse = async (warehouse: any) => {
   const now = Date.now();
-  const newWarehouse = { ...warehouse, id: generateId(), createdAt: now, updatedAt: now };
+  const isDef = Boolean(warehouse.isDefault || warehouse.isDefaultSales);
+  if (isDef) {
+    const existing = await getLocalData<any[]>('warehouses', []);
+    const updatedExisting = (existing || []).map((w: any) => ({
+      ...w,
+      isDefault: false,
+      isDefaultSales: false
+    }));
+    await saveLocalData('warehouses', updatedExisting);
+  }
+  const newWarehouse = {
+    ...warehouse,
+    id: generateId(),
+    isDefault: isDef,
+    isDefaultSales: isDef,
+    createdAt: now,
+    updatedAt: now
+  };
   await appendLocalData('warehouses', newWarehouse);
   return newWarehouse;
 };
 
 export const updateWarehouse = async (id: string, warehouse: any) => {
-  return await updateLocalData('warehouses', id, { ...warehouse, updatedAt: Date.now() });
+  const isDef = warehouse.isDefault !== undefined || warehouse.isDefaultSales !== undefined
+    ? Boolean(warehouse.isDefault || warehouse.isDefaultSales)
+    : undefined;
+
+  if (isDef === true) {
+    const existing = await getLocalData<any[]>('warehouses', []);
+    const updatedExisting = (existing || []).map((w: any) => {
+      if (String(w.id) !== String(id)) {
+        return { ...w, isDefault: false, isDefaultSales: false };
+      }
+      return w;
+    });
+    await saveLocalData('warehouses', updatedExisting);
+  }
+
+  const payload: any = {
+    ...warehouse,
+    updatedAt: Date.now()
+  };
+  if (isDef !== undefined) {
+    payload.isDefault = isDef;
+    payload.isDefaultSales = isDef;
+  }
+  return await updateLocalData('warehouses', id, payload);
 };
 
 export const deleteWarehouse = async (id: string) => {

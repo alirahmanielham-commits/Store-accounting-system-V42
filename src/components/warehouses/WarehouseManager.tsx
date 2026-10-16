@@ -20,10 +20,12 @@ import {
     Download,
     LayoutDashboard,
     FileText,
-    BarChart3
+    BarChart3,
+    Star
 } from "lucide-react";
 import { exportToExcel, formatDecimalForExcel } from "../../utils/exportUtils";
 import { getActiveStoreSettings } from "../../utils/format";
+import { setDefaultSalesWarehouse } from "../../services/dataService";
 import WarehouseDedicatedDashboard from "./WarehouseDedicatedDashboard";
 
 export default function WarehouseManager(props: any) {
@@ -286,15 +288,23 @@ export default function WarehouseManager(props: any) {
                                     {index + 1}
                                   </td>
                                   <td className="py-4 px-6 font-semibold text-gray-950">
-                                    <button
-                                      type="button"
-                                      onClick={() => setSelectedWarehouseId(wh.id)}
-                                      className="flex items-center gap-2 hover:text-indigo-600 font-extrabold text-right transition-colors cursor-pointer group"
-                                      title="مشاهده داشبورد، اسناد و موجودی این انبار"
-                                    >
-                                      <Box className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
-                                      <span>{wh.name}</span>
-                                    </button>
+                                    <div className="flex flex-col items-start gap-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => setSelectedWarehouseId(wh.id)}
+                                        className="flex items-center gap-2 hover:text-indigo-600 font-extrabold text-right transition-colors cursor-pointer group"
+                                        title="مشاهده داشبورد، اسناد و موجودی این انبار"
+                                      >
+                                        <Box className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
+                                        <span>{wh.name}</span>
+                                      </button>
+                                      {(wh.isDefault || wh.isDefaultSales) && (
+                                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[11px] font-black bg-amber-50 text-amber-800 border border-amber-200 shadow-3xs">
+                                          <Star className="w-3 h-3 fill-amber-400 text-amber-500" />
+                                          انبار پیش‌فرض فروش
+                                        </span>
+                                      )}
+                                    </div>
                                   </td>
                                   <td className="py-4 px-6 text-sm">
                                     {wh.manager || "-"}
@@ -315,6 +325,37 @@ export default function WarehouseManager(props: any) {
                                   </td>
                                   <td className="py-4 px-6 text-center">
                                     <div className="flex items-center justify-center gap-2">
+                                      {wh.isDefault || wh.isDefaultSales ? (
+                                        <span
+                                          className="p-1.5 text-amber-500 bg-amber-50 rounded-lg inline-flex items-center justify-center cursor-default border border-amber-200"
+                                          title="انبار پیش‌فرض فروش جاری فاکتورها"
+                                        >
+                                          <Star className="w-4 h-4 fill-amber-400 text-amber-500" />
+                                        </span>
+                                      ) : (
+                                        <button
+                                          type="button"
+                                          onClick={async () => {
+                                            try {
+                                              await setDefaultSalesWarehouse(wh.id);
+                                              if (showNotification) {
+                                                showNotification(`انبار «${wh.name}» به عنوان انبار پیش‌فرض فروش تعیین گردید.`, 'success');
+                                              }
+                                              if (props.fetchWarehouses) {
+                                                await props.fetchWarehouses();
+                                              } else if (handleRecalculateStocks) {
+                                                await handleRecalculateStocks();
+                                              }
+                                            } catch (err: any) {
+                                              if (showNotification) showNotification('خطا در تنظیم انبار پیش‌فرض', 'error');
+                                            }
+                                          }}
+                                          className="p-1.5 text-gray-400 hover:text-amber-600 hover:bg-amber-50 rounded-lg transition-colors inline-block cursor-pointer"
+                                          title="تنظیم به عنوان انبار پیش‌فرض فروش فاکتورها"
+                                        >
+                                          <Star className="w-4 h-4" />
+                                        </button>
+                                      )}
                                       <button
                                         type="button"
                                         onClick={() => setSelectedWarehouseId(wh.id)}

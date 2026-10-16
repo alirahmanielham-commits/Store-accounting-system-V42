@@ -188,6 +188,8 @@ export default function WarehouseDocCreate(props: any) {
     "transfer_in",
   ].includes(warehouseOperationType);
 
+  const [splitWarehouseNotice, setSplitWarehouseNotice] = useState<string | null>(null);
+
   // Quick stats for pending invoices in Step 1
   const pendingInvoicesSummary = useMemo(() => {
     let pendingPurchases = 0;
@@ -291,23 +293,54 @@ export default function WarehouseDocCreate(props: any) {
         !i.isDraft
     );
 
+    const targetWhId = (invoiceWarehouseId || "").toString();
+    const currentWhObj = warehouses.find((w: any) => w.id?.toString() === targetWhId);
+    const whName = currentWhObj ? currentWhObj.name : "انبار انتخاب شده";
+
     const processedAmounts: Record<string, number> = {};
     pastDocs.forEach((doc: any) => {
-      (doc.items || []).forEach((rt: any) => {
-        const key = String(rt.productId || rt.productName || "");
-        if (key) {
-          processedAmounts[key] = (processedAmounts[key] || 0) + (Number(rt.quantity) || 0);
-        }
-      });
+      const docWh = (doc.warehouseId || "").toString();
+      if (!targetWhId || docWh === targetWhId) {
+        (doc.items || []).forEach((rt: any) => {
+          const key = String(rt.productId || rt.productName || "");
+          if (key) {
+            processedAmounts[key] = (processedAmounts[key] || 0) + (Number(rt.quantity) || 0);
+          }
+        });
+      }
     });
 
-    const remainingItems = (sourceInv.items || [])
-      .filter((it: any) => {
-        const prod = products.find(
-          (p: any) => p.id?.toString() === it.productId?.toString()
+    const allPhysicalItems = (sourceInv.items || []).filter((it: any) => {
+      const prod = products.find(
+        (p: any) => p.id?.toString() === it.productId?.toString()
+      );
+      return prod?.type !== "service";
+    });
+
+    const itemsForThisWh = allPhysicalItems.filter((it: any) => {
+      const itWh = (it.warehouseId || sourceInv.warehouseId || "").toString();
+      return !targetWhId || itWh === targetWhId;
+    });
+
+    if (allPhysicalItems.length > 0 && itemsForThisWh.length === 0) {
+      if (customAlert) {
+        customAlert(
+          `هیچ‌یک از اقلام این فاکتور به انبار «${whName}» تعلق ندارند. لطفاً در مرحله اول انبار مربوطه را انتخاب نمایید.`
         );
-        return prod?.type !== "service";
-      })
+      }
+      return;
+    }
+
+    const otherWhCount = allPhysicalItems.length - itemsForThisWh.length;
+    if (otherWhCount > 0) {
+      setSplitWarehouseNotice(
+        `توجه: این فاکتور شامل اقلام تفکیکی در چند انبار است. در این حواله فقط ${itemsForThisWh.length} قلم کالا مربوط به «${whName}» قرار گرفته‌اند. تعداد ${otherWhCount} قلم کالا متعلق به سایر انبارها در حواله انبار مربوط به خودشان صادر خواهند شد.`
+      );
+    } else {
+      setSplitWarehouseNotice(null);
+    }
+
+    const remainingItems = itemsForThisWh
       .map((it: any) => {
         const prod = products.find((p: any) => p.id?.toString() === it.productId?.toString());
         const key = String(it.productId || it.productName || "");
@@ -346,7 +379,7 @@ export default function WarehouseDocCreate(props: any) {
     if (remainingItems.length === 0) {
       if (customAlert) {
         customAlert(
-          "تمامی اقلام این فاکتور قبلاً در اسناد انبار تحویل شده‌اند و مانده‌ای برای صدور سند انبار وجود ندارد."
+          `تمامی اقلام این فاکتور مربوط به انبار «${whName}» قبلاً تحویل شده‌اند و مانده‌ای برای صدور حواله در این انبار وجود ندارد.`
         );
       }
     }
@@ -868,6 +901,13 @@ export default function WarehouseDocCreate(props: any) {
             >
               اتصال به یک فاکتور مرجع...
             </button>
+          </div>
+        )}
+
+        {splitWarehouseNotice && (
+          <div className="bg-amber-50 border border-amber-200 text-amber-900 rounded-2xl p-4 flex items-start sm:items-center gap-3 text-xs font-bold shadow-xs">
+            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5 sm:mt-0" />
+            <span>{splitWarehouseNotice}</span>
           </div>
         )}
 

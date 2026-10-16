@@ -38,6 +38,7 @@ export default function SaleInvoiceCreate(props: any) {
     persian,
     persian_fa,
     items,
+    setItems,
     handleItemChange,
     products,
     handleRemoveItem,
@@ -116,6 +117,7 @@ export default function SaleInvoiceCreate(props: any) {
   const [buyerEconomicCode, setBuyerEconomicCode] = useState('');
   const [buyerPostalCode, setBuyerPostalCode] = useState('');
   const [paymentTerms, setPaymentTerms] = useState<'cash' | 'credit' | 'cheque'>('cash');
+  const [warehouseChangePrompt, setWarehouseChangePrompt] = useState<{ newWhId: string; whName: string } | null>(null);
 
   // Dirty Form Detection
   const isDirty = useMemo(() => {
@@ -288,6 +290,51 @@ export default function SaleInvoiceCreate(props: any) {
     getProductStockInfo,
     calculateProductCurrentStock,
   ]);
+
+  const handleWarehouseHeaderChange = (newWhId: string) => {
+    if (!newWhId) {
+      setInvoiceWarehouseId("");
+      return;
+    }
+    const hasExistingItems = (items || []).some(
+      (it: any) => it.productId || it.productName
+    );
+    if (hasExistingItems) {
+      const targetWhObj = warehouses.find(
+        (w: any) => String(w.id) === String(newWhId)
+      );
+      const whName = targetWhObj ? targetWhObj.name : "انبار انتخاب شده";
+      setWarehouseChangePrompt({ newWhId, whName });
+    } else {
+      setInvoiceWarehouseId(newWhId);
+    }
+  };
+
+  const handleApplyWarehouseToAllRows = () => {
+    if (!warehouseChangePrompt) return;
+    const { newWhId } = warehouseChangePrompt;
+    setInvoiceWarehouseId(newWhId);
+    if (setItems) {
+      setItems((prev: any[]) =>
+        prev.map((it: any) => ({
+          ...it,
+          warehouseId: newWhId,
+        }))
+      );
+    }
+    setWarehouseChangePrompt(null);
+  };
+
+  const handleApplyWarehouseToHeaderOnly = () => {
+    if (!warehouseChangePrompt) return;
+    const { newWhId } = warehouseChangePrompt;
+    setInvoiceWarehouseId(newWhId);
+    setWarehouseChangePrompt(null);
+  };
+
+  const handleCancelWarehouseChange = () => {
+    setWarehouseChangePrompt(null);
+  };
 
   const handleTriggerSaveWithValidation = () => {
     const cleanItems = (items || []).filter((it: any) => it && it.productId);
@@ -707,7 +754,7 @@ export default function SaleInvoiceCreate(props: any) {
                   </label>
                   <select
                     value={invoiceWarehouseId}
-                    onChange={(e) => setInvoiceWarehouseId(e.target.value)}
+                    onChange={(e) => handleWarehouseHeaderChange(e.target.value)}
                     className="w-full p-3 border border-indigo-100/80 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30 text-base font-bold text-indigo-950 outline-none"
                   >
                     <option value="">
@@ -717,7 +764,7 @@ export default function SaleInvoiceCreate(props: any) {
                       .filter((w) => w.isActive !== false)
                       .map((v, index) => (
                         <option key={`${v.id}-${index}`} value={v.id}>
-                          {v.name}
+                          {v.name} {v.isDefault || v.isDefaultSales ? "★ (انبار پیش‌فرض فروش)" : ""}
                         </option>
                       ))}
                   </select>
@@ -899,8 +946,11 @@ export default function SaleInvoiceCreate(props: any) {
                   <thead>
                     <tr className="bg-slate-50/90 text-xs font-bold text-slate-500 border-b border-slate-200">
                       <th className="py-2.5 px-3 w-12 text-center">ردیف</th>
-                      <th className="py-2.5 px-3 min-w-[240px] text-right">
+                      <th className="py-2.5 px-3 min-w-[220px] text-right">
                         شرح کالا / خدمات
+                      </th>
+                      <th className="py-2.5 px-3 w-36 text-center border-r border-slate-200/60">
+                        انبار خروج
                       </th>
                       <th className="py-2.5 px-3 w-36 text-center border-r border-slate-200/60">
                         تعداد
@@ -926,7 +976,7 @@ export default function SaleInvoiceCreate(props: any) {
                     {(items || []).length === 0 && (
                       <tr>
                         <td
-                          colSpan={8}
+                          colSpan={9}
                           className="py-12 text-center text-slate-400 font-bold text-sm bg-slate-50/30"
                         >
                           <div className="flex flex-col items-center justify-center space-y-2">
@@ -1030,6 +1080,44 @@ export default function SaleInvoiceCreate(props: any) {
                               className="w-full h-8 px-2.5 bg-white border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-sm font-bold text-slate-800 outline-none transition-all"
                             />
                           )}
+                        </td>
+
+                        {/* انبار خروج کالا */}
+                        <td className="py-2 px-2 text-center align-middle border-r border-slate-200/60 min-w-[130px]">
+                          {(() => {
+                            const prod = productMap[item.productId?.toString()];
+                            if (prod?.type === "service") {
+                              return (
+                                <span className="text-[10px] text-slate-400 font-bold bg-slate-100 px-2 py-1 rounded-md">
+                                  خدماتی
+                                </span>
+                              );
+                            }
+                            const currentWhId = (item.warehouseId || invoiceWarehouseId || "").toString();
+                            return (
+                              <select
+                                value={currentWhId}
+                                onChange={(e) =>
+                                  handleItemChange(
+                                    item.id,
+                                    "warehouseId",
+                                    e.target.value
+                                  )
+                                }
+                                className="w-full h-8 text-xs font-bold py-1 px-1.5 bg-slate-50 hover:bg-white border border-slate-200 rounded-lg focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 text-slate-800 outline-none transition-all cursor-pointer"
+                                title="انتخاب یا تغییر انبار خروج این قلم کالا"
+                              >
+                                <option value="">-- انبار فاکتور --</option>
+                                {warehouses
+                                  .filter((w: any) => w.isActive !== false)
+                                  .map((w: any) => (
+                                    <option key={w.id} value={w.id}>
+                                      {w.name} {w.isDefault || w.isDefaultSales ? "★" : ""}
+                                    </option>
+                                  ))}
+                              </select>
+                            );
+                          })()}
                         </td>
 
                         {/* تعداد */}
@@ -1492,6 +1580,49 @@ export default function SaleInvoiceCreate(props: any) {
               onStay={cancelDiscard}
               onDiscard={confirmDiscard}
             />
+
+            {/* Warehouse Change Confirmation Prompt */}
+            {warehouseChangePrompt && (
+              <div className="fixed inset-0 z-[150] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs" dir="rtl">
+                <div className="bg-white rounded-2xl shadow-2xl border border-slate-100 max-w-md w-full p-6 space-y-4 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-700 flex items-center justify-center shrink-0">
+                      <Box className="w-5 h-5 text-amber-600" />
+                    </div>
+                    <div>
+                      <h4 className="text-base font-black text-slate-900">تغییر انبار سطور فاکتور</h4>
+                      <p className="text-xs text-slate-500 mt-0.5">انبار هدر به «{warehouseChangePrompt.whName}» تغییر یافت.</p>
+                    </div>
+                  </div>
+                  <p className="text-xs font-medium text-slate-600 leading-relaxed bg-slate-50 p-3.5 rounded-xl border border-slate-100">
+                    شما انبار اصلی فاکتور را تغییر دادید. آیا مایلید انبار تمام سطرهای ثبت‌شده قبلی نیز به <strong>«{warehouseChangePrompt.whName}»</strong> تغییر یابد؟
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-2 pt-2">
+                    <button
+                      type="button"
+                      onClick={handleApplyWarehouseToAllRows}
+                      className="flex-1 py-2.5 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition-colors cursor-pointer text-center shadow-xs"
+                    >
+                      بله، همه سطرها تغییر کنند
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleApplyWarehouseToHeaderOnly}
+                      className="flex-1 py-2.5 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer text-center"
+                    >
+                      خیر، فقط سطرهای جدید
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleCancelWarehouseChange}
+                      className="py-2.5 px-3 text-slate-400 hover:text-slate-600 rounded-xl text-xs font-bold transition-colors cursor-pointer text-center"
+                    >
+                      انصراف
+                    </button>
+                  </div>
+                </div>
+              </div>
+            )}
           </motion.div>
   );
 }

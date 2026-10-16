@@ -142,13 +142,17 @@ export default function WarehouseInvoiceSelector({
           !doc.isDraft
       );
 
-      // Processed quantity per product
-      const processedByProduct: Record<string, number> = {};
+      // Processed quantity per product and per warehouse
+      const processedByProductAndWh: Record<string, number> = {};
+      const processedByProductOverall: Record<string, number> = {};
       pastDocs.forEach((doc) => {
+        const docWh = (doc.warehouseId || "").toString();
         (doc.items || []).forEach((item: any) => {
           const key = String(item.productId || item.productName || "");
           if (key) {
-            processedByProduct[key] = (processedByProduct[key] || 0) + (Number(item.quantity) || 0);
+            const whKey = `${key}__${docWh}`;
+            processedByProductAndWh[whKey] = (processedByProductAndWh[whKey] || 0) + (Number(item.quantity) || 0);
+            processedByProductOverall[key] = (processedByProductOverall[key] || 0) + (Number(item.quantity) || 0);
           }
         });
       });
@@ -159,7 +163,11 @@ export default function WarehouseInvoiceSelector({
         const isService = prod?.type === "service";
         const key = String(item.productId || item.productName || "");
         const invoicedQty = Number(item.quantity) || 0;
-        const deliveredQty = isService ? invoicedQty : (processedByProduct[key] || 0);
+        const itemWhId = (item.warehouseId || inv.warehouseId || "").toString();
+        const whKey = `${key}__${itemWhId}`;
+        const deliveredQty = isService
+          ? invoicedQty
+          : (processedByProductAndWh[whKey] !== undefined ? processedByProductAndWh[whKey] : (processedByProductOverall[key] || 0));
         const remainingQty = isService ? 0 : Math.max(0, invoicedQty - deliveredQty);
 
         // Physical stock in the selected warehouse
@@ -180,6 +188,10 @@ export default function WarehouseInvoiceSelector({
           }
         }
 
+        const itemWhObj = warehouses.find((w: any) => w.id?.toString() === itemWhId);
+        const itemWhName = itemWhObj?.name || "";
+        const isItemForCurrentWh = !invoiceWarehouseId || itemWhId === invoiceWarehouseId.toString();
+
         return {
           index: idx + 1,
           id: item.id || idx,
@@ -187,6 +199,9 @@ export default function WarehouseInvoiceSelector({
           productName: item.productName || prod?.name || "کالای نامشخص",
           productCode: prod?.code || "",
           productBarcode: prod?.barcode || "",
+          warehouseId: itemWhId,
+          warehouseName: itemWhName,
+          isItemForCurrentWh,
           isService,
           unit: item.selectedUnit || prod?.unit || "عدد",
           invoicedQty,
@@ -274,7 +289,13 @@ export default function WarehouseInvoiceSelector({
 
         // Warehouse filter
         if (warehouseFilter === "current" && invoiceWarehouseId) {
-          if (inv.warehouseId && inv.warehouseId.toString() !== invoiceWarehouseId.toString()) {
+          const targetWh = invoiceWarehouseId.toString();
+          const hasItemForWh = (inv.items || []).some((it: any) => {
+            const itWh = (it.warehouseId || inv.warehouseId || "").toString();
+            return itWh === targetWh;
+          });
+          const headerMatches = inv.warehouseId && inv.warehouseId.toString() === targetWh;
+          if (!hasItemForWh && !headerMatches) {
             return false;
           }
         }

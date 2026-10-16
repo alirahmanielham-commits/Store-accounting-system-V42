@@ -5,7 +5,8 @@ import {
   updateWarehouse,
   deleteWarehouse,
   getWarehouseStocks,
-  recalculateAllWarehouseStocks
+  recalculateAllWarehouseStocks,
+  setDefaultSalesWarehouse
 } from '../../services/inventoryService';
 
 export interface WarehouseSlice {
@@ -21,6 +22,7 @@ export interface WarehouseSlice {
   addWarehouse: (warehouse: any) => Promise<any>;
   updateWarehouse: (id: string, warehouse: any) => Promise<any>;
   deleteWarehouse: (id: string) => Promise<void>;
+  setDefaultWarehouse: (id: string) => Promise<void>;
   setSelectedWarehouseId: (id: string | null) => void;
 }
 
@@ -97,6 +99,13 @@ export const createWarehouseSlice: StateCreator<WarehouseSlice> = (set, get) => 
       await get().fetchWarehouses();
       
     
+  },
+
+  setDefaultWarehouse: async (id: string) => {
+    const store = get() as any;
+    store.updateProcessingStatus?.("تنظیم انبار پیش‌فرض فروش...");
+    await setDefaultSalesWarehouse(id);
+    await get().fetchWarehouses();
   },
 
   setSelectedWarehouseId: (id) => set({ selectedWarehouseId: id }),

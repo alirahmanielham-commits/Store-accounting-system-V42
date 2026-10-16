@@ -1124,6 +1124,23 @@ useEffect(() => {
   }
 }, [storeSettings?.currency, editingInvoiceId]);
 
+const defaultSalesWarehouse = useMemo(() => {
+  if (!Array.isArray(warehouses) || warehouses.length === 0) return null;
+  return (
+    warehouses.find((w: any) => (w.isDefault || w.isDefaultSales) && w.isActive !== false) ||
+    warehouses.find((w: any) => w.isActive !== false) ||
+    warehouses[0]
+  );
+}, [warehouses]);
+
+useEffect(() => {
+  if (!editingInvoiceId && (!invoiceWarehouseId || !warehouses.some(w => String(w.id) === String(invoiceWarehouseId)))) {
+    if (defaultSalesWarehouse?.id) {
+      setInvoiceWarehouseId(defaultSalesWarehouse.id);
+    }
+  }
+}, [defaultSalesWarehouse, editingInvoiceId, invoiceWarehouseId, warehouses]);
+
 const [exchangeRate, setExchangeRate] = useState<number>(1);
 
 const [exchangeRateInput, setExchangeRateInput] = useState<string>("1");
@@ -1379,14 +1396,7 @@ useEffect(() => {
               sourceInvoiceId,
               items: cleanItems.map((item) => ({
                 ...item,
-                warehouseId:
-                  (storeSettings?.requireWarehouse ||
-                    activeTab.includes("warehouse") ||
-                    activeTab === "create_sale" ||
-                    invoiceType === "sale") &&
-                  invoiceWarehouseId
-                    ? invoiceWarehouseId
-                    : item.warehouseId,
+                warehouseId: item.warehouseId || invoiceWarehouseId || "",
               })),
               overallDiscountPercent,
               totalAmount: calculateFinalTotal(),
@@ -4175,12 +4185,14 @@ const handleFastAddProduct = (
         );
         return newItems;
       } else {
+        const defaultWh = invoiceWarehouseId || defaultSalesWarehouse?.id || (warehouses?.[0]?.id ?? "");
         return [
           ...currentItems,
           {
             id: generateId(),
             productId: productIdStr,
             productName: product.name,
+            warehouseId: defaultWh,
             quantity: addQty,
             unitPrice: unitPriceRounded,
             discountPercent: 0,
@@ -4209,6 +4221,8 @@ const handleFastAddProduct = (
         pMap[p.id?.toString()] = p;
       }
     });
+
+    const defaultWh = invoiceWarehouseId || defaultSalesWarehouse?.id || (warehouses?.[0]?.id ?? "");
 
     setItems((currentItems) => {
       let newItems = [...currentItems];
@@ -4252,6 +4266,7 @@ const handleFastAddProduct = (
             id: generateId(),
             productId: pidStr,
             productName: product.name,
+            warehouseId: defaultWh,
             quantity: addQty,
             unitPrice: unitPriceRounded,
             discountPercent: 0,
@@ -4274,12 +4289,14 @@ const handleFastAddProduct = (
   };
 
   const handleAddBlankRow = () => {
+    const defaultWh = invoiceWarehouseId || defaultSalesWarehouse?.id || (warehouses?.[0]?.id ?? "");
     setItems((currentItems) => [
       ...currentItems,
       {
         id: generateId(),
         productId: "",
         productName: "",
+        warehouseId: defaultWh,
         quantity: 1,
         unitPrice: 0,
         discountPercent: 0,
@@ -4735,6 +4752,137 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
     } finally {
         stopAppProcessing();
     }
+};
+
+const handleFastWarehouseRemittance = async (inv: any, warehouseId?: string) => {
+  if (!inv) return null;
+
+  if (inv.status === "voided" || inv.isDraft) {
+    customAlert("صدور حواله انبار برای فاکتورهای پیش‌نویس یا باطل شده امکان‌پذیر نیست.");
+    return null;
+  }
+
+  // Get all physical items
+  const physicalItems = (inv.items || []).filter((it: any) => {
+    const p = products.find((prod) => prod.id?.toString() === it.productId?.toString());
+    return p?.type !== "service";
+  });
+
+  if (physicalItems.length === 0) {
+    customAlert("این فاکتور فاقد کالای فیزیکی جهت صدور حواله خروج است.");
+    return null;
+  }
+
+  // Find all distinct warehouses in items
+  const distinctWhIds: string[] = Array.from(
+    new Set(
+      physicalItems
+        .map((it: any) => (it.warehouseId || inv.warehouseId || "").toString())
+        .filter(Boolean)
+    )
+  );
+
+  const targetWhList = warehouseId ? [warehouseId.toString()] : distinctWhIds;
+  if (targetWhList.length === 0) {
+    customAlert("لطفاً انبار مورد نظر را انتخاب نمایید.");
+    return null;
+  }
+
+  startAppProcessing("در حال صدور حواله(های) تفکیکی خروج از انبار...");
+  const createdRemittances: any[] = [];
+
+  try {
+    for (const targetWh of targetWhList) {
+      const itemsForWh = physicalItems.filter(
+        (it: any) => (it.warehouseId || inv.warehouseId || "").toString() === targetWh
+      );
+      if (itemsForWh.length === 0) continue;
+
+      const whObj = warehouses.find((w: any) => w.id?.toString() === targetWh);
+      const whName = whObj ? whObj.name : "انبار";
+
+      // Check if remittance for this invoice and warehouse already exists
+      const existing = invoices.find(
+        (i: any) =>
+          i.type === "warehouse_remittance" &&
+          i.sourceInvoiceId?.toString() === inv.id?.toString() &&
+          i.warehouseId?.toString() === targetWh &&
+          i.status !== "voided" &&
+          !i.isDeleted
+      );
+      if (existing) {
+        createdRemittances.push(existing);
+        continue;
+      }
+
+      const mappedItems = itemsForWh.map((item: any) => {
+        const productObj = products.find((p) => p.id?.toString() === item.productId?.toString());
+        const isSec = Boolean(item.isSecondaryUnit) || (Boolean(productObj?.secondaryUnit) && item.selectedUnit === productObj?.secondaryUnit);
+        const ratio = Number(item.unitRatio || productObj?.unitRatio || 1);
+        const dir = item.unitRatioDirection || productObj?.unitRatioDirection || (productObj ? getUnitRatioDirection(productObj) : 'secondary_to_main');
+        const rawPrice = Number(item.unitPrice || item.price || 0);
+        const rawQty = Number(item.quantity) || 0;
+        const baseUnitPrice = convertPriceToBaseUnit(rawPrice, isSec, ratio, dir);
+        const baseQuantity = convertQuantityToBaseUnit(rawQty, isSec, ratio, dir);
+
+        return {
+          ...item,
+          warehouseId: targetWh,
+          isSecondaryUnit: isSec,
+          unitRatio: ratio,
+          unitRatioDirection: dir,
+          selectedUnit: item.selectedUnit || (isSec ? productObj?.secondaryUnit : productObj?.unit),
+          baseUnitPrice,
+          baseQuantity,
+        };
+      });
+
+      const totalItemsAmount = mappedItems.reduce((acc: number, it: any) => acc + (Number(it.totalPrice) || 0), 0);
+
+      const payload = {
+        type: "warehouse_remittance",
+        warehouseId: targetWh,
+        operationType: "sales_invoice",
+        sourceInvoiceId: inv.id,
+        customerId: inv.customerId,
+        date: new Date().toISOString(),
+        items: mappedItems,
+        status: "approved",
+        isDraft: false,
+        totalAmount: totalItemsAmount,
+        overallDiscountPercent: inv.overallDiscountPercent || 0,
+        invoiceDescription: `حواله خروج خودکار انبار «${whName}» برای فاکتور فروش ${inv.invoiceNumber || inv.id}`,
+      };
+
+      const added = await addInvoice(payload as any, false);
+      if (added) createdRemittances.push(added);
+    }
+
+    await recalculateAllWarehouseStocks();
+    await fetchInvoices();
+    await fetchProducts();
+
+    if (createdRemittances.length > 0) {
+      setSuccessMsg(
+        createdRemittances.length > 1
+          ? `تعداد ${toPersianDigits(createdRemittances.length)} حواله خروج تفکیکی برای انبارهای مربوطه با موفقیت صادر گردید.`
+          : `حواله خروج انبار با موفقیت صادر و در کاردکس ثبت شد.`
+      );
+      setTimeout(() => setSuccessMsg(""), 3500);
+
+      if (setViewingInvoice && createdRemittances[0]) {
+        setViewingInvoice(createdRemittances[0]);
+      }
+    }
+
+    return createdRemittances;
+  } catch (e) {
+    console.error("Fast remittance error:", e);
+    customAlert("خطا در صدور حواله خروج انبار");
+    return null;
+  } finally {
+    stopAppProcessing();
+  }
 };
 
 const handleApprovePurchaseInvoice = async (inv: any) => {
@@ -5499,14 +5647,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
     const baseItems = cleanItems.map((item) => ({
       ...mapItemWithBase(item),
-      warehouseId:
-        (storeSettings.requireWarehouse ||
-          activeTab.includes("warehouse") ||
-          activeTab === "create_sale" ||
-          invoiceType === "sale") &&
-        invoiceWarehouseId
-          ? invoiceWarehouseId
-          : item.warehouseId,
+      warehouseId: item.warehouseId || invoiceWarehouseId || "",
     }));
 
     const rawItems = (customPayload && Array.isArray(customPayload.items) && customPayload.items.length > 0)
@@ -6641,12 +6782,7 @@ const handleInvoicePreviewTrigger = () => {
         return {
 
           ...item,
-          warehouseId:
-            (storeSettings.requireWarehouse ||
-              activeTab.includes("warehouse")) &&
-            invoiceWarehouseId
-              ? invoiceWarehouseId
-              : item.warehouseId,
+          warehouseId: item.warehouseId || invoiceWarehouseId || "",
           productName: prod ? prod.name : item.productName || "کالای سفارشی",
         };
       }),
@@ -7083,6 +7219,7 @@ const renderTabContent = () => {
       case "list_warehouse_docs": {
         return (
           <InvoicesList
+             handleFastWarehouseRemittance={handleFastWarehouseRemittance}
              invoices={invoices} fetchInvoices={fetchInvoices} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} persons={persons} activeTab={activeTab} setActiveTab={setActiveTab} purchaseFilter={purchaseFilter} setPurchaseFilter={setPurchaseFilter} formatCurrency={formatCurrency} getPersonDisplayName={getPersonDisplayName} formatDateDisplay={formatDateDisplay}  numToPersianWords={numToPersianWords} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} setCustomerId={setCustomerId}  getRoleName={getRoleName} setEditingInvoiceId={setEditingInvoiceId} handleDeleteInvoice={handleDeleteInvoice}     storeSettings={storeSettings} invoiceCurrentPage={invoiceCurrentPage} setInvoiceCurrentPage={setInvoiceCurrentPage} invoicePageSize={invoicePageSize} setInvoicePageSize={setInvoicePageSize} toPersianDigits={toPersianDigits} listFilter={listFilter} setListFilter={setListFilter} invoiceGroupMode={invoiceGroupMode} setInvoiceGroupMode={setInvoiceGroupMode} List={List} clearDraft={clearDraft} setInvoiceType={setInvoiceType} setWarehouseOperationType={setWarehouseOperationType} Calendar={Calendar} renderPersonLink={renderPersonLink} products={products} setPricingWizardItems={setPricingWizardItems} setPricingWizardInvoice={setPricingWizardInvoice} setSuccessMsg={setSuccessMsg} setReceiptPersonId={setReceiptPersonId} setViewingInvoice={setViewingInvoice} handleEditInvoiceAction={handleEditInvoiceAction} handleFastWarehouseReceipt={handleFastWarehouseReceipt} handleVoidInvoice={handleVoidInvoice} handleApprovePurchaseInvoice={handleApprovePurchaseInvoice} handleApproveWarehouseReceipt={handleApproveWarehouseReceipt}
           />
         );
