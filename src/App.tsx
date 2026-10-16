@@ -380,21 +380,61 @@ import { allSidebarGroups } from './utils/sidebarData';
 
 import AdminLTELayout from "./layouts/AdminLTE/AdminLTELayout";
 
+function checkIsMobileOrTabletDevice(): boolean {
+  if (typeof window === "undefined" || typeof navigator === "undefined") return false;
+
+  // Signal 1: Standard viewport width check
+  if (window.innerWidth < 768 || window.screen.width < 768) return true;
+
+  const ua = (navigator.userAgent || navigator.vendor || (window as any).opera || "").toLowerCase();
+
+  // Signal 2: Explicit Mobile / Tablet User Agent
+  const mobileUARegex = /android|webos|iphone|ipad|ipod|blackberry|iemobile|opera mini|mobile|tablet|crios|fxios/i;
+  if (mobileUARegex.test(ua)) return true;
+
+  // Signal 3: iOS Safari / Chrome "Desktop Site" mode (MacIntel UserAgent + touch points >= 1)
+  const isMac = navigator.platform === "MacIntel" || ua.includes("macintosh");
+  const hasTouchPoints = (navigator.maxTouchPoints && navigator.maxTouchPoints > 0) || "ontouchstart" in window;
+  if (isMac && hasTouchPoints) return true;
+
+  // Signal 4: Android Chrome / Edge "Desktop Site" mode (X11/Linux UserAgent + coarse touch pointer)
+  const isLinux = ua.includes("linux") || ua.includes("x11");
+  const isCoarsePointer = window.matchMedia && window.matchMedia("(pointer: coarse)").matches;
+  const isNoHover = window.matchMedia && window.matchMedia("(hover: none)").matches;
+
+  if ((isLinux || isMac) && hasTouchPoints && (isCoarsePointer || isNoHover)) {
+    return true;
+  }
+
+  // Signal 5: Physical screen dimensions & pixel ratio combination
+  const minDimension = Math.min(window.screen.width, window.screen.height);
+  if (minDimension <= 1024 && (hasTouchPoints || isCoarsePointer)) {
+    return true;
+  }
+
+  return false;
+}
+
 export default function App() {
   const location = useLocation();
   const navigate = useNavigate();
   const syncQueueLength = useSyncQueueLength();
   const [isSyncModalOpen, setIsSyncModalOpen] = useState(false);
   const [isMobileScreen, setIsMobileScreen] = useState(
-    typeof window !== "undefined" ? window.innerWidth < 768 : false
+    typeof window !== "undefined" ? checkIsMobileOrTabletDevice() : false
   );
 
   useEffect(() => {
-    const handleResize = () => {
-      setIsMobileScreen(window.innerWidth < 768);
+    const handleCheck = () => {
+      setIsMobileScreen(checkIsMobileOrTabletDevice());
     };
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
+    handleCheck();
+    window.addEventListener("resize", handleCheck);
+    window.addEventListener("orientationchange", handleCheck);
+    return () => {
+      window.removeEventListener("resize", handleCheck);
+      window.removeEventListener("orientationchange", handleCheck);
+    };
   }, []);
 
 
@@ -1858,7 +1898,9 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
               </motion.div>
             </div>
           )}
-          {systemModule === "selector" ? (
+          {isMobileScreen ? (
+            <MobileRestrictedAccess />
+          ) : systemModule === "selector" ? (
             <ModuleSelector
               storeSettings={storeSettings}
               invoices={invoices}
