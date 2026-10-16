@@ -235,12 +235,22 @@ export const MOBILE_ALLOWED_TABS = new Set(
   MOBILE_CATEGORIES.flatMap((c) => c.subItems.map((s) => s.id)).concat([
     "quick_receive_payment",
     "receive_payment",
+    "receipts",
     "create_receive_check",
     "pay_check_form",
     "create_pay_check",
     "checks",
     "quick_price_inquiry",
     "product_view",
+    "product_card",
+    "sales_report",
+    "purchases_report",
+    "create_sale_return",
+    "create_purchase_return",
+    "person_ledger",
+    "person_profile",
+    "debtors_showcase",
+    "debtors_tracking",
   ])
 );
 

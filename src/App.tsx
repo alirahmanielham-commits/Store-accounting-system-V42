@@ -2888,6 +2888,14 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
 </div>
 </div>
 )}
+<Suspense fallback={null}>
+  <MobileRestrictedMenu
+    activeTab={activeTab}
+    setActiveTab={setActiveTab}
+    setIsPersonModalOpen={setIsPersonModalOpen}
+    setIsProductModalOpen={setIsProductModalOpen}
+  />
+</Suspense>
 <LiveAdminAlertToast user={user} setActiveTab={setActiveTab} />
 <Suspense fallback={null}><SalePaymentModal
       isOpen={appState.isSalePaymentModalOpen}

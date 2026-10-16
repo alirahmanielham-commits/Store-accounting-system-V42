@@ -1,6 +1,6 @@
 {
-  "summary": "طرح اجرایی جامع جداسازی کامل دیتابیس کسب‌وکارها، مدیریت متمرکز در جدول businesses دیتابیس اصلی، حذف اطلاعات کسب‌وکارهای فرعی از db_config، و بهینه‌سازی سوئیچ آنلاین بین محیط‌ها",
-  "updatedAt": "2026-10-16T10:08:35.373616349Z",
+  "summary": "Implementation plan for mobile optimization, mobile-restricted navigation, and mobile menu visual enhancement in the accounting system.",
+  "updatedAt": "2026-10-16T16:50:39.782557854Z",
   "requestFeedback": true,
   "userFacing": true
 }
