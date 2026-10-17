@@ -75,8 +75,141 @@ export default function ReceiptPrintTemplate({
       : toPersianDigits(String(data.jalaliDate || data.date || ''));
   }
 
-  // Format time
-  const timeStr = data.time || (data.createdAt ? new Date(data.createdAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }) : '');
+  // Ensure formattedDate never renders "Invalid Date"
+  if (!formattedDate || formattedDate.toLowerCase().includes('invalid') || formattedDate.trim() === '-') {
+    const calType = storeSettings?.calendarType === 'gregorian' ? 'gregorian' : 'jalali';
+    formattedDate = calType === 'gregorian'
+      ? new Date().toLocaleDateString('en-US')
+      : toPersianDigits(new Date().toLocaleDateString('fa-IR'));
+  }
+
+  // Safely extract receipt time without ever producing "Invalid Date"
+  const extractReceiptTime = (item: any): string => {
+    if (!item) return '';
+
+    // 1. Direct explicit time string check
+    if (item.time && typeof item.time === 'string') {
+      const raw = item.time.trim();
+      if (
+        raw &&
+        !raw.toLowerCase().includes('invalid') &&
+        raw !== 'undefined' &&
+        raw !== 'null' &&
+        raw !== '-'
+      ) {
+        const m = raw.match(/(\d{1,2}):(\d{1,2})/);
+        if (m) {
+          return `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}`;
+        }
+        return raw;
+      }
+    }
+
+    // Helper to parse numeric, string, or Date instances into HH:mm
+    const tryParseToTime = (val: any): string => {
+      if (!val || val === 'undefined' || val === 'null' || val === '-') return '';
+
+      // Numeric ms or seconds timestamp
+      if (typeof val === 'number' && !isNaN(val) && val > 0) {
+        const ms = val < 10000000000 ? val * 1000 : val;
+        const d = new Date(ms);
+        if (!isNaN(d.getTime())) {
+          const hh = String(d.getHours()).padStart(2, '0');
+          const mm = String(d.getMinutes()).padStart(2, '0');
+          return `${hh}:${mm}`;
+        }
+      }
+
+      // String that is numeric timestamp (e.g. "1729170000000")
+      if (typeof val === 'string' && /^\d{10,13}$/.test(val.trim())) {
+        const num = Number(val.trim());
+        if (!isNaN(num) && num > 0) {
+          const ms = num < 10000000000 ? num * 1000 : num;
+          const d = new Date(ms);
+          if (!isNaN(d.getTime())) {
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            return `${hh}:${mm}`;
+          }
+        }
+      }
+
+      // Date object
+      if (val instanceof Date && !isNaN(val.getTime())) {
+        const hh = String(val.getHours()).padStart(2, '0');
+        const mm = String(val.getMinutes()).padStart(2, '0');
+        return `${hh}:${mm}`;
+      }
+
+      // Object with toDate() (e.g. react-date-object or Firestore)
+      if (typeof val === 'object' && val !== null) {
+        if (typeof val.toDate === 'function') {
+          try {
+            const d = val.toDate();
+            if (d instanceof Date && !isNaN(d.getTime())) {
+              const hh = String(d.getHours()).padStart(2, '0');
+              const mm = String(d.getMinutes()).padStart(2, '0');
+              return `${hh}:${mm}`;
+            }
+          } catch (_) {}
+        }
+        if (typeof val.hour !== 'undefined' && typeof val.minute !== 'undefined') {
+          return `${String(val.hour).padStart(2, '0')}:${String(val.minute).padStart(2, '0')}`;
+        }
+      }
+
+      // String candidate
+      if (typeof val === 'string') {
+        const str = val.trim();
+        if (str.toLowerCase().includes('invalid')) return '';
+
+        // Match HH:mm directly from string like "2024-10-13 14:35" or "1403/07/22 14:35" or "T14:35"
+        const timeMatch = str.match(/(?:T|\s|^)(\d{1,2}):(\d{1,2})(?::\d{1,2})?/);
+        if (timeMatch && (str.includes(':') || str.includes('T'))) {
+          return `${timeMatch[1].padStart(2, '0')}:${timeMatch[2].padStart(2, '0')}`;
+        }
+
+        // Try standard Date.parse
+        const parsedMs = Date.parse(str);
+        if (!isNaN(parsedMs)) {
+          const d = new Date(parsedMs);
+          if (!isNaN(d.getTime())) {
+            const hh = String(d.getHours()).padStart(2, '0');
+            const mm = String(d.getMinutes()).padStart(2, '0');
+            return `${hh}:${mm}`;
+          }
+        }
+      }
+
+      return '';
+    };
+
+    const candidates = [
+      item.time,
+      item.createdAt,
+      item.created_at,
+      item.timestamp,
+      item.rawDate,
+      item.date,
+      item.updatedAt,
+    ];
+
+    for (const c of candidates) {
+      const parsed = tryParseToTime(c);
+      if (parsed && !parsed.toLowerCase().includes('invalid')) {
+        return parsed;
+      }
+    }
+
+    // Fallback to current time when receipt is registered/rendered
+    const now = new Date();
+    const hh = String(now.getHours()).padStart(2, '0');
+    const mm = String(now.getMinutes()).padStart(2, '0');
+    return `${hh}:${mm}`;
+  };
+
+  const timeStr = extractReceiptTime(data);
+  const safeTimeDisplay = timeStr && !timeStr.toLowerCase().includes('invalid') ? toPersianDigits(timeStr) : '';
 
   // Numbers & Words
   const amountNumber = Number(data.amount) || 0;
@@ -369,10 +502,10 @@ export default function ReceiptPrintTemplate({
                   <span className="font-mono">{formattedDate || '-'}</span>
                 </div>
               )}
-              {fields.showTime && timeStr && (
+              {fields.showTime && safeTimeDisplay && (
                 <div className="flex items-center gap-1 text-[10px] text-slate-600">
                   <span className="text-slate-400">ساعت:</span>
-                  <span className="font-mono">{toPersianDigits(timeStr)}</span>
+                  <span className="font-mono font-bold">{safeTimeDisplay}</span>
                 </div>
               )}
               {fields.showTrackingCode && data.trackingCode && (
@@ -384,44 +517,45 @@ export default function ReceiptPrintTemplate({
             </div>
           </div>
 
-          {/* PARTY INFORMATION BOX */}
-          <div className={`p-3 mb-3 rounded-xl ${isOfficial ? 'border border-slate-800 bg-slate-50/50' : 'border border-slate-200 bg-slate-50/70'}`}>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 items-center">
-              <div className="flex items-center gap-1.5 sm:col-span-1">
-                <span className="text-slate-600 font-bold text-xs shrink-0">
+          {/* PARTY INFORMATION BOX - Contact name on a single line with subsequent info immediately following */}
+          <div className={`p-3 mb-3 rounded-xl ${isOfficial ? 'border-2 border-slate-900 bg-slate-50/60' : isMinimal ? 'border border-slate-700 bg-white' : 'border border-slate-200 bg-slate-50/70'}`}>
+            <div className="flex flex-wrap items-center justify-between gap-y-2.5 gap-x-4">
+              {/* Primary line: Label + Contact Name in ONE single line, followed immediately by code & phone */}
+              <div className="flex items-center gap-2.5 flex-wrap min-w-0">
+                <span className="text-slate-600 font-bold text-xs shrink-0 whitespace-nowrap">
                   {isReceive ? 'طرف‌حساب (پرداخت‌کننده):' : 'طرف‌حساب (دریافت‌کننده):'}
                 </span>
                 {fields.showPersonName && (
-                  <span className="font-black text-slate-950 text-xs sm:text-sm">
+                  <span className="font-black text-slate-950 text-xs sm:text-sm whitespace-nowrap">
                     {personName}
                   </span>
                 )}
-              </div>
-
-              <div className="flex items-center gap-2 sm:col-span-1">
+                {/* Subsequent details right after the contact name */}
+                {fields.showPersonCode && (person?.personCode || (person as any)?.code) && (
+                  <span className="text-[10.5px] bg-white border border-slate-300 px-2 py-0.5 rounded font-mono text-slate-700 shrink-0 whitespace-nowrap flex items-center gap-1 shadow-2xs">
+                    <span className="text-slate-400 font-sans text-[10px]">کد شخص:</span>
+                    <span className="font-bold">{toPersianDigits(person.personCode || (person as any)?.code)}</span>
+                  </span>
+                )}
                 {fields.showPersonPhone && person && (person.phone || person.mobile) && (
-                  <span className="text-[11px] text-slate-700 font-bold flex items-center gap-1">
-                    <Phone className="w-3 h-3 text-slate-400" />
+                  <span className="text-[11px] text-slate-700 font-bold flex items-center gap-1 shrink-0 whitespace-nowrap bg-white border border-slate-300 px-2 py-0.5 rounded shadow-2xs">
+                    <Phone className="w-3 h-3 text-slate-400 shrink-0" />
                     <span className="font-mono">{toPersianDigits(person.phone || person.mobile)}</span>
                   </span>
                 )}
-                {fields.showPersonCode && person?.personCode && (
-                  <span className="text-[10px] bg-white border border-slate-200 px-2 py-0.5 rounded font-mono text-slate-600">
-                    کد: {toPersianDigits(person.personCode)}
-                  </span>
-                )}
               </div>
 
+              {/* Financial Balance status right after in flow */}
               {fields.showPersonBalance && balanceAfter !== null && (
-                <div className="text-left sm:col-span-1 flex items-center justify-end gap-1.5">
+                <div className="flex items-center gap-1.5 shrink-0 whitespace-nowrap mr-auto">
                   <span className="text-[11px] text-slate-500 font-bold">وضعیت مانده نهایی:</span>
                   <span
-                    className={`font-black text-xs ${
+                    className={`font-black text-xs px-2.5 py-0.5 rounded ${
                       balanceAfter > 0
-                        ? 'text-emerald-800'
+                        ? 'text-emerald-800 bg-emerald-50 border border-emerald-300'
                         : balanceAfter < 0
-                        ? 'text-rose-800'
-                        : 'text-slate-700'
+                        ? 'text-rose-800 bg-rose-50 border border-rose-300'
+                        : 'text-slate-700 bg-slate-100 border border-slate-300'
                     }`}
                   >
                     {balanceAfter > 0
@@ -617,13 +751,27 @@ export default function ReceiptPrintTemplate({
             <span className="text-slate-500 font-bold">شماره رسید:</span>
             <span className="font-mono font-black">{toPersianDigits(data.receiptNumber || data.id || '-')}</span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500 font-bold">تاریخ و ساعت:</span>
-            <span className="font-mono">{formattedDate} {timeStr ? `- ${toPersianDigits(timeStr)}` : ''}</span>
+          <div className="flex justify-between items-center">
+            <span className="text-slate-500 font-bold shrink-0">تاریخ و ساعت:</span>
+            <span className="font-mono font-bold text-slate-900 whitespace-nowrap">
+              {formattedDate} {safeTimeDisplay ? `- ${safeTimeDisplay}` : ''}
+            </span>
           </div>
-          <div className="flex justify-between">
-            <span className="text-slate-500 font-bold">طرف‌حساب:</span>
-            <span className="font-black text-slate-900 truncate max-w-[150px]">{personName}</span>
+          <div className="py-0.5">
+            <div className="flex items-center gap-1.5 whitespace-nowrap overflow-hidden">
+              <span className="text-slate-500 font-bold shrink-0">طرف‌حساب:</span>
+              <span className="font-black text-slate-900 text-[11px] truncate">{personName}</span>
+            </div>
+            {(fields.showPersonCode || fields.showPersonPhone) && (person?.phone || person?.mobile || (person as any)?.personCode || (person as any)?.code) && (
+              <div className="flex items-center gap-2 text-[10px] text-slate-600 mt-0.5">
+                {fields.showPersonCode && (person?.personCode || (person as any)?.code) && (
+                  <span className="font-mono">کد: {toPersianDigits(person?.personCode || (person as any)?.code)}</span>
+                )}
+                {fields.showPersonPhone && (person?.phone || person?.mobile) && (
+                  <span className="font-mono">تلفن: {toPersianDigits(person?.phone || person?.mobile)}</span>
+                )}
+              </div>
+            )}
           </div>
         </div>
 

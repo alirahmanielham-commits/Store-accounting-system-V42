@@ -2830,6 +2830,10 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
     const personObj = (persons || []).find((p: any) => String(p.id) === String(receiptPersonId));
     const resolvedPersonName = formatPersonName(personObj) !== "نامشخص" ? formatPersonName(personObj) : formatPersonName(receiptPersonId, persons);
 
+    const nowTimestamp = Date.now();
+    const nowDate = new Date(nowTimestamp);
+    const nowTimeStr = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
+
     const basePayload: any = {
       type,
       method: receiptMethod,
@@ -2839,6 +2843,8 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
       amount: Number(receiptAmount),
       date:
         convertToGregorian(receiptDate),
+      time: nowTimeStr,
+      createdAt: nowTimestamp,
       rawDate: receiptDate,
       displayDate: formatDateDisplay(receiptDate, storeSettings?.calendarType),
       description: receiptDescription,

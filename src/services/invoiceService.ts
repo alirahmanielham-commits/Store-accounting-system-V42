@@ -118,8 +118,13 @@ export const getTransactions = async () => {
 export const addTransaction = async (transaction: any) => {
   let activeYear = null; if (transaction.date) activeYear = await checkFinancialYear(transaction.date);
   const now = Date.now();
+  const nowDate = new Date(now);
+  const nowTime = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
   
   let finalTx = { ...transaction };
+  if (!finalTx.time || typeof finalTx.time !== 'string' || finalTx.time.toLowerCase().includes('invalid')) {
+    finalTx.time = nowTime;
+  }
   const docTypeMap: any = { 'receive': 'receive_receipt', 'pay': 'pay_receipt', 'salary': 'salary' };
   const table = mapTransactionTypeToTable(finalTx.type);
 

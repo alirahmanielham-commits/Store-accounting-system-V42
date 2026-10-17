@@ -305,6 +305,10 @@ export default function KeyboardReceiptPage({
         convertedDate = convertToGregorian(dateStr);
       }
 
+      const nowTimestamp = Date.now();
+      const nowDate = new Date(nowTimestamp);
+      const nowTimeStr = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
+
       const payload: any = {
         type: receiptType,
         method: 'cash',
@@ -312,6 +316,8 @@ export default function KeyboardReceiptPage({
         personName,
         amount: parsedAmount,
         date: convertedDate || new Date().toISOString(),
+        time: nowTimeStr,
+        createdAt: nowTimestamp,
         rawDate: dateStr,
         displayDate: dateStr,
         description: noteStr || (receiptType === 'receive' ? `دریافت وجه از ${personName}` : `پرداخت وجه به ${personName}`),
