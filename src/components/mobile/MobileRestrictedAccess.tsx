@@ -11,7 +11,13 @@ import {
   CheckCircle2,
 } from "lucide-react";
 
-export default function MobileRestrictedAccess() {
+export default function MobileRestrictedAccess({
+  currentTab,
+  setActiveTab,
+}: {
+  currentTab?: string;
+  setActiveTab?: (tab: any, force?: boolean) => void;
+} = {}) {
   return (
     <div
       className="fixed inset-0 z-[999999] bg-slate-950 text-white flex flex-col items-center justify-between p-6 overflow-y-auto font-sans select-none"

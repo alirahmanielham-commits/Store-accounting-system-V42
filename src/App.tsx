@@ -230,6 +230,7 @@ import PreviewModals from "./components/modals/PreviewModals";
 import ExtraModals from "./components/modals/ExtraModals";
 import GlobalProcessingOverlay from "./components/GlobalProcessingOverlay";
 import ConfirmModal from "./components/modals/ConfirmModal";
+import HeaderBusinessSelector from "./components/common/HeaderBusinessSelector";
 const BusinessManager = React.lazy(() => import('./components/admin/BusinessManager'));
 const FastStocktakingMobile = React.lazy(() => import('./components/inventory/FastStocktakingMobile'));
 const PricingWizardModal = React.lazy(() => import('./components/modals/PricingWizardModal'));
@@ -1372,21 +1373,9 @@ if (appState.isStoreSelectionOpen) {
         showNotification={showNotification}
         availableStores={appState.availableStores} 
         setAvailableStores={appState.setAvailableStores} 
-        onSelectStore={(id: string) => {
-          localStorage.setItem("activeStoreId", id);
-          sessionStorage.setItem("activeStoreId", id);
-          localStorage.setItem("initial_setup_complete", "true");
-          try {
-            document.cookie = `activeStoreId=${encodeURIComponent(id)}; path=/; max-age=31536000; SameSite=Lax`;
-          } catch (_) {}
-          // Clear previous cached profile and store settings
-          localStorage.removeItem("company_profile");
-          localStorage.removeItem("store_settings");
-          sessionStorage.removeItem("company_profile");
-          sessionStorage.removeItem("store_settings");
-          appState.setActiveStoreId(id);
+        onSelectStore={async (id: string) => {
           appState.setIsStoreSelectionOpen(false);
-          window.location.href = "/financial_report";
+          await appState.switchBusiness(id);
         }}
         onClose={localStorage.getItem("activeStoreId") ? () => appState.setIsStoreSelectionOpen(false) : undefined}
       />
@@ -2234,42 +2223,15 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                             <Layers className="w-4 h-4 relative z-10" />
                           </div>
                         )}
-                        {(() => {
-                          const activeStoreIdVal = (typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || 'default';
-                          const activeStoreObj = appState.availableStores.find(s => s.id === activeStoreIdVal);
-                          const activeStoreName = activeStoreObj?.name || storeSettings.storeName || "کسب‌وکار اصلی";
-                          return (
-                            <button
-                              type="button"
-                              onClick={() => {
-                                appState.confirmAction(
-                                  'آیا از تغییر کسب‌وکار یا مدیریت فروشگاه‌ها اطمینان دارید؟',
-                                  () => { appState.setIsStoreSelectionOpen(true); }
-                                );
-                              }}
-                              className="flex items-center gap-2 px-3 py-1.5 rounded-xl bg-indigo-50/80 hover:bg-indigo-100/90 border border-indigo-200/80 transition-all cursor-pointer shadow-3xs group"
-                              title="کسب‌وکار فعال - برای جابجایی یا افزودن کلیک کنید"
-                            >
-                              <div className="flex flex-col text-right">
-                                <div className="flex items-center gap-1.5">
-                                  <Store className="w-4 h-4 text-indigo-600 shrink-0" />
-                                  <span className="text-xs font-black text-slate-900 group-hover:text-indigo-800 truncate max-w-[130px] sm:max-w-[210px]">
-                                    {activeStoreName}
-                                  </span>
-                                  <span className="text-[9px] px-1.5 py-0.2 rounded-full font-black bg-emerald-100 text-emerald-800 border border-emerald-300 shrink-0">
-                                    کسب‌وکار انتخابی
-                                  </span>
-                                </div>
-                                <span className="text-[10px] text-indigo-600 font-bold flex items-center gap-1">
-                                  <span>تغییر کسب‌وکار</span>
-                                  <ChevronDown className="w-2.5 h-2.5" />
-                                </span>
-                              </div>
-                            </button>
-                          );
-                        })()}
+                        <HeaderBusinessSelector
+                          activeStoreId={(typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || appState.activeStoreId || 'default'}
+                          availableStores={appState.availableStores}
+                          onSwitchBusiness={appState.switchBusiness}
+                          onOpenBusinessManager={() => appState.setIsStoreSelectionOpen(true)}
+                        />
                       </div>
                     </div>
+
 
                     {/* Google style centered Search bar */}
                     {isGmailTheme && (

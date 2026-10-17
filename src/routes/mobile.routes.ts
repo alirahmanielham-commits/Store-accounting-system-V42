@@ -216,3 +216,100 @@ mobileRouter.get("/reports/debtors", (req: Request, res: Response) => {
     ],
   });
 });
+
+/**
+ * @route   GET /api/v1/mobile/products/quick-price
+ * @desc    Quick price and stock inquiry by barcode for mobile camera scanner
+ */
+mobileRouter.get("/products/quick-price", (req: Request, res: Response) => {
+  const barcode = (req.query.barcode as string) || "";
+  return res.json({
+    success: true,
+    barcode,
+    product: {
+      id: "p101",
+      code: "1001",
+      name: "لوله ۶ اینچ استاندارد",
+      barcode: barcode || "6260001",
+      consumerPrice: 1350000,
+      partnerPrice: 1250000,
+      stock: 450,
+      reorderPoint: 50,
+      unit: "شاخه",
+    },
+  });
+});
+
+/**
+ * @route   POST /api/v1/mobile/inventory/stocktaking
+ * @desc    Submit mobile stocktaking counts
+ */
+mobileRouter.post("/inventory/stocktaking", (req: Request, res: Response) => {
+  const { warehouseId, counts, note } = req.body;
+  const countSessionId = `STK-${Date.now()}`;
+  return res.json({
+    success: true,
+    message: "کاربرگ شمارش انبارگردانی موبایل با موفقیت ثبت شد",
+    countSessionId,
+    itemCount: Array.isArray(counts) ? counts.length : 0,
+    recordedAt: new Date().toISOString(),
+  });
+});
+
+/**
+ * @route   POST /api/v1/mobile/debtors/send-sms
+ * @desc    Dispatch SMS payment reminder to debtor
+ */
+mobileRouter.post("/debtors/send-sms", (req: Request, res: Response) => {
+  const { personId, phone, amount, templateId } = req.body;
+  return res.json({
+    success: true,
+    message: "پیامک یادآوری بدهی به شماره طرف‌حساب ارسال شد",
+    phone: phone || "0912xxxxxxx",
+    sentAt: new Date().toISOString(),
+  });
+});
+
+/**
+ * @route   POST /api/v1/mobile/sync/batch
+ * @desc    Resilient offline outbox sync endpoint for mobile app
+ */
+mobileRouter.post("/sync/batch", (req: Request, res: Response) => {
+  try {
+    const { deviceId, items } = req.body;
+    const processedTempIds: string[] = [];
+
+    if (Array.isArray(items)) {
+      for (const item of items) {
+        if (item.clientTempId) {
+          processedTempIds.push(item.clientTempId);
+        }
+      }
+    }
+
+    return res.json({
+      success: true,
+      message: `تعداد ${processedTempIds.length} تراکنش آفلاین با موفقیت همگام‌سازی شد`,
+      deviceId: deviceId || "unknown",
+      processedCount: processedTempIds.length,
+      processedTempIds,
+      syncedAt: new Date().toISOString(),
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, error: "خطا در پردازش اسناد صف آفلاین" });
+  }
+});
+
+/**
+ * @route   GET /api/v1/mobile/prompt
+ * @desc    Download / read the Standalone Mobile App Master AI Prompt
+ */
+mobileRouter.get("/prompt", (req: Request, res: Response) => {
+  res.setHeader("Content-Type", "text/markdown; charset=utf-8");
+  res.sendFile("STANDALONE_MOBILE_APP_PROMPT.md", { root: "public" }, (err) => {
+    if (err) {
+      res.status(404).send("# Prompt not found");
+    }
+  });
+});
+

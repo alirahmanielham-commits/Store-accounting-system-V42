@@ -39,8 +39,11 @@ router.get('/api/databases', async (req, res) => {
   try {
     let dbsFromTable: any[] = [];
     
-    // 1. Check PostgreSQL businesses table if active
+    // 1. Check PostgreSQL businesses table in default database as authoritative source
     try {
+      if (!activePgPools['default']) {
+        await loadPgPoolForStore('default');
+      }
       if (usePgMap['default'] && activePgPools['default']) {
         await ensureBusinessesTable(activePgPools['default']);
         const r = await activePgPools['default'].query("SELECT * FROM businesses ORDER BY created_at ASC");
@@ -335,102 +338,11 @@ router.post('/api/databases', async (req, res) => {
       createdAt: Date.now()
     };
 
-    const initialCategories = [
-      { id: 'cat-general', name: 'کالاهای عمومی', code: 'CAT-01', createdAt: Date.now() },
-      { id: 'cat-service', name: 'خدمات', code: 'CAT-02', createdAt: Date.now() }
-    ];
-
+    // New business environment is initialized clean and raw without initial sample data or demo products
+    const initialCategories: any[] = [];
     const initialPersons: any[] = [];
     const initialProducts: any[] = [];
 
-    if (starterPack) {
-      initialPersons.push({
-        id: 'person-retail-cash',
-        name: 'مشتری عمومی (نقدی)',
-        alias: 'مشتری نقدی',
-        personType: 'individual',
-        role: 'customer',
-        personCode: '1001',
-        phone: '09120000000',
-        initialBalance: 0,
-        initialBalanceType: 'settled',
-        createdAt: Date.now()
-      });
-      initialPersons.push({
-        id: 'person-supplier-default',
-        name: 'تامین‌کننده نمونه',
-        alias: 'تامین‌کننده اصلی',
-        personType: 'company',
-        role: 'supplier',
-        personCode: '2001',
-        phone: '02188888888',
-        initialBalance: 0,
-        initialBalanceType: 'settled',
-        createdAt: Date.now()
-      });
-
-      initialProducts.push({
-        id: 'prod-sample-1',
-        code: '101',
-        barcode: '626000000101',
-        name: 'کالای نمونه شماره ۱',
-        categoryId: 'cat-general',
-        unit: 'عدد',
-        type: 'goods',
-        purchasePrice: 120000,
-        sellPrice: 180000,
-        currentStock: 50,
-        initialStock: 50,
-        warehouseId: defaultWh.id,
-        createdAt: Date.now()
-      });
-    } else {
-      if (customPerson && customPerson.name?.trim()) {
-        const isLegal = customPerson.personType === 'legal' || customPerson.personType === 'company';
-        initialPersons.push({
-          id: 'person-' + Date.now(),
-          name: customPerson.name.trim(),
-          alias: customPerson.alias?.trim() || customPerson.name.trim(),
-          personType: isLegal ? 'legal' : 'real',
-          role: customPerson.role || 'customer',
-          roles: [customPerson.role || 'customer'],
-          personCode: customPerson.personCode?.trim() || '1001',
-          nationalId: customPerson.nationalId?.trim() || '',
-          economicCode: customPerson.economicCode?.trim() || '',
-          registrationNumber: customPerson.registrationNumber?.trim() || '',
-          phone: customPerson.phone?.trim() || '',
-          mobile: customPerson.mobile?.trim() || customPerson.phone?.trim() || '',
-          province: customPerson.province?.trim() || '',
-          city: customPerson.city?.trim() || '',
-          address: customPerson.address?.trim() || '',
-          bankName: customPerson.bankName?.trim() || '',
-          accountNumber: customPerson.accountNumber?.trim() || '',
-          cardNumber: customPerson.cardNumber?.trim() || '',
-          shebaNumber: customPerson.shebaNumber?.trim() || '',
-          initialBalance: Number(customPerson.initialBalance) || 0,
-          balance: Number(customPerson.initialBalance) || 0,
-          initialBalanceType: customPerson.initialBalanceType || 'settled',
-          status: 'active',
-          createdAt: Date.now()
-        });
-      }
-      if (customProduct && customProduct.name?.trim()) {
-        initialProducts.push({
-          id: 'prod-' + Date.now(),
-          code: '101',
-          name: customProduct.name.trim(),
-          categoryId: 'cat-general',
-          unit: customProduct.unit || 'عدد',
-          type: 'goods',
-          purchasePrice: Number(customProduct.purchasePrice) || 0,
-          sellPrice: Number(customProduct.salePrice) || 0,
-          currentStock: Number(customProduct.initialStock) || 0,
-          initialStock: Number(customProduct.initialStock) || 0,
-          warehouseId: defaultWh.id,
-          createdAt: Date.now()
-        });
-      }
-    }
 
     // 1. Provision separate PostgreSQL database for the business
     const connectionString = await getDefaultPgConnectionString();
@@ -567,41 +479,7 @@ router.post('/api/databases', async (req, res) => {
         ]);
       } catch (_) {}
 
-      // Seed categories
-      for (const cat of initialCategories) {
-        try {
-          await initPool.query(`
-            INSERT INTO product_categories (id, name, code, created_at)
-            VALUES ($1, $2, $3, $4)
-            ON CONFLICT(id) DO NOTHING
-          `, [cat.id, cat.name, cat.code, cat.createdAt]);
-        } catch (_) {}
-      }
-
-      // Seed persons
-      for (const p of initialPersons) {
-        try {
-          await initPool.query(`
-            INSERT INTO persons (id, name, alias, person_type, role, person_code, phone, initial_balance, initial_balance_type, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-            ON CONFLICT(id) DO NOTHING
-          `, [p.id, p.name, p.alias, p.personType, p.role, p.personCode, p.phone, p.initialBalance, p.initialBalanceType, p.createdAt]);
-        } catch (_) {}
-      }
-
-      // Seed products
-      for (const pr of initialProducts) {
-        try {
-          await initPool.query(`
-            INSERT INTO products (id, code, barcode, name, category_id, unit, type, purchase_price, sell_price, current_stock, initial_stock, warehouse_id, created_at)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
-            ON CONFLICT(id) DO NOTHING
-          `, [
-            pr.id, pr.code, pr.barcode || '', pr.name, pr.categoryId, pr.unit, pr.type,
-            pr.purchasePrice, pr.sellPrice, pr.currentStock, pr.initialStock, pr.warehouseId, pr.createdAt
-          ]);
-        } catch (_) {}
-      }
+      // The new business environment is completely clean without mock/demo products, persons, or categories
 
       await initPool.end();
     } catch (initErr) {

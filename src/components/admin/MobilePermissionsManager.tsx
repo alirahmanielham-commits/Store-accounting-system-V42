@@ -21,6 +21,12 @@ import {
   Plus,
   Trash2,
   Laptop,
+  FileText,
+  Copy,
+  Download,
+  ExternalLink,
+  Sparkles,
+  X,
 } from "lucide-react";
 import { User } from "../../types";
 
@@ -119,7 +125,7 @@ export default function MobilePermissionsManager({
     }
   }, [users, selectedUserId]);
 
-  const selectedUser = users.find((u) => String(u.id) === String(selectedUserId)) || users[0];
+  const selectedUser = users.find((u) => String(u.id) === selectedUserId) || users[0];
 
   const currentPermission: MobileUserPermission =
     permissionsMap[selectedUserId] ||
@@ -274,6 +280,53 @@ export default function MobilePermissionsManager({
     }
   };
 
+  const [showPromptModal, setShowPromptModal] = useState(false);
+  const [promptCopied, setPromptCopied] = useState(false);
+  const [promptLoading, setPromptLoading] = useState(false);
+  const [promptText, setPromptText] = useState("");
+
+  const handleOpenPromptModal = async () => {
+    setShowPromptModal(true);
+    if (!promptText) {
+      setPromptLoading(true);
+      try {
+        const res = await fetch("/STANDALONE_MOBILE_APP_PROMPT.md");
+        if (res.ok) {
+          const text = await res.text();
+          setPromptText(text);
+        } else {
+          setPromptText("// فایل STANDALONE_MOBILE_APP_PROMPT.md یافت نشد.");
+        }
+      } catch (err) {
+        setPromptText("// خطا در دریافت متن پرامپت.");
+      } finally {
+        setPromptLoading(false);
+      }
+    }
+  };
+
+  const handleCopyPrompt = () => {
+    if (!promptText) return;
+    navigator.clipboard.writeText(promptText);
+    setPromptCopied(true);
+    showNotification?.("متن پرامپت جامع اپ موبایل در کلیپ‌بورد کپی شد", "success");
+    setTimeout(() => setPromptCopied(false), 3000);
+  };
+
+  const handleDownloadPrompt = () => {
+    if (!promptText) return;
+    const blob = new Blob([promptText], { type: "text/markdown;charset=utf-8;" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.setAttribute("download", "STANDALONE_MOBILE_APP_PROMPT.md");
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    URL.revokeObjectURL(url);
+    showNotification?.("فایل پرامپت مستر دانلود شد", "success");
+  };
+
   const filteredUsers = users.filter((u) => {
     if (!searchQuery.trim()) return true;
     const q = searchQuery.toLowerCase();
@@ -298,19 +351,30 @@ export default function MobilePermissionsManager({
           </div>
         </div>
 
-        <button
-          type="button"
-          onClick={handleSaveAll}
-          disabled={isSaving}
-          className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs transition-all flex items-center gap-2 shadow-md shadow-indigo-600/30 cursor-pointer active:scale-95"
-        >
-          {isSaving ? (
-            <RefreshCw className="w-4 h-4 animate-spin" />
-          ) : (
-            <Save className="w-4 h-4" />
-          )}
-          <span>ذخیره نهایی دسترسی‌های همراه</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          <button
+            type="button"
+            onClick={handleOpenPromptModal}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black text-xs transition-all flex items-center gap-2 shadow-md shadow-violet-600/30 cursor-pointer active:scale-95"
+          >
+            <Sparkles className="w-4 h-4 text-amber-300" />
+            <span>پرامپت هوش مصنوعی اپ موبایل (Master Prompt)</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={handleSaveAll}
+            disabled={isSaving}
+            className="px-5 py-2.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs transition-all flex items-center gap-2 shadow-md shadow-indigo-600/30 cursor-pointer active:scale-95"
+          >
+            {isSaving ? (
+              <RefreshCw className="w-4 h-4 animate-spin" />
+            ) : (
+              <Save className="w-4 h-4" />
+            )}
+            <span>ذخیره نهایی دسترسی‌های همراه</span>
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-6">
@@ -334,7 +398,7 @@ export default function MobilePermissionsManager({
 
           <div className="space-y-1.5 overflow-y-auto flex-1 pr-0.5">
             {filteredUsers.map((u) => {
-              const isSelected = String(u.id) === String(selectedUserId);
+              const isSelected = String(u.id) === selectedUserId;
               return (
                 <button
                   key={u.id}
@@ -591,6 +655,93 @@ export default function MobilePermissionsManager({
           </div>
         </div>
       </div>
+
+      {/* Master Mobile AI Prompt Modal */}
+      {showPromptModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700/80 rounded-3xl w-full max-w-4xl max-h-[90vh] flex flex-col shadow-2xl text-white overflow-hidden">
+            {/* Modal Header */}
+            <div className="p-5 border-b border-slate-800 flex items-center justify-between bg-slate-950/80">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-500/20 border border-indigo-400/30 text-indigo-400 flex items-center justify-center">
+                  <Sparkles className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-sm font-black text-white flex items-center gap-2">
+                    <span>پرامپت جامع هوش مصنوعی جهت ساخت اپلیکیشن موبایل تراز</span>
+                    <span className="text-[10px] bg-indigo-500/30 text-indigo-300 border border-indigo-400/40 px-2 py-0.5 rounded-full font-bold">
+                      React Native + Expo
+                    </span>
+                  </h3>
+                  <p className="text-xs text-slate-400 font-medium mt-0.5">
+                    طراحی‌شده برای ۵ ماژول کامل (فروش/خرید با بارکدخوان، خزانه‌داری/صیاد، اشخاص و تگ، مطالبات، انبارگردانی) + صف آفلاین
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setShowPromptModal(false)}
+                className="w-8 h-8 rounded-full bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {/* Modal Action Bar */}
+            <div className="px-5 py-3 bg-slate-900/90 border-b border-slate-800 flex flex-wrap items-center justify-between gap-3 text-xs">
+              <div className="flex items-center gap-2 text-slate-400 text-xs">
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                <span>فایل مرجع: <code className="text-indigo-300 font-mono">public/STANDALONE_MOBILE_APP_PROMPT.md</code></span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyPrompt}
+                  className="px-4 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold flex items-center gap-1.5 cursor-pointer transition-all active:scale-95"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>{promptCopied ? "کپی شد!" : "کپی کل پرامپت برای هوش مصنوعی"}</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleDownloadPrompt}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold flex items-center gap-1.5 cursor-pointer border border-slate-700 transition-all"
+                >
+                  <Download className="w-3.5 h-3.5" />
+                  <span>دانلود فایل (.md)</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Modal Body / Code Preview */}
+            <div className="p-5 flex-1 overflow-y-auto bg-slate-950 font-mono text-xs text-slate-300 leading-relaxed select-text dir-ltr text-left">
+              {promptLoading ? (
+                <div className="py-20 text-center text-slate-500 flex flex-col items-center gap-3">
+                  <RefreshCw className="w-6 h-6 animate-spin text-indigo-400" />
+                  <span>در حال فراخوانی پرامپت جامع از سرور...</span>
+                </div>
+              ) : (
+                <pre className="whitespace-pre-wrap break-words">{promptText}</pre>
+              )}
+            </div>
+
+            {/* Modal Footer */}
+            <div className="p-4 border-t border-slate-800 bg-slate-950/90 flex items-center justify-between text-xs text-slate-400">
+              <span>راهنما: این متن را کپی کرده و به عنوان دستور ساخت در Claude، Cursor یا ChatGPT وارد فرمایید.</span>
+              <button
+                type="button"
+                onClick={() => setShowPromptModal(false)}
+                className="px-4 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-white font-bold cursor-pointer"
+              >
+                بستن
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

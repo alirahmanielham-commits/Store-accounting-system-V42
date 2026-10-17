@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Menu, Settings, Bell, Search, Moon, Sun, Power, AlertTriangle, Grid3x3, ShoppingCart, Box, Calculator, Users, FileText, PieChart, LayoutGrid } from 'lucide-react';
 import NotificationBell from '../../../components/notifications/NotificationBell';
+import HeaderBusinessSelector from '../../../components/common/HeaderBusinessSelector';
 
 interface HeaderProps {
   appState: any;
@@ -80,6 +81,14 @@ export default function Header({ appState, toggleSidebar, isDarkMode, toggleDark
         </button>
         <div className={`hidden sm:flex items-center px-3 py-2 text-[15px] font-medium transition-colors ${isDarkMode ? 'text-gray-300' : 'text-gray-600'}`}>
           <span>{appModules.find(m => m.id === systemModule)?.title || 'داشبورد'}</span>
+        </div>
+        <div className="mr-2">
+          <HeaderBusinessSelector
+            activeStoreId={(typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || appState.activeStoreId || 'default'}
+            availableStores={appState.availableStores}
+            onSwitchBusiness={appState.switchBusiness}
+            onOpenBusinessManager={() => appState.setIsStoreSelectionOpen(true)}
+          />
         </div>
       </div>
       

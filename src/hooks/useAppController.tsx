@@ -2,6 +2,7 @@ import { exportToExcel, formatDecimalForExcel } from "../utils/exportUtils";
 import { autoGenerateRentCommitments } from "../services/hrService";
 import { hasPagePermission, getPageTitle } from "../utils/permissionUtils";
 import { suspendAppDataChanged, resumeAppDataChanged, invalidateCache, getAuthHeaders } from "../services/coreService";
+import { syncBusinessDataToIndexedDb } from "../services/indexedDbService";
 import CustomDatePicker from "../components/ui/CustomDatePicker";
 import { SystemUpdatePage } from "../components/admin/SystemUpdatePage";
 import { PersonalNotesManager } from "../components/notes/PersonalNotesManager";
@@ -4037,8 +4038,118 @@ const fetchData = async () => {
       ]);
 
       await autoGenerateRentCommitments();
+
+      // Silently sync freshly fetched data to the isolated IndexedDB of the active business
+      try {
+        const curStoreId = (typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || 'default';
+        syncBusinessDataToIndexedDb(curStoreId, {
+          products,
+          persons,
+          invoices,
+          transactions,
+          accounts,
+          cashboxes,
+          warehouses
+        });
+      } catch (_) {}
     } catch (error) {
       console.error("Error fetching data:", error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  /**
+   * Seamless online business switching:
+   * 1. Resets in-memory client state immediately
+   * 2. Sets cookie & localStorage for the new business
+   * 3. Fetches new business data without full page reload
+   * 4. Syncs to the business's own IndexedDB
+   */
+  const switchBusiness = async (newStoreId: string) => {
+    if (!newStoreId) return;
+    const currentId = activeStoreId || (typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || 'default';
+    if (newStoreId === currentId) {
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      // 1. Invalidate HTTP in-memory caches
+      invalidateCache();
+
+      // 2. Clear client in-memory state immediately so previous store data is not visible
+      setProducts([]);
+      setPersons([]);
+      setInvoices([]);
+      setTransactions([]);
+      setAccounts([]);
+      setCashboxes([]);
+      setWarehouses([]);
+      setPersonGroups([]);
+      setPersonRoles([]);
+      setAccountingDocuments([]);
+      setIssuedChecks([]);
+      setReceivedChecks([]);
+      setSmsMessages([]);
+      setActiveFinancialYearState(null);
+
+      // 3. Clear stored keys for old store settings in session/local storage
+      localStorage.removeItem("company_profile");
+      localStorage.removeItem("store_settings");
+      sessionStorage.removeItem("company_profile");
+      sessionStorage.removeItem("store_settings");
+
+      // 4. Update storage & cookies to new storeId
+      localStorage.setItem("activeStoreId", newStoreId);
+      sessionStorage.setItem("activeStoreId", newStoreId);
+      localStorage.setItem("initial_setup_complete", "true");
+      try {
+        document.cookie = `activeStoreId=${encodeURIComponent(newStoreId)}; path=/; max-age=31536000; SameSite=Lax`;
+      } catch (_) {}
+
+      // 5. Update Zustand store
+      setActiveStoreId(newStoreId);
+      setIsStoreSelectionOpen(false);
+
+      // 6. Fetch fresh data for the newly active store
+      await Promise.all([
+        fetchPersonRoles(),
+        fetchPersonGroups(),
+        fetchPersons(),
+        fetchPersonOpeningBalances(),
+        fetchProducts(),
+        fetchAccounts(),
+        fetchCashboxes(),
+        fetchWarehouses(),
+        fetchSettings(),
+        fetchTransactions(),
+        fetchAccountingDocuments(),
+        fetchChecks(),
+        fetchSmsMessages(),
+        fetchFinancialYearInfo(),
+        fetchLoansAndInstallments(),
+        fetchInvoices(),
+      ]);
+
+      await autoGenerateRentCommitments();
+
+      // 7. Sync new store data to its dedicated IndexedDB
+      try {
+        const targetBiz = availableStores.find((s: any) => s.id === newStoreId);
+        await syncBusinessDataToIndexedDb(newStoreId, {
+          meta: { businessName: targetBiz?.name || newStoreId, switchedAt: Date.now() }
+        });
+      } catch (idbErr) {
+        console.warn("IndexedDB sync warning:", idbErr);
+      }
+
+      const storeName = availableStores.find((s: any) => s.id === newStoreId)?.name || 'کسب‌وکار انتخابی';
+      showNotification(`محیط کاری به «${storeName}» با موفقیت تغییر یافت.`, 'success');
+    } catch (err: any) {
+      console.error("Error switching business:", err);
+      showNotification(`خطا در تغییر کسب‌وکار: ${err.message || 'مشکل در بارگذاری اطلاعات'}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -7590,6 +7701,7 @@ const renderTabContent = () => {
     formatNumber,
     handleApprovePurchaseInvoice,
     handleApproveWarehouseReceipt,
+    switchBusiness,
     renderTabContent
   };
 }

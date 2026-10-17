@@ -1,120 +1,103 @@
-# Standalone Mobile App Master AI Prompt Specification
+# طرح اجرایی جامع تفکیک کامل و سوئیچینگ بدون وقفه کسب‌وکارها (Multi-Business Architecture)
 
-A comprehensive, production-grade master prompt designed to be copied directly into any AI code generation model (Claude, Cursor, Gemini, ChatGPT) to build the complete, standalone React Native / Expo mobile application connected to the central Taraz accounting system.
-
----
-
-## User Review & Confirmed Choices
-
-- **Framework & Target Platform**: React Native with Expo (Cross-platform Android & iOS).
-- **UI Design & Theme**: Ultra-modern Dark Mode aesthetic (`bg-slate-950`), vibrant module accent gradients, high-contrast typography (IRANYekanX / Vazirmatn fonts), and ergonomic touch targets ($\ge 44\text{px}$).
-- **API Connection & Authentication**: Dynamic Server API URL config screen, JWT Bearer Token authentication, and hardware Device ID registration header (`X-Device-Fingerprint`).
-- **Functional Scope**: All 5 core mobile modules:
-  1. **صدور فاکتور فروش و خرید** (Sale & Purchase Invoices with real-time barcode scanner and stock check)
-  2. **ثبت رسید دریافت و پرداخت وجه** (Cash, POS, Bank receipts)
-  3. **ثبت و کارتابل چک‌های صیادی** (Sayad Checks registration & status workflow)
-  4. **بانک اشخاص و کارت حساب** (Customer search, Ledger Card, Customer Profile)
-  5. **گزارش بدهکاران و ویترین مطالبات** (Live overdue debtors list with 1-tap call/SMS)
+این سند نقشه راه فنی برای برطرف‌سازی اساسی ساختار مدیریت کسب‌وکارها، تفکیک صددرصدی پایگاه‌های داده در سرور (PostgreSQL) و کلاینت (IndexedDB)، استعلام انحصاری از دیتابیس اصلی، و ایجاد تجربه کاربری یکپارچه و آنی در سوئیچ بین کسب‌وکارها بر مبنای پاسخ‌های ارائه‌شده تدوین شده است.
 
 ---
 
-## Master Prompt for AI Application Builder
+## ۱. تحلیل وضعیت فعلی و نیازمندی‌ها
 
-Copy and paste the following master prompt into your AI builder tool (e.g. Cursor, Claude 3.5 Sonnet, ChatGPT, or AI Studio):
-
-```markdown
-# MASTER PROMPT: BUILD STANDALONE REACT NATIVE (EXPO) MOBILE APP FOR TARAZ ACCOUNTING SYSTEM
-
-You are a Senior Mobile Software Engineer specializing in React Native, Expo, and TypeScript.
-Build a complete, standalone, production-grade mobile application for the "Taraz Accounting System" (سامانه مالی و حسابداری تراز) that connects online in real-time to the central accounting REST API.
-
----
-
-## 1. TECHNICAL ARCHITECTURE & STACK
-
-- **Framework**: React Native with Expo (SDK 51+), TypeScript, React Navigation (Native Stack & Bottom Tabs).
-- **Icons & UI System**: `lucide-react-native`, `react-native-reanimated`, `react-native-gesture-handler`, `expo-barcode-scanner` / `expo-camera`, `expo-device`, `expo-secure-store`.
-- **Styling**: NativeWind (Tailwind CSS for React Native) or styled-components with clean Dark Mode posture (`#020617` canvas).
-- **RTL & Font**: Native Right-to-Left (`I18nManager.allowRTL(true)`), Persian digits (`toPersianDigits`), IRANYekanX or Vazirmatn Persian typography, tabular numerals for currency values (`tabular-nums`).
-- **HTTP Client**: Axios instance with automatic JWT Bearer token injection, device fingerprint header (`X-Device-Fingerprint`), request timeouts (10s), and error interceptors.
+### مشکلات شناسایی‌شده در کد فعلی:
+1. **عدم انحصار در جدول `businesses` دیتابیس اصلی**:
+   - در حال حاضر کدهایی برای فایل‌های پشتیبان `businesses.json` و فایل‌های پراکنده `data_store_*.json` وجود دارد که با اصل تفکیک دیتابیس و ارتباط صرفاً از طریق جدول `businesses` در دیتابیس اصلی تناقض دارد.
+2. **پیکربندی `db_config`**:
+   - باید تضمین شود که فایل `db_config.json` فقط و فقط حاوی تنظیمات اتصال به دیتابیس اصلی (یا سرور مرکزی) است و هیچ نام، کلید، یا مسیردهی از کسب‌وکارهای فرعی در آن ذخیره نمی‌شود.
+3. **عدم تفکیک IndexedDB در مرورگر کلاینت**:
+   - داده‌های محلی در کلاینت یکپارچه یا درون حافظه موقت مشترک نگهداری می‌شوند؛ باید برای هر کسب‌وکار یک پایگاه داده IndexedDB کاملاً مجزا با پیشوند نام متناظر (مانند `hesabpak_business_[id]`) ساخته و متصل شود.
+4. **سوئیچ سنتی با رفرش کامل صفحه (`window.location.href`)**:
+   - هنگام تعویض کسب‌وکار، متد فعلی صفحه را با `window.location.href` بازنشانی می‌کند که باعث پرش تصویر و قطع تجربه کاربری می‌شود. نیاز به سوئیچینگ آنی، پاکسازی متغیرهای درون حافظه کلاینت و واکشی مستقیم داده‌های کسب‌وکار جدید بدون رفرش صفحه است.
+5. **منوی کشویی هدر**:
+   - در هدر، کلیک روی نام کسب‌وکار صفحه کامل BusinessManager را باز می‌کرد؛ باید یک منوی کشویی زیبا و واکنش‌گرا (Dropdown) در هدر اصلی قرار گیرد که لیست کسب‌وکارها، کسب‌وکار فعال، گزینه تغییر آنی و دکمه مدیریت کامل را در دسترس قرار دهد.
+6. **محیط خام برای کسب‌وکار جدید**:
+   - مطابق تصمیم کاربر، در زمان ایجاد کسب‌وکار جدید نباید کالای تستی یا شخص نمونه (starterPack) اضافه شود، بلکه دیتابیس باید کاملاً خام با ساختار جداول آماده و فقط تنظیمات اولیه نام و واحد پول ایجاد گردد.
 
 ---
 
-## 2. API CONTRACT & BACKEND ENDPOINTS
+## ۲. اهداف و معماری جدید
 
-The central server exposes the following RESTful API endpoints at `/api/v1/mobile`:
+```
+[ کلاینت (مرورگر) ]
+  ├── منوی کشویی هدر (Header Business Dropdown) -> سوئیچ آنلاین و بدون ریفرش
+  ├── سرویس IndexedDB مجزا:
+  │     ├── hesabpak_business_default
+  │     ├── hesabpak_business_store_xxx
+  │     └── hesabpak_business_store_yyy
+  └── ارسال هدر 'x-store-id' در تمام درخواست‌های شبکه به سرور
 
-1. **Auth & Device Registration**:
-   - `POST /api/v1/mobile/auth/login`: `{ username, password, deviceId }` -> returns `{ token, user, permissions }`
-   - `GET /api/v1/mobile/auth/my-permissions`: returns active user permissions
-2. **Products & Inventory**:
-   - `GET /api/v1/mobile/products/search?q={query}`: returns real-time product list, prices, and stock
-3. **Persons & Customer Ledger**:
-   - `GET /api/v1/mobile/persons/search?q={query}`: returns customer list with live debtor/creditor balance
-   - `GET /api/v1/mobile/persons/:id/ledger`: returns customer ledger entries (دفتر معین)
-4. **Sales & Purchase Invoices**:
-   - `POST /api/v1/mobile/invoices/sale`: `{ personId, items, totalPrice }` -> issues invoice online
-5. **Treasury & Receipts**:
-   - `POST /api/v1/mobile/receipts/receive`: `{ personId, amount, type }` -> creates receive receipt
-6. **Checks**:
-   - `POST /api/v1/mobile/checks/receive`: `{ SayadNo, bankName, amount, dueDate, personId }`
-7. **Debtors Report**:
-   - `GET /api/v1/mobile/reports/debtors`: returns live list of overdue customers
-
----
-
-## 3. UI/UX DESIGN CONSTITUTION & DARK THEME
-
-- **Canvas Background**: Deep Slate Black (`#020617` / `bg-slate-950`).
-- **Surface Elevation**: Subdued slate cards (`#0f172a` / `bg-slate-900`) with subtle hairline borders (`border-slate-800`).
-- **Accent Budget**:
-  - **Teal / Emerald**: Receipts & Incoming Payments (`#10b981`).
-  - **Sky Blue**: Sayad Checks (`#0284c7`).
-  - **Indigo / Purple**: Persons & Ledger Cards (`#6366f1`).
-  - **Rose / Pink**: Debts & Overdue Alerts (`#f43f5e`).
-- **Touch Ergonomics**: All buttons and list rows must have at least **44x44px touch hitboxes**.
-- **No Static Pill Enclosures**: Render metadata (dates, codes, tags) as unboxed quiet text with `·` separators.
-
----
-
-## 4. SCREEN HIERARCHY & NAVIGATION
-
-### Screen A: Server Setup & Login (`/screens/LoginScreen.tsx`)
-- Server API URL configuration modal (allows entering custom server IP/Domain e.g. `https://my-store.taraz.ir`).
-- Username & Password inputs with show/hide password toggle.
-- Automatic Hardware Device ID detection via `expo-device`.
-- Biometric Login (FaceID / Fingerprint) setup option.
-
-### Screen B: Main Bottom Tab Navigator (`/navigation/BottomTabNavigator.tsx`)
-1. **داشبورد (Home)**: Quick stats, total today's sales, server connection badge, and 5 quick action tiles.
-2. **فاکتور فروش (Sale Invoice)**:
-   - Live customer selector search box.
-   - Fast Barcode Scanner trigger (`expo-barcode-scanner`).
-   - Real-time product search with item counter & discount inputs.
-   - Instant "ثبت نهایی فاکتور" CTA with success modal and print preview.
-3. **دریافت وجه (Receive Receipt)**:
-   - Amount currency input with Iranian Toman words (`numberToWords`).
-   - Payment method toggle: Cash (نقد), POS Terminal (کارتخوان), Sayad Check (چک صیادی).
-4. **اشخاص و معین (Persons & Ledger)**:
-   - Customer search bar.
-   - Expandable customer card showing phone number, address, and live balance (`بدهکار` / `بستانکار`).
-   - 1-tap "مشاهده کارت حساب (معین)" modal.
-5. **مطالبات و بدهکاران (Debtors Report)**:
-   - High-contrast list of overdue accounts.
-   - 1-tap "تماس تلفنی" and "ارسال پیامک پیگیری".
-
----
-
-## 5. CODE QUALITY & HARDENING
-
-- Full TypeScript strict mode typing for all state, props, and API responses.
-- Complete offline-handling banner (informs user if server connection drops).
-- Input validation on all currency and date fields.
-- Graceful error boundaries and toast notifications.
+[ سرور (Express / Node.js) ]
+  ├── db_config.json (صرفاً اطلاعات اتصال به سرور مرکزی و دیتابیس اصلی)
+  ├── دیتابیس کسب‌وکار اصلی (Default Database):
+  │     └── جدول مرکزی `businesses` (شناسه، نام، مشخصات و نام پایگاه داده مجزا)
+  └── دیتابیس‌های مجزای هر کسب‌وکار (Isolated Databases):
+        ├── store_default (یا دیتابیس اصلی)
+        ├── store_xxx (پایگاه داده مستقل PostgreSQL برای کسب‌وکار ۱)
+        └── store_yyy (پایگاه داده مستقل PostgreSQL برای کسب‌وکار ۲)
 ```
 
 ---
 
-## Implementation Summary
+## ۳. مراحل اجرایی گام‌به‌گام
 
-This master prompt is 100% self-contained, specifies the React Native Expo stack, Dark Mode theme, API contracts, RTL Persian typography, and all 5 operational screens. You can copy the code block directly into any AI code generator to build the standalone app codebase.
+### گام اول: اصلاح و تثبیت لایه اتصال سرور (`src/db/connection.ts` و `schema-sync.ts`)
+- حذف کامل هرگونه وابستگی به فایل‌های متفرقه `businesses.json` یا فایل‌های JSON کمکی در مسیر سرور.
+- اتصال به کسب‌وکارهای فرعی فقط و فقط با واکشی مستقیم از جدول `businesses` در دیتابیس اصلی (`activePgPools['default']`).
+- اطمینان از اینکه فایل `db_config.json` فقط اطلاعات اتصال سرور PostgreSQL دیتابیس اصلی را نگه می‌دارد.
+- خودکارسازی ایجاد دیتابیس مجزای PostgreSQL برای هر کسب‌وکار در صورت عدم وجود (`CREATE DATABASE "store_[id]"`).
+- اجرای مایگریشن جداول استاندارد حسابداری در دیتابیس مجزای هر کسب‌وکار به صورت مستقل.
+
+### گام دوم: اصلاح مسیرهای مدیریت دیتابیس (`src/routes/database.routes.ts`)
+- در روت `GET /api/databases`: واکشی صرفاً از جدول `businesses` دیتابیس اصلی.
+- در روت `POST /api/databases`:
+  - ایجاد فیزیکی دیتابیس مستقل در PostgreSQL به نام `store_[cleanId]`.
+  - اجرای شمای جداول در دیتابیس جدید به صورت کاملاً خام (بدون ثبت اشخاص دمو، کالاهای دمو یا تراکنش‌های فرضی).
+  - ثبت اطلاعات شناسنامه‌ای کسب‌وکار جدید فقط در جدول `businesses` دیتابیس اصلی.
+- در روت‌های `PUT` و `DELETE`: ویرایش یا حذف منحصراً بر روی رکورد جدول `businesses` و دیتابیس مجزای متناظر.
+
+### گام سوم: توسعه لایه مجزای IndexedDB کلاینت (`src/services/indexedDbService.ts`)
+- ایجاد یک ماژول استاندارد کار با IndexedDB در سمت کلاینت با نام متناظر با هر فروشگاه (`hesabpak_business_[storeId]`).
+- نگهداری جداول محلی تفکیک‌شده (کالاها، اشخاص، فاکتورها، حساب‌ها، تنظیمات).
+- فراهم‌سازی متد `switchIndexedDbStore(storeId)` برای بستن دیتابیس قبلی و باز کردن پایگاه داده متناظر با کسب‌وکار فعال.
+
+### گام چهارم: پیاده‌سازی متد سوئیچ آنی بدون ریفرش (`useAppController.tsx` و `useStore`)
+- افزودن اکشن اختصاصی `switchActiveBusiness(targetStoreId: string)`:
+  1. به‌روزرسانی `activeStoreId` در `localStorage`، `sessionStorage` و `document.cookie`.
+  2. پاکسازی کامل مقادیر و آرایه‌های درون حافظه کلاینت (`invoices`, `products`, `persons`, `accounts`, `cashboxes`, `settings`, ...).
+  3. تغییر پایگاه داده فعال در `indexedDbService`.
+  4. فراخوانی تابع جامع `fetchData()` جهت بارگذاری آنی اطلاعات دیتابیس کسب‌وکار جدید از طریق ارسال خودکار هدر `x-store-id`.
+  5. نمایش اعلان موفقیت‌آمیز سوئیچ محیط با حفظ صفحه فعلی و بدون ریفرش مرورگر (`zero reload`).
+
+### گام پنجم: طراحی و ارتقای منوی کشویی هدر اصلی (`App.tsx` و `Header.tsx`)
+- تبدیل دکمه فعلی هدر به یک کامپوننت منوی کشویی حرفه‌ای (Dropdown):
+  - نمایش نام و آیکون کسب‌وکار جاری با بج وضعیت فعال.
+  - باز شدن لیست کلیه کسب‌وکارهای تعریف‌شده با یک کلیک.
+  - امکان سوئیچ با یک کلیک روی هر کسب‌وکار به همراه اسپینر لودینگ آنلاین.
+  - دکمه میانبر «مدیریت کسب‌وکارها / افزودن کسب‌وکار جدید» برای باز کردن مدال اختصاصی در صورت نیاز.
+  - پشتیبانی از تم‌های تیره و روشن و نمایش مناسب در حالت موبایل و دسکتاپ.
+
+### گام ششم: یکپارچه‌سازی `BusinessManager.tsx`
+- تغییر رفتار دکمه «ورود به کسب‌وکار» در پنل مدیریت تا از متد سوئیچ آنی بدون ریفرش استفاده کند.
+- حذف هرگونه فرم پیش‌فرض کالای نمونه یا شخص تستی در فرم ایجاد کسب‌وکار جدید جهت تضمین ساخت محیط خام.
+
+---
+
+## ۴. معیارهای اعتبارسنجی و تست
+
+1. **بررسی عدم وجود اطلاعات در `db_config.json`**:
+   - فایل کانفیگ صرفاً شامل تنظیمات اتصال به دیتابیس اصلی خواهد بود.
+2. **بررسی استعلام انحصاری از جدول `businesses`**:
+   - با اضافه کردن کسب‌وکار جدید، اطلاعات مستقیماً در جدول `businesses` دیتابیس اصلی ذخیره می‌شود.
+3. **تست مجزا بودن دیتابیس‌ها در سرور**:
+   - داده‌های ثبت‌شده در کسب‌وکار جدید (فاکتورها، کالاها، اشخاص) فقط در دیتابیس اختصاصی آن ذخیره شده و هیچ تداخلی با دیتابیس اصلی یا سایر کسب‌وکارها نخواهد داشت.
+4. **تست IndexedDB مجزا در مرورگر**:
+   - در DevTools مرورگر بررسی می‌شود که برای هر کسب‌وکار دیتابیس مستقلی به نام `hesabpak_business_[id]` ساخته شده است.
+5. **تست سوئیچینگ آنی**:
+   - تعویض کسب‌وکار از طریق منوی کشویی هدر بدون پرش یا ریفرش صفحه انجام شده و کلیه جداول و ویجت‌های آماری با داده‌های کسب‌وکار مقصد به‌روزرسانی می‌شوند.

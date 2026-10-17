@@ -1,6 +1,6 @@
 {
-  "summary": "Master AI Prompt blueprint for building the standalone React Native / Expo online mobile app connected to the Taraz central accounting REST API, complete with Dark Mode UI, JWT device binding, and 5 operational modules.",
-  "updatedAt": "2026-10-16T17:36:03.974260142Z",
+  "summary": "طرح اجرایی جامع برای جداسازی کامل دیتابیس کسب‌وکارها در سرور و کلاینت (IndexedDB)، استعلام انحصاری از جدول businesses دیتابیس اصلی، حذف هرگونه ارجاع به کسب‌وکارهای فرعی در db_config، ایجاد محیط‌های کاملاً خام و بدون داده اولیه، و سوئیچینگ آنی بدون ریفرش صفحه از طریق منوی کشویی هدر.",
+  "updatedAt": "2026-10-17T14:35:36.169006750Z",
   "requestFeedback": true,
   "userFacing": true
 }
