@@ -106,15 +106,21 @@ export default function MobilePermissionsManager({
   const [isSaving, setIsSaving] = useState(false);
   const [newDeviceId, setNewDeviceId] = useState("");
 
-  // Load saved mobile permissions from localStorage / API
+  const [userApiKeysMap, setUserApiKeysMap] = useState<Record<string, string>>({});
+
+  // Load saved mobile permissions & API keys from localStorage / API
   useEffect(() => {
     try {
       const saved = localStorage.getItem("taraz_mobile_permissions_map");
       if (saved) {
         setPermissionsMap(JSON.parse(saved));
       }
+      const savedKeys = localStorage.getItem("taraz_user_api_keys_map");
+      if (savedKeys) {
+        setUserApiKeysMap(JSON.parse(savedKeys));
+      }
     } catch (e) {
-      console.error("Failed to load mobile permissions", e);
+      console.error("Failed to load mobile permissions or API keys", e);
     }
   }, []);
 
@@ -126,6 +132,48 @@ export default function MobilePermissionsManager({
   }, [users, selectedUserId]);
 
   const selectedUser = users.find((u) => String(u.id) === selectedUserId) || users[0];
+
+  const getUserApiKey = (userId: string, username?: string): string => {
+    if (userApiKeysMap[userId]) return userApiKeysMap[userId];
+    const cleanName = (username || userId).replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+    return `taraz_mob_ak_${cleanName}_9f8a7b6c5d4e3f2a1b0c`;
+  };
+
+  const handleGenerateNewApiKey = async () => {
+    if (!selectedUser) return;
+    const userId = String(selectedUser.id);
+    const cleanName = selectedUser.username.replace(/[^a-zA-Z0-9]/g, "_").toLowerCase();
+    const randomHex = Array.from({ length: 16 }, () => Math.floor(Math.random() * 16).toString(16)).join("");
+    const newKey = `taraz_mob_ak_${cleanName}_${randomHex}`;
+
+    const updatedMap = { ...userApiKeysMap, [userId]: newKey };
+    setUserApiKeysMap(updatedMap);
+    localStorage.setItem("taraz_user_api_keys_map", JSON.stringify(updatedMap));
+
+    try {
+      await fetch("/api/v1/mobile/api-keys/generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          userId,
+          username: selectedUser.username,
+          role: selectedUser.role,
+          customApiKey: newKey,
+        }),
+      });
+    } catch (e) {
+      console.warn("Failed to sync API key with server", e);
+    }
+
+    showNotification?.(`کلید API جدید برای کاربر @${selectedUser.username} با موفقیت صادر گردید`, "success");
+  };
+
+  const handleCopyUserApiKey = () => {
+    if (!selectedUser) return;
+    const currentKey = getUserApiKey(String(selectedUser.id), selectedUser.username);
+    navigator.clipboard.writeText(currentKey);
+    showNotification?.(`کلید API اختصاصی کاربر @${selectedUser.username} در کلیپ‌بورد کپی شد`, "info");
+  };
 
   const currentPermission: MobileUserPermission =
     permissionsMap[selectedUserId] ||
@@ -476,6 +524,56 @@ export default function MobilePermissionsManager({
               >
                 دسترسی کامل (مدیر)
               </button>
+            </div>
+          </div>
+
+          {/* Dedicated User Mobile API Key Section */}
+          <div className="bg-slate-900 border border-slate-800 rounded-2xl p-4 text-white shadow-md">
+            <div className="flex flex-wrap items-center justify-between gap-3 mb-2.5">
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-xl bg-amber-500/20 border border-amber-400/30 text-amber-400 flex items-center justify-center">
+                  <Key className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-xs font-black text-white flex items-center gap-2">
+                    <span>کلید API اختصاصی اپلیکیشن همراه (احراز هویت دیتابیس)</span>
+                    <span className="text-[10px] bg-amber-500/20 text-amber-300 border border-amber-400/30 px-2 py-0.5 rounded-full font-mono">
+                      X-API-Key
+                    </span>
+                  </div>
+                  <p className="text-[11px] text-slate-400 font-medium mt-0.5">
+                    اپلیکیشن همراه با داشتن این کلید API به صورت صحیح کار کرده و بدون آن هیچ‌گونه دسترسی به دیتابیس ندارد.
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={handleCopyUserApiKey}
+                  className="px-3 py-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+                >
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>کپی کلید API</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={handleGenerateNewApiKey}
+                  className="px-3 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 text-xs font-bold transition-all flex items-center gap-1.5 cursor-pointer active:scale-95"
+                  title="صدور یا بازسازی کلید API جدید برای این کاربر"
+                >
+                  <RefreshCw className="w-3.5 h-3.5" />
+                  <span>بازسازی کلید API</span>
+                </button>
+              </div>
+            </div>
+
+            <div className="bg-slate-950 border border-slate-800/90 rounded-xl p-3 font-mono text-xs text-amber-300 flex items-center justify-between overflow-x-auto select-all dir-ltr text-left">
+              <span>{getUserApiKey(selectedUserId, selectedUser?.username)}</span>
+              <span className="text-[10px] text-slate-500 font-sans ml-2 shrink-0">
+                (کاربر @{selectedUser?.username})
+              </span>
             </div>
           </div>
 
