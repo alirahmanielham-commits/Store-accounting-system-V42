@@ -183,46 +183,14 @@ export default function PrintStudioCanvas({
           <ReceiptPrintTemplate
             data={documentData}
             storeSettings={effectiveStoreSettings}
-            persons={livePersons}
+            persons={livePersons.length > 0 ? livePersons : undefined}
             accounts={[]}
             cashboxes={[]}
             invoices={liveInvoices}
-            printSettings={{
-              paperSize: profile.paperSize === 'a4_2copy' ? 'a4_2copy' : profile.orientation === 'landscape' ? 'a5_landscape' : 'a5_portrait',
-              designTheme: profile.designTheme === 'minimal' ? 'minimal' : profile.designTheme === 'standard' ? 'classic' : 'modern',
-              fields: {
-                showStoreName: profile.showStoreName,
-                showStoreLogo: profile.showStoreLogo,
-                showStorePhone: profile.showStorePhone,
-                showStoreAddress: profile.showStoreAddress,
-                showEconomicCode: profile.showEconomicCode,
-                showReceiptNumber: true,
-                showDate: true,
-                showTime: true,
-                showTrackingCode: true,
-                showPersonName: profile.showCustomerInfo,
-                showPersonCode: true,
-                showPersonPhone: profile.showCustomerPhone,
-                showPersonAddress: profile.showCustomerAddress,
-                showPersonBalance: profile.showCustomerBalance,
-                showAmountNumber: true,
-                showAmountWords: profile.showAmountInWords,
-                showPaymentMethod: profile.showSettlementDetails,
-                showResourceDetails: true,
-                showCheckDetails: true,
-                showLinkedInvoices: true,
-                showDescription: true,
-                showNote: false,
-                showSignatures: profile.showSignatures,
-                signatureCount: profile.signaturesCount,
-                showFooterNote: profile.showFooter,
-                customFooterText: profile.footerNote || 'این رسید به منزله سند قطعی پرداخت/دریافت می‌باشد.',
-                showSoftwareWatermark: profile.showWatermark,
-              },
-              scale: profile.scale,
-            }}
+            printSettings={PrintTemplateService.toReceiptPrintSettings(profile)}
           />
         );
+
 
       case 'warehouse':
         return (

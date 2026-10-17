@@ -249,10 +249,34 @@ export default function ReceiptPrintModal({
               <Copy className="w-3 h-3" />
               <span>A4 دو نسخه‌ای</span>
             </button>
+
+            <button
+              type="button"
+              onClick={() => setPrintSettings(s => ({ ...s, paperSize: 'pos80' }))}
+              className={`px-3 py-1.5 rounded-lg transition-all ${
+                printSettings.paperSize === 'pos80'
+                  ? 'bg-white text-indigo-700 shadow-sm font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+              title="رول حرارتی ۸۰ میلی‌متری مخصوص فیش پرینتر صندوق"
+            >
+              <span>حرارتی ۸۰mm</span>
+            </button>
           </div>
 
           {/* Theme Selector */}
           <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+            <button
+              type="button"
+              onClick={() => setPrintSettings(s => ({ ...s, designTheme: 'official' }))}
+              className={`px-2.5 py-1.5 rounded-lg transition-all ${
+                printSettings.designTheme === 'official'
+                  ? 'bg-white text-slate-900 shadow-sm font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              رسمی
+            </button>
             <button
               type="button"
               onClick={() => setPrintSettings(s => ({ ...s, designTheme: 'modern' }))}

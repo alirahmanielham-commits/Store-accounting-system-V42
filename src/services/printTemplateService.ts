@@ -5,7 +5,7 @@ import {
   defaultInvoiceColumnSettings 
 } from '../types/printStudio';
 import { InvoicePrintSettings } from '../components/print/invoice-templates/InvoicePrintTypes';
-import { ReceiptPrintSettings, defaultReceiptPrintSettings, defaultReceiptPrintFields } from '../components/print/ReceiptPrintTypes';
+import { ReceiptPrintSettings, defaultReceiptPrintSettings, defaultReceiptPrintFields, ReceiptPaperSize, ReceiptDesignTheme } from '../components/print/ReceiptPrintTypes';
 
 const STORAGE_PROFILES_KEY = 'print_studio_profiles_v1';
 const INVOICE_PRINT_SETTINGS_STORAGE_KEY = 'company_user_invoice_print_settings';
@@ -21,6 +21,14 @@ export class PrintTemplateService {
       if (data) {
         const parsed = JSON.parse(data);
         if (Array.isArray(parsed) && parsed.length > 0) {
+          // Ensure any newly added factory default profiles are merged in if missing
+          const existingIds = new Set(parsed.map((p: any) => p.id));
+          const missingDefaults = defaultPrintProfiles.filter((dp) => !existingIds.has(dp.id));
+          if (missingDefaults.length > 0) {
+            const merged = [...parsed, ...missingDefaults];
+            this.saveProfiles(merged);
+            return merged;
+          }
           return parsed;
         }
       }
@@ -198,34 +206,64 @@ export class PrintTemplateService {
         profiles.find((p) => p.category === 'receipt');
 
       if (receiptDef) {
-        const receiptSettings: ReceiptPrintSettings = {
-          paperSize: receiptDef.paperSize === 'a4_2copy' ? 'a4_2copy' : (receiptDef.orientation === 'landscape' ? 'a5_landscape' : 'a5_portrait'),
-          designTheme: (receiptDef.designTheme === 'minimal' ? 'minimal' : receiptDef.designTheme === 'standard' ? 'classic' : 'modern'),
-          fields: {
-            ...defaultReceiptPrintFields,
-            showStoreName: receiptDef.showStoreName,
-            showStoreLogo: receiptDef.showStoreLogo,
-            showStorePhone: receiptDef.showStorePhone,
-            showStoreAddress: receiptDef.showStoreAddress,
-            showEconomicCode: receiptDef.showEconomicCode,
-            showPersonName: receiptDef.showCustomerInfo,
-            showPersonPhone: receiptDef.showCustomerPhone,
-            showPersonAddress: receiptDef.showCustomerAddress,
-            showPersonBalance: receiptDef.showCustomerBalance,
-            showSignatures: receiptDef.showSignatures,
-            signatureCount: receiptDef.signaturesCount,
-            showFooterNote: receiptDef.showFooter,
-            customFooterText: receiptDef.footerNote || defaultReceiptPrintFields.customFooterText,
-            showSoftwareWatermark: receiptDef.showWatermark,
-            ...(receiptDef.receiptFields || {})
-          },
-          scale: receiptDef.scale || 100,
-        };
+        const receiptSettings = this.toReceiptPrintSettings(receiptDef);
         localStorage.setItem(RECEIPT_PRINT_SETTINGS_STORAGE_KEY, JSON.stringify(receiptSettings));
       }
     } catch (e) {
       console.warn('Error syncing active print defaults:', e);
     }
+  }
+
+  /**
+   * Converts profile into ReceiptPrintSettings.
+   */
+  static toReceiptPrintSettings(profile: PrintTemplateProfile): ReceiptPrintSettings {
+    let paperSize: ReceiptPaperSize = 'a5_landscape';
+    if (profile.paperSize === 'a4_2copy') paperSize = 'a4_2copy';
+    else if (profile.paperSize === 'pos80' || profile.paperSize === 'pos58') paperSize = 'pos80';
+    else if (profile.paperSize === 'a4') paperSize = 'a4_portrait';
+    else if (profile.orientation === 'landscape') paperSize = 'a5_landscape';
+    else paperSize = 'a5_portrait';
+
+    let designTheme: ReceiptDesignTheme = 'modern';
+    if (profile.designTheme === 'official') designTheme = 'official';
+    else if (profile.designTheme === 'minimal') designTheme = 'minimal';
+    else if (profile.designTheme === 'thermal') designTheme = 'thermal';
+    else if (profile.designTheme === 'compact') designTheme = 'compact';
+    else if (profile.designTheme === 'standard') designTheme = 'classic';
+
+    return {
+      paperSize,
+      designTheme,
+      scale: profile.scale || 100,
+      fields: {
+        ...defaultReceiptPrintFields,
+        showStoreName: profile.showStoreName,
+        showStoreLogo: profile.showStoreLogo,
+        showStorePhone: profile.showStorePhone,
+        showStoreAddress: profile.showStoreAddress,
+        showEconomicCode: profile.showEconomicCode,
+        showNationalId: profile.showNationalId,
+        showPersonName: profile.showCustomerInfo,
+        showPersonPhone: profile.showCustomerPhone,
+        showPersonAddress: profile.showCustomerAddress,
+        showPersonBalance: profile.showCustomerBalance,
+        showAmountNumber: true,
+        showAmountWords: profile.showAmountInWords,
+        showPaymentMethod: profile.showSettlementDetails,
+        showDetailedSettlementTable: profile.showSettlementDetails,
+        showBalanceBeforeAndAfter: profile.showCustomerBalance,
+        showSignatures: profile.showSignatures,
+        signatureCount: profile.signaturesCount,
+        signature1Title: profile.signature1Title || defaultReceiptPrintFields.signature1Title,
+        signature2Title: profile.signature2Title || defaultReceiptPrintFields.signature2Title,
+        signature3Title: profile.signature3Title || defaultReceiptPrintFields.signature3Title,
+        showFooterNote: profile.showFooter,
+        customFooterText: profile.footerNote || defaultReceiptPrintFields.customFooterText,
+        showSoftwareWatermark: profile.showWatermark,
+        ...(profile.receiptFields || {})
+      }
+    };
   }
 
   /**

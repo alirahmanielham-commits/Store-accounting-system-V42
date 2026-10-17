@@ -61,7 +61,7 @@ export default function PrintStudioControls({
         {[
           { id: 'paper', label: 'ابعاد و قالب', icon: Layout },
           { id: 'header', label: 'سربرگ و لوگو', icon: Building2 },
-          { id: 'columns', label: 'ستون‌های جدول', icon: Columns },
+          { id: 'columns', label: profile.category === 'receipt' ? 'اقلام و جدول تسویه' : 'ستون‌های جدول', icon: Columns },
           { id: 'signatures', label: 'امضاها و فوتر', icon: PenTool },
           { id: 'extras', label: 'مالی و امنیت', icon: ShieldCheck },
         ].map((tab) => {
@@ -252,45 +252,77 @@ export default function PrintStudioControls({
           </div>
         )}
 
-        {/* TAB 3: TABLE COLUMNS */}
+        {/* TAB 3: TABLE COLUMNS / SETTLEMENT FIELDS */}
         {activeTab === 'columns' && (
           <div className="space-y-4">
             <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
               <Columns className="w-4 h-4 text-indigo-600" />
-              مدیریت ستون‌های جدول اقلام کالا و خدمات
+              {profile.category === 'receipt'
+                ? 'فیلدها و جدول جامع تسویه رسید'
+                : 'مدیریت ستون‌های جدول اقلام کالا و خدمات'}
             </h4>
             <p className="text-[11px] text-slate-500 mb-4">
-              با فعال یا غیرفعال کردن هر گزینه، ستون مربوطه بلافاصله از جدول فاکتور حذف یا به آن افزوده می‌شود:
+              {profile.category === 'receipt'
+                ? 'ردیف‌ها و اقلام مالی نمایش‌داده‌شده در جدول تسویه رسید را تنظیم فرمایید:'
+                : 'با فعال یا غیرفعال کردن هر گزینه، ستون مربوطه بلافاصله از جدول فاکتور حذف یا به آن افزوده می‌شود:'}
             </p>
 
-            <div className="space-y-2.5">
-              {[
-                { key: 'rowIndex', label: 'شماره ردیف (ردیف شمارشی)' },
-                { key: 'productCode', label: 'کد کالا یا خدمات' },
-                { key: 'productName', label: 'شرح کالا یا خدمات' },
-                { key: 'quantity', label: 'مقدار / تعداد' },
-                { key: 'unit', label: 'واحد سنجش (عدد، کیلوگرم، متر و...)' },
-                { key: 'unitPrice', label: 'مبلغ واحد (فی)' },
-                { key: 'grossAmount', label: 'مبلغ ناخالص (قبل از تخفیف)' },
-                { key: 'discountPercent', label: 'درصد تخفیف (%)' },
-                { key: 'discountAmount', label: 'مبلغ تخفیف سطر' },
-                { key: 'tax', label: 'مالیات و عوارض ارزش افزوده' },
-                { key: 'totalPrice', label: 'مبلغ کل نهایی سطر' },
-              ].map((col) => (
-                <label
-                  key={col.key}
-                  className="flex items-center justify-between p-2.5 px-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
-                >
-                  <span className="text-xs font-bold text-slate-800">{col.label}</span>
-                  <input
-                    type="checkbox"
-                    checked={profile.columns[col.key as keyof typeof profile.columns] !== false}
-                    onChange={(e) => updateColumn(col.key as keyof typeof profile.columns, e.target.checked)}
-                    className="w-4 h-4 text-indigo-600 rounded border-slate-300 cursor-pointer"
-                  />
-                </label>
-              ))}
-            </div>
+            {profile.category === 'receipt' ? (
+              <div className="space-y-2.5">
+                {[
+                  { key: 'showSettlementDetails', label: 'نمایش جدول جامع ردیف‌های تسویه و پرداخت' },
+                  { key: 'showAmountInWords', label: 'نمایش معادل مبلغ کل به حروف فارسی' },
+                  { key: 'showCustomerBalance', label: 'نمایش مانده حساب قبلی و جدید طرف‌حساب' },
+                  { key: 'showTransactions', label: 'نمایش شناسه رهگیری، کد صیاد و جزئیات پیگیری' },
+                  { key: 'showCustomerInfo', label: 'نمایش نام و عنوان طرف‌حساب (مشتری/فروشنده)' },
+                  { key: 'showCustomerPhone', label: 'نمایش تلفن و اطلاعات تماس طرف‌حساب' },
+                  { key: 'showCustomerAddress', label: 'نمایش نشانی و آدرس طرف‌حساب' },
+                  { key: 'showEconomicCode', label: 'نمایش کد اقتصادی و شناسه ملی طرفین' },
+                ].map((item) => (
+                  <label
+                    key={item.key}
+                    className="flex items-center justify-between p-2.5 px-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                  >
+                    <span className="text-xs font-bold text-slate-800">{item.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={Boolean((profile as any)[item.key])}
+                      onChange={(e) => update({ [item.key]: e.target.checked } as any)}
+                      className="w-4 h-4 text-indigo-600 rounded border-slate-300 cursor-pointer"
+                    />
+                  </label>
+                ))}
+              </div>
+            ) : (
+              <div className="space-y-2.5">
+                {[
+                  { key: 'rowIndex', label: 'شماره ردیف (ردیف شمارشی)' },
+                  { key: 'productCode', label: 'کد کالا یا خدمات' },
+                  { key: 'productName', label: 'شرح کالا یا خدمات' },
+                  { key: 'quantity', label: 'مقدار / تعداد' },
+                  { key: 'unit', label: 'واحد سنجش (عدد، کیلوگرم، متر و...)' },
+                  { key: 'unitPrice', label: 'مبلغ واحد (فی)' },
+                  { key: 'grossAmount', label: 'مبلغ ناخالص (قبل از تخفیف)' },
+                  { key: 'discountPercent', label: 'درصد تخفیف (%)' },
+                  { key: 'discountAmount', label: 'مبلغ تخفیف سطر' },
+                  { key: 'tax', label: 'مالیات و عوارض ارزش افزوده' },
+                  { key: 'totalPrice', label: 'مبلغ کل نهایی سطر' },
+                ].map((col) => (
+                  <label
+                    key={col.key}
+                    className="flex items-center justify-between p-2.5 px-3.5 rounded-xl border border-slate-200 hover:bg-slate-50 cursor-pointer transition-colors"
+                  >
+                    <span className="text-xs font-bold text-slate-800">{col.label}</span>
+                    <input
+                      type="checkbox"
+                      checked={profile.columns[col.key as keyof typeof profile.columns] !== false}
+                      onChange={(e) => updateColumn(col.key as keyof typeof profile.columns, e.target.checked)}
+                      className="w-4 h-4 text-indigo-600 rounded border-slate-300 cursor-pointer"
+                    />
+                  </label>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
