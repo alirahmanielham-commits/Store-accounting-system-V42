@@ -15,7 +15,7 @@ import {
   FileCheck, Coins, Zap
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
-import { convertToGregorian, formatDateDisplay, toPersianDigits, addCommas, formatNumber as formatNumberUtil, getActiveStoreSettings } from "../../utils/format";
+import { convertToGregorian, formatDateDisplay, toPersianDigits, toEnglishDigits, addCommas, formatNumber as formatNumberUtil, getActiveStoreSettings } from "../../utils/format";
 import { formatDecimalForExcel } from "../../utils/exportUtils";
 import { safePrint } from "../../utils/printHelper";
 
@@ -169,6 +169,115 @@ export default function ReceiptsList(props: any) {
       return cb ? `صندوق: ${cb.name || 'صندوق نقدی'}` : "صندوق نقدی";
     }
     return tx.resourceName || "نامشخص";
+  };
+
+  // Helper to extract time HH:mm from candidate
+  const parseTimeToHHMM = (val: any): string => {
+    if (!val || val === 'undefined' || val === 'null' || val === '-') return '';
+    if (typeof val === 'string') {
+      const raw = val.trim();
+      if (raw.toLowerCase().includes('invalid')) return '';
+      const m = raw.match(/(?:T|\s|^)(\d{1,2}):(\d{1,2})(?::\d{1,2})?/);
+      if (m && (raw.includes(':') || raw.includes('T'))) {
+        return `${m[1].padStart(2, '0')}:${m[2].padStart(2, '0')}`;
+      }
+    }
+    if (typeof val === 'number' && !isNaN(val) && val > 0) {
+      const ms = val < 10000000000 ? val * 1000 : val;
+      const d = new Date(ms);
+      if (!isNaN(d.getTime())) {
+        return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+      }
+    }
+    if (val instanceof Date && !isNaN(val.getTime())) {
+      return `${String(val.getHours()).padStart(2, '0')}:${String(val.getMinutes()).padStart(2, '0')}`;
+    }
+    return '';
+  };
+
+  // Helper 1: Accounting Effective Date and Time (تاریخ اثر مالی سند)
+  const formatAccountingDateTime = (tx: any) => {
+    if (!tx) return { date: '-', time: '-', fullText: '-' };
+    const isGregorian = storeSettings?.calendarType === 'gregorian';
+    const calType = isGregorian ? 'gregorian' : 'jalali';
+
+    // Date part
+    let dateStr = '';
+    try {
+      dateStr = formatDateDisplay(tx.date || tx.jalaliDate, calType);
+      if (!dateStr || dateStr.toLowerCase().includes('invalid') || dateStr === '-') {
+        dateStr = isGregorian
+          ? new Date().toLocaleDateString('en-US')
+          : toPersianDigits(new Date().toLocaleDateString('fa-IR'));
+      }
+    } catch {
+      dateStr = String(tx.date || tx.jalaliDate || '-');
+    }
+
+    // Time part
+    let timeStr = parseTimeToHHMM(tx.time) || parseTimeToHHMM(tx.createdAt) || parseTimeToHHMM(tx.created_at) || parseTimeToHHMM(tx.date);
+    if (!timeStr) {
+      const now = new Date();
+      timeStr = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    }
+
+    const formattedTime = isGregorian ? toEnglishDigits(timeStr) : toPersianDigits(timeStr);
+    return {
+      date: dateStr,
+      time: formattedTime,
+      fullText: `${dateStr} - ${formattedTime}`
+    };
+  };
+
+  // Helper 2: System Created At Date and Time (تاریخ ثبت سیستمی)
+  const formatSystemCreatedAtDateTime = (tx: any) => {
+    if (!tx) return { date: '-', time: '-', fullText: '-' };
+    const isGregorian = storeSettings?.calendarType === 'gregorian';
+    const calType = isGregorian ? 'gregorian' : 'jalali';
+
+    const candidate = tx.createdAt || tx.created_at || tx.timestamp || tx.date;
+    let d: Date | null = null;
+
+    if (typeof candidate === 'number' && candidate > 0) {
+      const ms = candidate < 10000000000 ? candidate * 1000 : candidate;
+      d = new Date(ms);
+    } else if (typeof candidate === 'string' && /^\d{10,13}$/.test(candidate.trim())) {
+      const num = Number(candidate.trim());
+      const ms = num < 10000000000 ? num * 1000 : num;
+      d = new Date(ms);
+    } else if (typeof candidate === 'string') {
+      const parsedMs = Date.parse(candidate);
+      if (!isNaN(parsedMs)) {
+        d = new Date(parsedMs);
+      }
+    } else if (candidate instanceof Date && !isNaN(candidate.getTime())) {
+      d = candidate;
+    }
+
+    if (!d || isNaN(d.getTime())) {
+      d = new Date();
+    }
+
+    let dateStr = '';
+    try {
+      dateStr = formatDateDisplay(d, calType);
+      if (!dateStr || dateStr.toLowerCase().includes('invalid') || dateStr === '-') {
+        dateStr = isGregorian ? d.toLocaleDateString('en-US') : toPersianDigits(d.toLocaleDateString('fa-IR'));
+      }
+    } catch {
+      dateStr = isGregorian ? d.toLocaleDateString('en-US') : toPersianDigits(d.toLocaleDateString('fa-IR'));
+    }
+
+    const hh = String(d.getHours()).padStart(2, '0');
+    const mm = String(d.getMinutes()).padStart(2, '0');
+    const rawTime = `${hh}:${mm}`;
+    const formattedTime = isGregorian ? toEnglishDigits(rawTime) : toPersianDigits(rawTime);
+
+    return {
+      date: dateStr,
+      time: formattedTime,
+      fullText: `${dateStr} - ${formattedTime}`
+    };
   };
 
   // Base transactions for this tab
@@ -687,6 +796,8 @@ export default function ReceiptsList(props: any) {
             paginatedTxs.map((tx: any) => {
               const person = persons.find((p: any) => String(p.id) === String(tx.personId));
               const resLabel = getResourceLabel(tx);
+              const accDT = formatAccountingDateTime(tx);
+              const sysDT = formatSystemCreatedAtDateTime(tx);
 
               return (
                 <div key={tx.id} className="p-4 space-y-3">
@@ -704,13 +815,22 @@ export default function ReceiptsList(props: any) {
                     </span>
                   </div>
 
-                  <div className="flex justify-between items-start">
-                    <div>
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="space-y-1">
                       <div className="font-black text-slate-800 text-sm">
                         {renderPersonLink(person?.id, person?.name || tx.personName)}
                       </div>
-                      <div className="text-[11px] text-slate-500 font-bold mt-0.5">
-                        {formatDateDisplay(tx.date || tx.jalaliDate)}
+                      {/* Accounting Date & Time */}
+                      <div className="flex items-center gap-1.5 text-[11px] text-indigo-900 font-bold bg-indigo-50/70 border border-indigo-100 px-2 py-0.5 rounded-md w-max" title="تاریخ اثر مالی سند در حسابداری">
+                        <CalendarIcon className="w-3 h-3 text-indigo-600 shrink-0" />
+                        <span className="text-[10px] text-slate-500 font-sans">سند:</span>
+                        <span className="font-mono">{accDT.fullText}</span>
+                      </div>
+                      {/* System Created At Date & Time */}
+                      <div className="flex items-center gap-1.5 text-[10.5px] text-slate-600 font-medium bg-slate-50 border border-slate-200/80 px-2 py-0.5 rounded-md w-max" title="زمان ثبت سیستمی">
+                        <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="text-[9.5px] text-slate-400 font-sans">ثبت:</span>
+                        <span className="font-mono">{sysDT.fullText}</span>
                       </div>
                     </div>
                     <div className="text-left">
@@ -781,7 +901,7 @@ export default function ReceiptsList(props: any) {
                 <th className="p-4 whitespace-nowrap">شماره رسید</th>
                 <th className="p-4 whitespace-nowrap">نوع سند</th>
                 <th className="p-4 whitespace-nowrap">طرف حساب</th>
-                <th className="p-4 whitespace-nowrap">تاریخ ثبت</th>
+                <th className="p-4 whitespace-nowrap">تاریخ سند / ثبت سیستمی</th>
                 <th className="p-4 whitespace-nowrap">منبع مالی / روش</th>
                 <th className="p-4 whitespace-nowrap text-left">مبلغ تراکنش</th>
                 <th className="p-4 text-center whitespace-nowrap print:hidden">عملیات</th>
@@ -791,6 +911,8 @@ export default function ReceiptsList(props: any) {
               {paginatedTxs.map((tx: any, idx: number) => {
                 const person = persons.find((p: any) => String(p.id) === String(tx.personId));
                 const resLabel = getResourceLabel(tx);
+                const accDT = formatAccountingDateTime(tx);
+                const sysDT = formatSystemCreatedAtDateTime(tx);
 
                 return (
                   <tr key={tx.id || idx} className="hover:bg-slate-50/80 transition-colors">
@@ -824,11 +946,26 @@ export default function ReceiptsList(props: any) {
                       {renderPersonLink(person?.id, person?.name || tx.personName)}
                     </td>
 
-                    {/* Date */}
-                    <td className="p-4 font-sans text-xs font-bold text-slate-700 whitespace-nowrap">
-                      <div className="flex items-center gap-1.5">
-                        <CalendarIcon className="w-3.5 h-3.5 text-indigo-500" />
-                        <span>{formatDateDisplay(tx.date || tx.jalaliDate)}</span>
+                    {/* Date & Time Column (Dual Display) */}
+                    <td className="p-4 text-xs whitespace-nowrap">
+                      <div className="flex flex-col gap-1">
+                        {/* Accounting Effective Date & Time */}
+                        <div className="flex items-center gap-1.5 font-bold text-slate-800" title="تاریخ اثر مالی سند در حسابداری">
+                          <CalendarIcon className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                          <span className="text-[10px] text-slate-400 font-sans">سند:</span>
+                          <span className="font-mono font-bold text-slate-900">{accDT.date}</span>
+                          <span className="text-slate-300">|</span>
+                          <span className="font-mono text-indigo-700 font-black">{accDT.time}</span>
+                        </div>
+
+                        {/* System Created At Date & Time */}
+                        <div className="flex items-center gap-1.5 text-[11px] text-slate-500 font-medium" title="زمان ثبت سیستمی">
+                          <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                          <span className="text-[10px] text-slate-400 font-sans">ثبت:</span>
+                          <span className="font-mono text-slate-600">{sysDT.date}</span>
+                          <span className="text-slate-300">|</span>
+                          <span className="font-mono text-slate-600">{sysDT.time}</span>
+                        </div>
                       </div>
                     </td>
 
