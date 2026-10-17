@@ -6,7 +6,7 @@ import {
   ShieldCheck, AlertTriangle, TrendingUp, TrendingDown, ArrowDownLeft, ArrowUpRight, 
   Copy, Check, Download, Printer, Plus, Trash2, X, RefreshCw, BarChart2, 
   Package, CreditCard, ChevronDown, ChevronUp, ExternalLink, Filter, Search, 
-  Award, AlertCircle, Smartphone, Globe, Share2, FileCheck, Layers
+  Award, AlertCircle, Smartphone, Globe, Share2, FileCheck, Layers, Tag, Bookmark
 } from "lucide-react";
 import { convertToGregorian, formatNumber, getActiveStoreSettings } from '../../utils/format';
 import { safePrint } from '../../utils/printHelper';
@@ -187,6 +187,68 @@ export default function PersonProfileView({
     setTimeout(() => setCopiedKey(null), 2000);
     if (showNotification) {
       showNotification('در کلیپ‌بورد کپی شد', 'success');
+    }
+  };
+
+  // Quick Tagging State & Presets
+  const [quickTagInput, setQuickTagInput] = useState('');
+  const [isTagSaving, setIsTagSaving] = useState(false);
+
+  const PRESET_TAGS = [
+    'مشتری VIP',
+    'خوش‌حساب',
+    'بدحساب',
+    'عمده‌فروش',
+    'خرده‌فروش',
+    'معتمد',
+    'همکار',
+    'شرکتی',
+    'پیگیری ویژه',
+    'تخفیف‌دار'
+  ];
+
+  const handleAddTag = async (tagText?: string) => {
+    const rawTag = (tagText !== undefined ? tagText : quickTagInput).trim();
+    const cleanTag = rawTag.replace(/^[#＃\s]+|[#＃\s]+$/g, '').trim();
+    if (!cleanTag) return;
+    if (!person) return;
+
+    const currentTags: string[] = Array.isArray(person.tags) ? [...person.tags] : [];
+    if (currentTags.some(t => t.toLowerCase() === cleanTag.toLowerCase())) {
+      if (showNotification) showNotification(`برچسب «${cleanTag}» قبلاً برای این شخص ثبت شده است`, 'error');
+      return;
+    }
+
+    try {
+      setIsTagSaving(true);
+      const updatedTags = [...currentTags, cleanTag];
+      const updatedPerson = { ...person, tags: updatedTags };
+      await savePerson(updatedPerson);
+      setQuickTagInput('');
+      if (fetchPersons) fetchPersons();
+      if (showNotification) showNotification(`برچسب «${cleanTag}» با موفقیت افزوده شد`, 'success');
+    } catch (e: any) {
+      if (showNotification) showNotification('خطا در افزودن برچسب: ' + (e.message || ''), 'error');
+    } finally {
+      setIsTagSaving(false);
+    }
+  };
+
+  const handleRemoveTag = async (tagToRemove: string) => {
+    if (!person) return;
+    const currentTags: string[] = Array.isArray(person.tags) ? [...person.tags] : [];
+    const updatedTags = currentTags.filter(t => t !== tagToRemove);
+
+    try {
+      setIsTagSaving(true);
+      const updatedPerson = { ...person, tags: updatedTags };
+      await savePerson(updatedPerson);
+      if (fetchPersons) fetchPersons();
+      if (showNotification) showNotification(`برچسب «${tagToRemove}» حذف شد`, 'success');
+    } catch (e: any) {
+      if (showNotification) showNotification('خطا در حذف برچسب: ' + (e.message || ''), 'error');
+    } finally {
+      setIsTagSaving(false);
     }
   };
 
@@ -1023,6 +1085,12 @@ export default function PersonProfileView({
                     کد شخص: {toPersianDigits(person.personCode)}
                   </span>
                 )}
+                {Array.isArray(person.tags) && person.tags.map((t: string, i: number) => (
+                  <span key={i} className="inline-flex items-center gap-1 text-xs font-black text-indigo-700 bg-indigo-50/90 px-2.5 py-1 rounded-lg border border-indigo-200">
+                    <Tag className="w-3 h-3 text-indigo-500" />
+                    #{t}
+                  </span>
+                ))}
               </div>
 
               <div className="flex flex-wrap items-center gap-4 text-xs font-bold text-slate-500">
@@ -1117,6 +1185,102 @@ export default function PersonProfileView({
               <FileText className="w-4 h-4 text-sky-600" />
               دفتر معین
             </button>
+          </div>
+        </div>
+
+        {/* Quick Tagging and Labels Management Bar */}
+        <div className="py-4 border-b border-slate-100 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-xl bg-indigo-50 text-indigo-600 border border-indigo-100">
+                <Tag className="w-4 h-4" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-black text-slate-800">برچسب‌های هوشمند شخص:</span>
+                <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">(برچسب‌گذاری سریع برای دسته‌بندی و فیلتر آسان در جستجو و لیست طرف‌حساب‌ها)</span>
+              </div>
+            </div>
+
+            {/* Quick Tag Input */}
+            <div className="flex items-center gap-1.5">
+              <div className="relative">
+                <input
+                  type="text"
+                  value={quickTagInput}
+                  onChange={(e) => setQuickTagInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') {
+                      e.preventDefault();
+                      handleAddTag();
+                    }
+                  }}
+                  placeholder="برچسب جدید (مثلاً: VIP)..."
+                  className="w-48 sm:w-56 px-3 py-1.5 text-xs font-bold bg-slate-50 hover:bg-white focus:bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all text-slate-800"
+                />
+                {quickTagInput && (
+                  <button
+                    type="button"
+                    onClick={() => setQuickTagInput('')}
+                    className="absolute left-2 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => handleAddTag()}
+                disabled={!quickTagInput.trim() || isTagSaving}
+                className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-slate-200 disabled:text-slate-400 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1 cursor-pointer disabled:cursor-not-allowed shadow-xs"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                افزودن
+              </button>
+            </div>
+          </div>
+
+          {/* Active Tags and Quick Suggested Chips */}
+          <div className="flex flex-wrap items-center gap-2">
+            {Array.isArray(person.tags) && person.tags.length > 0 ? (
+              person.tags.map((tag: string, idx: number) => (
+                <span
+                  key={idx}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black bg-indigo-50/80 text-indigo-700 border border-indigo-200/90 shadow-2xs group transition-all hover:bg-indigo-100/80"
+                >
+                  <Tag className="w-3 h-3 text-indigo-500" />
+                  <span>#{tag}</span>
+                  <button
+                    type="button"
+                    onClick={() => handleRemoveTag(tag)}
+                    className="p-0.5 rounded-full hover:bg-rose-200 hover:text-rose-700 text-indigo-400 transition-colors cursor-pointer"
+                    title={`حذف برچسب ${tag}`}
+                  >
+                    <X className="w-3 h-3" />
+                  </button>
+                </span>
+              ))
+            ) : (
+              <span className="text-xs text-slate-400 font-medium italic">
+                هنوز برچسبی برای این شخص انتخاب نشده است. از دکمه‌های سریع زیر یا کادر بالا استفاده کنید:
+              </span>
+            )}
+          </div>
+
+          {/* Suggested Quick Preset Tags */}
+          <div className="flex flex-wrap items-center gap-1.5 pt-1">
+            <span className="text-[10px] font-bold text-slate-400 ml-1">پیشنهادهای سریع:</span>
+            {PRESET_TAGS.filter(t => !Array.isArray(person.tags) || !person.tags.includes(t)).map((preset, i) => (
+              <button
+                key={i}
+                type="button"
+                onClick={() => handleAddTag(preset)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-indigo-50 text-slate-600 hover:text-indigo-700 border border-slate-200/70 hover:border-indigo-200 transition-all cursor-pointer shadow-2xs"
+                title={`افزودن سریع برچسب ${preset}`}
+              >
+                <Plus className="w-2.5 h-2.5 text-slate-400" />
+                {preset}
+              </button>
+            ))}
           </div>
         </div>
 

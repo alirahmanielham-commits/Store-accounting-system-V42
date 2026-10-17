@@ -1,6 +1,6 @@
 {
-  "summary": "Comprehensive architectural specification and implementation plan for building a standalone online mobile app connected to the central database, featuring granular admin access controls, JWT device binding, and real-time REST API interfaces.",
-  "updatedAt": "2026-10-16T17:03:48.164052852Z",
+  "summary": "Master AI Prompt blueprint for building the standalone React Native / Expo online mobile app connected to the Taraz central accounting REST API, complete with Dark Mode UI, JWT device binding, and 5 operational modules.",
+  "updatedAt": "2026-10-16T17:36:03.974260142Z",
   "requestFeedback": true,
   "userFacing": true
 }

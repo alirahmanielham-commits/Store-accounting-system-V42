@@ -1,147 +1,120 @@
-# Standalone Mobile App & Granular Mobile Permission Manager Specification
+# Standalone Mobile App Master AI Prompt Specification
 
-A complete architectural blueprint and technical plan for building a standalone, online Mobile App (React Native / PWA) connected in real-time to the central accounting database server, complete with a granular Admin Mobile Access Control Manager in the main system.
-
----
-
-## User Review & Confirmed Decisions
-
-> [!IMPORTANT]
-> The following core architectural decisions were confirmed in Phase 1 clarification:
-
-- **Confirmed Decision 1 (Platform & Framework)**: Modern PWA / React Native mobile app client communicating via REST API / JSON endpoints directly with the central backend server (`server.ts`).
-- **Confirmed Decision 2 (Admin Mobile Access Manager)**: A dedicated Mobile Permissions Matrix in the desktop Admin Panel allowing system administrators to grant or revoke specific mobile operations (receipts, check entry, sales invoices, stock check, person ledger, debtor reports) per user and per role.
-- **Confirmed Decision 3 (Data Synchronization Policy)**: 100% Real-time Online API architecture with zero local stale state caching, ensuring immediate database consistency across desktop and mobile devices.
-- **Confirmed Decision 4 (Authentication & Security)**: Secure JWT token-based authentication paired with Device ID registration and hardware fingerprinting to prevent unauthorized mobile access.
+A comprehensive, production-grade master prompt designed to be copied directly into any AI code generation model (Claude, Cursor, Gemini, ChatGPT) to build the complete, standalone React Native / Expo mobile application connected to the central Taraz accounting system.
 
 ---
 
-## 1. Overview & Core Concept
+## User Review & Confirmed Choices
 
-- **What It Delivers**:
-  1. **Central Server API Endpoints (`/api/v1/mobile/*`)**: High-performance RESTful JSON endpoints protected by JWT bearer authentication, role-based middleware, and mobile permission verification.
-  2. **Desktop Admin Mobile Permissions Panel (`/admin/mobile-permissions`)**: A matrix interface for system administrators to configure mobile permissions for every user (e.g. enabling sales rep A to issue sales invoices and view debtor lists, but disabling check management or purchasing).
-  3. **Standalone Mobile Client Application**: A responsive touch-optimized mobile web client / PWA engineered for high-speed field operations with biometric/JWT login, fast barcode scanning, real-time product search, receipt generation, and customer ledger lookups.
+- **Framework & Target Platform**: React Native with Expo (Cross-platform Android & iOS).
+- **UI Design & Theme**: Ultra-modern Dark Mode aesthetic (`bg-slate-950`), vibrant module accent gradients, high-contrast typography (IRANYekanX / Vazirmatn fonts), and ergonomic touch targets ($\ge 44\text{px}$).
+- **API Connection & Authentication**: Dynamic Server API URL config screen, JWT Bearer Token authentication, and hardware Device ID registration header (`X-Device-Fingerprint`).
+- **Functional Scope**: All 5 core mobile modules:
+  1. **صدور فاکتور فروش و خرید** (Sale & Purchase Invoices with real-time barcode scanner and stock check)
+  2. **ثبت رسید دریافت و پرداخت وجه** (Cash, POS, Bank receipts)
+  3. **ثبت و کارتابل چک‌های صیادی** (Sayad Checks registration & status workflow)
+  4. **بانک اشخاص و کارت حساب** (Customer search, Ledger Card, Customer Profile)
+  5. **گزارش بدهکاران و ویترین مطالبات** (Live overdue debtors list with 1-tap call/SMS)
 
 ---
 
-## 2. Technical System Architecture
+## Master Prompt for AI Application Builder
 
+Copy and paste the following master prompt into your AI builder tool (e.g. Cursor, Claude 3.5 Sonnet, ChatGPT, or AI Studio):
+
+```markdown
+# MASTER PROMPT: BUILD STANDALONE REACT NATIVE (EXPO) MOBILE APP FOR TARAZ ACCOUNTING SYSTEM
+
+You are a Senior Mobile Software Engineer specializing in React Native, Expo, and TypeScript.
+Build a complete, standalone, production-grade mobile application for the "Taraz Accounting System" (سامانه مالی و حسابداری تراز) that connects online in real-time to the central accounting REST API.
+
+---
+
+## 1. TECHNICAL ARCHITECTURE & STACK
+
+- **Framework**: React Native with Expo (SDK 51+), TypeScript, React Navigation (Native Stack & Bottom Tabs).
+- **Icons & UI System**: `lucide-react-native`, `react-native-reanimated`, `react-native-gesture-handler`, `expo-barcode-scanner` / `expo-camera`, `expo-device`, `expo-secure-store`.
+- **Styling**: NativeWind (Tailwind CSS for React Native) or styled-components with clean Dark Mode posture (`#020617` canvas).
+- **RTL & Font**: Native Right-to-Left (`I18nManager.allowRTL(true)`), Persian digits (`toPersianDigits`), IRANYekanX or Vazirmatn Persian typography, tabular numerals for currency values (`tabular-nums`).
+- **HTTP Client**: Axios instance with automatic JWT Bearer token injection, device fingerprint header (`X-Device-Fingerprint`), request timeouts (10s), and error interceptors.
+
+---
+
+## 2. API CONTRACT & BACKEND ENDPOINTS
+
+The central server exposes the following RESTful API endpoints at `/api/v1/mobile`:
+
+1. **Auth & Device Registration**:
+   - `POST /api/v1/mobile/auth/login`: `{ username, password, deviceId }` -> returns `{ token, user, permissions }`
+   - `GET /api/v1/mobile/auth/my-permissions`: returns active user permissions
+2. **Products & Inventory**:
+   - `GET /api/v1/mobile/products/search?q={query}`: returns real-time product list, prices, and stock
+3. **Persons & Customer Ledger**:
+   - `GET /api/v1/mobile/persons/search?q={query}`: returns customer list with live debtor/creditor balance
+   - `GET /api/v1/mobile/persons/:id/ledger`: returns customer ledger entries (دفتر معین)
+4. **Sales & Purchase Invoices**:
+   - `POST /api/v1/mobile/invoices/sale`: `{ personId, items, totalPrice }` -> issues invoice online
+5. **Treasury & Receipts**:
+   - `POST /api/v1/mobile/receipts/receive`: `{ personId, amount, type }` -> creates receive receipt
+6. **Checks**:
+   - `POST /api/v1/mobile/checks/receive`: `{ SayadNo, bankName, amount, dueDate, personId }`
+7. **Debtors Report**:
+   - `GET /api/v1/mobile/reports/debtors`: returns live list of overdue customers
+
+---
+
+## 3. UI/UX DESIGN CONSTITUTION & DARK THEME
+
+- **Canvas Background**: Deep Slate Black (`#020617` / `bg-slate-950`).
+- **Surface Elevation**: Subdued slate cards (`#0f172a` / `bg-slate-900`) with subtle hairline borders (`border-slate-800`).
+- **Accent Budget**:
+  - **Teal / Emerald**: Receipts & Incoming Payments (`#10b981`).
+  - **Sky Blue**: Sayad Checks (`#0284c7`).
+  - **Indigo / Purple**: Persons & Ledger Cards (`#6366f1`).
+  - **Rose / Pink**: Debts & Overdue Alerts (`#f43f5e`).
+- **Touch Ergonomics**: All buttons and list rows must have at least **44x44px touch hitboxes**.
+- **No Static Pill Enclosures**: Render metadata (dates, codes, tags) as unboxed quiet text with `·` separators.
+
+---
+
+## 4. SCREEN HIERARCHY & NAVIGATION
+
+### Screen A: Server Setup & Login (`/screens/LoginScreen.tsx`)
+- Server API URL configuration modal (allows entering custom server IP/Domain e.g. `https://my-store.taraz.ir`).
+- Username & Password inputs with show/hide password toggle.
+- Automatic Hardware Device ID detection via `expo-device`.
+- Biometric Login (FaceID / Fingerprint) setup option.
+
+### Screen B: Main Bottom Tab Navigator (`/navigation/BottomTabNavigator.tsx`)
+1. **داشبورد (Home)**: Quick stats, total today's sales, server connection badge, and 5 quick action tiles.
+2. **فاکتور فروش (Sale Invoice)**:
+   - Live customer selector search box.
+   - Fast Barcode Scanner trigger (`expo-barcode-scanner`).
+   - Real-time product search with item counter & discount inputs.
+   - Instant "ثبت نهایی فاکتور" CTA with success modal and print preview.
+3. **دریافت وجه (Receive Receipt)**:
+   - Amount currency input with Iranian Toman words (`numberToWords`).
+   - Payment method toggle: Cash (نقد), POS Terminal (کارتخوان), Sayad Check (چک صیادی).
+4. **اشخاص و معین (Persons & Ledger)**:
+   - Customer search bar.
+   - Expandable customer card showing phone number, address, and live balance (`بدهکار` / `بستانکار`).
+   - 1-tap "مشاهده کارت حساب (معین)" modal.
+5. **مطالبات و بدهکاران (Debtors Report)**:
+   - High-contrast list of overdue accounts.
+   - 1-tap "تماس تلفنی" and "ارسال پیامک پیگیری".
+
+---
+
+## 5. CODE QUALITY & HARDENING
+
+- Full TypeScript strict mode typing for all state, props, and API responses.
+- Complete offline-handling banner (informs user if server connection drops).
+- Input validation on all currency and date fields.
+- Graceful error boundaries and toast notifications.
 ```
-┌─────────────────────────────────────────────────────────────────────────┐
-│                        Standalone Mobile App                            │
-│                 (PWA / React Native Mobile Client)                      │
-└─────────────────────────────────────────────────────────────────────────┘
-                                   │
-                                   │ HTTPS / REST API
-                                   │ Bearer JWT Token + X-Device-ID
-                                   ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                          Central Express Server                         │
-│                              (server.ts)                                │
-│  ┌────────────────────────┐    ┌─────────────────────────────────────┐  │
-│  │ Mobile Auth Middleware │ ──►│ Mobile Access Enforcement Middleware│  │
-│  │ (JWT & Device Check)   │    │  (Checks mobile_permissions table)  │  │
-│  └────────────────────────┘    └─────────────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────────┘
-                                   │
-                                   ▼
-┌─────────────────────────────────────────────────────────────────────────┐
-│                       Central Database Storage                          │
-│               (PostgreSQL / SQLite / Local Store Data)                  │
-│   • users                     • mobile_permissions                      │
-│   • mobile_registered_devices • invoices, receipts, checks, persons    │
-└─────────────────────────────────────────────────────────────────────────┘
-```
 
 ---
 
-## 3. Mobile Permissions Matrix Schema & Admin Interface
+## Implementation Summary
 
-### A. Data Schema (`mobile_permissions` & `mobile_registered_devices`)
-
-```typescript
-// Mobile Permission Entity Structure
-export interface MobileUserPermission {
-  userId: string;
-  role: "admin" | "accountant" | "cashier" | "sales_rep" | "user";
-  
-  // Treasury Permissions
-  canCreateReceiveReceipt: boolean; // ثبت دریافت وجه
-  canCreatePayReceipt: boolean;     // ثبت پرداخت وجه
-  canViewReceiptsList: boolean;     // لیست رسیدها
-  canUseKeyboardReceipt: boolean;   // ثبت سریع کیبوردی
-
-  // Commercial / Sales Permissions
-  canCreateSaleInvoice: boolean;    // صدور فاکتور فروش
-  canCreatePurchaseInvoice: boolean;// ثبت فاکتور خرید
-  canViewInvoicesList: boolean;     // مشاهده لیست فاکتورها
-  canQuickPriceInquiry: boolean;    // استعلام سریع قیمت
-  canManageProducts: boolean;       // ثبت و تعریف کالا
-
-  // Checks Permissions
-  canReceiveCheck: boolean;         // ثبت چک دریافتی
-  canPayCheck: boolean;             // ثبت چک پرداختی
-  canViewCheckDashboard: boolean;   // مشاهده داشبورد و کارتابل چک‌ها
-
-  // Persons & Ledger Permissions
-  canManagePersons: boolean;        // ثبت و ویرایش طرف‌حساب
-  canViewPersonLedger: boolean;     // مشاهده دفتر معین و کارت حساب
-  canViewPersonProfile: boolean;    // مشاهده پرونده شخص
-
-  // Reports & CRM
-  canViewDebtorsReport: boolean;    // مشاهده گزارش بدهکاران/بستانکاران
-  canViewDebtorsShowcase: boolean;  // مشاهده ویترین مطالبات معوق
-
-  // Device & Security Rules
-  allowedDeviceIds?: string[];      // شناسه دستگاه‌های مجاز
-  maxActiveSessions?: number;       // حداکثر نشست‌های همزمان
-  updatedAt: string;
-  updatedBy: string;
-}
-```
-
-### B. Admin Mobile Control Panel Features (`src/components/admin/MobilePermissionsManager.tsx`)
-
-1. **User Selection Drawer**: Select any registered user from the system.
-2. **Preset Role Templates**:
-   - *فروشنده میدانی (Field Sales Rep)*: Sale Invoice Creation, Customer Search, Ledger View, Debtors List, Receive Receipt.
-   - *تحویل‌دار / صندوق‌دار سیار (Mobile Cashier)*: Cash/Bank Receive & Pay Receipts, Check Entry, Daily Transactions.
-   - *انباردار همراه (Mobile Warehouse Operator)*: Product Stock Inquiry, Purchase Invoice Entry, Fast Barcode Scanner.
-   - *مدیر کل (Super Admin)*: Full access across all mobile endpoints.
-3. **Toggle Matrix UI**: Switch permissions individually with instant visual feedback and audit logs.
-4. **Device Registration Hub**: View registered smartphone models, IP addresses, last active timestamps, and option to remotely revoke device access.
-
----
-
-## 4. Mobile API Endpoints Specification (`/api/v1/mobile`)
-
-### A. Auth & Security Endpoints
-- `POST /api/v1/mobile/auth/login`: Validates credentials, checks active device ID, issues JWT token with embedded mobile claims.
-- `POST /api/v1/mobile/auth/device-register`: Registers new smartphone hardware fingerprint for admin approval.
-- `GET  /api/v1/mobile/auth/my-permissions`: Fetches current user's active mobile permissions.
-
-### B. Core Operational Endpoints
-- `GET  /api/v1/mobile/products/search?q=...`: Real-time barcode & title product lookup.
-- `GET  /api/v1/mobile/persons/search?q=...`: Instant customer search with live balance.
-- `POST /api/v1/mobile/invoices/sale`: Real-time sale invoice issue & automatic stock/account debit.
-- `POST /api/v1/mobile/receipts/receive`: Issue cash/POS/bank receive receipt with auto journal entry.
-- `POST /api/v1/mobile/checks/receive`: Register incoming Sayad check.
-- `GET  /api/v1/mobile/reports/debtors`: Real-time list of customer balances and overdue debts.
-
----
-
-## 5. Security & Device Binding Specification
-
-1. **JWT Auth Header**: `Authorization: Bearer <jwt_token>` containing user ID, store ID, and signature.
-2. **Device Header Verification**: `X-Device-Fingerprint: <sha256_hash>` checked against `allowedDeviceIds` in admin settings.
-3. **Session Revocation**: Admin panel includes a 1-tap "خروج اضطراری تمام نشست‌های همراه" (Force Revoke All Mobile Sessions) button.
-
----
-
-## 6. Implementation Milestones
-
-1. **Milestone 1**: Implement `mobile_permissions` database store and Admin Control Panel component in the main desktop web app (`/admin/mobile-permissions`).
-2. **Milestone 2**: Build central backend express router `/api/v1/mobile/*` with JWT authentication and permission enforcement middleware.
-3. **Milestone 3**: Create mobile client application structure with touch-optimized forms (Sales Invoice, Receive Receipt, Check Entry, Person Ledger, Debtors Report).
-4. **Milestone 4**: Conduct end-to-end testing, compile verification, and generate final deployment package.
+This master prompt is 100% self-contained, specifies the React Native Expo stack, Dark Mode theme, API contracts, RTL Persian typography, and all 5 operational screens. You can copy the code block directly into any AI code generator to build the standalone app codebase.

@@ -126,6 +126,8 @@ export default function PersonFormModal({
   const [newPersonRegistrationDate, setNewPersonRegistrationDate] = useState<any>("");
   const [newPersonDescription, setNewPersonDescription] = useState("");
   const [newPersonCategories, setNewPersonCategories] = useState<string[]>([]);
+  const [newPersonTags, setNewPersonTags] = useState<string[]>([]);
+  const [newPersonTagInput, setNewPersonTagInput] = useState("");
 
   // Employment / Personnel Info
   const [newPersonJobTitle, setNewPersonJobTitle] = useState("");
@@ -170,6 +172,7 @@ export default function PersonFormModal({
           setNewPersonRole(person.role || "customer");
           setNewPersonRoles(person.roles || (person.role ? [person.role] : []));
           setNewPersonCategories(person.categories || []);
+          setNewPersonTags(Array.isArray(person.tags) ? person.tags : []);
           setNewPersonPhone(person.phone || person.mobile || "");
           setNewPersonMobile(person.mobile || person.phone || "");
           setNewPersonPostalCode(person.postalCode || "");
@@ -242,6 +245,8 @@ export default function PersonFormModal({
         setNewPersonRegistrationDate(new Date().toISOString().split("T")[0]);
         setNewPersonDescription("");
         setNewPersonCategories([]);
+        setNewPersonTags([]);
+        setNewPersonTagInput("");
 
         setNewPersonJobTitle("");
         setNewPersonInsuranceNumber("");
@@ -599,6 +604,7 @@ export default function PersonFormModal({
         role: newPersonRole,
         roles: Array.from(new Set([newPersonRole, ...(newPersonRoles || [])])),
         categories: newPersonCategories,
+        tags: newPersonTags,
         phone: newPersonPhone.trim(),
         mobile: newPersonMobile.trim() || newPersonPhone.trim(),
         postalCode: newPersonPostalCode.trim(),
@@ -1808,6 +1814,65 @@ export default function PersonFormModal({
                           );
                         })}
                       </div>
+                    </div>
+
+                    {/* Smart Tags / Labels */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-indigo-500" />
+                        <span>برچسب‌های هوشمند شخص (تگ‌ها)</span>
+                      </label>
+                      <div className="flex items-center gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={newPersonTagInput}
+                          onChange={(e) => setNewPersonTagInput(e.target.value)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') {
+                              e.preventDefault();
+                              const clean = newPersonTagInput.trim().replace(/^#/, '');
+                              if (clean && !newPersonTags.includes(clean)) {
+                                setNewPersonTags([...newPersonTags, clean]);
+                                setNewPersonTagInput('');
+                              }
+                            }
+                          }}
+                          placeholder="برچسب جدید (Enter یا دکمه افزودن)..."
+                          className="flex-1 px-4 py-2 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 text-xs font-bold text-slate-900 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const clean = newPersonTagInput.trim().replace(/^#/, '');
+                            if (clean && !newPersonTags.includes(clean)) {
+                              setNewPersonTags([...newPersonTags, clean]);
+                              setNewPersonTagInput('');
+                            }
+                          }}
+                          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-2xl text-xs font-bold transition-colors cursor-pointer"
+                        >
+                          افزودن برچسب
+                        </button>
+                      </div>
+                      {newPersonTags.length > 0 && (
+                        <div className="flex flex-wrap gap-1.5">
+                          {newPersonTags.map((t, idx) => (
+                            <span
+                              key={idx}
+                              className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-xs font-bold bg-indigo-50 text-indigo-700 border border-indigo-200"
+                            >
+                              #{t}
+                              <button
+                                type="button"
+                                onClick={() => setNewPersonTags(newPersonTags.filter((_, i) => i !== idx))}
+                                className="hover:text-rose-600 p-0.5 rounded-full cursor-pointer"
+                              >
+                                <X className="w-3 h-3" />
+                              </button>
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
 
                     {/* Description / Notes */}

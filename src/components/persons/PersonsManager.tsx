@@ -7,7 +7,7 @@ import {
   Info, Trash2, RefreshCw, Key, ArrowRightLeft, LayoutGrid, Table as TableIcon,
   Building, BookOpen, Settings, Check, X, FilterX, MoreHorizontal, FileSpreadsheet,
   ArrowUpDown, Download, CheckSquare, Square, FileOutput, Power, PowerOff,
-  MessageSquare
+  MessageSquare, Tag
 } from "lucide-react";
 import { updatePerson } from '../../services/personService';
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
@@ -124,6 +124,7 @@ export default function PersonsManager(props: any) {
   const [filterPersonType, setFilterPersonType] = useState<string>(() => sessionStorage.getItem('person_filterPersonType') || 'all');
   const [filterProvince, setFilterProvince] = useState<string>(() => sessionStorage.getItem('person_filterProvince') || 'all');
   const [filterCity, setFilterCity] = useState<string>(() => sessionStorage.getItem('person_filterCity') || 'all');
+  const [filterTag, setFilterTag] = useState<string>(() => sessionStorage.getItem('person_filterTag') || 'all');
 
   // Table Enhancements
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>(() => {
@@ -164,8 +165,9 @@ export default function PersonsManager(props: any) {
     sessionStorage.setItem('person_filterPersonType', filterPersonType);
     sessionStorage.setItem('person_filterProvince', filterProvince);
     sessionStorage.setItem('person_filterCity', filterCity);
+    sessionStorage.setItem('person_filterTag', filterTag);
     if (sortConfig) sessionStorage.setItem('personSortConfig', JSON.stringify(sortConfig));
-  }, [filterActiveStatus, filterBalanceStatus, filterPersonType, filterProvince, filterCity, sortConfig]);
+  }, [filterActiveStatus, filterBalanceStatus, filterPersonType, filterProvince, filterCity, filterTag, sortConfig]);
 
   // Extract available locations
   const availableProvinces = useMemo(() => {
@@ -183,6 +185,20 @@ export default function PersonsManager(props: any) {
     });
     return Array.from(set).sort();
   }, [filteredPersons, filterProvince]);
+
+  // Extract all available tags across persons
+  const availableTags = useMemo(() => {
+    const set = new Set<string>();
+    (filteredPersons || []).forEach((p: any) => {
+      if (Array.isArray(p.tags)) {
+        p.tags.forEach((t: string) => {
+          const clean = (t || '').trim();
+          if (clean) set.add(clean);
+        });
+      }
+    });
+    return Array.from(set).sort();
+  }, [filteredPersons]);
 
   // Compute Balances and advanced filtering
   const processedPersons = useMemo(() => {
@@ -208,9 +224,14 @@ export default function PersonsManager(props: any) {
       if (filterProvince !== 'all' && p.province !== filterProvince) return false;
       if (filterCity !== 'all' && p.city !== filterCity) return false;
 
+      if (filterTag !== 'all') {
+        const pTags = Array.isArray(p.tags) ? p.tags : [];
+        if (!pTags.includes(filterTag)) return false;
+      }
+
       return true;
     });
-  }, [filteredPersons, calculatePersonBalance, filterActiveStatus, filterBalanceStatus, filterPersonType, filterProvince, filterCity]);
+  }, [filteredPersons, calculatePersonBalance, filterActiveStatus, filterBalanceStatus, filterPersonType, filterProvince, filterCity, filterTag]);
 
   // Apply Sorting
   const sortedPersons = useMemo(() => {
@@ -328,6 +349,7 @@ export default function PersonsManager(props: any) {
     setFilterPersonType('all');
     setFilterProvince('all');
     setFilterCity('all');
+    setFilterTag('all');
   };
 
   const activeFilters = [];
@@ -348,6 +370,7 @@ export default function PersonsManager(props: any) {
   if (filterPersonType !== 'all') activeFilters.push({ id: 'type', label: `نوع: ${filterPersonType === 'real' ? 'حقیقی' : 'حقوقی'}`, onRemove: () => setFilterPersonType('all') });
   if (filterProvince !== 'all') activeFilters.push({ id: 'province', label: `استان: ${filterProvince}`, onRemove: () => { setFilterProvince('all'); setFilterCity('all'); } });
   if (filterCity !== 'all') activeFilters.push({ id: 'city', label: `شهر: ${filterCity}`, onRemove: () => setFilterCity('all') });
+  if (filterTag !== 'all') activeFilters.push({ id: 'tag', label: `برچسب: #${filterTag}`, onRemove: () => setFilterTag('all') });
 
 
   // Bulk Actions
@@ -698,6 +721,47 @@ export default function PersonsManager(props: any) {
           </div>
         </div>
 
+        {/* Quick Tag Filter Pills */}
+        {availableTags.length > 0 && (
+          <div className="flex items-center gap-1.5 overflow-x-auto pb-1 mt-3 scrollbar-none">
+            <span className="text-[10px] font-black text-slate-400 flex items-center gap-1 shrink-0 ml-1">
+              <Tag className="w-3 h-3 text-indigo-500" />
+              برچسب‌ها:
+            </span>
+            <button
+              onClick={() => { setFilterTag('all'); setPersonCurrentPage(1); }}
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold transition-all shrink-0 cursor-pointer ${
+                filterTag === 'all'
+                  ? 'bg-slate-800 text-white shadow-2xs'
+                  : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              همه ({toPersianDigits(filteredPersons.length)})
+            </button>
+            {availableTags.map(tag => {
+              const count = (filteredPersons || []).filter((p: any) => Array.isArray(p.tags) && p.tags.includes(tag)).length;
+              const isSelected = filterTag === tag;
+              return (
+                <button
+                  key={tag}
+                  onClick={() => { setFilterTag(isSelected ? 'all' : tag); setPersonCurrentPage(1); }}
+                  className={`inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black transition-all shrink-0 cursor-pointer ${
+                    isSelected
+                      ? 'bg-indigo-600 text-white shadow-xs'
+                      : 'bg-white border border-slate-200 text-slate-700 hover:border-indigo-300 hover:text-indigo-600'
+                  }`}
+                  title={`فیلتر بر اساس برچسب ${tag}`}
+                >
+                  <span>#{tag}</span>
+                  <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-sans ${isSelected ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                    {toPersianDigits(count)}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+
         {/* Active Filter Chips */}
         {activeFilters.length > 0 && (
           <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100">
@@ -816,6 +880,23 @@ export default function PersonsManager(props: any) {
                   </select>
                 </div>
 
+                <div>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1 flex items-center gap-1">
+                    <Tag className="w-3 h-3 text-indigo-500" />
+                    برچسب (تگ)
+                  </label>
+                  <select 
+                    value={filterTag} 
+                    onChange={e => { setFilterTag(e.target.value); setPersonCurrentPage(1); }}
+                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500 bg-white"
+                  >
+                    <option value="all">همه برچسب‌ها</option>
+                    {availableTags.map(tag => (
+                      <option key={tag} value={tag}>#{tag}</option>
+                    ))}
+                  </select>
+                </div>
+
               </div>
             </motion.div>
           )}
@@ -912,6 +993,18 @@ export default function PersonsManager(props: any) {
                             </span>
                           )}
                         </div>
+                        {Array.isArray(p.tags) && p.tags.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 mt-1">
+                            {p.tags.slice(0, 3).map((t: string, ti: number) => (
+                              <span key={ti} className="text-[9px] font-bold bg-indigo-50 text-indigo-700 px-1.5 py-0.2 rounded border border-indigo-100">
+                                #{t}
+                              </span>
+                            ))}
+                            {p.tags.length > 3 && (
+                              <span className="text-[8px] font-bold text-slate-400">+{p.tags.length - 3}</span>
+                            )}
+                          </div>
+                        )}
                       </div>
                     </div>
 
@@ -1001,6 +1094,29 @@ export default function PersonsManager(props: any) {
                           return g ? <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 truncate max-w-[80px]">{g.name}</span> : null;
                         })()}
                       </div>
+                      {Array.isArray(p.tags) && p.tags.length > 0 && (
+                        <div className="flex flex-wrap items-center gap-1 mt-2">
+                          {p.tags.map((t: string, ti: number) => (
+                            <span
+                              key={ti}
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setFilterTag(filterTag === t ? 'all' : t);
+                                setPersonCurrentPage(1);
+                              }}
+                              className={`inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                                filterTag === t
+                                  ? 'bg-indigo-600 text-white shadow-2xs'
+                                  : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
+                              }`}
+                              title={`فیلتر بر اساس برچسب ${t}`}
+                            >
+                              <Tag className="w-2.5 h-2.5" />
+                              #{t}
+                            </span>
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
 
@@ -1049,7 +1165,7 @@ export default function PersonsManager(props: any) {
                       شخص / شرکت <SortIcon columnKey="name" />
                     </th>
                     <th className="px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('role')}>
-                      نقش و گروه <SortIcon columnKey="role" />
+                      نقش، گروه و برچسب <SortIcon columnKey="role" />
                     </th>
                     <th className="px-4 py-4 cursor-pointer hover:bg-slate-100 transition-colors" onClick={() => handleSort('contact')}>
                       اطلاعات تماس <SortIcon columnKey="contact" />
@@ -1122,6 +1238,28 @@ export default function PersonsManager(props: any) {
                               const g = (personGroups || []).find((grp: any) => grp.id === p.group);
                               return g ? <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md truncate max-w-[140px]">{g.name}</span> : null;
                             })()}
+                            {Array.isArray(p.tags) && p.tags.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1 mt-1 max-w-[200px]">
+                                {p.tags.map((t: string, ti: number) => (
+                                  <span
+                                    key={ti}
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      setFilterTag(filterTag === t ? 'all' : t);
+                                      setPersonCurrentPage(1);
+                                    }}
+                                    className={`inline-flex items-center gap-0.5 text-[9px] font-black px-1.5 py-0.5 rounded cursor-pointer transition-colors ${
+                                      filterTag === t
+                                        ? 'bg-indigo-600 text-white shadow-2xs'
+                                        : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200'
+                                    }`}
+                                    title={`کلیک برای فیلتر بر اساس برچسب ${t}`}
+                                  >
+                                    #{t}
+                                  </span>
+                                ))}
+                              </div>
+                            )}
                           </div>
                         </td>
                         <td className="px-4 py-3">

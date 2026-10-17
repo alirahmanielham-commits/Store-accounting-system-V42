@@ -2860,7 +2860,7 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                   >
                     <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
                     {isMobileScreen ? (
-                      <MobileRestrictedAccess currentTab={activeTab} setActiveTab={setActiveTab} />
+                      <MobileRestrictedAccess />
                     ) : user && activeTab !== "welcome_page" && !hasPagePermission(user, activeTab) ? (
                       <AccessRestricted activeTab={activeTab} user={user} onGoHome={() => setActiveTab("welcome_page")} />
                     ) : (

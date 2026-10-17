@@ -115,16 +115,16 @@ export default function MobilePermissionsManager({
   // Initialize selected user
   useEffect(() => {
     if (users.length > 0 && !selectedUserId) {
-      setSelectedUserId(users[0].id);
+      setSelectedUserId(String(users[0].id));
     }
   }, [users, selectedUserId]);
 
-  const selectedUser = users.find((u) => u.id === selectedUserId) || users[0];
+  const selectedUser = users.find((u) => String(u.id) === String(selectedUserId)) || users[0];
 
   const currentPermission: MobileUserPermission =
     permissionsMap[selectedUserId] ||
     (selectedUser
-      ? DEFAULT_PERMISSIONS(selectedUser.id, selectedUser.name, selectedUser.role)
+      ? DEFAULT_PERMISSIONS(String(selectedUser.id), selectedUser.name, selectedUser.role)
       : DEFAULT_PERMISSIONS("guest", "کاربر", "user"));
 
   const handleToggle = (key: keyof MobileUserPermission) => {
@@ -334,12 +334,12 @@ export default function MobilePermissionsManager({
 
           <div className="space-y-1.5 overflow-y-auto flex-1 pr-0.5">
             {filteredUsers.map((u) => {
-              const isSelected = u.id === selectedUserId;
+              const isSelected = String(u.id) === String(selectedUserId);
               return (
                 <button
                   key={u.id}
                   type="button"
-                  onClick={() => setSelectedUserId(u.id)}
+                  onClick={() => setSelectedUserId(String(u.id))}
                   className={`w-full text-right p-3 rounded-xl transition-all cursor-pointer flex items-center justify-between ${
                     isSelected
                       ? "bg-indigo-600 text-white shadow-xs font-black"

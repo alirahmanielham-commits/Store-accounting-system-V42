@@ -43,6 +43,7 @@ export type Person = {
   role: 'customer' | 'employee' | 'supplier';
   roles?: string[];
   categories?: string[];
+  tags?: string[];
   taxNumber?: string;
   registrationNumber?: string; 
   phone: string;
