@@ -624,7 +624,7 @@ router.get('/api/data/:key', async (req, res) => {
         'payment_transactions', 'persons', 'products', 'warehouses', 'accounting_documents', 'issued_checks',
         'received_checks', 'checkbooks', 'loans', 'installments', 'payslips', 'product_categories', 'person_groups',
         'person_roles', 'person_categories', 'sales_invoice_payments', 'purchase_invoice_payments',
-        'inventory_transactions', 'system_logs'
+        'inventory_transactions', 'system_logs', 'person_specialties'
       ].includes(key);
 
       if ((data === null || data === undefined) && isCollectionKey) {

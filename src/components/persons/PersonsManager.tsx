@@ -13,7 +13,8 @@ import { updatePerson } from '../../services/personService';
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import { getActiveStoreSettings } from '../../utils/format';
-import { DEFAULT_SPECIALTIES } from '../../services/specialistService';
+import { DEFAULT_SPECIALTIES, getSpecialties, getSpecialtyById, getSpecialtyName } from '../../services/specialistService';
+import { PersonSpecialty } from '../../types';
 
 export default function PersonsManager(props: any) {
   const { 
@@ -127,6 +128,41 @@ export default function PersonsManager(props: any) {
   const [filterCity, setFilterCity] = useState<string>(() => sessionStorage.getItem('person_filterCity') || 'all');
   const [filterTag, setFilterTag] = useState<string>(() => sessionStorage.getItem('person_filterTag') || 'all');
   const [filterSpecialistsOnly, setFilterSpecialistsOnly] = useState<boolean>(false);
+  const [specialtiesCatalog, setSpecialtiesCatalog] = useState<PersonSpecialty[]>(DEFAULT_SPECIALTIES);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadCatalog = () => {
+      getSpecialties().then((list) => {
+        if (mounted && list && list.length > 0) {
+          setSpecialtiesCatalog(list);
+        }
+      });
+    };
+    loadCatalog();
+
+    const handleCatalogChanged = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setSpecialtiesCatalog(e.detail);
+      } else {
+        loadCatalog();
+      }
+    };
+
+    const handleAppDataChanged = (e: any) => {
+      if (e?.detail?.key === 'person_specialties') {
+        loadCatalog();
+      }
+    };
+
+    window.addEventListener('specialties_catalog_changed', handleCatalogChanged);
+    window.addEventListener('app_data_changed', handleAppDataChanged);
+    return () => {
+      mounted = false;
+      window.removeEventListener('specialties_catalog_changed', handleCatalogChanged);
+      window.removeEventListener('app_data_changed', handleAppDataChanged);
+    };
+  }, []);
 
   // Table Enhancements
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>(() => {
@@ -1027,11 +1063,11 @@ export default function PersonsManager(props: any) {
                         {Array.isArray(p.specialties) && p.specialties.length > 0 && (
                           <div className="flex flex-wrap items-center gap-1 mt-1">
                             {p.specialties.slice(0, 2).map((specId: string) => {
-                              const spec = DEFAULT_SPECIALTIES.find((s) => s.id === specId);
+                              const spec = getSpecialtyById(specId, specialtiesCatalog);
                               return (
                                 <span key={specId} className="inline-flex items-center gap-0.5 text-[8.5px] font-bold bg-amber-50 text-amber-900 px-1.5 py-0.2 rounded border border-amber-200">
                                   <Hammer className="w-2.5 h-2.5 text-amber-600" />
-                                  <span>{spec?.name || specId}</span>
+                                  <span>{spec.name}</span>
                                 </span>
                               );
                             })}
@@ -1288,7 +1324,7 @@ export default function PersonsManager(props: any) {
                             {Array.isArray(p.specialties) && p.specialties.length > 0 && (
                               <div className="flex flex-wrap items-center gap-1 mt-1 max-w-[200px]">
                                 {p.specialties.map((specId: string) => {
-                                  const spec = DEFAULT_SPECIALTIES.find((s) => s.id === specId);
+                                  const spec = getSpecialtyById(specId, specialtiesCatalog);
                                   return (
                                     <span
                                       key={specId}
@@ -1300,7 +1336,7 @@ export default function PersonsManager(props: any) {
                                       title="مشاهده در ویترین متخصصین"
                                     >
                                       <Hammer className="w-2.5 h-2.5 text-amber-600" />
-                                      <span>{spec?.name || specId}</span>
+                                      <span>{spec.name}</span>
                                     </span>
                                   );
                                 })}

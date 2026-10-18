@@ -112,33 +112,109 @@ export const DEFAULT_SPECIALTIES: PersonSpecialty[] = [
   },
 ];
 
-const STORAGE_KEY = 'taraz_person_specialties_catalog_v1';
+const STORAGE_KEY = 'person_specialties';
+const LEGACY_STORAGE_KEY = 'taraz_person_specialties_catalog_v1';
 
-/**
- * دریافت لیست کلیه تخصص‌ها
- */
-export async function getSpecialties(): Promise<PersonSpecialty[]> {
+let memorySpecialtiesCache: PersonSpecialty[] | null = null;
+
+const readFromLocalStorage = (): PersonSpecialty[] => {
+  if (typeof window === 'undefined') return [];
   try {
-    const stored = await getLocalData<PersonSpecialty[]>(STORAGE_KEY, []);
-    if (stored && stored.length > 0) {
-      return stored;
+    const raw = localStorage.getItem(STORAGE_KEY) || localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
     }
   } catch (e) {
-    console.warn("Could not read stored specialties from local data", e);
+    console.warn("Error reading specialties from localStorage", e);
   }
+  return [];
+};
 
-  // اگر هنوز ذخیره نشده بود، با پیش‌فرض‌ها ذخیره کن
+const writeToLocalStorage = (list: PersonSpecialty[]) => {
+  if (typeof window === 'undefined') return;
   try {
-    await saveLocalData(STORAGE_KEY, DEFAULT_SPECIALTIES);
-  } catch {}
-  return DEFAULT_SPECIALTIES;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
+    localStorage.setItem(LEGACY_STORAGE_KEY, JSON.stringify(list));
+  } catch (e) {
+    console.warn("Error saving specialties to localStorage", e);
+  }
+};
+
+/**
+ * ادغام تخصص‌های پیش‌فرض با تخصص‌های ذخیره‌شده یا سفارشی
+ */
+export function mergeSpecialties(stored: PersonSpecialty[]): PersonSpecialty[] {
+  const map = new Map<string, PersonSpecialty>();
+
+  // ۱. اضافه کردن پیش‌فرض‌ها
+  DEFAULT_SPECIALTIES.forEach((s) => map.set(s.id, { ...s, isDefault: true }));
+
+  // ۲. اعمال تخصص‌های ذخیره‌شده / سفارشی
+  (stored || []).forEach((s) => {
+    if (s && s.id) {
+      const existing = map.get(s.id);
+      const cleanName = s.name && s.name.trim() ? s.name.trim() : (existing?.name || s.id);
+      map.set(s.id, {
+        icon: "Wrench",
+        color: "#6366f1",
+        category: "ساختمانی و فنی",
+        ...(existing || {}),
+        ...s,
+        id: s.id,
+        name: cleanName,
+        isDefault: existing ? existing.isDefault : false,
+      });
+    }
+  });
+
+  return Array.from(map.values());
 }
 
 /**
- * ذخیره لیست تخصص‌ها
+ * دریافت لیست کلیه تخصص‌ها (از کش حافظه، localStorage و سرور)
+ */
+export async function getSpecialties(): Promise<PersonSpecialty[]> {
+  const localItems = readFromLocalStorage();
+
+  try {
+    const serverItems = await getLocalData<PersonSpecialty[]>(STORAGE_KEY, []);
+    const combinedSource = [
+      ...(Array.isArray(serverItems) ? serverItems : []),
+      ...localItems,
+    ];
+
+    const merged = mergeSpecialties(combinedSource);
+    memorySpecialtiesCache = merged;
+    writeToLocalStorage(merged);
+    return merged;
+  } catch (e) {
+    console.warn("Could not read stored specialties from server, using local fallback", e);
+  }
+
+  const fallbackMerged = mergeSpecialties(localItems);
+  memorySpecialtiesCache = fallbackMerged;
+  return fallbackMerged;
+}
+
+/**
+ * ذخیره لیست کامل تخصص‌ها
  */
 export async function saveSpecialties(list: PersonSpecialty[]): Promise<void> {
-  await saveLocalData(STORAGE_KEY, list);
+  const merged = mergeSpecialties(list);
+  memorySpecialtiesCache = merged;
+  writeToLocalStorage(merged);
+
+  try {
+    await saveLocalData(STORAGE_KEY, merged);
+  } catch (e) {
+    console.warn("Could not save specialties to server, saved to localStorage", e);
+  }
+
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('specialties_catalog_changed', { detail: merged }));
+    window.dispatchEvent(new CustomEvent('app_data_changed', { detail: { key: STORAGE_KEY } }));
+  }
 }
 
 /**
@@ -147,22 +223,32 @@ export async function saveSpecialties(list: PersonSpecialty[]): Promise<void> {
 export async function addSpecialty(specialty: Omit<PersonSpecialty, 'id'>): Promise<PersonSpecialty> {
   const current = await getSpecialties();
   const id = `spec_${Date.now()}_${Math.random().toString(36).substring(2, 6)}`;
+  const cleanName = (specialty.name || "").trim() || "تخصص جدید";
+  
   const newItem: PersonSpecialty = {
     ...specialty,
+    name: cleanName,
     id,
     isDefault: false,
   };
-  const updated = [newItem, ...current];
+
+  const updated = [newItem, ...current.filter(s => s.id !== id)];
   await saveSpecialties(updated);
   return newItem;
 }
 
 /**
- * به‌روزرسانی تخصص موجود
+ * به‌روزرسانی تخصص موجود (از جمله تغییر نام)
  */
 export async function updateSpecialty(id: string, updates: Partial<PersonSpecialty>): Promise<PersonSpecialty[]> {
   const current = await getSpecialties();
-  const updated = current.map((s) => (s.id === id ? { ...s, ...updates } : s));
+  const updated = current.map((s) => {
+    if (s.id === id) {
+      const cleanName = updates.name !== undefined ? (updates.name.trim() || s.name) : s.name;
+      return { ...s, ...updates, name: cleanName };
+    }
+    return s;
+  });
   await saveSpecialties(updated);
   return updated;
 }
@@ -174,6 +260,71 @@ export async function deleteSpecialty(id: string): Promise<PersonSpecialty[]> {
   const current = await getSpecialties();
   const updated = current.filter((s) => s.id !== id);
   await saveSpecialties(updated);
+  return updated;
+}
+
+/**
+ * بازیابی شیء تخصص بر اساس شناسه به همراه فال‌بک هوشمند
+ */
+export function getSpecialtyById(id: string, catalog?: PersonSpecialty[]): PersonSpecialty {
+  const list = catalog || memorySpecialtiesCache || readFromLocalStorage() || DEFAULT_SPECIALTIES;
+  const found = list.find((s) => s.id === id);
+  if (found && found.name && found.name.trim() && found.name !== id) {
+    return found;
+  }
+
+  const defFound = DEFAULT_SPECIALTIES.find((s) => s.id === id);
+  if (defFound) {
+    return defFound;
+  }
+
+  // اگر شناسه به فرمت spec_ باشد و هنوز عنوانی برای آن پیدا نشده باشد:
+  return {
+    id,
+    name: `تخصص سفارشی (${id.substring(0, 12)}...)`,
+    category: "ساختمانی و فنی",
+    icon: "Hammer",
+    color: "#6366f1",
+    isDefault: false,
+  };
+}
+
+/**
+ * بازیابی نام تخصص جهت نمایش زیبا به کاربر
+ */
+export function getSpecialtyName(id: string, catalog?: PersonSpecialty[]): string {
+  const spec = getSpecialtyById(id, catalog);
+  return spec.name;
+}
+
+/**
+ * خودکارساز ثبت تخصص‌های گم‌شده اشخاص در کاتالوگ با عنوان پیش‌فرض قابل ویرایش
+ */
+export async function ensureSpecialtiesExist(ids: string[]): Promise<PersonSpecialty[]> {
+  if (!ids || ids.length === 0) return await getSpecialties();
+  const current = await getSpecialties();
+  let hasMissing = false;
+  const updated = [...current];
+
+  for (const id of ids) {
+    if (!id || typeof id !== 'string') continue;
+    const exists = updated.some((s) => s.id === id);
+    if (!exists) {
+      hasMissing = true;
+      updated.push({
+        id,
+        name: `تخصص جدید (${id.substring(0, 8)})`,
+        category: "مهارت‌های فنی",
+        icon: "Hammer",
+        color: "#6366f1",
+        isDefault: false,
+      });
+    }
+  }
+
+  if (hasMissing) {
+    await saveSpecialties(updated);
+  }
   return updated;
 }
 
@@ -199,3 +350,4 @@ export function updatePersonSpecialistData(
     dailyWage: data.dailyWage !== undefined ? data.dailyWage : person.dailyWage,
   };
 }
+

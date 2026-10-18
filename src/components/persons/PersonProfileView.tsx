@@ -15,7 +15,15 @@ import { safePrint } from '../../utils/printHelper';
 import { exportToExcel } from '../../utils/exportUtils';
 import { getPersonFollowUps, addPersonFollowUp, updatePersonFollowUp, deletePersonFollowUp, savePerson, updatePerson } from "../../services/personService";
 import { PersonSpecialty } from "../../types";
-import { DEFAULT_SPECIALTIES, getSpecialties, updatePersonSpecialistData } from "../../services/specialistService";
+import { 
+  DEFAULT_SPECIALTIES, 
+  getSpecialties, 
+  updatePersonSpecialistData, 
+  getSpecialtyById, 
+  getSpecialtyName, 
+  ensureSpecialtiesExist,
+  addSpecialty 
+} from "../../services/specialistService";
 import SendPersonMessageModal from "../modals/SendPersonMessageModal";
 
 interface PersonProfileViewProps {
@@ -94,15 +102,46 @@ export default function PersonProfileView({
 
   useEffect(() => {
     let mounted = true;
-    getSpecialties().then((list) => {
-      if (mounted && list && list.length > 0) {
-        setSpecialtiesCatalog(list);
+
+    const loadCatalog = () => {
+      getSpecialties().then(async (list) => {
+        if (!mounted) return;
+        const currentTarget = (persons || []).find(p => p && String(p.id) === String(personId));
+        const pSpecs = Array.isArray(currentTarget?.specialties) ? currentTarget.specialties : [];
+        const missing = pSpecs.filter((id: string) => id && !list.some((s) => s.id === id));
+        if (missing.length > 0) {
+          const updated = await ensureSpecialtiesExist(missing);
+          if (mounted) setSpecialtiesCatalog(updated);
+        } else if (list && list.length > 0) {
+          setSpecialtiesCatalog(list);
+        }
+      });
+    };
+
+    loadCatalog();
+
+    const handleCatalogChanged = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setSpecialtiesCatalog(e.detail);
+      } else {
+        loadCatalog();
       }
-    });
+    };
+
+    const handleAppDataChanged = (e: any) => {
+      if (e?.detail?.key === 'person_specialties') {
+        loadCatalog();
+      }
+    };
+
+    window.addEventListener('specialties_catalog_changed', handleCatalogChanged);
+    window.addEventListener('app_data_changed', handleAppDataChanged);
     return () => {
       mounted = false;
+      window.removeEventListener('specialties_catalog_changed', handleCatalogChanged);
+      window.removeEventListener('app_data_changed', handleAppDataChanged);
     };
-  }, []);
+  }, [persons, personId]);
 
   const getSpecialtyIcon = (iconName?: string) => {
     switch (iconName) {
@@ -1363,9 +1402,9 @@ export default function PersonProfileView({
             <div className="space-y-2.5">
               <div className="flex flex-wrap items-center gap-2">
                 {person.specialties.map((specId: string) => {
-                  const spec = specialtiesCatalog.find((s) => s.id === specId);
-                  const name = spec?.name || specId;
-                  const color = spec?.color || "#f59e0b";
+                  const spec = getSpecialtyById(specId, specialtiesCatalog);
+                  const name = spec.name;
+                  const color = spec.color || "#f59e0b";
                   return (
                     <span
                       key={specId}
@@ -1916,7 +1955,7 @@ export default function PersonProfileView({
                       <span className="text-[10px] font-bold text-slate-400 block mb-1">تخصص‌های منتسب:</span>
                       <div className="flex flex-wrap gap-1.5 mt-1">
                         {person.specialties.map((specId: string) => {
-                          const spec = specialtiesCatalog.find((s) => s.id === specId);
+                          const spec = getSpecialtyById(specId, specialtiesCatalog);
                           return (
                             <span
                               key={specId}
@@ -1928,7 +1967,7 @@ export default function PersonProfileView({
                               }}
                             >
                               {getSpecialtyIcon(spec?.icon)}
-                              <span>{spec?.name || specId}</span>
+                              <span>{spec.name}</span>
                             </span>
                           );
                         })}
@@ -3238,6 +3277,29 @@ function PersonSpecialtyModal({
   const [wage, setWage] = useState<number>(person.dailyWage || 0);
   const [isSaving, setIsSaving] = useState(false);
 
+  const [showAddInline, setShowAddInline] = useState(false);
+  const [newSpecName, setNewSpecName] = useState("");
+  const [isAddingNew, setIsAddingNew] = useState(false);
+
+  const handleCreateQuickSpec = async () => {
+    const clean = newSpecName.trim();
+    if (!clean) return;
+    setIsAddingNew(true);
+    try {
+      const created = await addSpecialty({
+        name: clean,
+        category: "ساختمانی و فنی",
+        icon: "Hammer",
+        color: "#f59e0b",
+      });
+      setSelectedSpecs((prev) => [...prev, created.id]);
+      setNewSpecName("");
+      setShowAddInline(false);
+    } finally {
+      setIsAddingNew(false);
+    }
+  };
+
   const toggleSpec = (id: string) => {
     setSelectedSpecs((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
   };
@@ -3283,12 +3345,44 @@ function PersonSpecialtyModal({
               <label className="block text-xs font-bold text-slate-700">
                 انتخاب تخصص‌ها و پیشه‌ها (امکان انتخاب همزمان چند تخصص):
               </label>
-              <span className="text-[11px] text-amber-700 font-bold">{selectedSpecs.length} تخصص انتخاب‌شده</span>
+              <div className="flex items-center gap-2">
+                <span className="text-[11px] text-amber-700 font-bold">{selectedSpecs.length} تخصص انتخاب‌شده</span>
+                <button
+                  type="button"
+                  onClick={() => setShowAddInline(!showAddInline)}
+                  className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-lg flex items-center gap-1 border border-indigo-200 transition-colors cursor-pointer"
+                >
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>تخصص جدید</span>
+                </button>
+              </div>
             </div>
+
+            {showAddInline && (
+              <div className="p-3 mb-3 bg-amber-50/80 rounded-2xl border border-amber-200 flex items-center gap-2 animate-in fade-in duration-150">
+                <input
+                  type="text"
+                  value={newSpecName}
+                  onChange={(e) => setNewSpecName(e.target.value)}
+                  placeholder="عنوان تخصص جدید (مثال: داربست‌بند، تراشکار)..."
+                  className="flex-1 px-3 py-1.5 bg-white border border-amber-300 rounded-xl text-xs font-bold outline-none"
+                  autoFocus
+                />
+                <button
+                  type="button"
+                  disabled={isAddingNew || !newSpecName.trim()}
+                  onClick={handleCreateQuickSpec}
+                  className="px-3 py-1.5 bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0"
+                >
+                  افزودن و انتساب
+                </button>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1.5 border border-slate-200 rounded-2xl bg-slate-50/50">
               {catalog.map((spec) => {
                 const checked = selectedSpecs.includes(spec.id);
+                const specObj = getSpecialtyById(spec.id, catalog);
                 return (
                   <button
                     key={spec.id}
@@ -3301,10 +3395,10 @@ function PersonSpecialtyModal({
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <span style={{ color: spec.color || "#f59e0b" }}>
+                      <span style={{ color: specObj.color || "#f59e0b" }}>
                         <Hammer className="w-4 h-4" />
                       </span>
-                      <span>{spec.name}</span>
+                      <span>{specObj.name}</span>
                     </div>
                     {checked ? (
                       <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />

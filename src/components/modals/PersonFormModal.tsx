@@ -43,7 +43,8 @@ import CustomDatePicker from "../ui/CustomDatePicker";
 import { toPersianDigits, convertToGregorian, numberToWords } from "../../utils/format";
 import CurrencyInput from "../ui/CurrencyInput";
 import { addPerson, updatePerson, deletePerson as deletePersonService } from "../../services/dataService";
-import { DEFAULT_SPECIALTIES } from "../../services/specialistService";
+import { DEFAULT_SPECIALTIES, getSpecialties, addSpecialty, getSpecialtyById } from "../../services/specialistService";
+import { PersonSpecialty } from "../../types";
 
 const DatePicker = CustomDatePicker;
 
@@ -150,6 +151,45 @@ export default function PersonFormModal({
   const [newPersonSpecialistRating, setNewPersonSpecialistRating] = useState<number>(5);
   const [newPersonSkillNotes, setNewPersonSkillNotes] = useState<string>("");
   const [newPersonDailyWage, setNewPersonDailyWage] = useState<string>("");
+
+  const [specialtiesCatalog, setSpecialtiesCatalog] = useState<PersonSpecialty[]>(DEFAULT_SPECIALTIES);
+  const [showAddInlineSpec, setShowAddInlineSpec] = useState(false);
+  const [inlineSpecName, setInlineSpecName] = useState("");
+  const [isAddingInlineSpec, setIsAddingInlineSpec] = useState(false);
+
+  useEffect(() => {
+    let mounted = true;
+    const loadCatalog = () => {
+      getSpecialties().then((list) => {
+        if (mounted && list && list.length > 0) {
+          setSpecialtiesCatalog(list);
+        }
+      });
+    };
+    loadCatalog();
+
+    const handleCatalogChanged = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setSpecialtiesCatalog(e.detail);
+      } else {
+        loadCatalog();
+      }
+    };
+
+    const handleAppDataChanged = (e: any) => {
+      if (e?.detail?.key === 'person_specialties') {
+        loadCatalog();
+      }
+    };
+
+    window.addEventListener('specialties_catalog_changed', handleCatalogChanged);
+    window.addEventListener('app_data_changed', handleAppDataChanged);
+    return () => {
+      mounted = false;
+      window.removeEventListener('specialties_catalog_changed', handleCatalogChanged);
+      window.removeEventListener('app_data_changed', handleAppDataChanged);
+    };
+  }, []);
 
   // Submission & Duplicates State
   const [submittingPerson, setSubmittingPerson] = useState(false);
@@ -2078,10 +2118,58 @@ export default function PersonFormModal({
                         <Hammer className="w-4 h-4 text-amber-500" />
                         <span>تخصص‌ها، مهارت‌های فنی و استادکاری</span>
                       </h4>
-                      <span className="text-[11px] font-bold text-indigo-600">
-                        {newPersonSpecialties.length} تخصص انتخاب‌شده
-                      </span>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[11px] font-bold text-indigo-600">
+                          {newPersonSpecialties.length} تخصص انتخاب‌شده
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setShowAddInlineSpec(!showAddInlineSpec)}
+                          className="text-xs font-bold text-indigo-600 hover:text-indigo-800 bg-indigo-50 px-2 py-0.5 rounded-lg flex items-center gap-1 border border-indigo-200 transition-colors cursor-pointer"
+                        >
+                          <Plus className="w-3.5 h-3.5" />
+                          <span>تخصص جدید</span>
+                        </button>
+                      </div>
                     </div>
+
+                    {showAddInlineSpec && (
+                      <div className="p-3 bg-indigo-50/80 rounded-2xl border border-indigo-200 flex items-center gap-2 animate-in fade-in duration-150">
+                        <input
+                          type="text"
+                          value={inlineSpecName}
+                          onChange={(e) => setInlineSpecName(e.target.value)}
+                          placeholder="عنوان تخصص جدید (مثال: جوشکار، نقاش ساختمان)..."
+                          className="flex-1 px-3 py-1.5 bg-white border border-indigo-300 rounded-xl text-xs font-bold outline-none"
+                          autoFocus
+                        />
+                        <button
+                          type="button"
+                          disabled={isAddingInlineSpec || !inlineSpecName.trim()}
+                          onClick={async () => {
+                            const clean = inlineSpecName.trim();
+                            if (!clean) return;
+                            setIsAddingInlineSpec(true);
+                            try {
+                              const created = await addSpecialty({
+                                name: clean,
+                                category: "ساختمانی و فنی",
+                                icon: "Hammer",
+                                color: "#6366f1",
+                              });
+                              setNewPersonSpecialties((prev) => [...prev, created.id]);
+                              setInlineSpecName("");
+                              setShowAddInlineSpec(false);
+                            } finally {
+                              setIsAddingInlineSpec(false);
+                            }
+                          }}
+                          className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-xs rounded-xl transition-all cursor-pointer shrink-0"
+                        >
+                          افزودن و انتخاب
+                        </button>
+                      </div>
+                    )}
 
                     {/* Crafts Multi-select grid */}
                     <div>
@@ -2089,8 +2177,9 @@ export default function PersonFormModal({
                         انتخاب تخصص‌ها و پیشه‌ها (امکان انتخاب همزمان چند تخصص):
                       </label>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto p-1.5 border border-slate-200 rounded-2xl bg-slate-50/50">
-                        {DEFAULT_SPECIALTIES.map((spec) => {
+                        {specialtiesCatalog.map((spec) => {
                           const checked = newPersonSpecialties.includes(spec.id);
+                          const specObj = getSpecialtyById(spec.id, specialtiesCatalog);
                           return (
                             <button
                               key={spec.id}
@@ -2107,10 +2196,10 @@ export default function PersonFormModal({
                               }`}
                             >
                               <div className="flex items-center gap-2.5">
-                                <span style={{ color: spec.color || "#6366f1" }}>
+                                <span style={{ color: specObj.color || "#6366f1" }}>
                                   <Hammer className="w-4 h-4" />
                                 </span>
-                                <span>{spec.name}</span>
+                                <span>{specObj.name}</span>
                               </div>
                               {checked ? (
                                 <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />

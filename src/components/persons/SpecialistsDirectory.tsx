@@ -54,7 +54,11 @@ import {
   getSpecialties,
   saveSpecialties,
   addSpecialty,
+  updateSpecialty,
   deleteSpecialty,
+  getSpecialtyById,
+  getSpecialtyName,
+  ensureSpecialtiesExist,
   updatePersonSpecialistData,
   DEFAULT_SPECIALTIES,
 } from "../../services/specialistService";
@@ -126,18 +130,59 @@ export default function SpecialistsDirectory({
   const [editingSpecialist, setEditingSpecialist] = useState<Person | null>(null);
   const [messagingPerson, setMessagingPerson] = useState<Person | null>(null);
 
-  // Load specialties catalog
+  // Load specialties catalog and keep synchronized
   useEffect(() => {
     let mounted = true;
-    getSpecialties().then((list) => {
-      if (mounted && list && list.length > 0) {
-        setSpecialtiesCatalog(list);
+
+    const loadCatalog = () => {
+      getSpecialties().then(async (list) => {
+        if (!mounted) return;
+
+        // Auto-detect and register any custom specialty IDs already assigned to persons
+        const assignedIds = new Set<string>();
+        persons.forEach((p) => {
+          if (Array.isArray(p.specialties)) {
+            p.specialties.forEach((id) => {
+              if (id) assignedIds.add(id);
+            });
+          }
+        });
+
+        const missingIds = Array.from(assignedIds).filter((id) => !list.some((s) => s.id === id));
+        if (missingIds.length > 0) {
+          const updated = await ensureSpecialtiesExist(missingIds);
+          if (mounted) setSpecialtiesCatalog(updated);
+        } else if (list && list.length > 0) {
+          setSpecialtiesCatalog(list);
+        }
+      });
+    };
+
+    loadCatalog();
+
+    const handleCatalogChanged = (e: any) => {
+      if (e.detail && Array.isArray(e.detail)) {
+        setSpecialtiesCatalog(e.detail);
+      } else {
+        loadCatalog();
       }
-    });
+    };
+
+    const handleAppDataChanged = (e: any) => {
+      if (e?.detail?.key === 'person_specialties' || e?.detail?.key === 'persons') {
+        loadCatalog();
+      }
+    };
+
+    window.addEventListener('specialties_catalog_changed', handleCatalogChanged);
+    window.addEventListener('app_data_changed', handleAppDataChanged);
+
     return () => {
       mounted = false;
+      window.removeEventListener('specialties_catalog_changed', handleCatalogChanged);
+      window.removeEventListener('app_data_changed', handleAppDataChanged);
     };
-  }, []);
+  }, [persons]);
 
   // Filter persons who have at least one specialty explicitly assigned.
   // Initially all persons are inactive/non-specialist by default.
@@ -521,7 +566,7 @@ export default function SpecialistsDirectory({
             const status = person.availabilityStatus || "available";
             const rating = person.specialistRating || 5;
             const personSpecs = (person.specialties || []).map((id) =>
-              specialtiesCatalog.find((s) => s.id === id) || { id, name: id, color: "#6366f1", icon: "Briefcase" }
+              getSpecialtyById(id, specialtiesCatalog)
             );
 
             return (
@@ -787,7 +832,7 @@ export default function SpecialistsDirectory({
                   const status = person.availabilityStatus || "available";
                   const rating = person.specialistRating || 5;
                   const personSpecs = (person.specialties || []).map((id) =>
-                    specialtiesCatalog.find((s) => s.id === id) || { id, name: id, color: "#6366f1", icon: "Briefcase" }
+                    getSpecialtyById(id, specialtiesCatalog)
                   );
 
                   return (
@@ -915,8 +960,13 @@ export default function SpecialistsDirectory({
           onClose={() => setShowConfigModal(false)}
           onAdd={async (newSpec) => {
             const added = await addSpecialty(newSpec);
-            setSpecialtiesCatalog((prev) => [added, ...prev]);
+            setSpecialtiesCatalog((prev) => [added, ...prev.filter(s => s.id !== added.id)]);
             showNotification?.(`تخصص «${added.name}» با موفقیت اضافه شد`, "success");
+          }}
+          onUpdate={async (id, updates) => {
+            const updated = await updateSpecialty(id, updates);
+            setSpecialtiesCatalog(updated);
+            showNotification?.("عنوان و تنظیمات تخصص به‌روزرسانی شد", "success");
           }}
           onDelete={async (id) => {
             const updated = await deleteSpecialty(id);
@@ -978,11 +1028,13 @@ function SpecialtiesConfigModal({
   catalog,
   onClose,
   onAdd,
+  onUpdate,
   onDelete,
 }: {
   catalog: PersonSpecialty[];
   onClose: () => void;
   onAdd: (spec: Omit<PersonSpecialty, "id">) => Promise<void>;
+  onUpdate?: (id: string, updates: Partial<PersonSpecialty>) => Promise<void>;
   onDelete: (id: string) => Promise<void>;
 }) {
   const [name, setName] = useState("");
@@ -992,17 +1044,24 @@ function SpecialtiesConfigModal({
   const [description, setDescription] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
 
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState("");
+  const [editingCategory, setEditingCategory] = useState("");
+  const [isUpdating, setIsUpdating] = useState(false);
+
   const availableIcons = ["Wrench", "Zap", "Hammer", "Paintbrush", "Flame", "Axe", "Grid", "DoorOpen", "Layers", "Droplets", "Wind", "Key"];
   const colorPalette = ["#6366f1", "#f59e0b", "#0284c7", "#ec4899", "#f97316", "#84cc16", "#14b8a6", "#8b5cf6", "#06b6d4", "#3b82f6", "#64748b", "#b45309"];
 
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!name.trim()) return;
+    const clean = name.trim();
+    if (!clean) return;
     setIsSubmitting(true);
     try {
       await onAdd({
-        name: name.trim(),
-        category,
+        name: clean,
+        category: category.trim() || "ساختمانی و فنی",
         icon,
         color,
         description: description.trim(),
@@ -1011,6 +1070,27 @@ function SpecialtiesConfigModal({
       setDescription("");
     } finally {
       setIsSubmitting(false);
+    }
+  };
+
+  const startEdit = (spec: PersonSpecialty) => {
+    setEditingId(spec.id);
+    setEditingName(spec.name || "");
+    setEditingCategory(spec.category || "فنی و ساختمانی");
+  };
+
+  const handleSaveEdit = async (specId: string) => {
+    const clean = editingName.trim();
+    if (!clean || !onUpdate) return;
+    setIsUpdating(true);
+    try {
+      await onUpdate(specId, {
+        name: clean,
+        category: editingCategory.trim() || "فنی و ساختمانی",
+      });
+      setEditingId(null);
+    } finally {
+      setIsUpdating(false);
     }
   };
 
@@ -1023,11 +1103,11 @@ function SpecialtiesConfigModal({
               <Sliders className="w-5 h-5" />
             </div>
             <div>
-              <h3 className="text-sm font-black text-slate-900">مدیریت عناوین تخصص‌ها و پیشه‌ها</h3>
-              <p className="text-xs text-slate-500 font-medium">افزودن تخصص جدید، انتخاب آیکون و رنگ شاخص</p>
+              <h3 className="text-sm font-black text-slate-900">مدیریت و تعریف عناوین تخصص‌ها و پیشه‌ها</h3>
+              <p className="text-xs text-slate-500 font-medium">افزودن تخصص جدید، ویرایش عناوین و سفارشی‌سازی رنگ و آیکون</p>
             </div>
           </div>
-          <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full">
+          <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1037,18 +1117,18 @@ function SpecialtiesConfigModal({
           <form onSubmit={handleCreate} className="p-4 bg-slate-50 rounded-2xl border border-slate-200/80 space-y-4">
             <h4 className="text-xs font-black text-slate-800 flex items-center gap-1.5">
               <Plus className="w-4 h-4 text-indigo-600" />
-              <span>افزودن تخصص جدید:</span>
+              <span>تعریف تخصص / پیشه جدید:</span>
             </h4>
 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
-                <label className="block text-xs font-bold text-slate-700 mb-1">نام تخصص / حرفه *</label>
+                <label className="block text-xs font-bold text-slate-700 mb-1">نام یا عنوان تخصص *</label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
-                  placeholder="مثال: لوله‌کش، کناف‌کار، نصاب آسانسور"
+                  placeholder="مثال: لوله‌کش، کناف‌کار، نصاب آسانسور، ایزوگام‌کار"
                   className="w-full px-3 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none focus:border-indigo-500"
                 />
               </div>
@@ -1059,7 +1139,7 @@ function SpecialtiesConfigModal({
                   type="text"
                   value={category}
                   onChange={(e) => setCategory(e.target.value)}
-                  placeholder="مثال: ساختمانی، برق، دکوراسیون"
+                  placeholder="مثال: ساختمانی، برق، دکوراسیون، تأسیسات"
                   className="w-full px-3 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none"
                 />
               </div>
@@ -1086,7 +1166,7 @@ function SpecialtiesConfigModal({
 
             {/* Color Picker */}
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1.5">رنگ تم:</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1.5">رنگ تم و شناسه بصری:</label>
               <div className="flex items-center gap-2 flex-wrap">
                 {colorPalette.map((c) => (
                   <button
@@ -1103,12 +1183,12 @@ function SpecialtiesConfigModal({
             </div>
 
             <div>
-              <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات مختصر:</label>
+              <label className="block text-xs font-bold text-slate-700 mb-1">توضیحات مختصر (اختیاری):</label>
               <input
                 type="text"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="شرح خدمات این مهارت..."
+                placeholder="شرح خدمات و مهارت‌های موردنیاز این پیشه..."
                 className="w-full px-3 py-2 text-xs bg-white border border-slate-200 rounded-xl outline-none"
               />
             </div>
@@ -1117,53 +1197,146 @@ function SpecialtiesConfigModal({
               <button
                 type="submit"
                 disabled={isSubmitting}
-                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all cursor-pointer"
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-bold transition-all cursor-pointer shadow-sm active:scale-95"
               >
-                ثبت تخصص جدید
+                {isSubmitting ? "در حال ثبت..." : "ثبت تخصص جدید"}
               </button>
             </div>
           </form>
 
           {/* List of existing */}
           <div>
-            <h4 className="text-xs font-black text-slate-800 mb-3">فهرست تخصص‌های تعریف‌شده:</h4>
-            <div className="space-y-2">
-              {catalog.map((spec) => (
-                <div
-                  key={spec.id}
-                  className="flex items-center justify-between p-3 rounded-2xl bg-white border border-slate-200 text-xs"
-                >
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-8 h-8 rounded-xl flex items-center justify-center font-bold"
-                      style={{ backgroundColor: `${spec.color || "#6366f1"}20`, color: spec.color || "#6366f1" }}
-                    >
-                      {getSpecialtyIcon(spec.icon)}
-                    </div>
-                    <div>
-                      <span className="font-black text-slate-900 block">{spec.name}</span>
-                      <span className="text-[10px] text-slate-400">{spec.category || "فنی"}</span>
-                    </div>
-                  </div>
+            <div className="flex items-center justify-between mb-3">
+              <h4 className="text-xs font-black text-slate-800">
+                فهرست تخصص‌های تعریف‌شده در سامانه ({catalog.length} عنوان):
+              </h4>
+              <span className="text-[11px] text-slate-400 font-medium">امکان ویرایش نام و عنوان همه تخصص‌ها</span>
+            </div>
 
-                  {!spec.isDefault && (
-                    <button
-                      type="button"
-                      onClick={() => onDelete(spec.id)}
-                      className="text-slate-400 hover:text-rose-600 p-1.5 cursor-pointer"
-                      title="حذف تخصص سفارشی"
-                    >
-                      <Trash2 className="w-4 h-4" />
-                    </button>
-                  )}
-                </div>
-              ))}
+            <div className="space-y-2">
+              {catalog.map((spec) => {
+                const isEditingThis = editingId === spec.id;
+                const isUnnamed = !spec.name || spec.name.startsWith("spec_") || spec.name === spec.id;
+
+                return (
+                  <div
+                    key={spec.id}
+                    className={`p-3 rounded-2xl border transition-all text-xs ${
+                      isUnnamed
+                        ? "bg-amber-50/60 border-amber-300"
+                        : "bg-white border-slate-200 hover:border-slate-300"
+                    }`}
+                  >
+                    {isEditingThis ? (
+                      <div className="space-y-3">
+                        <div className="text-xs font-bold text-indigo-700 flex items-center gap-1.5">
+                          <Edit2 className="w-3.5 h-3.5" />
+                          <span>ویرایش عنوان تخصص:</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-1">نام یا عنوان فارسی:</label>
+                            <input
+                              type="text"
+                              value={editingName}
+                              onChange={(e) => setEditingName(e.target.value)}
+                              placeholder="مثال: لوله‌کش، برق‌کار ساختمان"
+                              className="w-full px-3 py-1.5 text-xs font-bold bg-white border border-indigo-300 rounded-xl outline-none focus:ring-1 focus:ring-indigo-500"
+                              autoFocus
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-slate-600 mb-1">دسته‌بندی:</label>
+                            <input
+                              type="text"
+                              value={editingCategory}
+                              onChange={(e) => setEditingCategory(e.target.value)}
+                              placeholder="مثال: ساختمانی و فنی"
+                              className="w-full px-3 py-1.5 text-xs font-bold bg-white border border-slate-200 rounded-xl outline-none"
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-end gap-2 pt-1">
+                          <button
+                            type="button"
+                            onClick={() => setEditingId(null)}
+                            className="px-3 py-1.5 rounded-lg text-slate-600 bg-slate-100 hover:bg-slate-200 font-bold text-xs cursor-pointer"
+                          >
+                            انصراف
+                          </button>
+                          <button
+                            type="button"
+                            disabled={isUpdating || !editingName.trim()}
+                            onClick={() => handleSaveEdit(spec.id)}
+                            className="px-4 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs cursor-pointer flex items-center gap-1 shadow-xs"
+                          >
+                            <Check className="w-3.5 h-3.5" />
+                            <span>ذخیره عنوان</span>
+                          </button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="w-8 h-8 rounded-xl flex items-center justify-center font-bold shrink-0"
+                            style={{ backgroundColor: `${spec.color || "#6366f1"}20`, color: spec.color || "#6366f1" }}
+                          >
+                            {getSpecialtyIcon(spec.icon)}
+                          </div>
+                          <div>
+                            <div className="flex items-center gap-2">
+                              <span className="font-black text-slate-900 block">
+                                {spec.name && !spec.name.startsWith("spec_") ? spec.name : `تخصص (${spec.id.substring(0, 10)}...)`}
+                              </span>
+                              {isUnnamed && (
+                                <span className="text-[9.5px] font-bold px-2 py-0.5 rounded-md bg-amber-100 text-amber-900 border border-amber-300">
+                                  نیاز به تعیین عنوان فارسی
+                                </span>
+                              )}
+                              {spec.isDefault && (
+                                <span className="text-[9px] font-bold px-1.5 py-0.2 rounded bg-slate-100 text-slate-500">
+                                  پیش‌فرض
+                                </span>
+                              )}
+                            </div>
+                            <span className="text-[10px] text-slate-400">{spec.category || "فنی"}</span>
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => startEdit(spec)}
+                            className="px-2.5 py-1 text-indigo-600 hover:bg-indigo-50 rounded-lg font-bold text-xs flex items-center gap-1 transition-colors cursor-pointer"
+                            title="ویرایش عنوان تخصص"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                            <span className="hidden sm:inline">ویرایش عنوان</span>
+                          </button>
+
+                          {!spec.isDefault && (
+                            <button
+                              type="button"
+                              onClick={() => onDelete(spec.id)}
+                              className="text-slate-400 hover:text-rose-600 p-1.5 rounded-lg hover:bg-rose-50 cursor-pointer transition-colors"
+                              title="حذف تخصص سفارشی"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
 
         <div className="p-4 border-t border-slate-100 flex items-center justify-end bg-slate-50">
-          <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer">
+          <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold cursor-pointer transition-colors">
             بستن
           </button>
         </div>
