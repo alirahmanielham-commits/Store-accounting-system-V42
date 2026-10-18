@@ -4,6 +4,7 @@ import * as lucide from 'lucide-react';
 import { SmsTemplateEditor } from './SmsTemplateEditor';
 import ZyXelGsmSettings from '../messaging/ZyXelGsmSettings';
 import MobilePermissionsManager from './MobilePermissionsManager';
+import ApiManagementCenter from './ApiManagementCenter';
 import { setGlobalStoreSettings, formatNumber } from '../../utils/format';
 
 export default function SettingsTab(props: any) {
@@ -123,6 +124,11 @@ export default function SettingsTab(props: any) {
                             id: "mobile_permissions",
                             label: "دسترسی‌های اپلیکیشن همراه",
                             icon: Smartphone,
+                          },
+                          {
+                            id: "api_management",
+                            label: "مرکز مدیریت کلیدهای API",
+                            icon: lucide.Key,
                           },
                           {
                             id: "inventory_control",
@@ -2510,6 +2516,13 @@ export default function SettingsTab(props: any) {
 
                         {settingsTab === "mobile_permissions" && (
                           <MobilePermissionsManager
+                            users={props.users || []}
+                            showNotification={props.showNotification}
+                          />
+                        )}
+
+                        {settingsTab === "api_management" && (
+                          <ApiManagementCenter
                             users={props.users || []}
                             showNotification={props.showNotification}
                           />

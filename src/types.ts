@@ -24,6 +24,16 @@ export type PersonCategory = {
   icon?: string;
 };
 
+export type PersonSpecialty = {
+  id: string;
+  name: string;
+  category?: string;
+  icon?: string;
+  color?: string;
+  description?: string;
+  isDefault?: boolean;
+};
+
 export type Person = { 
   id: string | number; 
   personCode?: string;
@@ -76,6 +86,13 @@ export type Person = {
   jobCategory?: string;
   employmentType?: string;
   childrenCount?: number | string;
+
+  // Specialist & Craft fields
+  specialties?: string[]; // IDs of PersonSpecialty
+  availabilityStatus?: 'available' | 'busy' | 'unavailable'; // وضعیت در دسترس بودن
+  specialistRating?: number; // امتیاز ۱ تا ۵ ستاره
+  skillNotes?: string; // یادداشت مهارت‌ها، سوابق و ابزار موجود
+  dailyWage?: number; // دستمزد روزانه تقریبی
 };
 
 export type Checkbook = {

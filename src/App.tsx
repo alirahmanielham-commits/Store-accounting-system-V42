@@ -281,6 +281,7 @@ const WarehouseManager = React.lazy(() => import('./components/warehouses/Wareho
 const PersonGroupsManager = React.lazy(() => import('./components/persons/PersonGroupsManager'));
 const PersonCategoriesManager = React.lazy(() => import('./components/persons/PersonCategoriesManager'));
 const PersonRolesManager = React.lazy(() => import('./components/persons/PersonRolesManager'));
+const SpecialistsDirectory = React.lazy(() => import('./components/persons/SpecialistsDirectory'));
 
 // { useState, useEffect, useMemo, useRef } from "react";
 const WarehouseDocCreate = React.lazy(() => import('./components/warehouses/WarehouseDocCreate'));
@@ -868,6 +869,38 @@ export default function App() {
 <Route path="/person_groups" element={<PersonGroupsManager showNotification={showNotification} />} />
 <Route path="/person_categories" element={<PersonCategoriesManager showNotification={showNotification} />} />
 <Route path="/person_roles" element={<PersonRolesManager showNotification={showNotification} />} />
+<Route path="/specialists_directory" element={<SpecialistsDirectory
+  persons={persons}
+  transactions={transactions}
+  invoices={invoices}
+  storeSettings={storeSettings}
+  showNotification={showNotification}
+  fetchPersons={fetchPersons}
+  setProfilePersonId={setProfilePersonId}
+  setLedgerPersonId={setLedgerPersonId}
+  setActiveTab={setActiveTab}
+  setIsPersonModalOpen={setIsPersonModalOpen}
+  calculatePersonBalance={calculatePersonBalance}
+  formatNumber={formatNumber}
+  setReceiptPersonId={setReceiptPersonId}
+  setIsReceiptModalOpen={(open) => { if (open) setActiveTab("payment_create"); }}
+/>} />
+<Route path="/specialists" element={<SpecialistsDirectory
+  persons={persons}
+  transactions={transactions}
+  invoices={invoices}
+  storeSettings={storeSettings}
+  showNotification={showNotification}
+  fetchPersons={fetchPersons}
+  setProfilePersonId={setProfilePersonId}
+  setLedgerPersonId={setLedgerPersonId}
+  setActiveTab={setActiveTab}
+  setIsPersonModalOpen={setIsPersonModalOpen}
+  calculatePersonBalance={calculatePersonBalance}
+  formatNumber={formatNumber}
+  setReceiptPersonId={setReceiptPersonId}
+  setIsReceiptModalOpen={(open) => { if (open) setActiveTab("payment_create"); }}
+/>} />
 <Route path="/accounts" element={<AccountsManager
                         setEditingAccountId={setEditingAccountId}
                         setIsAccountModalOpen={setIsAccountModalOpen}

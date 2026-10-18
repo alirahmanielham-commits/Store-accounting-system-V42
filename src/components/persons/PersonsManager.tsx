@@ -7,12 +7,13 @@ import {
   Info, Trash2, RefreshCw, Key, ArrowRightLeft, LayoutGrid, Table as TableIcon,
   Building, BookOpen, Settings, Check, X, FilterX, MoreHorizontal, FileSpreadsheet,
   ArrowUpDown, Download, CheckSquare, Square, FileOutput, Power, PowerOff,
-  MessageSquare, Tag
+  MessageSquare, Tag, Hammer, Sparkles, Wrench, Zap
 } from "lucide-react";
 import { updatePerson } from '../../services/personService';
 import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import { getActiveStoreSettings } from '../../utils/format';
+import { DEFAULT_SPECIALTIES } from '../../services/specialistService';
 
 export default function PersonsManager(props: any) {
   const { 
@@ -125,6 +126,7 @@ export default function PersonsManager(props: any) {
   const [filterProvince, setFilterProvince] = useState<string>(() => sessionStorage.getItem('person_filterProvince') || 'all');
   const [filterCity, setFilterCity] = useState<string>(() => sessionStorage.getItem('person_filterCity') || 'all');
   const [filterTag, setFilterTag] = useState<string>(() => sessionStorage.getItem('person_filterTag') || 'all');
+  const [filterSpecialistsOnly, setFilterSpecialistsOnly] = useState<boolean>(false);
 
   // Table Enhancements
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>(() => {
@@ -229,9 +231,14 @@ export default function PersonsManager(props: any) {
         if (!pTags.includes(filterTag)) return false;
       }
 
+      if (filterSpecialistsOnly) {
+        const hasSpecs = Array.isArray(p.specialties) && p.specialties.length > 0;
+        if (!hasSpecs) return false;
+      }
+
       return true;
     });
-  }, [filteredPersons, calculatePersonBalance, filterActiveStatus, filterBalanceStatus, filterPersonType, filterProvince, filterCity, filterTag]);
+  }, [filteredPersons, calculatePersonBalance, filterActiveStatus, filterBalanceStatus, filterPersonType, filterProvince, filterCity, filterTag, filterSpecialistsOnly]);
 
   // Apply Sorting
   const sortedPersons = useMemo(() => {
@@ -569,6 +576,14 @@ export default function PersonsManager(props: any) {
               خروجی اکسل (.xlsx)
             </button>
             <button
+              onClick={() => setActiveTab?.("specialists_directory")}
+              className="px-3.5 py-2 border border-amber-300 hover:bg-amber-100/70 text-amber-900 bg-amber-50/80 rounded-lg flex items-center gap-1.5 transition-all text-xs font-black shadow-2xs cursor-pointer"
+              title="مشاهده ویترین متخصصین و استادکاران فنی"
+            >
+              <Hammer className="w-4 h-4 text-amber-600" />
+              <span>ویترین متخصصین و استادکاران</span>
+            </button>
+            <button
               onClick={() => { setPersonIOAction("export"); setIsPersonIOModalOpen(true); }}
               className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 bg-white rounded-lg flex items-center gap-1.5 transition-all text-xs font-bold"
             >
@@ -672,6 +687,22 @@ export default function PersonsManager(props: any) {
             >
               <Filter className="w-4 h-4" />
               فیلترهای پیشرفته
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setFilterSpecialistsOnly(!filterSpecialistsOnly);
+                setPersonCurrentPage(1);
+              }}
+              className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                filterSpecialistsOnly
+                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-800'
+              }`}
+              title="نمایش فقط اشخاص دارای تخصص و مهارت فنی"
+            >
+              <Hammer className={`w-3.5 h-3.5 ${filterSpecialistsOnly ? 'text-white' : 'text-amber-500'}`} />
+              <span>فقط متخصصین فنی</span>
             </button>
             <button
               type="button"
@@ -993,6 +1024,22 @@ export default function PersonsManager(props: any) {
                             </span>
                           )}
                         </div>
+                        {Array.isArray(p.specialties) && p.specialties.length > 0 && (
+                          <div className="flex flex-wrap items-center gap-1 mt-1">
+                            {p.specialties.slice(0, 2).map((specId: string) => {
+                              const spec = DEFAULT_SPECIALTIES.find((s) => s.id === specId);
+                              return (
+                                <span key={specId} className="inline-flex items-center gap-0.5 text-[8.5px] font-bold bg-amber-50 text-amber-900 px-1.5 py-0.2 rounded border border-amber-200">
+                                  <Hammer className="w-2.5 h-2.5 text-amber-600" />
+                                  <span>{spec?.name || specId}</span>
+                                </span>
+                              );
+                            })}
+                            {p.specialties.length > 2 && (
+                              <span className="text-[8px] font-bold text-amber-700">+{p.specialties.length - 2} تخصص</span>
+                            )}
+                          </div>
+                        )}
                         {Array.isArray(p.tags) && p.tags.length > 0 && (
                           <div className="flex flex-wrap items-center gap-1 mt-1">
                             {p.tags.slice(0, 3).map((t: string, ti: number) => (
@@ -1238,6 +1285,27 @@ export default function PersonsManager(props: any) {
                               const g = (personGroups || []).find((grp: any) => grp.id === p.group);
                               return g ? <span className="text-[10px] font-bold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md truncate max-w-[140px]">{g.name}</span> : null;
                             })()}
+                            {Array.isArray(p.specialties) && p.specialties.length > 0 && (
+                              <div className="flex flex-wrap items-center gap-1 mt-1 max-w-[200px]">
+                                {p.specialties.map((specId: string) => {
+                                  const spec = DEFAULT_SPECIALTIES.find((s) => s.id === specId);
+                                  return (
+                                    <span
+                                      key={specId}
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        props.setActiveTab?.("specialists_directory");
+                                      }}
+                                      className="inline-flex items-center gap-1 text-[9px] font-black px-1.5 py-0.5 rounded-md bg-amber-50 text-amber-900 border border-amber-200 hover:bg-amber-100 cursor-pointer transition-colors"
+                                      title="مشاهده در ویترین متخصصین"
+                                    >
+                                      <Hammer className="w-2.5 h-2.5 text-amber-600" />
+                                      <span>{spec?.name || specId}</span>
+                                    </span>
+                                  );
+                                })}
+                              </div>
+                            )}
                             {Array.isArray(p.tags) && p.tags.length > 0 && (
                               <div className="flex flex-wrap items-center gap-1 mt-1 max-w-[200px]">
                                 {p.tags.map((t: string, ti: number) => (

@@ -32,7 +32,10 @@ import {
   Share2,
   CheckCheck,
   Building2,
-  Info
+  Info,
+  Hammer,
+  Star,
+  Wrench,
 } from "lucide-react";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
@@ -40,10 +43,11 @@ import CustomDatePicker from "../ui/CustomDatePicker";
 import { toPersianDigits, convertToGregorian, numberToWords } from "../../utils/format";
 import CurrencyInput from "../ui/CurrencyInput";
 import { addPerson, updatePerson, deletePerson as deletePersonService } from "../../services/dataService";
+import { DEFAULT_SPECIALTIES } from "../../services/specialistService";
 
 const DatePicker = CustomDatePicker;
 
-export type PersonTabId = "general" | "contact" | "financial" | "settings" | "employee";
+export type PersonTabId = "general" | "contact" | "financial" | "settings" | "employee" | "specialties";
 
 interface PersonFormModalProps {
   isOpen: boolean;
@@ -140,6 +144,13 @@ export default function PersonFormModal({
   const [newPersonChildrenCount, setNewPersonChildrenCount] = useState("");
   const [hasEmployeeDetails, setHasEmployeeDetails] = useState(false);
 
+  // Specialist & Craft Fields
+  const [newPersonSpecialties, setNewPersonSpecialties] = useState<string[]>([]);
+  const [newPersonAvailability, setNewPersonAvailability] = useState<'available' | 'busy' | 'unavailable'>('available');
+  const [newPersonSpecialistRating, setNewPersonSpecialistRating] = useState<number>(5);
+  const [newPersonSkillNotes, setNewPersonSkillNotes] = useState<string>("");
+  const [newPersonDailyWage, setNewPersonDailyWage] = useState<string>("");
+
   // Submission & Duplicates State
   const [submittingPerson, setSubmittingPerson] = useState(false);
   const [submitStatus, setSubmitStatus] = useState<string | null>(null);
@@ -196,6 +207,13 @@ export default function PersonFormModal({
           setNewPersonExperienceYears(person.experienceYears ? String(person.experienceYears) : "");
           setNewPersonMaritalStatus(person.maritalStatus || "");
           setNewPersonChildrenCount(person.childrenCount ? String(person.childrenCount) : "");
+
+          // Specialist fields
+          setNewPersonSpecialties(Array.isArray(person.specialties) ? person.specialties : []);
+          setNewPersonAvailability(person.availabilityStatus || "available");
+          setNewPersonSpecialistRating(person.specialistRating || 5);
+          setNewPersonSkillNotes(person.skillNotes || "");
+          setNewPersonDailyWage(person.dailyWage ? String(person.dailyWage) : "");
           
           if (
             person.role === "employee" || 
@@ -257,6 +275,13 @@ export default function PersonFormModal({
         setNewPersonMaritalStatus("");
         setNewPersonChildrenCount("");
         setHasEmployeeDetails(false);
+
+        // Reset Specialist Fields
+        setNewPersonSpecialties([]);
+        setNewPersonAvailability("available");
+        setNewPersonSpecialistRating(5);
+        setNewPersonSkillNotes("");
+        setNewPersonDailyWage("");
       }
       setPersonFormTab("general");
     }
@@ -633,6 +658,13 @@ export default function PersonFormModal({
         experienceYears: newPersonExperienceYears ? Number(newPersonExperienceYears) : undefined,
         maritalStatus: newPersonMaritalStatus,
         childrenCount: newPersonChildrenCount ? Number(newPersonChildrenCount) : undefined,
+
+        // Specialist & Crafts
+        specialties: newPersonSpecialties,
+        availabilityStatus: newPersonAvailability,
+        specialistRating: newPersonSpecialistRating,
+        skillNotes: newPersonSkillNotes.trim(),
+        dailyWage: newPersonDailyWage ? Number(newPersonDailyWage) : undefined,
       };
 
       let addedPerson: any;
@@ -736,6 +768,14 @@ export default function PersonFormModal({
       subtitle: "گروه‌بندی، وضعیت و دسته‌ها",
       icon: SlidersHorizontal,
       isFilled: Boolean(newPersonGroup || newPersonDescription)
+    },
+    {
+      id: "specialties",
+      title: "تخصص‌ها و مهارت‌ها",
+      subtitle: "برق‌کار، تأسیسات، بنّا، نقاش و...",
+      icon: Hammer,
+      badgeCount: newPersonSpecialties.length,
+      isFilled: newPersonSpecialties.length > 0
     }
   ];
 
@@ -2019,6 +2059,139 @@ export default function PersonFormModal({
                           className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 text-xs sm:text-sm font-mono text-center font-bold text-slate-900"
                         />
                       </div>
+                    </div>
+                  </div>
+                </motion.div>
+              )}
+
+              {/* TAB 5: SPECIALTIES & CRAFTS */}
+              {personFormTab === "specialties" && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ duration: 0.2 }}
+                  className="space-y-6"
+                >
+                  <div className="bg-white p-5 rounded-3xl border border-slate-200 shadow-xs space-y-5">
+                    <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+                      <h4 className="text-xs font-black text-slate-800 flex items-center gap-2">
+                        <Hammer className="w-4 h-4 text-amber-500" />
+                        <span>تخصص‌ها، مهارت‌های فنی و استادکاری</span>
+                      </h4>
+                      <span className="text-[11px] font-bold text-indigo-600">
+                        {newPersonSpecialties.length} تخصص انتخاب‌شده
+                      </span>
+                    </div>
+
+                    {/* Crafts Multi-select grid */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-2">
+                        انتخاب تخصص‌ها و پیشه‌ها (امکان انتخاب همزمان چند تخصص):
+                      </label>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 max-h-60 overflow-y-auto p-1.5 border border-slate-200 rounded-2xl bg-slate-50/50">
+                        {DEFAULT_SPECIALTIES.map((spec) => {
+                          const checked = newPersonSpecialties.includes(spec.id);
+                          return (
+                            <button
+                              key={spec.id}
+                              type="button"
+                              onClick={() => {
+                                setNewPersonSpecialties((prev) =>
+                                  prev.includes(spec.id) ? prev.filter((s) => s !== spec.id) : [...prev, spec.id]
+                                );
+                              }}
+                              className={`flex items-center justify-between p-3 rounded-xl border text-xs cursor-pointer transition-all ${
+                                checked
+                                  ? "bg-indigo-50/90 border-indigo-300 text-indigo-950 font-black shadow-2xs"
+                                  : "bg-white border-slate-200 text-slate-700 hover:bg-slate-100"
+                              }`}
+                            >
+                              <div className="flex items-center gap-2.5">
+                                <span style={{ color: spec.color || "#6366f1" }}>
+                                  <Hammer className="w-4 h-4" />
+                                </span>
+                                <span>{spec.name}</span>
+                              </div>
+                              {checked ? (
+                                <CheckCircle2 className="w-4 h-4 text-indigo-600 shrink-0" />
+                              ) : (
+                                <div className="w-4 h-4 rounded border border-slate-300 shrink-0" />
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    {/* Availability and Rating */}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          وضعیت در دسترس بودن جهت کار:
+                        </label>
+                        <select
+                          value={newPersonAvailability}
+                          onChange={(e) => setNewPersonAvailability(e.target.value as any)}
+                          className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 text-xs sm:text-sm font-bold text-slate-900 bg-slate-50"
+                        >
+                          <option value="available">🟢 آماده به کار (در دسترس)</option>
+                          <option value="busy">🟡 سر پروژه (مشغول به کار)</option>
+                          <option value="unavailable">⚪ خارج از دسترس / مرخصی</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                          امتیاز مهارت و کیفیت کار (۱ تا ۵ ستاره):
+                        </label>
+                        <div className="flex items-center gap-1.5 h-11 px-3 bg-slate-50 border border-slate-200 rounded-2xl">
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <button
+                              key={star}
+                              type="button"
+                              onClick={() => setNewPersonSpecialistRating(star)}
+                              className="p-1 cursor-pointer"
+                            >
+                              <Star
+                                className={`w-4 h-4 ${
+                                  star <= newPersonSpecialistRating ? "fill-amber-400 text-amber-400" : "text-slate-300"
+                                }`}
+                              />
+                            </button>
+                          ))}
+                          <span className="text-xs font-mono font-bold text-slate-700 mr-2">
+                            {newPersonSpecialistRating} ستاره
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Daily Wage */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        دستمزد روزانه تقریبی (تومان - اختیاری):
+                      </label>
+                      <input
+                        type="number"
+                        value={newPersonDailyWage}
+                        onChange={(e) => setNewPersonDailyWage(e.target.value)}
+                        placeholder="مثال: 1500000"
+                        className="w-full px-4 py-2.5 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 text-xs sm:text-sm font-mono font-bold text-slate-900 bg-slate-50"
+                      />
+                    </div>
+
+                    {/* Skill Notes */}
+                    <div>
+                      <label className="block text-xs font-bold text-slate-700 mb-1.5">
+                        سوابق مهارتی، تجربیات و ابزارآلات موجود:
+                      </label>
+                      <textarea
+                        rows={3}
+                        value={newPersonSkillNotes}
+                        onChange={(e) => setNewPersonSkillNotes(e.target.value)}
+                        placeholder="توضیحاتی در مورد سوابق کاری، پروژه‌های قبلی، ابزارها و دستگاه‌های همراه..."
+                        className="w-full p-4 rounded-2xl border border-slate-200 focus:ring-2 focus:ring-indigo-500 text-xs sm:text-sm font-medium text-slate-900 bg-slate-50"
+                      />
                     </div>
                   </div>
                 </motion.div>

@@ -101,6 +101,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
       { id: 'person_groups', label: 'گروه‌بندی اشخاص', defaultRoles: ['admin', 'manager', 'accountant'] },
       { id: 'person_roles', label: 'نقش‌های اشخاص', defaultRoles: ['admin', 'manager', 'accountant'] },
       { id: 'person_categories', label: 'دسته‌بندی‌های اشخاص', defaultRoles: ['admin', 'manager', 'accountant'] },
+      { id: 'specialists_directory', label: 'ویترین متخصصین و استادکاران', defaultRoles: ['admin', 'manager', 'accountant', 'cashier', 'viewer'] },
     ]
   },
   {

@@ -54,6 +54,8 @@ import {
   Scale,
   Key,
   Zap,
+  Hammer,
+  Wrench,
 } from "lucide-react";
 
 export interface SidebarItem {
@@ -375,6 +377,16 @@ export const allSidebarGroups: SidebarGroup[] = [
         shortLabel: "پرونده شخص",
         icon: <UserCircle className="w-4 h-4 text-indigo-500" />,
         roles: ["admin", "accountant", "cashier", "viewer"],
+      },
+      {
+        id: "specialists_directory",
+        label: "ویترین متخصصین و استادکاران",
+        shortLabel: "ویترین متخصصین",
+        icon: <Hammer className="w-4 h-4 text-amber-500" />,
+        roles: ["admin", "accountant", "manager", "cashier", "viewer"],
+        badge: "فنی",
+        badgeColor: "amber",
+        description: "دسترسی سریع به برق‌کاران، تأسیساتی‌ها، بناها، نقاشان و نیروهای ماهر",
       },
       {
         id: "person_ledger",
