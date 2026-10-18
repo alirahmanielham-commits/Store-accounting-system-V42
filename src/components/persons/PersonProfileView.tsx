@@ -6,13 +6,16 @@ import {
   ShieldCheck, AlertTriangle, TrendingUp, TrendingDown, ArrowDownLeft, ArrowUpRight, 
   Copy, Check, Download, Printer, Plus, Trash2, X, RefreshCw, BarChart2, 
   Package, CreditCard, ChevronDown, ChevronUp, ExternalLink, Filter, Search, 
-  Award, AlertCircle, Smartphone, Globe, Share2, FileCheck, Layers, Tag, Bookmark
+  Award, AlertCircle, Smartphone, Globe, Share2, FileCheck, Layers, Tag, Bookmark,
+  Hammer, Star, Wrench, Zap, Paintbrush, Flame, Axe, Grid, DoorOpen, Droplets, Wind, Key,
+  CheckCircle2, Square
 } from "lucide-react";
 import { convertToGregorian, formatNumber, getActiveStoreSettings } from '../../utils/format';
 import { safePrint } from '../../utils/printHelper';
 import { exportToExcel } from '../../utils/exportUtils';
-import { getPersonFollowUps, addPersonFollowUp, updatePersonFollowUp, deletePersonFollowUp } from "../../services/personService";
-import { savePerson } from "../../services/personService";
+import { getPersonFollowUps, addPersonFollowUp, updatePersonFollowUp, deletePersonFollowUp, savePerson, updatePerson } from "../../services/personService";
+import { PersonSpecialty } from "../../types";
+import { DEFAULT_SPECIALTIES, getSpecialties, updatePersonSpecialistData } from "../../services/specialistService";
 import SendPersonMessageModal from "../modals/SendPersonMessageModal";
 
 interface PersonProfileViewProps {
@@ -86,6 +89,38 @@ export default function PersonProfileView({
   const [isAddCrmTaskModalOpen, setIsAddCrmTaskModalOpen] = useState(false);
   const [isAddAttachmentModalOpen, setIsAddAttachmentModalOpen] = useState(false);
   const [isSettingCreditLimit, setIsSettingCreditLimit] = useState(false);
+  const [isSpecialtyModalOpen, setIsSpecialtyModalOpen] = useState(false);
+  const [specialtiesCatalog, setSpecialtiesCatalog] = useState<PersonSpecialty[]>(DEFAULT_SPECIALTIES);
+
+  useEffect(() => {
+    let mounted = true;
+    getSpecialties().then((list) => {
+      if (mounted && list && list.length > 0) {
+        setSpecialtiesCatalog(list);
+      }
+    });
+    return () => {
+      mounted = false;
+    };
+  }, []);
+
+  const getSpecialtyIcon = (iconName?: string) => {
+    switch (iconName) {
+      case "Zap": return <Zap className="w-3.5 h-3.5" />;
+      case "Wrench": return <Wrench className="w-3.5 h-3.5" />;
+      case "Hammer": return <Hammer className="w-3.5 h-3.5" />;
+      case "Paintbrush": return <Paintbrush className="w-3.5 h-3.5" />;
+      case "Flame": return <Flame className="w-3.5 h-3.5" />;
+      case "Axe": return <Axe className="w-3.5 h-3.5" />;
+      case "Grid": return <Grid className="w-3.5 h-3.5" />;
+      case "DoorOpen": return <DoorOpen className="w-3.5 h-3.5" />;
+      case "Layers": return <Layers className="w-3.5 h-3.5" />;
+      case "Droplets": return <Droplets className="w-3.5 h-3.5" />;
+      case "Wind": return <Wind className="w-3.5 h-3.5" />;
+      case "Key": return <Key className="w-3.5 h-3.5" />;
+      default: return <Hammer className="w-3.5 h-3.5" />;
+    }
+  };
 
   // Invoices Tab Filters
   const [invoiceTypeFilter, setInvoiceTypeFilter] = useState<'all' | 'sale' | 'purchase' | 'return' | 'proforma'>('all');
@@ -1284,6 +1319,119 @@ export default function PersonProfileView({
           </div>
         </div>
 
+        {/* Specialties & Craft Skills Bar */}
+        <div className="py-4 border-b border-slate-100 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-2">
+              <div className="p-1.5 rounded-xl bg-amber-50 text-amber-600 border border-amber-200">
+                <Hammer className="w-4 h-4" />
+              </div>
+              <div className="flex items-baseline gap-2">
+                <span className="text-xs font-black text-slate-800">مهارت‌ها و تخصص‌های فنی (استادکاری):</span>
+                {Array.isArray(person.specialties) && person.specialties.length > 0 ? (
+                  <span className="text-[11px] text-amber-800 font-bold bg-amber-100/70 px-2 py-0.5 rounded-lg border border-amber-200">
+                    عضو ویترین متخصصین ({person.specialties.length} تخصص)
+                  </span>
+                ) : (
+                  <span className="text-[11px] text-slate-400 font-medium hidden sm:inline">
+                    (تخصصی برای این شخص ثبت نشده است؛ جهت انتساب مهارت روی دکمه اختصاص تخصص کلیک فرمایید)
+                  </span>
+                )}
+              </div>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => setIsSpecialtyModalOpen(true)}
+              className="px-3.5 py-1.5 bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white rounded-xl text-xs font-black transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+            >
+              {Array.isArray(person.specialties) && person.specialties.length > 0 ? (
+                <>
+                  <Edit2 className="w-3.5 h-3.5" />
+                  <span>ویرایش تخصص‌ها و وضعیت</span>
+                </>
+              ) : (
+                <>
+                  <Plus className="w-3.5 h-3.5" />
+                  <span>اختصاص تخصص به این شخص</span>
+                </>
+              )}
+            </button>
+          </div>
+
+          {Array.isArray(person.specialties) && person.specialties.length > 0 ? (
+            <div className="space-y-2.5">
+              <div className="flex flex-wrap items-center gap-2">
+                {person.specialties.map((specId: string) => {
+                  const spec = specialtiesCatalog.find((s) => s.id === specId);
+                  const name = spec?.name || specId;
+                  const color = spec?.color || "#f59e0b";
+                  return (
+                    <span
+                      key={specId}
+                      className="inline-flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-black border shadow-2xs"
+                      style={{
+                        backgroundColor: `${color}15`,
+                        color: color,
+                        borderColor: `${color}35`,
+                      }}
+                    >
+                      {getSpecialtyIcon(spec?.icon)}
+                      <span>{name}</span>
+                    </span>
+                  );
+                })}
+
+                <div className="inline-flex items-center gap-1 bg-amber-50 px-2.5 py-1 rounded-xl border border-amber-200 text-xs font-bold text-amber-800">
+                  <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                  <span className="font-mono">{person.specialistRating || 5}.0 ستاره</span>
+                </div>
+
+                <span
+                  className={`text-xs font-bold px-2.5 py-1 rounded-xl border ${
+                    (person.availabilityStatus || "available") === "available"
+                      ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                      : person.availabilityStatus === "busy"
+                      ? "bg-amber-50 text-amber-800 border-amber-200"
+                      : "bg-slate-100 text-slate-600 border-slate-200"
+                  }`}
+                >
+                  {(person.availabilityStatus || "available") === "available"
+                    ? "🟢 آماده به کار"
+                    : person.availabilityStatus === "busy"
+                    ? "🟡 مشغول سر پروژه"
+                    : "⚪ خارج از دسترس"}
+                </span>
+
+                {person.dailyWage ? (
+                  <span className="text-xs font-mono font-bold text-slate-700 bg-slate-100 px-2.5 py-1 rounded-xl border border-slate-200">
+                    دستمزد: {toPersianDigits(formatCurrency(person.dailyWage))} {storeSettings?.currency || "تومان"}
+                  </span>
+                ) : null}
+              </div>
+
+              {person.skillNotes && (
+                <div className="text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl border border-slate-200/70 leading-relaxed">
+                  <span className="font-bold text-slate-500 ml-1">تجهیزات و سوابق مهارتی:</span>
+                  <span>{person.skillNotes}</span>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex items-center justify-between p-3 rounded-2xl bg-amber-50/40 border border-dashed border-amber-200/80 text-xs text-slate-600">
+              <span className="text-slate-500">این شخص هنوز به عنوان متخصص تعریف نشده و در ویترین متخصصین حضور ندارد.</span>
+              <button
+                type="button"
+                onClick={() => setIsSpecialtyModalOpen(true)}
+                className="text-amber-700 hover:text-amber-900 font-black flex items-center gap-1 cursor-pointer"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>تعیین تخصص‌های این شخص</span>
+              </button>
+            </div>
+          )}
+        </div>
+
         {/* Address & Quick Notes Bar */}
         <div className="pt-4 flex flex-col md:flex-row md:items-center justify-between gap-3 text-xs font-bold text-slate-600">
           <div className="flex items-center gap-2">
@@ -1743,6 +1891,99 @@ export default function PersonProfileView({
                     </div>
                   </div>
                 </div>
+              </div>
+
+              {/* Specialist Craft Skills Widget */}
+              <div className="bg-slate-50/70 rounded-3xl p-5 border border-slate-200 space-y-4">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-sm font-black text-slate-800 flex items-center gap-2">
+                    <Hammer className="w-4 h-4 text-amber-500" />
+                    وضعیت فنی و تخصص‌های استادکاری
+                  </h4>
+                  <button
+                    type="button"
+                    onClick={() => setIsSpecialtyModalOpen(true)}
+                    className="text-xs font-bold text-amber-700 hover:text-amber-900 bg-amber-100/70 hover:bg-amber-100 px-3 py-1.5 rounded-xl border border-amber-200 transition-colors flex items-center gap-1 cursor-pointer"
+                  >
+                    <Edit2 className="w-3.5 h-3.5" />
+                    <span>{Array.isArray(person.specialties) && person.specialties.length > 0 ? "ویرایش مهارت‌ها" : "اختصاص تخصص"}</span>
+                  </button>
+                </div>
+
+                {Array.isArray(person.specialties) && person.specialties.length > 0 ? (
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 block mb-1">تخصص‌های منتسب:</span>
+                      <div className="flex flex-wrap gap-1.5 mt-1">
+                        {person.specialties.map((specId: string) => {
+                          const spec = specialtiesCatalog.find((s) => s.id === specId);
+                          return (
+                            <span
+                              key={specId}
+                              className="inline-flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-bold border"
+                              style={{
+                                backgroundColor: `${spec?.color || "#f59e0b"}15`,
+                                color: spec?.color || "#b45309",
+                                borderColor: `${spec?.color || "#f59e0b"}30`,
+                              }}
+                            >
+                              {getSpecialtyIcon(spec?.icon)}
+                              <span>{spec?.name || specId}</span>
+                            </span>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 block mb-1">امتیاز و وضعیت فعالیت:</span>
+                      <div className="flex items-center gap-2 mt-1">
+                        <div className="flex items-center gap-1">
+                          <Star className="w-3.5 h-3.5 fill-amber-400 text-amber-400" />
+                          <span className="font-mono font-black text-slate-800 text-xs">{person.specialistRating || 5}.0</span>
+                        </div>
+                        <span
+                          className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${
+                            (person.availabilityStatus || "available") === "available"
+                              ? "bg-emerald-50 text-emerald-800 border-emerald-200"
+                              : person.availabilityStatus === "busy"
+                              ? "bg-amber-50 text-amber-800 border-amber-200"
+                              : "bg-slate-100 text-slate-600 border-slate-200"
+                          }`}
+                        >
+                          {(person.availabilityStatus || "available") === "available"
+                            ? "آماده به کار"
+                            : person.availabilityStatus === "busy"
+                            ? "سر پروژه"
+                            : "خارج از دسترس"}
+                        </span>
+                      </div>
+                      {person.dailyWage ? (
+                        <div className="text-[11px] font-mono font-bold text-slate-600 mt-2">
+                          دستمزد: {toPersianDigits(formatCurrency(person.dailyWage))} {storeSettings?.currency || "تومان"}
+                        </div>
+                      ) : null}
+                    </div>
+
+                    <div className="bg-white p-3.5 rounded-2xl border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 block mb-1">یادداشت و تجهیزات:</span>
+                      <p className="text-xs text-slate-600 font-medium leading-relaxed mt-1 line-clamp-3">
+                        {person.skillNotes || "تجهیزات یا سوابق خاصی ثبت نشده است."}
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-4 bg-white rounded-2xl border border-dashed border-slate-200 flex items-center justify-between text-xs text-slate-500">
+                    <span>این شخص هنوز به عنوان متخصص تعریف نشده و در ویترین متخصصین غیرفعال است.</span>
+                    <button
+                      type="button"
+                      onClick={() => setIsSpecialtyModalOpen(true)}
+                      className="px-3 py-1.5 bg-amber-500 hover:bg-amber-600 text-white font-bold rounded-xl text-xs transition-colors cursor-pointer"
+                    >
+                      افزودن تخصص
+                    </button>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -2854,6 +3095,30 @@ export default function PersonProfileView({
         storeSettings={storeSettings}
       />
 
+      {/* SPECIALTY MODAL */}
+      {isSpecialtyModalOpen && person && (
+        <PersonSpecialtyModal
+          person={person}
+          catalog={specialtiesCatalog}
+          onClose={() => setIsSpecialtyModalOpen(false)}
+          onSave={async (data) => {
+            try {
+              const updated = updatePersonSpecialistData(person, data);
+              await updatePerson(String(person.id), updated);
+              fetchPersons?.();
+              setIsSpecialtyModalOpen(false);
+              if (showNotification) {
+                showNotification("مهارت‌ها و تخصص‌های شخص با موفقیت ثبت شد", "success");
+              }
+            } catch (e) {
+              if (showNotification) {
+                showNotification("خطا در به‌روزرسانی تخصص‌های شخص", "error");
+              }
+            }
+          }}
+        />
+      )}
+
       {/* 7. HIDDEN PRINTABLE DOSSIER (A4 FORMAT FOR SAFEPRINT) */}
       <div id="printable-person-dossier" className="hidden print:block p-8 bg-white text-right" dir="rtl">
         {/* Print Header */}
@@ -2945,5 +3210,216 @@ export default function PersonProfileView({
         </div>
       </div>
     </motion.div>
+  );
+}
+
+// --- SUB-COMPONENT: PERSON SPECIALTY ASSIGNMENT MODAL ---
+function PersonSpecialtyModal({
+  person,
+  catalog,
+  onClose,
+  onSave,
+}: {
+  person: any;
+  catalog: PersonSpecialty[];
+  onClose: () => void;
+  onSave: (data: {
+    specialties: string[];
+    availabilityStatus: "available" | "busy" | "unavailable";
+    specialistRating: number;
+    skillNotes: string;
+    dailyWage: number;
+  }) => Promise<void>;
+}) {
+  const [selectedSpecs, setSelectedSpecs] = useState<string[]>(person.specialties || []);
+  const [availability, setAvailability] = useState<"available" | "busy" | "unavailable">(person.availabilityStatus || "available");
+  const [rating, setRating] = useState<number>(person.specialistRating || 5);
+  const [notes, setNotes] = useState<string>(person.skillNotes || "");
+  const [wage, setWage] = useState<number>(person.dailyWage || 0);
+  const [isSaving, setIsSaving] = useState(false);
+
+  const toggleSpec = (id: string) => {
+    setSelectedSpecs((prev) => (prev.includes(id) ? prev.filter((s) => s !== id) : [...prev, id]));
+  };
+
+  const handleSave = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSaving(true);
+    try {
+      await onSave({
+        specialties: selectedSpecs,
+        availabilityStatus: availability,
+        specialistRating: rating,
+        skillNotes: notes.trim(),
+        dailyWage: wage,
+      });
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl max-h-[90vh] flex flex-col shadow-2xl text-right overflow-hidden dir-rtl">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+              <Hammer className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900">اختصاص تخصص‌ها و وضعیت استادکاری</h3>
+              <p className="text-xs text-slate-500 font-medium">{person.name} ({person.phone || person.mobile || "بدون شماره"})</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <form onSubmit={handleSave} className="p-6 overflow-y-auto space-y-5 flex-1">
+          {/* Multi-specialty selector */}
+          <div>
+            <div className="flex items-center justify-between mb-2">
+              <label className="block text-xs font-bold text-slate-700">
+                انتخاب تخصص‌ها و پیشه‌ها (امکان انتخاب همزمان چند تخصص):
+              </label>
+              <span className="text-[11px] text-amber-700 font-bold">{selectedSpecs.length} تخصص انتخاب‌شده</span>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto p-1.5 border border-slate-200 rounded-2xl bg-slate-50/50">
+              {catalog.map((spec) => {
+                const checked = selectedSpecs.includes(spec.id);
+                return (
+                  <button
+                    key={spec.id}
+                    type="button"
+                    onClick={() => toggleSpec(spec.id)}
+                    className={`flex items-center justify-between p-2.5 rounded-xl border text-xs cursor-pointer transition-all ${
+                      checked
+                        ? "bg-amber-50/90 border-amber-300 text-amber-950 font-black shadow-2xs"
+                        : "bg-white border-slate-200 text-slate-600 hover:bg-slate-100"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <span style={{ color: spec.color || "#f59e0b" }}>
+                        <Hammer className="w-4 h-4" />
+                      </span>
+                      <span>{spec.name}</span>
+                    </div>
+                    {checked ? (
+                      <CheckCircle2 className="w-4 h-4 text-amber-600 shrink-0" />
+                    ) : (
+                      <Square className="w-4 h-4 text-slate-300 shrink-0" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* Availability */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">وضعیت در دسترس بودن:</label>
+              <select
+                value={availability}
+                onChange={(e) => setAvailability(e.target.value as any)}
+                className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold outline-none"
+              >
+                <option value="available">🟢 آماده به کار (در دسترس جهت اعزام)</option>
+                <option value="busy">🟡 سر پروژه (مشغول به کار)</option>
+                <option value="unavailable">⚪ خارج از دسترس / مرخصی</option>
+              </select>
+            </div>
+
+            {/* Rating */}
+            <div>
+              <label className="block text-xs font-bold text-slate-700 mb-1">امتیاز رضایت و مهارت (۱ تا ۵):</label>
+              <div className="flex items-center gap-1.5 h-10 px-3 bg-slate-50 border border-slate-200 rounded-xl">
+                {[1, 2, 3, 4, 5].map((s) => (
+                  <button
+                    key={s}
+                    type="button"
+                    onClick={() => setRating(s)}
+                    className="cursor-pointer p-0.5"
+                  >
+                    <Star
+                      className={`w-4 h-4 ${
+                        s <= rating ? "fill-amber-400 text-amber-400" : "text-slate-300"
+                      }`}
+                    />
+                  </button>
+                ))}
+                <span className="text-xs font-mono font-bold text-slate-700 mr-2">{rating} ستاره</span>
+              </div>
+            </div>
+          </div>
+
+          {/* Wage / Daily rate */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">دستمزد روزانه تقریبی (تومان - اختیاری):</label>
+            <input
+              type="number"
+              value={wage || ""}
+              onChange={(e) => setWage(Number(e.target.value))}
+              placeholder="مثال: 1200000"
+              className="w-full px-3.5 py-2 text-xs font-mono bg-slate-50 border border-slate-200 rounded-xl outline-none"
+            />
+          </div>
+
+          {/* Skill Notes */}
+          <div>
+            <label className="block text-xs font-bold text-slate-700 mb-1">یادداشت‌های مهارتی، تجربیات و ابزارآلات همراه:</label>
+            <textarea
+              rows={3}
+              value={notes}
+              onChange={(e) => setNotes(e.target.value)}
+              placeholder="مثال: ۱۰ سال سابقه کار در تأسیسات ساختمانی، ابزار کامل لوله‌کشی و جوشکاری، آماده اعزام به کارگاه..."
+              className="w-full p-3 bg-slate-50 border border-slate-200 rounded-xl text-xs font-medium outline-none focus:bg-white"
+            />
+          </div>
+
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50">
+            {Array.isArray(person.specialties) && person.specialties.length > 0 ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsSaving(true);
+                  try {
+                    await onSave({
+                      specialties: [],
+                      availabilityStatus: "available",
+                      specialistRating: 5,
+                      skillNotes: "",
+                      dailyWage: 0,
+                    });
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                title="حذف از ویترین متخصصین"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>حذف از ویترین متخصصین</span>
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer">
+                انصراف
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="px-5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs cursor-pointer shadow-md"
+              >
+                ذخیره تخصص‌ها و وضعیت
+              </button>
+            </div>
+          </div>
+        </form>
+      </div>
+    </div>
   );
 }
