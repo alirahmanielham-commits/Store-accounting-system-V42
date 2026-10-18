@@ -24,6 +24,8 @@ import {
   Plus,
   Search,
   Filter,
+  ChevronDown,
+  ChevronUp,
   Sparkles,
   Sliders,
   Edit2,
@@ -48,6 +50,8 @@ import {
   MoreVertical,
   CheckSquare,
   Square,
+  Printer,
+  Copy,
 } from "lucide-react";
 import { Person, PersonSpecialty } from "../../types";
 import {
@@ -64,6 +68,7 @@ import {
 } from "../../services/specialistService";
 import { updatePerson } from "../../services/personService";
 import SendPersonMessageModal from "../modals/SendPersonMessageModal";
+import PrintSpecialistsModal from "./PrintSpecialistsModal";
 
 interface SpecialistsDirectoryProps {
   persons?: Person[];
@@ -124,11 +129,47 @@ export default function SpecialistsDirectory({
   const [viewMode, setViewMode] = useState<"grid" | "table">("grid");
   const [sortBy, setSortBy] = useState<"rating" | "name" | "specialties" | "newest">("rating");
 
+  // Category Dropdown State
+  const [isCategoryDropdownOpen, setIsCategoryDropdownOpen] = useState(false);
+  const [categorySearchQuery, setCategorySearchQuery] = useState("");
+
   // Modals state
   const [showConfigModal, setShowConfigModal] = useState(false);
   const [showAddFromPersonsModal, setShowAddFromPersonsModal] = useState(false);
   const [editingSpecialist, setEditingSpecialist] = useState<Person | null>(null);
   const [messagingPerson, setMessagingPerson] = useState<Person | null>(null);
+
+  // Batch Selection & Print State
+  const [selectedPersonIds, setSelectedPersonIds] = useState<string[]>([]);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [printTargetList, setPrintTargetList] = useState<Person[]>([]);
+
+  // Toggle selection for a person
+  const toggleSelectPerson = (id: string | number) => {
+    const sId = String(id);
+    setSelectedPersonIds((prev) =>
+      prev.includes(sId) ? prev.filter((p) => p !== sId) : [...prev, sId]
+    );
+  };
+
+  // Print single specialist
+  const handlePrintSingle = (person: Person) => {
+    setPrintTargetList([person]);
+    setShowPrintModal(true);
+  };
+
+  // Print batch or all filtered specialists
+  const handlePrintBatch = () => {
+    if (selectedPersonIds.length > 0) {
+      const selectedPersons = effectiveSpecialistsList.filter((p) =>
+        selectedPersonIds.includes(String(p.id))
+      );
+      setPrintTargetList(selectedPersons);
+    } else {
+      setPrintTargetList(filteredSpecialists);
+    }
+    setShowPrintModal(true);
+  };
 
   // Load specialties catalog and keep synchronized
   useEffect(() => {
@@ -257,6 +298,23 @@ export default function SpecialistsDirectory({
     return counts;
   }, [specialtiesCatalog, effectiveSpecialistsList]);
 
+  // Selected specialty object helper
+  const selectedSpecObj = useMemo(() => {
+    return specialtiesCatalog.find((s) => s.id === selectedSpecialtyFilter);
+  }, [specialtiesCatalog, selectedSpecialtyFilter]);
+
+  // Filtered specialty catalog for dropdown search
+  const filteredCatalogForDropdown = useMemo(() => {
+    if (!categorySearchQuery.trim()) return specialtiesCatalog;
+    const q = categorySearchQuery.toLowerCase().trim();
+    return specialtiesCatalog.filter(
+      (s) =>
+        (s.name || "").toLowerCase().includes(q) ||
+        (s.category || "").toLowerCase().includes(q) ||
+        (s.description || "").toLowerCase().includes(q)
+    );
+  }, [specialtiesCatalog, categorySearchQuery]);
+
   // Handle Quick Rating Change directly from card
   const handleRatePerson = async (person: Person, newRating: number) => {
     try {
@@ -304,6 +362,21 @@ export default function SpecialistsDirectory({
         </div>
 
         <div className="flex items-center gap-2.5 flex-wrap">
+          <button
+            type="button"
+            onClick={handlePrintBatch}
+            className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-amber-300 border border-slate-700 font-black text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs active:scale-95"
+            title="چاپ تکی یا گروهی اسامی، شماره تماس و تخصص‌های نیروها"
+          >
+            <Printer className="w-4 h-4 text-amber-400" />
+            <span>چاپ لیست متخصصین</span>
+            {selectedPersonIds.length > 0 && (
+              <span className="bg-amber-500 text-slate-950 px-1.5 py-0.2 rounded-md font-mono text-[10px] font-bold">
+                {selectedPersonIds.length}
+              </span>
+            )}
+          </button>
+
           <button
             type="button"
             onClick={() => setShowConfigModal(true)}
@@ -384,60 +457,220 @@ export default function SpecialistsDirectory({
         </div>
       </div>
 
-      {/* 3. Horizontal Visual Specialty Category Chips Bar */}
-      <div className="bg-white rounded-3xl p-4 shadow-sm border border-slate-200/80 space-y-3">
-        <div className="flex items-center justify-between">
-          <span className="text-xs font-black text-slate-800 flex items-center gap-2">
-            <Sparkles className="w-4 h-4 text-indigo-600" />
-            <span>دسته‌بندی مهارت‌ها و پیشه‌ها:</span>
-          </span>
-          <span className="text-[11px] text-slate-500 font-medium">برای فیلتر روی هر پیشه کلیک فرمایید</span>
+      {/* 3. Expandable / Dropdown Specialty Category Selection Bar */}
+      <div className="bg-white rounded-3xl p-4 shadow-xs border border-slate-200/80 space-y-3">
+        <div className="flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-bold">
+              <Sparkles className="w-4 h-4" />
+            </div>
+            <div>
+              <span className="text-xs font-black text-slate-800 block">
+                دسته‌بندی و فیلتر مهارت‌ها و پیشه‌ها
+              </span>
+              <span className="text-[11px] text-slate-500 font-medium">
+                جهت انتخاب و فیلتر پیشه از لیست بازشونده زیر استفاده فرمایید
+              </span>
+            </div>
+          </div>
+
+          {selectedSpecialtyFilter !== "all" && (
+            <button
+              type="button"
+              onClick={() => setSelectedSpecialtyFilter("all")}
+              className="px-2.5 py-1 rounded-xl bg-rose-50 text-rose-700 border border-rose-200 text-xs font-bold hover:bg-rose-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>نمایش همه تخصص‌ها</span>
+            </button>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 scrollbar-thin">
+        {/* Dropdown Trigger Button */}
+        <div className="relative">
           <button
             type="button"
-            onClick={() => setSelectedSpecialtyFilter("all")}
-            className={`px-3.5 py-2 rounded-2xl text-xs font-black transition-all cursor-pointer shrink-0 flex items-center gap-2 border ${
-              selectedSpecialtyFilter === "all"
-                ? "bg-slate-900 text-white border-slate-900 shadow-xs"
-                : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
+            onClick={() => setIsCategoryDropdownOpen(!isCategoryDropdownOpen)}
+            className={`w-full px-4 py-3 rounded-2xl border text-xs font-bold transition-all flex items-center justify-between gap-3 cursor-pointer ${
+              isCategoryDropdownOpen
+                ? "bg-slate-900 text-white border-slate-900 shadow-md"
+                : selectedSpecialtyFilter !== "all"
+                ? "bg-indigo-50/90 border-indigo-300 text-indigo-950 shadow-2xs"
+                : "bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-800"
             }`}
           >
-            <Briefcase className="w-4 h-4" />
-            <span>همه تخصص‌ها</span>
-            <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono ${selectedSpecialtyFilter === "all" ? "bg-slate-700 text-white" : "bg-slate-200 text-slate-700"}`}>
-              {effectiveSpecialistsList.length}
-            </span>
+            <div className="flex items-center gap-2.5 min-w-0">
+              {selectedSpecialtyFilter === "all" ? (
+                <>
+                  <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${isCategoryDropdownOpen ? "bg-slate-800 text-amber-400" : "bg-slate-200 text-slate-700"}`}>
+                    <Briefcase className="w-4.5 h-4.5" />
+                  </div>
+                  <div className="truncate text-right">
+                    <span className="font-black text-xs block">همه تخصص‌ها و پیشه‌ها</span>
+                    <span className={`text-[10px] block ${isCategoryDropdownOpen ? "text-slate-300" : "text-slate-500"}`}>
+                      نمایش کامل تمام متخصصین و استادکاران ({effectiveSpecialistsList.length} نفر)
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <div className="w-8 h-8 rounded-xl flex items-center justify-center shrink-0 bg-indigo-600 text-white shadow-xs">
+                    {getSpecialtyIcon(selectedSpecObj?.icon)}
+                  </div>
+                  <div className="truncate text-right">
+                    <span className="font-black text-xs block text-indigo-950 dark:text-white">
+                      تخصص فعال: {selectedSpecObj?.name || selectedSpecialtyFilter}
+                    </span>
+                    <span className="text-[10px] text-indigo-700 block">
+                      دسته‌بندی: {selectedSpecObj?.category || "فنی"} · ({specialtyCounts[selectedSpecialtyFilter] || 0} نیرو در این پیشه)
+                    </span>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex items-center gap-2 shrink-0">
+              <span className={`text-[10px] px-2.5 py-0.5 rounded-lg font-bold ${isCategoryDropdownOpen ? "bg-slate-800 text-slate-200" : "bg-white border border-slate-200 text-slate-600"}`}>
+                {specialtiesCatalog.length} پیشه تعریف‌شده
+              </span>
+              {isCategoryDropdownOpen ? (
+                <ChevronUp className="w-5 h-5 text-amber-400" />
+              ) : (
+                <ChevronDown className="w-5 h-5 text-slate-400" />
+              )}
+            </div>
           </button>
 
-          {specialtiesCatalog.map((spec) => {
-            const isSelected = selectedSpecialtyFilter === spec.id;
-            const count = specialtyCounts[spec.id] || 0;
-
-            return (
-              <button
-                key={spec.id}
-                type="button"
-                onClick={() => setSelectedSpecialtyFilter(spec.id)}
-                className={`px-3.5 py-2 rounded-2xl text-xs font-bold transition-all cursor-pointer shrink-0 flex items-center gap-2 border ${
-                  isSelected
-                    ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
-                    : "bg-slate-50 hover:bg-slate-100 text-slate-700 border-slate-200"
-                }`}
+          {/* Expandable Dropdown List Panel */}
+          <AnimatePresence>
+            {isCategoryDropdownOpen && (
+              <motion.div
+                initial={{ opacity: 0, height: 0 }}
+                animate={{ opacity: 1, height: "auto" }}
+                exit={{ opacity: 0, height: 0 }}
+                transition={{ duration: 0.2 }}
+                className="overflow-hidden mt-2 bg-white rounded-2xl border border-slate-200 shadow-xl"
               >
-                <span style={{ color: isSelected ? "#fff" : spec.color || "#6366f1" }}>
-                  {getSpecialtyIcon(spec.icon)}
-                </span>
-                <span>{spec.name}</span>
-                {count > 0 && (
-                  <span className={`px-1.5 py-0.2 rounded-md text-[10px] font-mono ${isSelected ? "bg-indigo-700 text-white" : "bg-slate-200 text-slate-700"}`}>
-                    {count}
-                  </span>
-                )}
-              </button>
-            );
-          })}
+                {/* Search Box Inside List */}
+                <div className="p-3 bg-slate-50 border-b border-slate-200/80 flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <input
+                      type="text"
+                      value={categorySearchQuery}
+                      onChange={(e) => setCategorySearchQuery(e.target.value)}
+                      placeholder="جستجو در لیست عناوین و دسته‌بندی پیشه‌ها..."
+                      className="w-full pr-8 pl-3 py-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 outline-none focus:border-indigo-500"
+                      autoFocus
+                    />
+                    <Search className="w-3.5 h-3.5 text-slate-400 absolute right-2.5 top-1/2 -translate-y-1/2" />
+                  </div>
+                  {categorySearchQuery && (
+                    <button
+                      type="button"
+                      onClick={() => setCategorySearchQuery("")}
+                      className="px-2.5 py-1.5 bg-slate-200 text-slate-700 rounded-xl text-xs font-bold hover:bg-slate-300 transition-colors"
+                    >
+                      پاکسازی
+                    </button>
+                  )}
+                </div>
+
+                {/* Dropdown Items List */}
+                <div className="max-h-72 overflow-y-auto p-2 space-y-1.5">
+                  {/* Option 1: All Specialties */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSelectedSpecialtyFilter("all");
+                      setIsCategoryDropdownOpen(false);
+                    }}
+                    className={`w-full px-3.5 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between cursor-pointer border ${
+                      selectedSpecialtyFilter === "all"
+                        ? "bg-slate-900 text-white border-slate-900 shadow-xs"
+                        : "bg-slate-50 hover:bg-slate-100 text-slate-800 border-slate-200/80"
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5">
+                      <Briefcase className="w-4 h-4 text-amber-400" />
+                      <span>همه تخصص‌ها و پیشه‌ها (کل بانک اطلاعاتی)</span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-mono ${selectedSpecialtyFilter === "all" ? "bg-slate-800 text-white" : "bg-white border border-slate-200 text-slate-600"}`}>
+                      {effectiveSpecialistsList.length} نیرو
+                    </span>
+                  </button>
+
+                  {/* Grid of Catalog Specialties */}
+                  <div className="pt-1.5 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-1.5">
+                    {filteredCatalogForDropdown.map((spec) => {
+                      const isSelected = selectedSpecialtyFilter === spec.id;
+                      const count = specialtyCounts[spec.id] || 0;
+
+                      return (
+                        <button
+                          key={spec.id}
+                          type="button"
+                          onClick={() => {
+                            setSelectedSpecialtyFilter(spec.id);
+                            setIsCategoryDropdownOpen(false);
+                          }}
+                          className={`px-3 py-2.5 rounded-xl text-xs font-bold transition-all flex items-center justify-between border cursor-pointer ${
+                            isSelected
+                              ? "bg-indigo-600 text-white border-indigo-600 shadow-xs"
+                              : "bg-white hover:bg-slate-50 text-slate-800 border-slate-200/80"
+                          }`}
+                        >
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className="shrink-0" style={{ color: isSelected ? "#fff" : spec.color || "#6366f1" }}>
+                              {getSpecialtyIcon(spec.icon)}
+                            </span>
+                            <div className="truncate text-right">
+                              <span className="block truncate">{spec.name}</span>
+                              <span className={`text-[9.5px] font-medium block truncate ${isSelected ? "text-indigo-200" : "text-slate-400"}`}>
+                                {spec.category || "فنی و ساختمانی"}
+                              </span>
+                            </div>
+                          </div>
+
+                          <span className={`px-1.5 py-0.5 rounded text-[10px] font-mono shrink-0 ${isSelected ? "bg-indigo-700 text-white" : "bg-slate-100 text-slate-600"}`}>
+                            {count}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {filteredCatalogForDropdown.length === 0 && (
+                    <div className="p-4 text-center text-slate-400 text-xs font-medium">
+                      هیچ تخصصی متناسب با «{categorySearchQuery}» یافت نشد.
+                    </div>
+                  )}
+                </div>
+
+                {/* Footer management shortcut */}
+                <div className="p-2.5 bg-slate-50 border-t border-slate-200/80 flex items-center justify-between">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsCategoryDropdownOpen(false);
+                      setShowConfigModal(true);
+                    }}
+                    className="text-xs font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1.5 cursor-pointer"
+                  >
+                    <Sliders className="w-3.5 h-3.5" />
+                    <span>تعریف و مدیریت عناوین تخصص‌ها</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsCategoryDropdownOpen(false)}
+                    className="text-xs text-slate-500 hover:text-slate-800 font-bold px-2.5 py-1 rounded-lg hover:bg-slate-200/60 transition-colors"
+                  >
+                    بستن لیست
+                  </button>
+                </div>
+              </motion.div>
+            )}
+          </AnimatePresence>
         </div>
       </div>
 
@@ -569,31 +802,51 @@ export default function SpecialistsDirectory({
               getSpecialtyById(id, specialtiesCatalog)
             );
 
+            const isSelected = selectedPersonIds.includes(String(person.id));
+
             return (
               <div
                 key={person.id}
-                className="bg-white rounded-3xl p-5 border border-slate-200/90 hover:border-indigo-300 hover:shadow-md transition-all flex flex-col justify-between group"
+                className={`bg-white rounded-3xl p-5 border transition-all flex flex-col justify-between group ${
+                  isSelected
+                    ? "border-amber-400 ring-2 ring-amber-400/30 shadow-md bg-amber-50/10"
+                    : "border-slate-200/90 hover:border-indigo-300 hover:shadow-md"
+                }`}
               >
                 <div>
-                  {/* Card Header: Avatar, Name, Availability Pill */}
+                  {/* Card Header: Avatar, Name, Selection Checkbox */}
                   <div className="flex items-start justify-between gap-3 mb-3">
-                    <div className="flex items-start gap-3">
+                    <div className="flex items-start gap-3 min-w-0">
+                      {/* Selection Checkbox */}
+                      <button
+                        type="button"
+                        onClick={() => toggleSelectPerson(person.id)}
+                        className={`mt-1 p-1 rounded-lg border transition-all cursor-pointer shrink-0 ${
+                          isSelected
+                            ? "bg-amber-500 text-slate-950 border-amber-500 font-bold shadow-xs"
+                            : "bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600"
+                        }`}
+                        title={isSelected ? "خروج از انتخاب چاپی" : "انتخاب جهت چاپ گروهی"}
+                      >
+                        {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                      </button>
+
                       {/* Avatar with Status Dot */}
                       <div className="relative shrink-0">
                         {person.imageUrl ? (
                           <img
                             src={person.imageUrl}
                             alt={person.name}
-                            className="w-13 h-13 rounded-2xl object-cover border border-slate-200 shadow-xs"
+                            className="w-12 h-12 rounded-2xl object-cover border border-slate-200 shadow-xs"
                           />
                         ) : (
-                          <div className="w-13 h-13 rounded-2xl bg-gradient-to-br from-indigo-50 to-slate-100 border border-slate-200 text-indigo-700 font-black text-base flex items-center justify-center shadow-xs">
+                          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-indigo-50 to-slate-100 border border-slate-200 text-indigo-700 font-black text-base flex items-center justify-center shadow-xs">
                             {person.firstName ? person.firstName.charAt(0) : person.name?.charAt(0) || "U"}
                           </div>
                         )}
                         {/* Status Dot */}
                         <span
-                          className={`absolute -bottom-1 -right-1 w-4 h-4 rounded-full border-2 border-white flex items-center justify-center ${
+                          className={`absolute -bottom-1 -right-1 w-3.5 h-3.5 rounded-full border-2 border-white flex items-center justify-center ${
                             status === "available"
                               ? "bg-emerald-500"
                               : status === "busy"
@@ -604,10 +857,10 @@ export default function SpecialistsDirectory({
                         />
                       </div>
 
-                      <div>
+                      <div className="min-w-0">
                         <h3
                           onClick={() => setProfilePersonId && setProfilePersonId(person.id)}
-                          className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors cursor-pointer"
+                          className="text-sm font-black text-slate-900 group-hover:text-indigo-600 transition-colors cursor-pointer truncate"
                         >
                           {person.name || `${person.firstName || ""} ${person.lastName || ""}`}
                         </h3>
@@ -624,8 +877,17 @@ export default function SpecialistsDirectory({
                       </div>
                     </div>
 
-                    {/* Quick Edit & Remove Buttons */}
-                    <div className="flex items-center gap-1">
+                    {/* Action Buttons: Print Single, Quick Edit, Remove */}
+                    <div className="flex items-center gap-1 shrink-0">
+                      <button
+                        type="button"
+                        onClick={() => handlePrintSingle(person)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-amber-600 hover:bg-amber-50 transition-colors cursor-pointer"
+                        title="چاپ تکی برگه یا کارت این متخصص"
+                      >
+                        <Printer className="w-4 h-4" />
+                      </button>
+
                       <button
                         type="button"
                         onClick={() => setEditingSpecialist(person)}
@@ -634,6 +896,7 @@ export default function SpecialistsDirectory({
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
+
                       <button
                         type="button"
                         onClick={async () => {
@@ -651,6 +914,42 @@ export default function SpecialistsDirectory({
                       >
                         <UserMinus className="w-4 h-4" />
                       </button>
+                    </div>
+                  </div>
+
+                  {/* HIGHLY PROMINENT & BOLD CONTACT NUMBER BOX */}
+                  <div className="bg-slate-900 text-white p-3 rounded-2xl shadow-xs border border-slate-800 my-2.5 flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30 flex items-center justify-center shrink-0">
+                        <Phone className="w-4 h-4" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[10px] text-slate-300 font-bold block">شماره تماس درشت و مستقیم:</span>
+                        <a
+                          href={`tel:${person.mobile || person.phone || ""}`}
+                          className="text-sm sm:text-base font-black font-mono tracking-wider text-amber-300 hover:text-amber-200 transition-colors block truncate dir-ltr text-right"
+                          dir="ltr"
+                        >
+                          {person.mobile || person.phone || "بدون شماره ثبت‌شده"}
+                        </a>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
+                      {person.mobile || person.phone ? (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const num = person.mobile || person.phone || "";
+                            navigator.clipboard.writeText(num);
+                            showNotification?.(`شماره «${num}» کپی شد`, "success");
+                          }}
+                          className="p-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 transition-colors cursor-pointer"
+                          title="کپی شماره تماس"
+                        >
+                          <Copy className="w-3.5 h-3.5" />
+                        </button>
+                      ) : null}
                     </div>
                   </div>
 
@@ -816,11 +1115,31 @@ export default function SpecialistsDirectory({
             <table className="w-full text-right text-xs">
               <thead className="bg-slate-50 text-slate-600 font-black border-b border-slate-200">
                 <tr>
+                  <th className="p-4 w-12 text-center">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (selectedPersonIds.length === filteredSpecialists.length) {
+                          setSelectedPersonIds([]);
+                        } else {
+                          setSelectedPersonIds(filteredSpecialists.map((p) => String(p.id)));
+                        }
+                      }}
+                      className="p-1 rounded-lg border border-slate-300 text-slate-500 hover:bg-slate-100"
+                      title="انتخاب همه"
+                    >
+                      {selectedPersonIds.length === filteredSpecialists.length && filteredSpecialists.length > 0 ? (
+                        <CheckSquare className="w-4 h-4 text-amber-600" />
+                      ) : (
+                        <Square className="w-4 h-4" />
+                      )}
+                    </button>
+                  </th>
                   <th className="p-4">استادکار / شخص</th>
                   <th className="p-4">تخصص‌ها و مهارت‌ها</th>
                   <th className="p-4">وضعیت فعالیت</th>
                   <th className="p-4">امتیاز مهارت</th>
-                  <th className="p-4">شماره تماس</th>
+                  <th className="p-4 text-center">شماره تماس (درشت)</th>
                   <th className="p-4">مانده حساب</th>
                   <th className="p-4 text-center">عملیات سریع</th>
                 </tr>
@@ -834,9 +1153,29 @@ export default function SpecialistsDirectory({
                   const personSpecs = (person.specialties || []).map((id) =>
                     getSpecialtyById(id, specialtiesCatalog)
                   );
+                  const isSelected = selectedPersonIds.includes(String(person.id));
 
                   return (
-                    <tr key={person.id} className="hover:bg-slate-50/70 transition-colors">
+                    <tr
+                      key={person.id}
+                      className={`transition-colors ${
+                        isSelected ? "bg-amber-50/50" : "hover:bg-slate-50/70"
+                      }`}
+                    >
+                      <td className="p-4 text-center">
+                        <button
+                          type="button"
+                          onClick={() => toggleSelectPerson(person.id)}
+                          className={`p-1 rounded-lg border transition-all cursor-pointer ${
+                            isSelected
+                              ? "bg-amber-500 text-slate-950 border-amber-500 font-bold"
+                              : "bg-slate-50 text-slate-400 border-slate-200 hover:text-slate-600"
+                          }`}
+                        >
+                          {isSelected ? <CheckSquare className="w-4 h-4" /> : <Square className="w-4 h-4" />}
+                        </button>
+                      </td>
+
                       <td className="p-4">
                         <div className="flex items-center gap-2.5">
                           <div className="w-9 h-9 rounded-xl bg-slate-100 flex items-center justify-center font-black text-indigo-700 shrink-0">
@@ -896,8 +1235,27 @@ export default function SpecialistsDirectory({
                         </div>
                       </td>
 
-                      <td className="p-4 font-mono font-bold text-slate-700">
-                        {person.mobile || person.phone || "-"}
+                      {/* PROMINENT & BOLD CONTACT NUMBER BADGE */}
+                      <td className="p-4 text-center dir-ltr">
+                        <div className="inline-flex items-center gap-2">
+                          <span className="font-mono font-black text-xs sm:text-sm text-amber-950 bg-amber-100/90 px-3 py-1 rounded-xl border border-amber-300 shadow-2xs tracking-wider">
+                            {person.mobile || person.phone || "بدون شماره"}
+                          </span>
+                          {person.mobile || person.phone ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const num = person.mobile || person.phone || "";
+                                navigator.clipboard.writeText(num);
+                                showNotification?.(`شماره «${num}» کپی شد`, "success");
+                              }}
+                              className="p-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 transition-colors"
+                              title="کپی شماره تماس"
+                            >
+                              <Copy className="w-3.5 h-3.5" />
+                            </button>
+                          ) : null}
+                        </div>
                       </td>
 
                       <td className="p-4 font-mono font-bold">
@@ -908,6 +1266,15 @@ export default function SpecialistsDirectory({
 
                       <td className="p-4 text-center">
                         <div className="flex items-center justify-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={() => handlePrintSingle(person)}
+                            className="p-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-800 transition-colors cursor-pointer"
+                            title="چاپ تکی برگه یا کارت این متخصص"
+                          >
+                            <Printer className="w-4 h-4" />
+                          </button>
+
                           <a
                             href={`tel:${person.mobile || person.phone}`}
                             className="p-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition-colors"
@@ -1017,6 +1384,46 @@ export default function SpecialistsDirectory({
             setShowAddFromPersonsModal(false);
             setEditingSpecialist(person);
           }}
+        />
+      )}
+      {/* STICKY BATCH SELECTION & PRINT FLOATING BAR */}
+      {selectedPersonIds.length > 0 && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 bg-slate-900/95 backdrop-blur-md text-white px-5 py-3 rounded-2xl shadow-2xl border border-slate-700 flex items-center gap-4 animate-in slide-in-from-bottom-4 duration-200 dir-rtl">
+          <div className="flex items-center gap-2">
+            <CheckSquare className="w-5 h-5 text-amber-400" />
+            <span className="text-xs font-black">
+              {selectedPersonIds.length} متخصص انتخاب شده است
+            </span>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={handlePrintBatch}
+              className="px-4 py-2 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-slate-950 font-black text-xs flex items-center gap-2 shadow-lg cursor-pointer active:scale-95"
+            >
+              <Printer className="w-4 h-4" />
+              <span>چاپ گروهی انتخاب‌شده‌ها ({selectedPersonIds.length} نفر)</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setSelectedPersonIds([])}
+              className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 font-bold text-xs cursor-pointer"
+            >
+              انصراف
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* MODAL 5: PRINT SPECIALISTS MODAL */}
+      {showPrintModal && (
+        <PrintSpecialistsModal
+          specialists={printTargetList}
+          catalog={specialtiesCatalog}
+          onClose={() => setShowPrintModal(false)}
+          showNotification={showNotification}
         />
       )}
     </div>
