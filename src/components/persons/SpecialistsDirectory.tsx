@@ -18,6 +18,8 @@ import {
   MessageSquare,
   Star,
   UserCheck,
+  UserPlus,
+  UserMinus,
   Clock,
   Plus,
   Search,
@@ -120,6 +122,7 @@ export default function SpecialistsDirectory({
 
   // Modals state
   const [showConfigModal, setShowConfigModal] = useState(false);
+  const [showAddFromPersonsModal, setShowAddFromPersonsModal] = useState(false);
   const [editingSpecialist, setEditingSpecialist] = useState<Person | null>(null);
   const [messagingPerson, setMessagingPerson] = useState<Person | null>(null);
 
@@ -136,23 +139,16 @@ export default function SpecialistsDirectory({
     };
   }, []);
 
-  // Filter persons who have at least one specialty assigned, or display all if no specialists yet
+  // Filter persons who have at least one specialty explicitly assigned.
+  // Initially all persons are inactive/non-specialist by default.
   const allSpecialists = useMemo(() => {
     return persons.filter((p) => {
-      const hasSpecialties = Array.isArray(p.specialties) && p.specialties.length > 0;
-      // also include if their jobTitle or roles matches any craft
-      const hasCraftRole = p.roles?.some((r) =>
-        r.includes("استادکار") || r.includes("تأسیسات") || r.includes("برق") || r.includes("فنی") || r.includes("مجری")
-      );
-      return hasSpecialties || hasCraftRole;
+      return Array.isArray(p.specialties) && p.specialties.length > 0;
     });
   }, [persons]);
 
-  // If there are no assigned specialists yet in a fresh database, give easy access to all persons so user can assign
-  const effectiveSpecialistsList = useMemo(() => {
-    if (allSpecialists.length > 0) return allSpecialists;
-    return persons; // fallback so the view isn't completely empty before assignment
-  }, [allSpecialists, persons]);
+  // Only persons explicitly configured with specialties appear in the showcase
+  const effectiveSpecialistsList = allSpecialists;
 
   // Filtered & Sorted specialists
   const filteredSpecialists = useMemo(() => {
@@ -266,10 +262,20 @@ export default function SpecialistsDirectory({
           <button
             type="button"
             onClick={() => setShowConfigModal(true)}
-            className="px-4 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs active:scale-95"
+            className="px-3.5 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer shadow-xs active:scale-95"
           >
             <Sliders className="w-4 h-4 text-amber-400" />
             <span>مدیریت عناوین تخصص‌ها</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => setShowAddFromPersonsModal(true)}
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-400 hover:to-amber-500 text-white font-black text-xs transition-all flex items-center gap-2 shadow-lg shadow-amber-500/25 cursor-pointer active:scale-95"
+            title="انتخاب یک شخص از بانک طرف‌حساب‌ها و تبدیل او به متخصص"
+          >
+            <UserPlus className="w-4 h-4" />
+            <span>افزودن شخص به متخصصین</span>
           </button>
 
           <button
@@ -279,10 +285,10 @@ export default function SpecialistsDirectory({
                 setIsPersonModalOpen(true);
               }
             }}
-            className="px-5 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-xs transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer active:scale-95"
+            className="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-black text-xs transition-all flex items-center gap-2 shadow-lg shadow-indigo-600/25 cursor-pointer active:scale-95"
           >
             <Plus className="w-4 h-4" />
-            <span>تعریف شخص متخصص جدید</span>
+            <span>تعریف شخص جدید</span>
           </button>
         </div>
       </div>
@@ -469,12 +475,42 @@ export default function SpecialistsDirectory({
       </div>
 
       {/* 5. Specialists Presentation (Grid or Table) */}
-      {filteredSpecialists.length === 0 ? (
+      {allSpecialists.length === 0 ? (
+        <div className="bg-white rounded-3xl p-8 sm:p-14 text-center border border-slate-200/90 shadow-sm max-w-2xl mx-auto my-6 space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto shadow-inner border border-amber-200">
+            <Hammer className="w-8 h-8" />
+          </div>
+          <div>
+            <h3 className="text-base font-black text-slate-900">هنوز متخصصی به این بخش افزوده نشده است</h3>
+            <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+              وضعیت اولیه کلیه اشخاص در ابتدا غیرفعال برای پنل متخصصین است. شما می‌توانید با کلیک روی دکمه «افزودن شخص به متخصصین» یا از طریق ویرایش اطلاعات شخص در لیست اشخاص، مهارت‌های فنی او را ثبت کرده و به این ویترین بیاورید.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center justify-center gap-3 pt-3">
+            <button
+              type="button"
+              onClick={() => setShowAddFromPersonsModal(true)}
+              className="px-5 py-2.5 rounded-2xl bg-gradient-to-r from-amber-500 to-amber-600 hover:from-amber-600 hover:to-amber-700 text-white font-black text-xs transition-all shadow-md flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <UserPlus className="w-4 h-4" />
+              <span>افزودن شخص موجود به متخصصین</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setIsPersonModalOpen?.(true)}
+              className="px-4 py-2.5 rounded-2xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs transition-all flex items-center gap-2 cursor-pointer active:scale-95"
+            >
+              <Plus className="w-4 h-4" />
+              <span>تعریف شخص جدید</span>
+            </button>
+          </div>
+        </div>
+      ) : filteredSpecialists.length === 0 ? (
         <div className="bg-white rounded-3xl p-12 text-center border border-slate-200/80 shadow-xs">
-          <Hammer className="w-12 h-12 text-slate-300 mx-auto mb-3 animate-pulse" />
+          <Search className="w-10 h-10 text-slate-300 mx-auto mb-3" />
           <h3 className="text-base font-black text-slate-800">هیچ متخصصی با این فیلترها یافت نشد</h3>
           <p className="text-xs text-slate-500 mt-1 max-w-md mx-auto leading-relaxed">
-            می‌توانید با کلیک بر روی دکمه «تخصیص تخصص» به هر شخص، تخصص‌های او (برق‌کار، تأسیسات، بنا، نقاش و...) را معین نمایید.
+            لطفاً عبارت جستجو یا فیلتر دسته‌بندی و وضعیت در دسترس بودن را تغییر دهید.
           </p>
         </div>
       ) : viewMode === "grid" ? (
@@ -543,15 +579,34 @@ export default function SpecialistsDirectory({
                       </div>
                     </div>
 
-                    {/* Quick Edit Specialty Button */}
-                    <button
-                      type="button"
-                      onClick={() => setEditingSpecialist(person)}
-                      className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
-                      title="ویرایش مهارت‌ها و وضعیت"
-                    >
-                      <Edit2 className="w-4 h-4" />
-                    </button>
+                    {/* Quick Edit & Remove Buttons */}
+                    <div className="flex items-center gap-1">
+                      <button
+                        type="button"
+                        onClick={() => setEditingSpecialist(person)}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors cursor-pointer"
+                        title="ویرایش مهارت‌ها و وضعیت"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            const updated = updatePersonSpecialistData(person, { specialties: [] });
+                            await updatePerson(String(person.id), updated);
+                            fetchPersons?.();
+                            showNotification?.(`«${person.name}» از ویترین متخصصین خارج شد`, "info");
+                          } catch (e) {
+                            showNotification?.("خطا در خروج از ویترین متخصصین", "error");
+                          }
+                        }}
+                        className="p-1.5 rounded-xl text-slate-400 hover:text-rose-600 hover:bg-rose-50 transition-colors cursor-pointer"
+                        title="حذف از ویترین متخصصین"
+                      >
+                        <UserMinus className="w-4 h-4" />
+                      </button>
+                    </div>
                   </div>
 
                   {/* Star Rating & Status Badges */}
@@ -824,6 +879,24 @@ export default function SpecialistsDirectory({
                           >
                             <Edit2 className="w-4 h-4" />
                           </button>
+
+                          <button
+                            type="button"
+                            onClick={async () => {
+                              try {
+                                const updated = updatePersonSpecialistData(person, { specialties: [] });
+                                await updatePerson(String(person.id), updated);
+                                fetchPersons?.();
+                                showNotification?.(`«${person.name}» از ویترین متخصصین خارج شد`, "info");
+                              } catch (e) {
+                                showNotification?.("خطا در خروج از ویترین متخصصین", "error");
+                              }
+                            }}
+                            className="p-1.5 rounded-lg bg-rose-50 hover:bg-rose-100 text-rose-600 transition-colors cursor-pointer"
+                            title="حذف از ویترین متخصصین"
+                          >
+                            <UserMinus className="w-4 h-4" />
+                          </button>
                         </div>
                       </td>
                     </tr>
@@ -881,6 +954,19 @@ export default function SpecialistsDirectory({
           person={messagingPerson}
           storeSettings={storeSettings}
           showNotification={showNotification}
+        />
+      )}
+
+      {/* MODAL 4: ADD SPECIALIST FROM PERSONS */}
+      {showAddFromPersonsModal && (
+        <AddSpecialistFromPersonsModal
+          persons={persons}
+          specialtiesCatalog={specialtiesCatalog}
+          onClose={() => setShowAddFromPersonsModal(false)}
+          onSelectPerson={(person) => {
+            setShowAddFromPersonsModal(false);
+            setEditingSpecialist(person);
+          }}
         />
       )}
     </div>
@@ -1250,19 +1336,192 @@ function EditSpecialistModal({
             />
           </div>
 
-          <div className="p-4 border-t border-slate-100 flex items-center justify-end gap-2 bg-slate-50">
-            <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer">
-              انصراف
-            </button>
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs cursor-pointer shadow-md"
-            >
-              ذخیره تخصص‌ها و وضعیت
-            </button>
+          <div className="p-4 border-t border-slate-100 flex items-center justify-between gap-2 bg-slate-50">
+            {Array.isArray(person.specialties) && person.specialties.length > 0 ? (
+              <button
+                type="button"
+                onClick={async () => {
+                  setIsSaving(true);
+                  try {
+                    await onSave({
+                      specialties: [],
+                      availabilityStatus: "available",
+                      specialistRating: 5,
+                      skillNotes: "",
+                      dailyWage: 0,
+                    });
+                  } finally {
+                    setIsSaving(false);
+                  }
+                }}
+                className="px-3.5 py-2 rounded-xl text-rose-600 hover:bg-rose-50 border border-rose-200 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
+                title="حذف این شخص از ویترین متخصصین"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+                <span>حذف از ویترین متخصصین</span>
+              </button>
+            ) : <div />}
+
+            <div className="flex items-center gap-2">
+              <button type="button" onClick={onClose} className="px-4 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer">
+                انصراف
+              </button>
+              <button
+                type="submit"
+                disabled={isSaving}
+                className="px-5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-black text-xs cursor-pointer shadow-md"
+              >
+                ذخیره تخصص‌ها و وضعیت
+              </button>
+            </div>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// --- SUB-COMPONENT 3: ADD SPECIALIST FROM EXISTING PERSONS MODAL ---
+function AddSpecialistFromPersonsModal({
+  persons,
+  specialtiesCatalog,
+  onClose,
+  onSelectPerson,
+}: {
+  persons: Person[];
+  specialtiesCatalog: PersonSpecialty[];
+  onClose: () => void;
+  onSelectPerson: (person: Person) => void;
+}) {
+  const [searchTerm, setSearchTerm] = useState("");
+  const [filterMode, setFilterMode] = useState<"non_specialists" | "all">("non_specialists");
+
+  const filteredList = useMemo(() => {
+    return persons.filter((p) => {
+      const isSpec = Array.isArray(p.specialties) && p.specialties.length > 0;
+      if (filterMode === "non_specialists" && isSpec) return false;
+
+      if (searchTerm.trim()) {
+        const q = searchTerm.toLowerCase().trim();
+        const fullName = `${p.firstName || ""} ${p.lastName || ""} ${p.name || ""}`.toLowerCase();
+        const phone = `${p.phone || ""} ${p.mobile || ""}`;
+        const code = `${p.personCode || ""}`;
+        return fullName.includes(q) || phone.includes(q) || code.includes(q);
+      }
+      return true;
+    });
+  }, [persons, filterMode, searchTerm]);
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-xs animate-in fade-in duration-200">
+      <div className="bg-white border border-slate-200 rounded-3xl w-full max-w-2xl max-h-[85vh] flex flex-col shadow-2xl text-right overflow-hidden dir-rtl">
+        <div className="p-5 border-b border-slate-100 flex items-center justify-between bg-slate-50">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center font-bold">
+              <UserPlus className="w-5 h-5" />
+            </div>
+            <div>
+              <h3 className="text-sm font-black text-slate-900">افزودن شخص به ویترین متخصصین</h3>
+              <p className="text-xs text-slate-500 font-medium">یک شخص را انتخاب کنید تا تخصص‌های فنی او را تعیین و به این بخش اضافه نمایید</p>
+            </div>
+          </div>
+          <button type="button" onClick={onClose} className="p-1.5 text-slate-400 hover:text-slate-600 rounded-full cursor-pointer">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-4 border-b border-slate-100 space-y-3 bg-white">
+          <div className="relative">
+            <input
+              type="text"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              placeholder="جستجوی نام شخص، شماره موبایل، کد شخص..."
+              className="w-full pr-9 pl-4 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none focus:bg-white focus:border-amber-500 transition-colors"
+            />
+            <Search className="w-4 h-4 text-slate-400 absolute right-3 top-1/2 -translate-y-1/2" />
+          </div>
+
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setFilterMode("non_specialists")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                filterMode === "non_specialists"
+                  ? "bg-amber-500 text-white shadow-2xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <span>اشخاص عادی (غیرمتخصص)</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterMode("all")}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer ${
+                filterMode === "all"
+                  ? "bg-slate-900 text-white shadow-2xs"
+                  : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+              }`}
+            >
+              <span>همه اشخاص ({persons.length})</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="p-4 overflow-y-auto space-y-2 flex-1">
+          {filteredList.length === 0 ? (
+            <div className="text-center py-12 text-slate-400 text-xs font-bold">
+              هیچ شخصی با مشخصات جستجو شده یافت نشد
+            </div>
+          ) : (
+            filteredList.map((person) => {
+              const isSpecialist = Array.isArray(person.specialties) && person.specialties.length > 0;
+              return (
+                <div
+                  key={person.id}
+                  className="flex items-center justify-between p-3 rounded-2xl border border-slate-200 hover:border-amber-300 hover:bg-amber-50/20 transition-all text-xs"
+                >
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-xl bg-slate-100 flex items-center justify-center font-black text-indigo-700 shrink-0">
+                      {person.name?.charAt(0) || "U"}
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <span className="font-black text-slate-900 text-xs">{person.name}</span>
+                        {person.personCode && (
+                          <span className="text-[10px] font-mono text-slate-400 font-bold">کد: {person.personCode}</span>
+                        )}
+                        {isSpecialist && (
+                          <span className="text-[9px] bg-amber-100 text-amber-800 font-bold px-1.5 py-0.2 rounded-md">
+                            دارای تخصص
+                          </span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-slate-400 font-mono mt-0.5" dir="ltr">
+                        {person.mobile || person.phone || "بدون شماره"}
+                      </div>
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => onSelectPerson(person)}
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-600 text-white font-black text-xs transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95 shrink-0"
+                  >
+                    <Hammer className="w-3.5 h-3.5" />
+                    <span>{isSpecialist ? "ویرایش تخصص‌ها" : "افزودن و انتساب تخصص"}</span>
+                  </button>
+                </div>
+              );
+            })
+          )}
+        </div>
+
+        <div className="p-4 border-t border-slate-100 flex items-center justify-end bg-slate-50">
+          <button type="button" onClick={onClose} className="px-5 py-2 rounded-xl bg-slate-200 text-slate-700 text-xs font-bold cursor-pointer">
+            بستن
+          </button>
+        </div>
       </div>
     </div>
   );

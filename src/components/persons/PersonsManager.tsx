@@ -1382,6 +1382,10 @@ export default function PersonsManager(props: any) {
                                       <button onClick={() => { setOpenPersonActionsId(null); handleEditPerson(p); }} className="w-full text-right px-3 py-2 text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 rounded-lg flex items-center gap-2 transition-colors">
                                         <Edit2 className="w-3.5 h-3.5 text-slate-400" /> ویرایش اطلاعات
                                       </button>
+                                      <button onClick={() => { setOpenPersonActionsId(null); handleEditPerson(p); }} className="w-full text-right px-3 py-2 text-xs font-bold text-slate-700 hover:bg-amber-50 hover:text-amber-800 rounded-lg flex items-center gap-2 transition-colors">
+                                        <Hammer className="w-3.5 h-3.5 text-amber-500" />
+                                        {Array.isArray(p.specialties) && p.specialties.length > 0 ? "ویرایش مهارت‌های تخصصی" : "افزودن به متخصصین و استادکاران"}
+                                      </button>
                                       <button onClick={() => { setOpenPersonActionsId(null); handleOpenMessageModal(p); }} className="w-full text-right px-3 py-2 text-xs font-bold text-slate-700 hover:bg-indigo-50 hover:text-indigo-600 rounded-lg flex items-center gap-2 transition-colors">
                                         <MessageSquare className="w-3.5 h-3.5 text-indigo-500" /> ارسال پیامک و مانده حساب
                                       </button>
