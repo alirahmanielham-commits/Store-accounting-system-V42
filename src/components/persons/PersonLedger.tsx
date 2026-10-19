@@ -492,9 +492,17 @@ export default function PersonLedger(props: any) {
 
                       // Calculations
                       const accountingDocEntries = accountingDocuments
-                        .filter((doc) =>
-                          doc.items?.some((item) => String(item.detailedAccountId) === String(selectedPerson.id))
-                        )
+                        .filter((doc) => {
+                          // Exclude duplicate cash/bank documents generated erroneously for person transfers
+                          if (
+                            (doc.sourceType === 'receipt' || doc.sourceType === 'payment') &&
+                            (doc.description?.includes('حواله و انتقال') || doc.description?.includes('از محل دریافت از طرف‌حساب')) &&
+                            doc.items?.some((i: any) => !i.detailedAccountId)
+                          ) {
+                            return false;
+                          }
+                          return doc.items?.some((item) => String(item.detailedAccountId) === String(selectedPerson.id));
+                        })
                         .map((doc) => {
                           const personItems = doc.items.filter((item) => String(item.detailedAccountId) === String(selectedPerson.id));
                           const debit = personItems.reduce((sum, item) => sum + Number(item.debit || 0), 0);
@@ -552,6 +560,7 @@ export default function PersonLedger(props: any) {
                           }
                           else if (doc.sourceType === "receipt") { entryType = "transaction"; typeName = "رسید دریافت"; }
                           else if (doc.sourceType === "payment") { entryType = "transaction"; typeName = (typeof isPayslip !== "undefined" && isPayslip) ? desc : "رسید پرداخت"; }
+                          else if (doc.sourceType === "person_transfer" || doc.sourceType === "transfer") { entryType = "transaction"; typeName = "حواله طرف‌حساب"; }
                           else if (doc.sourceType === "opening_balance") { entryType = "opening_balance"; typeName = "افتتاحیه"; }
                           else if (doc.sourceType?.startsWith("check_issued")) { entryType = "issued_check"; typeName = "چک پرداختی"; }
                           else if (doc.sourceType?.startsWith("check_received")) { entryType = "received_check"; typeName = "چک دریافتی"; }

@@ -200,6 +200,16 @@ export const addTransaction = async (transaction: any) => {
 
   // Auto-generate detailed accounting document with full explanation
   try {
+     if (
+       transaction.skipAccounting ||
+       transaction.method === 'check' ||
+       transaction.method === 'person_transfer' ||
+       transaction.resourceType === 'person' ||
+       transaction.isPersonTransfer
+     ) {
+        return newTransaction;
+     }
+
      const docType = transaction.type === 'receive' ? 'receipt' : 'payment';
      const ledgerAccounts = await getLedgerAccounts();
      const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
@@ -840,7 +850,7 @@ export const deleteTransaction = async (id: string) => {
       const accDocs = await getLocalData<any[]>('accounting_documents', []);
       const docOperations: any[] = [];
       accDocs.forEach(d => {
-         if ((String(d.sourceId) === String(id) || (t.pairedTransactionId && String(d.sourceId) === String(t.pairedTransactionId)) || (t.receiptNumber && String(d.sourceId) === String(t.receiptNumber))) && (d.sourceType === 'receipt' || d.sourceType === 'payment' || d.sourceType === 'transfer')) {
+         if ((String(d.sourceId) === String(id) || (t.pairedTransactionId && String(d.sourceId) === String(t.pairedTransactionId)) || (t.receiptNumber && String(d.sourceId) === String(t.receiptNumber))) && (d.sourceType === 'receipt' || d.sourceType === 'payment' || d.sourceType === 'transfer' || d.sourceType === 'person_transfer')) {
             docOperations.push({ type: 'delete', key: 'accounting_documents', id: d.id });
          }
       });

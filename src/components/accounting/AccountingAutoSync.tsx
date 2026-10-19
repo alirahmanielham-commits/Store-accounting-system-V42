@@ -38,7 +38,12 @@ export default function AccountingAutoSync({ showNotification }: any) {
       const instDocs = (docs || []).filter(d => d.sourceType === 'installment');
 
       const mInvoices = (invoices || []).filter(inv => !['proforma', 'warehouse_receipt', 'warehouse_remittance'].includes(inv.type) && inv.status !== 'voided' && !inv.isDeleted && inv.status !== 'draft' && !inv.isDraft && !invoiceDocs.some(d => d.sourceId?.toString() === inv.id.toString()));
-      const mTransactions = (transactions || []).filter(t => !transactionDocs.some(d => d.sourceId?.toString() === t.id.toString()));
+      const mTransactions = (transactions || []).filter(t => 
+        t.method !== 'person_transfer' && 
+        t.resourceType !== 'person' && 
+        !t.isPersonTransfer &&
+        !transactionDocs.some(d => d.sourceId?.toString() === t.id.toString())
+      );
       
       const mChecks = [...(issuedChecks || []).map(c => ({...c, _isIssued: true})), ...(receivedChecks || []).map(c => ({...c, _isIssued: false}))].filter(c => !checkDocs.some(d => d.sourceId?.toString() === c.id.toString()));
       const mLoans = loans.filter(l => !loanDocs.some(d => d.sourceId?.toString() === l.id.toString()));

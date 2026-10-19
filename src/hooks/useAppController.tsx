@@ -2620,6 +2620,22 @@ const fetchTransactions = async () => {
 const fetchAccountingDocuments = async () => {
     try {
       const data = await getAccountingDocuments();
+      // Auto-cleanup any stray duplicate accounting documents created for person transfers touching account 11
+      const badDocs = (data || []).filter((d: any) => 
+        (d.sourceType === 'receipt' || d.sourceType === 'payment') &&
+        (d.description?.includes('حواله و انتقال') || d.description?.includes('از محل دریافت از طرف‌حساب')) &&
+        d.items?.some((i: any) => !i.detailedAccountId)
+      );
+      if (badDocs.length > 0) {
+        for (const bd of badDocs) {
+          try {
+            await deleteAccountingDocument(bd.id);
+          } catch (_) {}
+        }
+        const cleanedData = (data || []).filter((d: any) => !badDocs.some((bd: any) => String(bd.id) === String(d.id)));
+        setAccountingDocuments(cleanedData as any);
+        return;
+      }
       setAccountingDocuments(data as any);
     } catch (error) {
       console.error("Error fetching accounting documents", error);
@@ -3094,18 +3110,18 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
           date: payload.date || new Date().toISOString().split('T')[0],
           description: `حواله و انتقال وجه بین اشخاص به مبلغ ${formattedAmt} ${currencyStr} - دریافت از [${payerName}] و پرداخت به [${payeeName}] (شماره رسید: ${finalReceiptNumber})`,
           status: 'approved',
-          sourceType: 'receipt',
+          sourceType: 'person_transfer',
           sourceId: txReceive.id,
           items: [
             {
-              description: `پرداخت / انتقال وجه به ${payeeName} از محل دریافت از ${payerName} (رسید شماره ${finalReceiptNumber})`,
+              description: `انتقال / حواله وجه به ${payeeName} از محل دریافت از ${payerName} (رسید شماره ${finalReceiptNumber})`,
               debit: Number(payload.amount),
               credit: 0,
               ledgerAccountId: payeeLedgerId,
               detailedAccountId: payeeId,
             },
             {
-              description: `دریافت / انتقال وجه از ${payerName} و پرداخت به ${payeeName} (رسید شماره ${finalReceiptNumber})`,
+              description: `انتقال / حواله وجه از ${payerName} و پرداخت به ${payeeName} (رسید شماره ${finalReceiptNumber})`,
               debit: 0,
               credit: Number(payload.amount),
               ledgerAccountId: payerLedgerId,
@@ -3113,6 +3129,18 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
             }
           ]
         });
+
+        // Ensure no stray auto-documents touching account 11 exist for these transactions
+        try {
+          const freshAccDocs = await getAccountingDocuments();
+          const badDocs = freshAccDocs.filter((d: any) => 
+            (String(d.sourceId) === String(txReceive.id) || String(d.sourceId) === String(txPay.id)) &&
+            d.sourceType !== 'person_transfer'
+          );
+          for (const bd of badDocs) {
+            await deleteAccountingDocument(bd.id);
+          }
+        } catch (_) {}
 
         createdReceiptObj = {
           ...txReceive,
