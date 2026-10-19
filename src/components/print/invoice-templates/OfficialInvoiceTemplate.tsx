@@ -36,6 +36,17 @@ export default function OfficialInvoiceTemplate({
       
   const relatedPerson = (persons || []).find(p => p && p.id?.toString() === data.customerId?.toString());
 
+  const driverPerson = (persons || []).find((p: any) => p && String(p.id) === String(data.driverPersonId));
+  const receiverPerson = (persons || []).find((p: any) => p && String(p.id) === String(data.receiverPersonId));
+
+  const driverName = data.driverName || driverPerson?.name || driverPerson?.alias || "";
+  const driverPhone = data.driverPhone || driverPerson?.phone || driverPerson?.mobile || "";
+  const receiverName = data.receiverName || receiverPerson?.name || receiverPerson?.alias || "";
+  const receiverPhone = data.receiverPhone || receiverPerson?.phone || receiverPerson?.mobile || "";
+  const vehiclePlateNumber = data.vehiclePlateNumber || "";
+  const shippingAddress = data.shippingAddress || "";
+  const hasLogisticsInfo = Boolean(driverName || driverPhone || receiverName || receiverPhone || vehiclePlateNumber || shippingAddress);
+
   const defaultCols = {
     rowIndex: true,
     productCode: true,
@@ -311,6 +322,35 @@ export default function OfficialInvoiceTemplate({
                      <div className="col-span-4">تلفن / همراه: <span className="font-bold" dir="ltr">{toPersianDigits(isSale ? (relatedPerson?.mobile || relatedPerson?.phone || "---") : (storeSettings.phone || storeSettings.mobile || "---"))}</span></div>
                   </div>
                 </div>
+
+                {/* Logistics, Driver & Delivery Info */}
+                {hasLogisticsInfo && (
+                  <div className="border border-black mb-2">
+                    <div className="font-bold bg-gray-100 px-2 py-0.5 text-xs border-b border-black">
+                      مشخصات راننده، تحویل‌گیرنده و حمل کالا
+                    </div>
+                    <div className="grid grid-cols-4 gap-1 p-2 text-[10.5px]">
+                      {(driverName || driverPhone) && (
+                        <div>نام راننده: <span className="font-bold">{driverName || "-"}</span></div>
+                      )}
+                      {driverPhone && (
+                        <div>تلفن راننده: <span className="font-bold" dir="ltr">{toPersianDigits(driverPhone)}</span></div>
+                      )}
+                      {(receiverName || receiverPhone) && (
+                        <div>تحویل‌گیرنده: <span className="font-bold">{receiverName || "-"}</span></div>
+                      )}
+                      {receiverPhone && (
+                        <div>تلفن تحویل‌گیرنده: <span className="font-bold" dir="ltr">{toPersianDigits(receiverPhone)}</span></div>
+                      )}
+                      {vehiclePlateNumber && (
+                        <div className="col-span-2">مشخصات / پلاک خودرو: <span className="font-bold">{toPersianDigits(vehiclePlateNumber)}</span></div>
+                      )}
+                      {shippingAddress && (
+                        <div className="col-span-4">نشانی و محل تخلیه/تحویل: <span className="font-bold">{shippingAddress}</span></div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </>
             )}
 
@@ -452,13 +492,19 @@ export default function OfficialInvoiceTemplate({
                 </div>
 
                 {/* Signatures */}
-                <div className="grid grid-cols-2 gap-4 h-20 text-center print-avoid-break mb-1">
+                <div className={`grid ${hasLogisticsInfo ? 'grid-cols-3' : 'grid-cols-2'} gap-4 h-20 text-center print-avoid-break mb-1`}>
                   <div className="border border-black p-1 flex flex-col justify-between">
                      <div className="font-bold text-xs">مهر و امضای فروشنده</div>
                      <div className="border-b border-dashed border-gray-400 mx-8"></div>
                   </div>
+                  {hasLogisticsInfo && (
+                    <div className="border border-black p-1 flex flex-col justify-between">
+                       <div className="font-bold text-xs">امضای راننده / متصدی حمل {driverName ? `(${driverName})` : ''}</div>
+                       <div className="border-b border-dashed border-gray-400 mx-8"></div>
+                    </div>
+                  )}
                   <div className="border border-black p-1 flex flex-col justify-between">
-                     <div className="font-bold text-xs">مهر و امضای خریدار</div>
+                     <div className="font-bold text-xs">{receiverName ? `امضای تحویل‌گیرنده (${receiverName})` : 'مهر و امضای خریدار'}</div>
                      <div className="border-b border-dashed border-gray-400 mx-8"></div>
                   </div>
                 </div>

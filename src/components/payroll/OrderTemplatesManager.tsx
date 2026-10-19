@@ -17,13 +17,32 @@ export default function OrderTemplatesManager({ showNotification }) {
   });
 
   const availableComponents = [
-    { id: 'daily_wage', title: 'دستمزد روزانه', type: 'earning' },
-    { id: 'housing', title: 'حق مسکن', type: 'earning' },
-    { id: 'marriage', title: 'حق تاهل', type: 'earning' },
-    { id: 'grocery', title: 'خوار بار', type: 'earning' },
-    { id: 'child', title: 'حق اولاد', type: 'earning' },
-    { id: 'base_years', title: 'پایه سنوات', type: 'earning' }
+    { id: 'daily_wage', title: 'دستمزد روزانه (مزد مبنا)', type: 'earning', defaultAmount: '2388728' },
+    { id: 'housing', title: 'حق مسکن (ماهیانه)', type: 'earning', defaultAmount: '9000000' },
+    { id: 'grocery', title: 'بن خواربار و اقلام مصرفی (ماهیانه)', type: 'earning', defaultAmount: '14000000' },
+    { id: 'marriage', title: 'حق تاهل (ماهیانه)', type: 'earning', defaultAmount: '5000000' },
+    { id: 'child', title: 'حق اولاد (به ازای هر فرزند)', type: 'earning', defaultAmount: '7166184' },
+    { id: 'base_years', title: 'پایه سنوات (روزانه)', type: 'earning', defaultAmount: '70000' },
+    { id: 'supervision', title: 'حق سرپرستی / مسئولیت', type: 'earning', defaultAmount: '0' },
+    { id: 'hardship', title: 'فوق‌العاده سختی کار', type: 'earning', defaultAmount: '0' },
+    { id: 'transport', title: 'ایاب و ذهاب', type: 'earning', defaultAmount: '0' },
+    { id: 'bonus', title: 'پاداش و کارایی', type: 'earning', defaultAmount: '0' }
   ];
+
+  const handleApplyOfficialLaborLawTemplate = () => {
+    setTemplateForm({
+      name: templateForm.name || 'قالب رسمی قانون کار سال ۱۴۰۳ (کارگری)',
+      items: [
+        { id: 'daily_wage', title: 'دستمزد روزانه (مزد مبنا)', type: 'earning', amount: '2388728' },
+        { id: 'housing', title: 'حق مسکن (ماهیانه)', type: 'earning', amount: '9000000' },
+        { id: 'grocery', title: 'بن خواربار و اقلام مصرفی (ماهیانه)', type: 'earning', amount: '14000000' },
+        { id: 'marriage', title: 'حق تاهل (ماهیانه)', type: 'earning', amount: '5000000' },
+        { id: 'child', title: 'حق اولاد (به ازای هر فرزند)', type: 'earning', amount: '7166184' },
+        { id: 'base_years', title: 'پایه سنوات (روزانه)', type: 'earning', amount: '70000' }
+      ]
+    });
+    showNotification('مقادیر و اقلام مصوب رسمی قانون کار بارگذاری شد', 'success');
+  };
 
   useEffect(() => {
     fetchData();
@@ -243,13 +262,24 @@ export default function OrderTemplatesManager({ showNotification }) {
               </div>
 
               <div>
-                <label className="block text-sm font-bold text-slate-700 mb-3">آیتم‌های حقوق و مزایا (انتخاب کنید)</label>
+                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-3">
+                  <label className="block text-sm font-bold text-slate-700">آیتم‌های حقوق و مزایا (انتخاب کنید)</label>
+                  <button
+                    type="button"
+                    onClick={handleApplyOfficialLaborLawTemplate}
+                    className="px-3 py-1.5 bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-200 rounded-xl text-xs font-bold transition-all flex items-center gap-1.5 self-start sm:self-auto"
+                  >
+                    <span>⚡</span>
+                    بارگذاری پیش‌فرض‌های رسمی قانون کار ۱۴۰۳
+                  </button>
+                </div>
                 <div className="flex flex-wrap gap-2 mb-6">
                   {availableComponents.map(comp => {
                     const isSelected = templateForm.items.some((i: any) => i.id === comp.id);
                     return (
                       <button
                         key={comp.id}
+                        type="button"
                         onClick={() => handleToggleComponent(comp)}
                         className={`px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-all ${
                           isSelected 
@@ -266,16 +296,23 @@ export default function OrderTemplatesManager({ showNotification }) {
 
                 {templateForm.items.length > 0 && (
                   <div className="bg-slate-50 p-4 rounded-2xl border border-slate-100">
-                    <h4 className="text-sm font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">مقادیر ثابت برای این قالب (اختیاری)</h4>
+                    <h4 className="text-sm font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">مقادیر پایه یا ثابت برای این قالب (ریال)</h4>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {templateForm.items.map((item: any) => (
                         <div key={item.id} className="bg-white p-3 rounded-xl border border-slate-200 shadow-sm">
-                          <label className="block text-xs font-bold text-slate-700 mb-2">{item.title}</label>
+                          <div className="flex items-center justify-between mb-1.5">
+                            <label className="block text-xs font-bold text-slate-700">{item.title}</label>
+                            {item.amount && !isNaN(Number(item.amount)) && Number(item.amount) > 0 && (
+                              <span className="text-[10px] text-indigo-600 font-bold font-mono">
+                                {toPersianDigits(formatNumber(item.amount))} ریال
+                              </span>
+                            )}
+                          </div>
                           <input
                             type="text"
                             value={item.amount || ''}
                             onChange={(e) => handleItemAmountChange(item.id, e.target.value)}
-                            placeholder="مبلغ ثابت (ریال) یا فرمول"
+                            placeholder="مبلغ (ریال) مثلاً 2388728"
                             className="w-full border border-slate-200 bg-slate-50 rounded-lg p-2 outline-none focus:border-indigo-500 font-mono transition-all text-sm"
                             dir="ltr"
                           />

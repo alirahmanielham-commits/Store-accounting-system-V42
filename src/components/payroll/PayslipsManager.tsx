@@ -209,6 +209,51 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
     }
   };
 
+  const resolveWageItemsForPerson = (
+    personId: string, 
+    allOrders: any[], 
+    allContracts: any[], 
+    salComponents: any[],
+    person: any
+  ) => {
+    // 1. Try finding active order
+    const order = (allOrders || []).find(o => o.personId === personId && o.status === 'active');
+    if (order && order.items && order.items.length > 0) {
+      return {
+        order,
+        contractId: order.contractId || ((allContracts || []).find(c => c.personId === personId)?.id) || '',
+        orderItems: order.items,
+        childrenCount: order.childrenCount !== undefined && order.childrenCount !== '' ? order.childrenCount : person?.childrenCount,
+        experienceYears: order.experienceYears !== undefined && order.experienceYears !== '' ? order.experienceYears : person?.experienceYears,
+        source: 'order'
+      };
+    }
+
+    // 2. Fallback to active contract (or any contract assigned to this person)
+    const contract = (allContracts || []).find(c => c.personId === personId && (c.status === 'active' || !c.status));
+    if (contract) {
+      const dailyWageValue = contract.dailyWage || '2388728';
+      const items = [
+        { id: 'daily_wage', title: 'دستمزد روزانه', type: 'earning', amount: String(dailyWageValue), isBaseWage: true },
+        { id: 'housing', title: 'حق مسکن', type: 'earning', amount: '9000000', isInsuranceExempt: false },
+        { id: 'grocery', title: 'خوار بار', type: 'earning', amount: '14000000', isInsuranceExempt: false },
+        ...(person?.maritalStatus === 'married' ? [{ id: 'marriage', title: 'حق تاهل', type: 'earning', amount: '5000000' }] : []),
+        ...(Number(person?.childrenCount || 0) > 0 ? [{ id: 'child', title: 'حق اولاد', type: 'earning', amount: '7166184', isTaxExempt: true }] : []),
+        ...(Number(person?.experienceYears || 0) >= 1 ? [{ id: 'base_years', title: 'پایه سنوات', type: 'earning', amount: '70000', isBaseWage: true }] : [])
+      ];
+      return {
+        order: null,
+        contractId: contract.id,
+        orderItems: items,
+        childrenCount: person?.childrenCount || '0',
+        experienceYears: person?.experienceYears || '0',
+        source: 'contract'
+      };
+    }
+
+    return null;
+  };
+
   const handleRecalculateSingle = async (slipId) => {
     if (loading) return;
     const existing = slips.find(s => s.id === slipId);
@@ -224,32 +269,27 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       }
       
       const allOrders = await getEmployeeOrders();
-      const order = allOrders.find(o => o.personId === att.personId && o.status === 'active');
-      if (!order) {
-         setLoading(false);
-         return showNotification('حکم فعالی برای این شخص یافت نشد', 'error');
-      }
-
       const allContracts = await getEmployeeContracts();
-      const contract = allContracts.find(c => c.id === order.contractId);
-      if (!contract) {
-         setLoading(false);
-         return showNotification('قرارداد یافت نشد', 'error');
-      }
-
       const salComponents = await getSalaryComponents();
       const person = (personsData || []).find(p => p.id === att.personId);
       if (!person) {
          setLoading(false);
          return showNotification('اطلاعات پرسنل یافت نشد', 'error');
       }
-      
-            const orderItems = order.items || [];
+
+      const resolved = resolveWageItemsForPerson(att.personId, allOrders, allContracts, salComponents, person);
+      if (!resolved) {
+         setLoading(false);
+         return showNotification('حکم کارگزینی فعال یا قرارداد کاری معتبری برای این شخص یافت نشد', 'error');
+      }
+
+      const order = resolved.order;
+      const orderItems = resolved.orderItems;
       const workDays = parseFloat(att.workDays || 0);
       const overtimeHours = parseFloat(att.overtimeHours || 0);
       const absenceDays = parseFloat(att.absentDays || 0);
-      const childrenCount = parseInt(order.childrenCount !== undefined && order.childrenCount !== '' ? order.childrenCount : person.childrenCount) || 0;
-      const experienceYears = parseFloat(order.experienceYears !== undefined && order.experienceYears !== '' ? order.experienceYears : person.experienceYears) || 0;
+      const childrenCount = parseInt(resolved.childrenCount !== undefined && resolved.childrenCount !== '' ? resolved.childrenCount : person.childrenCount) || 0;
+      const experienceYears = parseFloat(resolved.experienceYears !== undefined && resolved.experienceYears !== '' ? resolved.experienceYears : person.experienceYears) || 0;
       const isMarried = person.maritalStatus === 'married' ? 1 : 0;
 
       let totalEarnings = 0;
@@ -512,24 +552,24 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
       const { updateMonthlyAttendance } = await import('../../services/hrService');
 
       for (const att of attendances) {
-        const order = activeOrders.find(o => o.personId === att.personId);
-        if (!order) continue; // Must have an active order to generate payroll
+        const person = (personsData || []).find(p => p.id === att.personId);
+        if (!person) continue;
 
-        const contract = allContracts.find(c => c.id === order.contractId);
-        if (!contract) continue;
+        const resolved = resolveWageItemsForPerson(att.personId, allOrders, allContracts, salComponents, person);
+        if (!resolved) continue; // Fallback smoothly to contract if no explicit order exists
 
         const existing = slips.find(s => s.personId === att.personId);
         if (existing && existing.status === 'finalized') continue;
       
-        const person = (personsData || []).find(p => p.id === att.personId);
-        if (!person) continue;
-            const orderItems = order.items || [];
-      const workDays = parseFloat(att.workDays || 0);
-      const overtimeHours = parseFloat(att.overtimeHours || 0);
-      const absenceDays = parseFloat(att.absentDays || 0);
-      const childrenCount = parseInt(order.childrenCount !== undefined && order.childrenCount !== '' ? order.childrenCount : person.childrenCount) || 0;
-      const experienceYears = parseFloat(order.experienceYears !== undefined && order.experienceYears !== '' ? order.experienceYears : person.experienceYears) || 0;
-      const isMarried = person.maritalStatus === 'married' ? 1 : 0;
+        const contractId = resolved.contractId;
+        const order = resolved.order;
+        const orderItems = resolved.orderItems || [];
+        const workDays = parseFloat(att.workDays || 0);
+        const overtimeHours = parseFloat(att.overtimeHours || 0);
+        const absenceDays = parseFloat(att.absentDays || 0);
+        const childrenCount = parseInt(resolved.childrenCount !== undefined && resolved.childrenCount !== '' ? resolved.childrenCount : person.childrenCount) || 0;
+        const experienceYears = parseFloat(resolved.experienceYears !== undefined && resolved.experienceYears !== '' ? resolved.experienceYears : person.experienceYears) || 0;
+        const isMarried = person.maritalStatus === 'married' ? 1 : 0;
 
       let totalEarnings = 0;
       let totalDeductions = 0;
@@ -711,7 +751,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
           personId: att.personId,
           periodYear: year,
           periodMonth: month,
-          contractId: contract.id,
+          contractId: contractId || (order ? order.contractId : '') || (existing ? existing.contractId : ''),
           attendanceId: att.id,
           totalEarnings: totalEarnings.toString(),
           totalDeductions: totalDeductions.toString(),
@@ -741,7 +781,7 @@ export default function PayslipsManager({ personsData, storeSettings, showNotifi
         count++;
       }
 
-      showNotification(`محاسبه حقوق برای ${toPersianDigits(count)} نفر (بر اساس احکام فعال) انجام شد`, 'success');
+      showNotification(`محاسبه حقوق برای ${toPersianDigits(count)} نفر (بر اساس احکام و قراردادهای فعال) انجام شد`, 'success');
       fetchPayslips();
     } catch (e) {
       console.error(e);

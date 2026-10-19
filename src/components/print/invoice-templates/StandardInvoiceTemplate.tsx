@@ -1,7 +1,7 @@
 import React from "react";
 import Barcode from "react-barcode";
 import { formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, numToPersianWords } from "../../../utils/format";
-import { Store, Building2, User, Phone, MapPin, CheckCircle, Percent } from "lucide-react";
+import { Store, Building2, User, Phone, MapPin, CheckCircle, Percent, Truck, UserCheck } from "lucide-react";
 import { InvoicePrintTemplateProps } from "./InvoicePrintTypes";
 
 export default function StandardInvoiceTemplate({
@@ -47,6 +47,17 @@ export default function StandardInvoiceTemplate({
   const relatedPerson = (persons || []).find(
     (p) => p && p.id?.toString() === data.customerId?.toString()
   );
+
+  const driverPerson = (persons || []).find((p: any) => p && String(p.id) === String(data.driverPersonId));
+  const receiverPerson = (persons || []).find((p: any) => p && String(p.id) === String(data.receiverPersonId));
+
+  const driverName = data.driverName || driverPerson?.name || driverPerson?.alias || "";
+  const driverPhone = data.driverPhone || driverPerson?.phone || driverPerson?.mobile || "";
+  const receiverName = data.receiverName || receiverPerson?.name || receiverPerson?.alias || "";
+  const receiverPhone = data.receiverPhone || receiverPerson?.phone || receiverPerson?.mobile || "";
+  const vehiclePlateNumber = data.vehiclePlateNumber || "";
+  const shippingAddress = data.shippingAddress || "";
+  const hasLogisticsInfo = Boolean(driverName || driverPhone || receiverName || receiverPhone || vehiclePlateNumber || shippingAddress);
 
   const getInvoiceDateOnly = (d: any) => {
     return formatInvoiceDate(d, storeSettings?.calendarType, { showTime: false });
@@ -643,6 +654,61 @@ export default function StandardInvoiceTemplate({
                     )}
                   </div>
                 </div>
+
+                {/* Logistics, Driver & Delivery Info Box */}
+                {hasLogisticsInfo && (
+                  <div className={`mt-2 rounded-xl border border-slate-200 bg-slate-50/60 ${isA5 ? 'p-1.5' : 'p-2.5'}`}>
+                    <div className="flex justify-between items-center border-b border-slate-200/60 pb-1 mb-1.5">
+                      <div className="font-bold text-slate-700 flex items-center gap-1.5 text-[11px]">
+                        <Truck className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>اطلاعات راننده، تحویل‌گیرنده و حمل کالا</span>
+                      </div>
+                      <span className="text-[9.5px] font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                        مشخصات ترابری و تحویل
+                      </span>
+                    </div>
+
+                    <div className={`grid grid-cols-2 md:grid-cols-4 gap-2 ${isA5 ? 'text-[9.5px]' : 'text-[11px]'}`}>
+                      {(driverName || driverPhone) && (
+                        <div>
+                          <span className="text-slate-400 block text-[9px] font-medium">راننده / متصدی حمل:</span>
+                          <span className="font-black text-slate-900">{driverName || "-"}</span>
+                          {driverPhone && (
+                            <span className="font-bold text-slate-600 mr-1" dir="ltr">
+                              ({toPersianDigits(driverPhone)})
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {(receiverName || receiverPhone) && (
+                        <div>
+                          <span className="text-slate-400 block text-[9px] font-medium">شخص تحویل‌گیرنده:</span>
+                          <span className="font-black text-slate-900">{receiverName || "-"}</span>
+                          {receiverPhone && (
+                            <span className="font-bold text-slate-600 mr-1" dir="ltr">
+                              ({toPersianDigits(receiverPhone)})
+                            </span>
+                          )}
+                        </div>
+                      )}
+
+                      {vehiclePlateNumber && (
+                        <div>
+                          <span className="text-slate-400 block text-[9px] font-medium">مشخصات / پلاک خودرو:</span>
+                          <span className="font-bold text-slate-800">{toPersianDigits(vehiclePlateNumber)}</span>
+                        </div>
+                      )}
+
+                      {shippingAddress && (
+                        <div className={(driverName || driverPhone) && (receiverName || receiverPhone) && vehiclePlateNumber ? "col-span-2 md:col-span-4" : "col-span-1 md:col-span-2"}>
+                          <span className="text-slate-400 block text-[9px] font-medium">محل تخلیه / آدرس تحویل:</span>
+                          <span className="font-bold text-slate-800">{shippingAddress}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
               </div>
             )}
 
@@ -937,13 +1003,24 @@ export default function StandardInvoiceTemplate({
 
                 {/* Signatures */}
                 {printSettings.showSignatures && (
-                  <div className={`grid grid-cols-2 gap-8 text-center text-slate-800 font-bold print-avoid-break ${isA5 ? 'mt-3 mb-1 text-[9px]' : 'mt-5 mb-2 text-[10.5px]'}`}>
+                  <div className={`grid ${hasLogisticsInfo ? 'grid-cols-3 gap-4' : 'grid-cols-2 gap-8'} text-center text-slate-800 font-bold print-avoid-break ${isA5 ? 'mt-3 mb-1 text-[9px]' : 'mt-5 mb-2 text-[10.5px]'}`}>
                     <div className="flex flex-col items-center">
                       <span className="text-slate-600">مهر و امضای فروشنده</span>
                       <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-7' : 'mt-10'}`}></div>
                     </div>
+                    {hasLogisticsInfo && (
+                      <div className="flex flex-col items-center">
+                        <span className="text-slate-600">
+                          امضای راننده / تحویل‌دهنده
+                          {driverName ? ` (${driverName})` : ''}
+                        </span>
+                        <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-7' : 'mt-10'}`}></div>
+                      </div>
+                    )}
                     <div className="flex flex-col items-center">
-                      <span className="text-slate-600">مهر و امضای خریدار</span>
+                      <span className="text-slate-600">
+                        {receiverName ? `امضای تحویل‌گیرنده (${receiverName})` : 'مهر و امضای خریدار'}
+                      </span>
                       <div className={`w-3/4 border-b-2 border-dashed ${isBold ? 'border-slate-500' : 'border-slate-300'} ${isA5 ? 'mt-7' : 'mt-10'}`}></div>
                     </div>
                   </div>

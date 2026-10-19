@@ -59,6 +59,9 @@ export default function ExtraModals(props: any) {
     formatNumber,
     receiptResourceType, setReceiptResourceType,
     receiptResourceId, setReceiptResourceId,
+    receiptTargetPersonId, setReceiptTargetPersonId,
+    receiptTransferDirection, setReceiptTransferDirection,
+    calculatePersonBalance,
     receiptLinkedInvoices, setReceiptLinkedInvoices,
     receiptNumber,
     setIsPersonModalOpen,
@@ -126,6 +129,11 @@ export default function ExtraModals(props: any) {
           setReceiptResourceType={setReceiptResourceType}
           receiptResourceId={receiptResourceId}
           setReceiptResourceId={setReceiptResourceId}
+          receiptTargetPersonId={receiptTargetPersonId}
+          setReceiptTargetPersonId={setReceiptTargetPersonId}
+          receiptTransferDirection={receiptTransferDirection}
+          setReceiptTransferDirection={setReceiptTransferDirection}
+          calculatePersonBalance={calculatePersonBalance}
           receiptLinkedInvoices={receiptLinkedInvoices}
           setReceiptLinkedInvoices={setReceiptLinkedInvoices}
           receiptNumber={receiptNumber}
@@ -191,6 +199,11 @@ export default function ExtraModals(props: any) {
           setReceiptResourceType={setReceiptResourceType}
           receiptResourceId={receiptResourceId}
           setReceiptResourceId={setReceiptResourceId}
+          receiptTargetPersonId={receiptTargetPersonId}
+          setReceiptTargetPersonId={setReceiptTargetPersonId}
+          receiptTransferDirection={receiptTransferDirection}
+          setReceiptTransferDirection={setReceiptTransferDirection}
+          calculatePersonBalance={calculatePersonBalance}
           receiptLinkedInvoices={receiptLinkedInvoices}
           setReceiptLinkedInvoices={setReceiptLinkedInvoices}
           receiptNumber={receiptNumber}

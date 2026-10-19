@@ -814,6 +814,13 @@ export const deleteTransaction = async (id: string) => {
     }
     const table = mapTransactionTypeToTable(t.type);
     operations.push({ type: 'delete', key: table, id: id });
+    if (t.pairedTransactionId) {
+        const pairedTx = transactions.find(tx => String(tx.id) === String(t.pairedTransactionId));
+        if (pairedTx) {
+            const pairedTable = mapTransactionTypeToTable(pairedTx.type);
+            operations.push({ type: 'delete', key: pairedTable, id: pairedTx.id });
+        }
+    }
     if (t.type === 'salary') {
         const allPayslips = await getLocalData<any[]>('payslips', []);
         const toDelete = allPayslips.find(p => String(p.transactionId) === String(id));
@@ -833,7 +840,7 @@ export const deleteTransaction = async (id: string) => {
       const accDocs = await getLocalData<any[]>('accounting_documents', []);
       const docOperations: any[] = [];
       accDocs.forEach(d => {
-         if (String(d.sourceId) === String(id) && (d.sourceType === 'receipt' || d.sourceType === 'payment')) {
+         if ((String(d.sourceId) === String(id) || (t.pairedTransactionId && String(d.sourceId) === String(t.pairedTransactionId)) || (t.receiptNumber && String(d.sourceId) === String(t.receiptNumber))) && (d.sourceType === 'receipt' || d.sourceType === 'payment' || d.sourceType === 'transfer')) {
             docOperations.push({ type: 'delete', key: 'accounting_documents', id: d.id });
          }
       });

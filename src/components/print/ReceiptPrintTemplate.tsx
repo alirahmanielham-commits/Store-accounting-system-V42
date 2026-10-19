@@ -358,6 +358,16 @@ export default function ReceiptPrintTemplate({
         const bank = (accounts || []).find((a: any) => String(a.id) === String(data.resourceId || data.accountId));
         rLabel = bank ? `${bank.bankName || bank.title}` : 'حساب مبدا/مقصد';
         due = 'نقدی';
+      } else if (data.method === 'person_transfer' || data.resourceType === 'person' || data.isPersonTransfer) {
+        mLabel = 'انتقال و حواله طرف‌حساب';
+        const targetPerson = (persons || []).find((p: any) => String(p.id) === String(data.targetPersonId || data.resourceId || data.payeeId || data.payerId));
+        const tpName = targetPerson
+          ? (typeof getPersonDisplayName === 'function'
+              ? getPersonDisplayName(targetPerson, persons)
+              : (targetPerson.alias || targetPerson.name || `${targetPerson.firstName || ''} ${targetPerson.lastName || ''}`.trim()))
+          : (data.targetPersonName || data.resourceName || 'طرف‌حساب مقابل');
+        rLabel = `حواله به/از شخص: ${tpName}`;
+        due = 'تسویه مستقیم حساب';
       }
 
       rows.push({

@@ -21,6 +21,17 @@ export default function ThermalInvoiceTemplate({
       : rawTitle;
   
   const relatedPerson = (persons || []).find(p => p && p.id?.toString() === data.customerId?.toString());
+
+  const driverPerson = (persons || []).find((p: any) => p && String(p.id) === String(data.driverPersonId));
+  const receiverPerson = (persons || []).find((p: any) => p && String(p.id) === String(data.receiverPersonId));
+
+  const driverName = data.driverName || driverPerson?.name || driverPerson?.alias || "";
+  const driverPhone = data.driverPhone || driverPerson?.phone || driverPerson?.mobile || "";
+  const receiverName = data.receiverName || receiverPerson?.name || receiverPerson?.alias || "";
+  const receiverPhone = data.receiverPhone || receiverPerson?.phone || receiverPerson?.mobile || "";
+  const vehiclePlateNumber = data.vehiclePlateNumber || "";
+  const shippingAddress = data.shippingAddress || "";
+  const hasLogisticsInfo = Boolean(driverName || driverPhone || receiverName || receiverPhone || vehiclePlateNumber || shippingAddress);
   const allItems = (data.items && Array.isArray(data.items) && data.items.length > 0)
     ? data.items
     : (data.totalAmount || data.totalPrice || data.finalAmount)
@@ -74,6 +85,35 @@ export default function ThermalInvoiceTemplate({
       <div className="flex justify-between border-b border-dashed border-black pb-2 mb-2">
          <span>مشتری: {relatedPerson?.name || "عمومی"}</span>
       </div>
+
+      {hasLogisticsInfo && (
+        <div className="border-b border-dashed border-black pb-1.5 mb-1.5 text-[10px] space-y-0.5">
+          {(driverName || driverPhone) && (
+            <div className="flex justify-between">
+              <span>راننده:</span>
+              <span className="font-bold">{driverName} {driverPhone && `(${toPersianDigits(driverPhone)})`}</span>
+            </div>
+          )}
+          {(receiverName || receiverPhone) && (
+            <div className="flex justify-between">
+              <span>تحویل‌گیرنده:</span>
+              <span className="font-bold">{receiverName} {receiverPhone && `(${toPersianDigits(receiverPhone)})`}</span>
+            </div>
+          )}
+          {vehiclePlateNumber && (
+            <div className="flex justify-between">
+              <span>پلاک/خودرو:</span>
+              <span className="font-bold">{toPersianDigits(vehiclePlateNumber)}</span>
+            </div>
+          )}
+          {shippingAddress && (
+            <div className="pt-0.5">
+              <span>آدرس تحویل: </span>
+              <span className="font-bold">{shippingAddress}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <table className="w-full text-right mb-2">
          <thead>

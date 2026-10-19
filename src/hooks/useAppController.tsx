@@ -857,8 +857,11 @@ const [receiptDate, setReceiptDate] = useState<Date | any>(new Date());
 const [receiptAmount, setReceiptAmount] = useState<string>("");
 
 const [receiptResourceType, setReceiptResourceType] = useState<
-    "bank" | "cashbox"
+    "bank" | "cashbox" | "person"
   >("bank");
+
+const [receiptTargetPersonId, setReceiptTargetPersonId] = useState<string | number | "">("");
+const [receiptTransferDirection, setReceiptTransferDirection] = useState<"from_first_to_second" | "from_second_to_first">("from_first_to_second");
 
 const [receiptMethod, setReceiptMethod] = useState<"cash" | "check">("cash");
 
@@ -2739,9 +2742,37 @@ const checkDebtThreshold = async (personId: string | number) => {
     }
   };
 
-const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
+const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, customData?: any) => {
     e.preventDefault();
-    if (receiptMethod === "cash") {
+    const isPersonTransfer = Boolean(
+      customData?.isPersonTransfer ||
+      receiptResourceType === "person" ||
+      customData?.method === "person_transfer" ||
+      customData?.paymentChannel === "person_transfer"
+    );
+
+    const targetPersonId = customData?.targetPersonId || receiptTargetPersonId || (receiptResourceType === "person" ? receiptResourceId : "");
+    const transferDirection = customData?.transferDirection || receiptTransferDirection || "from_first_to_second";
+
+    if (isPersonTransfer) {
+      if (!receiptPersonId) {
+        customAlert("لطفاً طرف‌حساب اصلی را انتخاب کنید.");
+        return;
+      }
+      if (!targetPersonId) {
+        customAlert("لطفاً طرف‌حساب دوم (مقابل) را انتخاب کنید.");
+        return;
+      }
+      if (String(receiptPersonId) === String(targetPersonId)) {
+        customAlert("طرف‌حساب مبدا و مقصد نمی‌توانند یک شخص باشند.");
+        return;
+      }
+      const numAmount = Number(String(receiptAmount || "").replace(/,/g, ""));
+      if (!numAmount || numAmount <= 0) {
+        customAlert("لطفاً مبلغ انتقال را به درستی وارد کنید.");
+        return;
+      }
+    } else if (receiptMethod === "cash") {
       if (
         !receiptPersonId ||
         !receiptAmount ||
@@ -2765,7 +2796,7 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
       }
     }
 
-    if (type === "pay") {
+    if (type === "pay" && !isPersonTransfer) {
       const person = persons.find(
         (p) => p.id.toString() === receiptPersonId.toString(),
       );
@@ -2848,16 +2879,55 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
     const personObj = (persons || []).find((p: any) => String(p.id) === String(receiptPersonId));
     const resolvedPersonName = formatPersonName(personObj) !== "نامشخص" ? formatPersonName(personObj) : formatPersonName(receiptPersonId, persons);
 
+    let payerId = receiptPersonId;
+    let payeeId = targetPersonId;
+
+    if (isPersonTransfer) {
+      if (type === "receive") {
+        if (transferDirection === "from_second_to_first") {
+          payerId = targetPersonId;
+          payeeId = receiptPersonId;
+        } else {
+          payerId = receiptPersonId;
+          payeeId = targetPersonId;
+        }
+      } else {
+        if (transferDirection === "from_second_to_first") {
+          payeeId = targetPersonId;
+          payerId = receiptPersonId;
+        } else {
+          payeeId = receiptPersonId;
+          payerId = targetPersonId;
+        }
+      }
+    }
+
+    const payerObj = (persons || []).find((p: any) => String(p.id) === String(payerId));
+    const payeeObj = (persons || []).find((p: any) => String(p.id) === String(payeeId));
+    const payerName = payerObj ? (formatPersonName(payerObj) !== "نامشخص" ? formatPersonName(payerObj) : (payerObj.name || "طرف‌حساب پرداخت‌کننده")) : "نامشخص";
+    const payeeName = payeeObj ? (formatPersonName(payeeObj) !== "نامشخص" ? formatPersonName(payeeObj) : (payeeObj.name || "طرف‌حساب دریافت‌کننده")) : "نامشخص";
+
     const nowTimestamp = Date.now();
     const nowDate = new Date(nowTimestamp);
     const nowTimeStr = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
 
     const basePayload: any = {
       type,
-      method: receiptMethod,
+      method: isPersonTransfer ? "person_transfer" : receiptMethod,
+      isPersonTransfer,
       personId: receiptPersonId,
       personName: resolvedPersonName,
       person: personObj,
+      targetPersonId,
+      targetPersonName: payeeId === receiptPersonId ? payerName : payeeName,
+      targetPerson: payeeId === receiptPersonId ? payerObj : payeeObj,
+      transferDirection,
+      payerId,
+      payerName,
+      payerPerson: payerObj,
+      payeeId,
+      payeeName,
+      payeePerson: payeeObj,
       amount: Number(receiptAmount),
       date:
         convertToGregorian(receiptDate),
@@ -2869,12 +2939,14 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
       note: receiptNote,
       receiptNumber: receiptNumber,
       linkedInvoices: { ...receiptLinkedInvoices },
+      resourceType: isPersonTransfer ? "person" : receiptResourceType,
+      resourceId: isPersonTransfer ? targetPersonId : receiptResourceId,
     };
 
-    if (receiptMethod === "cash") {
+    if (!isPersonTransfer && receiptMethod === "cash") {
       basePayload.resourceType = receiptResourceType;
       basePayload.resourceId = receiptResourceId;
-    } else {
+    } else if (!isPersonTransfer) {
       basePayload.checkNumber = receiptCheckNumber;
       basePayload.checkDueDate =
         convertToGregorian(receiptCheckDueDate);
@@ -2896,9 +2968,12 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
     setSubmittingReceipt(true);
     const isReceive = payload.type === "receive";
     const isCheck = payload.method === "check";
+    const isPersonTransfer = Boolean(payload.isPersonTransfer || payload.method === "person_transfer" || payload.resourceType === "person");
 
     startAppProcessing(
-      isCheck
+      isPersonTransfer
+        ? "شروع فرآیند ثبت انتقال بین طرفین حساب..."
+        : isCheck
         ? (isReceive ? "شروع فرآیند دریافت چک..." : "شروع فرآیند پرداخت چک...")
         : (isReceive ? "شروع فرآیند ثبت رسید دریافت..." : "شروع فرآیند ثبت رسید پرداخت...")
     );
@@ -2908,7 +2983,6 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
       updateAppProcessing("مرحله ۱ از ۳: اعتبارسنجی اطلاعات مالی و طرف‌حساب...");
 
       // Concurrency check before persisting:
-      // Ensure receipt number is not already taken by another user/browser tab in the background
       let finalReceiptNumber = payload.receiptNumber;
       const freshTransactions = await getTransactions();
       const isTaken = freshTransactions.some(
@@ -2925,11 +2999,135 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
         ...payload,
         receiptNumber: finalReceiptNumber,
         linkedInvoices: receiptLinkedInvoices,
-        skipAccounting: payload.method === "check"
+        skipAccounting: payload.method === "check" || isPersonTransfer
       };
       let createdReceiptObj: any = { ...payload, receiptNumber: finalReceiptNumber };
 
-      if (payload.method === "check") {
+      if (isPersonTransfer) {
+        updateAppProcessing("مرحله ۲ از ۳: ثبت تراکنش‌های متقابل و صدور سند انتقال بین طرفین حساب...");
+        
+        const payerId = payload.payerId;
+        const payeeId = payload.payeeId;
+        const payerObj = (persons || []).find((p: any) => String(p.id) === String(payerId));
+        const payeeObj = (persons || []).find((p: any) => String(p.id) === String(payeeId));
+        const payerName = payload.payerName || formatPersonName(payerObj) || "طرف پرداخت‌کننده";
+        const payeeName = payload.payeeName || formatPersonName(payeeObj) || "طرف دریافت‌کننده";
+
+        // 1. Transaction 1 (Receive from payer)
+        const txReceive = await addTransaction({
+          type: "receive",
+          method: "person_transfer",
+          resourceType: "person",
+          resourceId: payeeId,
+          personId: payerId,
+          personName: payerName,
+          targetPersonId: payeeId,
+          targetPersonName: payeeName,
+          transferDirection: payload.transferDirection,
+          amount: payload.amount,
+          receiptNumber: finalReceiptNumber,
+          date: payload.date,
+          time: payload.time,
+          rawDate: payload.rawDate,
+          displayDate: payload.displayDate,
+          description: payload.description || `دریافت وجه بابت حواله و انتقال به طرف‌حساب: ${payeeName}`,
+          note: payload.note,
+          linkedInvoices: payload.type === "receive" ? receiptLinkedInvoices : {},
+          skipAccounting: true,
+        });
+
+        // 2. Transaction 2 (Pay to payee)
+        const payReceiptNum = `${finalReceiptNumber}-P`;
+        const txPay = await addTransaction({
+          type: "pay",
+          method: "person_transfer",
+          resourceType: "person",
+          resourceId: payerId,
+          personId: payeeId,
+          personName: payeeName,
+          targetPersonId: payerId,
+          targetPersonName: payerName,
+          transferDirection: payload.transferDirection,
+          amount: payload.amount,
+          receiptNumber: payReceiptNum,
+          originalReceiptNumber: finalReceiptNumber,
+          pairedTransactionId: txReceive.id,
+          date: payload.date,
+          time: payload.time,
+          rawDate: payload.rawDate,
+          displayDate: payload.displayDate,
+          description: payload.description || `پرداخت وجه از محل دریافت از طرف‌حساب: ${payerName}`,
+          note: payload.note,
+          linkedInvoices: payload.type === "pay" ? receiptLinkedInvoices : {},
+          skipAccounting: true,
+        });
+
+        // Link txReceive to txPay
+        await updateTransaction(txReceive.id, { ...txReceive, pairedTransactionId: txPay.id });
+
+        // 3. Balanced Accounting Document
+        const ledgerAccounts = await getLedgerAccounts();
+        const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
+
+        let payerLedgerId = defaultLedger;
+        if (payerObj && payerObj.accountingCode) {
+          const acc = ledgerAccounts.find((a: any) => a.code === payerObj.accountingCode);
+          if (acc) payerLedgerId = acc.id;
+        } else {
+          const acc = ledgerAccounts.find((a: any) => a.code === '21' || a.code === '2101');
+          if (acc) payerLedgerId = acc.id;
+        }
+
+        let payeeLedgerId = defaultLedger;
+        if (payeeObj && payeeObj.accountingCode) {
+          const acc = ledgerAccounts.find((a: any) => a.code === payeeObj.accountingCode);
+          if (acc) payeeLedgerId = acc.id;
+        } else {
+          const acc = ledgerAccounts.find((a: any) => a.code === '13' || a.code === '1301');
+          if (acc) payeeLedgerId = acc.id;
+        }
+
+        const formattedAmt = Number(payload.amount || 0).toLocaleString('fa-IR');
+        const currencyStr = storeSettings?.currency || 'تومان';
+
+        await addAccountingDocument({
+          date: payload.date || new Date().toISOString().split('T')[0],
+          description: `حواله و انتقال وجه بین اشخاص به مبلغ ${formattedAmt} ${currencyStr} - دریافت از [${payerName}] و پرداخت به [${payeeName}] (شماره رسید: ${finalReceiptNumber})`,
+          status: 'approved',
+          sourceType: 'receipt',
+          sourceId: txReceive.id,
+          items: [
+            {
+              description: `پرداخت / انتقال وجه به ${payeeName} از محل دریافت از ${payerName} (رسید شماره ${finalReceiptNumber})`,
+              debit: Number(payload.amount),
+              credit: 0,
+              ledgerAccountId: payeeLedgerId,
+              detailedAccountId: payeeId,
+            },
+            {
+              description: `دریافت / انتقال وجه از ${payerName} و پرداخت به ${payeeName} (رسید شماره ${finalReceiptNumber})`,
+              debit: 0,
+              credit: Number(payload.amount),
+              ledgerAccountId: payerLedgerId,
+              detailedAccountId: payerId,
+            }
+          ]
+        });
+
+        createdReceiptObj = {
+          ...txReceive,
+          pairedTransactionId: txPay.id,
+          isPersonTransfer: true,
+          payerName,
+          payeeName,
+          payerId,
+          payeeId,
+        };
+
+        rollbackActions.push(async () => {
+          await deleteTransaction(txReceive.id.toString());
+        });
+      } else if (payload.method === "check") {
         updateAppProcessing(
           isReceive
             ? "مرحله ۲ از ۳: ثبت چک در دفتر چک‌های دریافتی..."
@@ -3038,6 +3236,8 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
       const typeTmp = payload.type;
 
       setReceiptPersonId("");
+      setReceiptTargetPersonId("");
+      setReceiptTransferDirection("from_first_to_second");
       setReceiptAmount("");
       setReceiptResourceType("bank");
       setReceiptResourceId("");
@@ -3058,7 +3258,9 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent) => {
 
       setLastCreatedReceipt(createdReceiptObj);
       setReceiptSuccessMsg(
-        typeTmp === "receive"
+        isPersonTransfer
+          ? `حواله و انتقال وجه بین طرفین حساب (${payload.payerName} ⬅️ ${payload.payeeName}) با موفقیت در حساب هر دو طرف ثبت گردید`
+          : typeTmp === "receive"
           ? "رسید دریافت با موفقیت صادر شد"
           : "رسید پرداخت با موفقیت صادر شد",
       );
@@ -6913,6 +7115,14 @@ const handleInvoicePreviewTrigger = () => {
           dueDate: invoiceDueDate ? (convertToGregorian(invoiceDueDate)) : null,
               
       customerId,
+      driverPersonId,
+      driverName,
+      driverPhone,
+      receiverPersonId,
+      receiverName,
+      receiverPhone,
+      vehiclePlateNumber,
+      shippingAddress,
       
       sourceInvoiceId, // Pass it correctly
       items: (items || []).map((item) => {
@@ -7239,6 +7449,11 @@ const renderTabContent = () => {
             setReceiptResourceType={setReceiptResourceType}
             receiptResourceId={receiptResourceId}
             setReceiptResourceId={setReceiptResourceId}
+            receiptTargetPersonId={receiptTargetPersonId}
+            setReceiptTargetPersonId={setReceiptTargetPersonId}
+            receiptTransferDirection={receiptTransferDirection}
+            setReceiptTransferDirection={setReceiptTransferDirection}
+            calculatePersonBalance={calculatePersonBalance}
             invoices={invoices}
             getDefaultExchangeRate={getDefaultExchangeRate}
             receiptLinkedInvoices={receiptLinkedInvoices}
@@ -7295,6 +7510,11 @@ const renderTabContent = () => {
             setReceiptResourceType={setReceiptResourceType}
             receiptResourceId={receiptResourceId}
             setReceiptResourceId={setReceiptResourceId}
+            receiptTargetPersonId={receiptTargetPersonId}
+            setReceiptTargetPersonId={setReceiptTargetPersonId}
+            receiptTransferDirection={receiptTransferDirection}
+            setReceiptTransferDirection={setReceiptTransferDirection}
+            calculatePersonBalance={calculatePersonBalance}
             invoices={invoices}
             getDefaultExchangeRate={getDefaultExchangeRate}
             receiptLinkedInvoices={receiptLinkedInvoices}
@@ -7519,6 +7739,10 @@ const renderTabContent = () => {
     sendNotification,
     receiptNumber,
     setReceiptPersonId,
+    receiptTargetPersonId,
+    setReceiptTargetPersonId,
+    receiptTransferDirection,
+    setReceiptTransferDirection,
     printingTransaction,
     setPrintingTransaction,
     receiptLinkedInvoices,

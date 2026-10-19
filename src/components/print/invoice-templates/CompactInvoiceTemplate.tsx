@@ -20,6 +20,17 @@ export default function CompactInvoiceTemplate({
       ? `${rawTitle} (پیش‌نویس)`
       : rawTitle;
   const relatedPerson = (persons || []).find(p => p && p.id?.toString() === data.customerId?.toString());
+
+  const driverPerson = (persons || []).find((p: any) => p && String(p.id) === String(data.driverPersonId));
+  const receiverPerson = (persons || []).find((p: any) => p && String(p.id) === String(data.receiverPersonId));
+
+  const driverName = data.driverName || driverPerson?.name || driverPerson?.alias || "";
+  const driverPhone = data.driverPhone || driverPerson?.phone || driverPerson?.mobile || "";
+  const receiverName = data.receiverName || receiverPerson?.name || receiverPerson?.alias || "";
+  const receiverPhone = data.receiverPhone || receiverPerson?.phone || receiverPerson?.mobile || "";
+  const vehiclePlateNumber = data.vehiclePlateNumber || "";
+  const shippingAddress = data.shippingAddress || "";
+  const hasLogisticsInfo = Boolean(driverName || driverPhone || receiverName || receiverPhone || vehiclePlateNumber || shippingAddress);
   const allItems = (data.items && Array.isArray(data.items) && data.items.length > 0)
     ? data.items
     : (data.totalAmount || data.totalPrice || data.finalAmount)
@@ -82,6 +93,31 @@ export default function CompactInvoiceTemplate({
             آدرس: <span className="font-bold">{relatedPerson?.address || "-"}</span>
          </div>
       </div>
+
+      {hasLogisticsInfo && (
+        <div className="flex flex-wrap justify-between items-center border-b border-gray-300 pb-2 mb-2 text-xs bg-gray-50/80 p-1.5 rounded">
+          {(driverName || driverPhone) && (
+            <div>
+              راننده: <span className="font-bold">{driverName}</span> {driverPhone && <span dir="ltr">({toPersianDigits(driverPhone)})</span>}
+            </div>
+          )}
+          {(receiverName || receiverPhone) && (
+            <div>
+              تحویل‌گیرنده: <span className="font-bold">{receiverName}</span> {receiverPhone && <span dir="ltr">({toPersianDigits(receiverPhone)})</span>}
+            </div>
+          )}
+          {vehiclePlateNumber && (
+            <div>
+              خودرو/پلاک: <span className="font-bold">{toPersianDigits(vehiclePlateNumber)}</span>
+            </div>
+          )}
+          {shippingAddress && (
+            <div className="w-full mt-1 pt-1 border-t border-gray-200">
+              آدرس تحویل: <span className="font-bold">{shippingAddress}</span>
+            </div>
+          )}
+        </div>
+      )}
 
       <table className="w-full text-center border-collapse text-xs mb-2">
          <thead className="bg-gray-100 border-b border-gray-300">

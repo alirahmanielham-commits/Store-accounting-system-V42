@@ -23,7 +23,9 @@ import {
   ChevronDown,
   Layers,
   Check,
-  Zap
+  Zap,
+  ArrowRightLeft,
+  Users
 } from "lucide-react";
 import Select from "react-select";
 import CurrencyInput from "../common/CurrencyInput";
@@ -80,24 +82,40 @@ export default function ReceiveReceiptModal(props: any) {
     formatDateDisplay,
     formatCurrency,
     customAlert,
+    receiptTargetPersonId,
+    setReceiptTargetPersonId,
+    receiptTransferDirection,
+    setReceiptTransferDirection,
+    calculatePersonBalance = props.calculatePersonBalance,
   } = props;
 
-  // Active channel within cash/bank methods
-  const [paymentChannel, setPaymentChannel] = useState<"transfer" | "cashbox" | "pos" | "card">("transfer");
+  // Active channel within payment methods
+  const [paymentChannel, setPaymentChannel] = useState<"transfer" | "cashbox" | "pos" | "card" | "person_transfer">("transfer");
+  const [internalTargetPersonId, setInternalTargetPersonId] = useState<string>(
+    String(receiptTargetPersonId || "")
+  );
+  const [transferDirection, setTransferDirection] = useState<"from_first_to_second" | "from_second_to_first">(
+    receiptTransferDirection || "from_first_to_second"
+  );
   const [trackingNumber, setTrackingNumber] = useState<string>("");
   const [isInvoicesExpanded, setIsInvoicesExpanded] = useState<boolean>(true);
 
-  // Guarantee method is always cash/bank
+  // Guarantee method is cash or person_transfer
   useEffect(() => {
-    if (typeof setReceiptMethod === "function" && receiptMethod !== "cash") {
+    if (typeof setReceiptMethod === "function" && receiptMethod !== "cash" && receiptMethod !== "person_transfer") {
       setReceiptMethod("cash");
     }
   }, [receiptMethod, setReceiptMethod]);
 
   // Sync payment channel with resource type
-  const handleSelectChannel = (channel: "transfer" | "cashbox" | "pos" | "card") => {
+  const handleSelectChannel = (channel: "transfer" | "cashbox" | "pos" | "card" | "person_transfer") => {
     setPaymentChannel(channel);
-    if (channel === "cashbox") {
+    if (channel === "person_transfer") {
+      if (typeof setReceiptResourceType === "function") setReceiptResourceType("person");
+      if (typeof setReceiptResourceId === "function") {
+        setReceiptResourceId(internalTargetPersonId || "");
+      }
+    } else if (channel === "cashbox") {
       if (typeof setReceiptResourceType === "function") setReceiptResourceType("cashbox");
       if (typeof setReceiptResourceId === "function" && cashboxes && cashboxes.length > 0) {
         if (!cashboxes.some((c: any) => String(c.id) === String(receiptResourceId))) {
@@ -112,6 +130,26 @@ export default function ReceiveReceiptModal(props: any) {
         }
       }
     }
+  };
+
+  const handleSelectTargetPerson = (id: string) => {
+    setInternalTargetPersonId(id);
+    if (typeof setReceiptTargetPersonId === "function") {
+      setReceiptTargetPersonId(id);
+    }
+    if (paymentChannel === "person_transfer" && typeof setReceiptResourceId === "function") {
+      setReceiptResourceId(id);
+    }
+  };
+
+  const handleSwapDirection = () => {
+    setTransferDirection((prev) => {
+      const next = prev === "from_first_to_second" ? "from_second_to_first" : "from_first_to_second";
+      if (typeof setReceiptTransferDirection === "function") {
+        setReceiptTransferDirection(next);
+      }
+      return next;
+    });
   };
 
   const themeRing = "focus:ring-emerald-500";
@@ -231,6 +269,23 @@ export default function ReceiveReceiptModal(props: any) {
           setReceiptNote((prev: string) => prev ? `${trackPrefix} - ${prev}` : trackPrefix);
         }
       }
+    }
+
+    if (paymentChannel === "person_transfer") {
+      if (!internalTargetPersonId) {
+        if (typeof customAlert === "function") customAlert("لطفاً طرف‌حساب دوم (مقابل) را انتخاب کنید");
+        return;
+      }
+      if (String(internalTargetPersonId) === String(effectivePersonId)) {
+        if (typeof customAlert === "function") customAlert("طرف‌حساب مبدا و مقصد نمی‌توانند یک شخص باشند");
+        return;
+      }
+      handleSubmitReceipt("receive", e, {
+        isPersonTransfer: true,
+        targetPersonId: internalTargetPersonId,
+        transferDirection,
+      });
+      return;
     }
 
     handleSubmitReceipt("receive", e);
@@ -381,7 +436,7 @@ export default function ReceiveReceiptModal(props: any) {
             <span className="block text-[11px] font-bold text-slate-500 mb-2 px-1">
               روش و کانال دریافت وجه:
             </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
               <button
                 type="button"
                 onClick={() => handleSelectChannel("transfer")}
@@ -392,7 +447,7 @@ export default function ReceiveReceiptModal(props: any) {
                 }`}
               >
                 <Building2 className="w-4 h-4 text-emerald-600" />
-                واریز به حساب / حواله پایا
+                واریز به حساب / حواله
               </button>
 
               <button
@@ -432,6 +487,20 @@ export default function ReceiveReceiptModal(props: any) {
               >
                 <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
                 کارت به کارت
+              </button>
+
+              <button
+                type="button"
+                onClick={() => handleSelectChannel("person_transfer")}
+                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
+                  paymentChannel === "person_transfer"
+                    ? "bg-white text-indigo-700 shadow-sm border border-indigo-300 font-black ring-2 ring-indigo-500/20"
+                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
+                }`}
+                title="دریافت از یک شخص و پرداخت به شخص دیگر و ثبت همزمان در حساب هر دو طرف"
+              >
+                <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
+                حواله بین دو طرف‌حساب
               </button>
             </div>
           </div>
@@ -674,61 +743,267 @@ export default function ReceiveReceiptModal(props: any) {
                   )}
               </div>
 
-              {/* Resource: Bank or Cashbox (3 cols) */}
-              <div className="lg:col-span-3 space-y-2">
-                <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  {receiptResourceType === "bank" ? (
-                    <Building2 className="w-4 h-4 text-emerald-600" />
-                  ) : (
-                    <Wallet className="w-4 h-4 text-emerald-600" />
-                  )}
-                  {receiptResourceType === "bank" ? "حساب بانکی مقصد *" : "صندوق فروشگاهی مقصد *"}
-                </label>
+              {/* Resource: Bank / Cashbox OR Person Target */}
+              {paymentChannel === "person_transfer" ? (
+                <div className="lg:col-span-6 space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-indigo-700 font-black">
+                      <Users className="w-4 h-4 text-indigo-600" />
+                      طرف‌حساب دوم (مقابل) *
+                    </span>
+                    {internalTargetPersonId && (
+                      <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                        {(() => {
+                          const tp = (persons || []).find((p: any) => String(p.id) === String(internalTargetPersonId));
+                          return tp ? `کد: ${toPersianDigits(tp.personCode || tp.id)}` : "";
+                        })()}
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Select
+                        isRtl
+                        value={
+                          internalTargetPersonId
+                            ? (() => {
+                                const tp = (persons || []).find((p: any) => String(p.id) === String(internalTargetPersonId));
+                                return tp ? { value: String(tp.id), label: (tp.personCode ? `[${tp.personCode}] ` : "") + resolvePersonName(tp) } : null;
+                              })()
+                            : null
+                        }
+                        onChange={(opt: any) => handleSelectTargetPerson(opt ? opt.value : "")}
+                        options={effectiveActivePersons
+                          .filter((p: any) => String(p.id) !== String(effectivePersonId))
+                          .map(effectiveMapPerson) as any}
+                        filterOption={customPersonFilter}
+                        placeholder="انتخاب یا جستجوی طرف‌حساب دوم (مقابل)..."
+                        noOptionsMessage={() => "شخص دیگری یافت نشد"}
+                        isClearable
+                        menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                        menuPosition="fixed"
+                        styles={{
+                          menuPortal: (base) => ({ ...base, zIndex: 99999 }),
+                          control: (base) => ({
+                            ...base,
+                            borderRadius: "0.875rem",
+                            borderColor: "#818CF8",
+                            minHeight: "46px",
+                            boxShadow: "none",
+                            backgroundColor: "#EEF2FF",
+                            "&:hover": { borderColor: "#4F46E5" },
+                          }),
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsPersonModalOpen && setIsPersonModalOpen(true)}
+                      className="w-12 h-[46px] shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl flex items-center justify-center transition-colors shadow-2xs"
+                      title="تعریف شخص جدید"
+                    >
+                      <UserPlus className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="lg:col-span-3 space-y-2">
+                    <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      {receiptResourceType === "bank" ? (
+                        <Building2 className="w-4 h-4 text-emerald-600" />
+                      ) : (
+                        <Wallet className="w-4 h-4 text-emerald-600" />
+                      )}
+                      {receiptResourceType === "bank" ? "حساب بانکی مقصد *" : "صندوق فروشگاهی مقصد *"}
+                    </label>
 
-                {receiptResourceType === "bank" ? (
-                  <select
-                    value={receiptResourceId}
-                    onChange={(e) => setReceiptResourceId(e.target.value)}
-                    className="w-full min-h-[48px] p-2.5 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-emerald-500 font-bold text-xs sm:text-sm text-slate-800 outline-none transition-shadow shadow-2xs"
-                    required
-                  >
-                    <option value="">-- انتخاب حساب بانکی --</option>
-                    {(accounts || []).map((acc: any, idx: number) => (
-                      <option key={acc.id ? `rcpt-acc-${acc.id}` : `acc-idx-${idx}`} value={acc.id}>
-                        {acc.bankName} - {acc.accountNumber} ({acc.accountHolder || "اصلی"})
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <select
-                    value={receiptResourceId}
-                    onChange={(e) => setReceiptResourceId(e.target.value)}
-                    className="w-full min-h-[48px] p-2.5 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-emerald-500 font-bold text-xs sm:text-sm text-slate-800 outline-none transition-shadow shadow-2xs"
-                    required
-                  >
-                    <option value="">-- انتخاب صندوق --</option>
-                    {(cashboxes || []).map((cb: any) => (
-                      <option key={cb.id} value={cb.id}>
-                        صندوق: {cb.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
+                    {receiptResourceType === "bank" ? (
+                      <select
+                        value={receiptResourceId}
+                        onChange={(e) => setReceiptResourceId(e.target.value)}
+                        className="w-full min-h-[48px] p-2.5 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-emerald-500 font-bold text-xs sm:text-sm text-slate-800 outline-none transition-shadow shadow-2xs"
+                        required
+                      >
+                        <option value="">-- انتخاب حساب بانکی --</option>
+                        {(accounts || []).map((acc: any, idx: number) => (
+                          <option key={acc.id ? `rcpt-acc-${acc.id}` : `acc-idx-${idx}`} value={acc.id}>
+                            {acc.bankName} - {acc.accountNumber} ({acc.accountHolder || "اصلی"})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={receiptResourceId}
+                        onChange={(e) => setReceiptResourceId(e.target.value)}
+                        className="w-full min-h-[48px] p-2.5 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-emerald-500 font-bold text-xs sm:text-sm text-slate-800 outline-none transition-shadow shadow-2xs"
+                        required
+                      >
+                        <option value="">-- انتخاب صندوق --</option>
+                        {(cashboxes || []).map((cb: any) => (
+                          <option key={cb.id} value={cb.id}>
+                            صندوق: {cb.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
 
-              {/* Tracking / Reference Number (3 cols) */}
-              <div className="lg:col-span-3 space-y-2">
-                <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Hash className="w-4 h-4 text-emerald-600" /> شماره پیگیری / ارجاع واریز
-                </label>
-                <input
-                  type="text"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  placeholder="مثال: ۱۲۴۸۵۹۶۳"
-                  className="w-full min-h-[48px] p-3 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-emerald-500 font-mono text-center font-bold text-xs sm:text-sm text-slate-800 outline-none shadow-2xs"
-                />
-              </div>
+                  {/* Tracking / Reference Number (3 cols) */}
+                  <div className="lg:col-span-3 space-y-2">
+                    <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Hash className="w-4 h-4 text-emerald-600" /> شماره پیگیری / ارجاع واریز
+                    </label>
+                    <input
+                      type="text"
+                      value={trackingNumber}
+                      onChange={(e) => setTrackingNumber(e.target.value)}
+                      placeholder="مثال: ۱۲۴۸۵۹۶۳"
+                      className="w-full min-h-[48px] p-3 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-emerald-500 font-mono text-center font-bold text-xs sm:text-sm text-slate-800 outline-none shadow-2xs"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Person-to-Person Interactive Flow & Balances Panel */}
+              {paymentChannel === "person_transfer" && (
+                <div className="lg:col-span-12 bg-gradient-to-l from-indigo-50/90 via-purple-50/40 to-indigo-50/90 border border-indigo-200 rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-200/70 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <ArrowRightLeft className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm text-indigo-950">
+                          مدیریت و کنترل جریان انتقال بین طرفین
+                        </h4>
+                        <p className="text-[11px] font-medium text-slate-500">
+                          جهت دریافت و پرداخت را مشخص کنید؛ اثر مالی همزمان در حساب هر دو طرف ثبت خواهد شد.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSwapDirection}
+                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer self-start sm:self-auto"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      تعویض جهت انتقال (جابجایی دوطرفه)
+                    </button>
+                  </div>
+
+                  {(() => {
+                    const p1 = selectedPerson;
+                    const p2 = (persons || []).find((p: any) => String(p.id) === String(internalTargetPersonId));
+                    const numAmt = Number(String(receiptAmount || "").replace(/,/g, "")) || 0;
+
+                    const p1Name = p1 ? resolvePersonName(p1) : "طرف اول";
+                    const p2Name = p2 ? resolvePersonName(p2) : "طرف دوم";
+
+                    const p1Bal = p1 && calculatePersonBalance ? calculatePersonBalance(p1.id) : null;
+                    const p2Bal = p2 && calculatePersonBalance ? calculatePersonBalance(p2.id) : null;
+
+                    const isP1Payer = transferDirection === "from_first_to_second";
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 items-center">
+                        {/* Party 1 Card (5 cols) */}
+                        <div className={`md:col-span-5 p-4 rounded-2xl border transition-all ${
+                          isP1Payer
+                            ? "bg-emerald-50/70 border-emerald-200 ring-2 ring-emerald-500/10"
+                            : "bg-rose-50/70 border-rose-200 ring-2 ring-rose-500/10"
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-black text-slate-500">طرف اول:</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              isP1Payer
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}>
+                              {isP1Payer ? "پرداخت‌کننده (مبدا دریافت)" : "دریافت‌کننده (مقصد پرداخت)"}
+                            </span>
+                          </div>
+                          <div className="font-black text-slate-900 text-sm sm:text-base">
+                            {p1Name}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-black/5 text-xs space-y-1">
+                            <div className="flex justify-between text-slate-500">
+                              <span>مانده حساب فعلی:</span>
+                              <span className="font-bold text-slate-800">
+                                {p1Bal ? `${formatCurrency(p1Bal.amount)} ${storeSettings?.currency || "تومان"} (${p1Bal.status})` : "---"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between font-black">
+                              <span className={isP1Payer ? "text-emerald-700" : "text-rose-700"}>
+                                اثر بر حساب:
+                              </span>
+                              <span className={isP1Payer ? "text-emerald-700" : "text-rose-700"}>
+                                {isP1Payer ? "بستانکار می‌شود (کاهش بدهی)" : "بدهکار می‌شود (افزایش بدهی)"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Direction Arrow & Swap Center (2 cols) */}
+                        <div className="md:col-span-2 flex flex-col items-center justify-center text-center p-2">
+                          <button
+                            type="button"
+                            onClick={handleSwapDirection}
+                            className="w-12 h-12 rounded-2xl bg-white border border-indigo-200 hover:border-indigo-400 text-indigo-700 flex items-center justify-center shadow-sm hover:shadow transition-all cursor-pointer group"
+                            title="کلیک برای جابجایی دوطرفه"
+                          >
+                            <ArrowRightLeft className="w-5 h-5 group-hover:scale-110 transition-transform" />
+                          </button>
+                          <div className="mt-2 text-[11px] font-black text-indigo-900">
+                            {numAmt > 0 ? `${formatCurrency(numAmt)} ${storeSettings?.currency || "تومان"}` : "مبلغ انتقال"}
+                          </div>
+                          <span className="text-[10px] text-slate-400 mt-0.5">
+                            {isP1Payer ? `${p1Name} ⬅️ ${p2Name}` : `${p2Name} ⬅️ ${p1Name}`}
+                          </span>
+                        </div>
+
+                        {/* Party 2 Card (5 cols) */}
+                        <div className={`md:col-span-5 p-4 rounded-2xl border transition-all ${
+                          !isP1Payer
+                            ? "bg-emerald-50/70 border-emerald-200 ring-2 ring-emerald-500/10"
+                            : "bg-rose-50/70 border-rose-200 ring-2 ring-rose-500/10"
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-black text-slate-500">طرف دوم (مقابل):</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              !isP1Payer
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}>
+                              {!isP1Payer ? "پرداخت‌کننده (مبدا دریافت)" : "دریافت‌کننده (مقصد پرداخت)"}
+                            </span>
+                          </div>
+                          <div className="font-black text-slate-900 text-sm sm:text-base">
+                            {p2Name}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-black/5 text-xs space-y-1">
+                            <div className="flex justify-between text-slate-500">
+                              <span>مانده حساب فعلی:</span>
+                              <span className="font-bold text-slate-800">
+                                {p2Bal ? `${formatCurrency(p2Bal.amount)} ${storeSettings?.currency || "تومان"} (${p2Bal.status})` : "---"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between font-black">
+                              <span className={!isP1Payer ? "text-emerald-700" : "text-rose-700"}>
+                                اثر بر حساب:
+                              </span>
+                              <span className={!isP1Payer ? "text-emerald-700" : "text-rose-700"}>
+                                {!isP1Payer ? "بستانکار می‌شود (کاهش بدهی)" : "بدهکار می‌شود (افزایش بدهی)"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Note / Description (Full 12 cols) */}
               <div className="lg:col-span-12 space-y-2">

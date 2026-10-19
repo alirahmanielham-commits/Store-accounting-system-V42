@@ -15,6 +15,8 @@ import {
   RefreshCw,
   Info,
   Hash,
+  ArrowRightLeft,
+  Users,
 } from "lucide-react";
 import {
   addCommas,
@@ -30,7 +32,18 @@ export interface ReceiptConfirmationModalProps {
   submitting?: boolean;
   receiptData: {
     type: "receive" | "pay";
-    method: "cash" | "check";
+    method: "cash" | "check" | "person_transfer" | string;
+    isPersonTransfer?: boolean;
+    targetPersonId?: string | number;
+    targetPersonName?: string;
+    targetPerson?: any;
+    transferDirection?: "from_first_to_second" | "from_second_to_first";
+    payerId?: string | number;
+    payerName?: string;
+    payerPerson?: any;
+    payeeId?: string | number;
+    payeeName?: string;
+    payeePerson?: any;
     personId: string | number;
     personName?: string;
     person?: any;
@@ -41,7 +54,7 @@ export interface ReceiptConfirmationModalProps {
     description?: string;
     note?: string;
     receiptNumber?: string;
-    resourceType?: "cashbox" | "bank" | "account" | string;
+    resourceType?: "cashbox" | "bank" | "account" | "person" | string;
     resourceId?: string | number;
     checkNumber?: string;
     checkDueDate?: any;
@@ -82,6 +95,12 @@ export default function ReceiptConfirmationModal({
   const isPay = receiptData.type === "pay";
   const isCash = receiptData.method === "cash";
   const isCheck = receiptData.method === "check";
+  const isPersonTransfer = Boolean(
+    receiptData.isPersonTransfer ||
+    receiptData.method === "person_transfer" ||
+    receiptData.resourceType === "person" ||
+    receiptData.targetPersonId
+  );
 
   const currency = storeSettings?.currency || "تومان";
 
@@ -111,6 +130,46 @@ export default function ReceiptConfirmationModal({
   }
   if (!personName || personName.trim() === "") {
     personName = "نامشخص";
+  }
+
+  // Dual-party transfer payer & payee resolution
+  let payerName = receiptData.payerName || "";
+  let payeeName = receiptData.payeeName || "";
+
+  if (isPersonTransfer && (!payerName || !payeeName)) {
+    const p1 = person;
+    const p2 =
+      receiptData.targetPerson ||
+      persons.find(
+        (p) =>
+          String(p.id) ===
+          String(receiptData.targetPersonId || receiptData.resourceId)
+      );
+
+    const resolveName = (pItem: any, fallback: string) => {
+      if (!pItem) return fallback;
+      if (getPersonDisplayName) {
+        const dName = getPersonDisplayName(pItem) || getPersonDisplayName(pItem.id, persons);
+        if (dName && dName !== "نامشخص") return dName;
+      }
+      return (
+        pItem.alias?.trim() ||
+        pItem.name?.trim() ||
+        `${pItem.firstName || ""} ${pItem.lastName || ""}`.trim() ||
+        fallback
+      );
+    };
+
+    const p1Resolved = resolveName(p1, personName);
+    const p2Resolved = resolveName(p2, receiptData.targetPersonName || "طرف‌حساب مقابل");
+
+    if (receiptData.payerId && receiptData.payeeId) {
+      payerName = String(receiptData.payerId) === String(p1?.id) ? p1Resolved : p2Resolved;
+      payeeName = String(receiptData.payeeId) === String(p1?.id) ? p1Resolved : p2Resolved;
+    } else {
+      payerName = isReceive ? p1Resolved : p2Resolved;
+      payeeName = isReceive ? p2Resolved : p1Resolved;
+    }
   }
 
   // Cashbox / Bank lookup
@@ -354,6 +413,83 @@ export default function ReceiptConfirmationModal({
           </div>
 
           {/* Core Info Grid: Counterparty & Financial Method */}
+          {isPersonTransfer ? (
+            <div className="bg-gradient-to-l from-indigo-50/90 via-purple-50/40 to-indigo-50/90 border border-indigo-200 rounded-2xl p-4 sm:p-5 shadow-xs space-y-4">
+              <div className="flex items-center justify-between border-b border-indigo-200/80 pb-3">
+                <div className="flex items-center gap-2">
+                  <div className="w-8 h-8 rounded-lg bg-indigo-600 text-white flex items-center justify-center">
+                    <ArrowRightLeft className="w-4 h-4" />
+                  </div>
+                  <div>
+                    <h3 className="font-black text-sm text-indigo-950">
+                      حواله و انتقال مستقیم وجه بین دو طرف‌حساب
+                    </h3>
+                    <p className="text-[11px] font-medium text-slate-500 mt-0.5">
+                      ثبت همزمان و خودکار در حساب معین هر دو شخص بدون درگیر شدن صندوق یا حساب بانکی
+                    </p>
+                  </div>
+                </div>
+                <span className="px-2.5 py-1 bg-indigo-100 text-indigo-800 rounded-lg text-xs font-black">
+                  تهاتر و تسویه دوطرفه
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 sm:gap-4">
+                {/* Payer Card */}
+                <div className="bg-white rounded-xl p-3.5 border border-indigo-100 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-400">طرف اول (پرداخت‌کننده وجه):</span>
+                    <span className="px-2 py-0.5 bg-emerald-50 text-emerald-700 border border-emerald-200 rounded text-[10px] font-black">
+                      بستانکار می‌شود ✓
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs">
+                      <User className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-black text-slate-900 text-sm block">
+                        {payerName}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        کاهش بدهی یا افزایش طلبکاری
+                      </span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Payee Card */}
+                <div className="bg-white rounded-xl p-3.5 border border-indigo-100 shadow-2xs space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="text-[11px] font-bold text-slate-400">طرف دوم (دریافت‌کننده وجه):</span>
+                    <span className="px-2 py-0.5 bg-rose-50 text-rose-700 border border-rose-200 rounded text-[10px] font-black">
+                      بدهکار می‌شود ✓
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 font-bold text-xs">
+                      <User className="w-3.5 h-3.5" />
+                    </div>
+                    <div>
+                      <span className="font-black text-slate-900 text-sm block">
+                        {payeeName}
+                      </span>
+                      <span className="text-[10px] text-slate-400">
+                        افزایش بدهی یا تسویه طلبکاری
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-indigo-100/50 rounded-xl p-2.5 text-xs text-indigo-900 flex items-center gap-2 font-medium">
+                <Info className="w-4 h-4 text-indigo-600 shrink-0" />
+                <span>
+                  مبلغ <strong>{formatAmount(receiptData.amount)} {currency}</strong> از حساب <strong>{payerName}</strong> کسر و به حساب <strong>{payeeName}</strong> منظور خواهد شد.
+                </span>
+              </div>
+            </div>
+          ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Counterparty Box */}
             <div className="p-4 bg-white rounded-xl border border-slate-200 shadow-2xs space-y-2.5">
@@ -448,6 +584,7 @@ export default function ReceiptConfirmationModal({
               )}
             </div>
           </div>
+          )}
 
           {/* Linked Invoices (if any) */}
           {linkedEntries.length > 0 && (

@@ -153,9 +153,10 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
            const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));
            if (hasPayslip) return;
            
-           // 1. Calculate work days and overtime from daily logs
+           // 1. Calculate work days, shortage and overtime from daily logs
            let workDaysCount = 0;
            let overtimeCount = 0;
+           let shortageCount = 0;
            
            const personLogs = dailyLogs.filter(l => {
               if (String(l.personId) !== String(a.personId)) return false;
@@ -183,14 +184,21 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                if (diff < 0) diff += 24 * 60;
                let hrs = diff / 60;
                const type = l.recordType || 'work';
-               if (type === 'work') dayWorkH += hrs;
+               if (type === 'work') {
+                 dayWorkH += hrs;
+               } else if (type === 'overtime') {
+                 overtimeCount += hrs;
+               }
              });
              
-             if (dayWorkH >= 8) {
+             if (dayWorkH >= 7.33) {
                workDaysCount += 1;
-               overtimeCount += (dayWorkH - 8);
+               if (dayWorkH > 7.33) {
+                 overtimeCount += (dayWorkH - 7.33);
+               }
              } else if (dayWorkH > 0) {
-               workDaysCount += (dayWorkH / 8);
+               workDaysCount += 1;
+               shortageCount += (7.33 - dayWorkH);
              }
            });
            
@@ -246,7 +254,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
 
            a.workDays = parseFloat(workDaysCount.toFixed(2));
            a.overtimeHours = parseFloat(overtimeCount.toFixed(2));
-           a.shortageHours = 0;
+           a.shortageHours = parseFloat(shortageCount.toFixed(2));
            a.paidLeaveDays = pLeave;
            a.sickLeaveDays = sLeave;
            a.unpaidLeaveDays = uLeave;

@@ -23,7 +23,9 @@ import {
   ChevronDown,
   Layers,
   Check,
-  Zap
+  Zap,
+  ArrowRightLeft,
+  Users
 } from "lucide-react";
 import Select from "react-select";
 import CurrencyInput from "../common/CurrencyInput";
@@ -80,24 +82,40 @@ export default function PayReceiptModal(props: any) {
     formatDateDisplay,
     formatCurrency,
     customAlert,
+    receiptTargetPersonId,
+    setReceiptTargetPersonId,
+    receiptTransferDirection,
+    setReceiptTransferDirection,
+    calculatePersonBalance = props.calculatePersonBalance,
   } = props;
 
   // Active channel within cash/bank payment methods
-  const [paymentChannel, setPaymentChannel] = useState<"transfer" | "cashbox" | "pos" | "card">("transfer");
+  const [paymentChannel, setPaymentChannel] = useState<"transfer" | "cashbox" | "pos" | "card" | "person_transfer">("transfer");
+  const [internalTargetPersonId, setInternalTargetPersonId] = useState<string>(
+    String(receiptTargetPersonId || "")
+  );
+  const [transferDirection, setTransferDirection] = useState<"from_first_to_second" | "from_second_to_first">(
+    receiptTransferDirection || "from_first_to_second"
+  );
   const [trackingNumber, setTrackingNumber] = useState<string>("");
   const [isInvoicesExpanded, setIsInvoicesExpanded] = useState<boolean>(true);
 
-  // Guarantee method is always cash/bank
+  // Guarantee method is always cash or person_transfer
   useEffect(() => {
-    if (typeof setReceiptMethod === "function" && receiptMethod !== "cash") {
+    if (typeof setReceiptMethod === "function" && receiptMethod !== "cash" && receiptMethod !== "person_transfer") {
       setReceiptMethod("cash");
     }
   }, [receiptMethod, setReceiptMethod]);
 
   // Sync payment channel with resource type
-  const handleSelectChannel = (channel: "transfer" | "cashbox" | "pos" | "card") => {
+  const handleSelectChannel = (channel: "transfer" | "cashbox" | "pos" | "card" | "person_transfer") => {
     setPaymentChannel(channel);
-    if (channel === "cashbox") {
+    if (channel === "person_transfer") {
+      if (typeof setReceiptResourceType === "function") setReceiptResourceType("person");
+      if (typeof setReceiptResourceId === "function") {
+        setReceiptResourceId(internalTargetPersonId || "");
+      }
+    } else if (channel === "cashbox") {
       if (typeof setReceiptResourceType === "function") setReceiptResourceType("cashbox");
       if (typeof setReceiptResourceId === "function" && cashboxes && cashboxes.length > 0) {
         if (!cashboxes.some((c: any) => String(c.id) === String(receiptResourceId))) {
@@ -112,6 +130,26 @@ export default function PayReceiptModal(props: any) {
         }
       }
     }
+  };
+
+  const handleSelectTargetPerson = (id: string) => {
+    setInternalTargetPersonId(id);
+    if (typeof setReceiptTargetPersonId === "function") {
+      setReceiptTargetPersonId(id);
+    }
+    if (paymentChannel === "person_transfer" && typeof setReceiptResourceId === "function") {
+      setReceiptResourceId(id);
+    }
+  };
+
+  const handleSwapDirection = () => {
+    setTransferDirection((prev) => {
+      const next = prev === "from_first_to_second" ? "from_second_to_first" : "from_first_to_second";
+      if (typeof setReceiptTransferDirection === "function") {
+        setReceiptTransferDirection(next);
+      }
+      return next;
+    });
   };
 
   const themeRing = "focus:ring-rose-500";
@@ -224,14 +262,21 @@ export default function PayReceiptModal(props: any) {
       return;
     }
 
-    // Prepend tracking number if provided and not yet in note
-    if (trackingNumber.trim()) {
-      const trackPrefix = `کد رهگیری/حواله: ${trackingNumber.trim()}`;
-      if (!receiptNote.includes(trackingNumber.trim())) {
-        if (typeof setReceiptNote === "function") {
-          setReceiptNote((prev: string) => prev ? `${trackPrefix} - ${prev}` : trackPrefix);
-        }
+    if (paymentChannel === "person_transfer") {
+      if (!internalTargetPersonId) {
+        if (typeof customAlert === "function") customAlert("لطفاً طرف‌حساب دوم (مقابل) را انتخاب کنید");
+        return;
       }
+      if (String(internalTargetPersonId) === String(effectivePersonId)) {
+        if (typeof customAlert === "function") customAlert("طرف‌حساب مبدا و مقصد نمی‌توانند یک شخص باشند");
+        return;
+      }
+      handleSubmitReceipt("pay", e, {
+        isPersonTransfer: true,
+        targetPersonId: internalTargetPersonId,
+        transferDirection,
+      });
+      return;
     }
 
     handleSubmitReceipt("pay", e);

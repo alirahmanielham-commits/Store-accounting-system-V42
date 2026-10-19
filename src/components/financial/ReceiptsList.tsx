@@ -12,7 +12,7 @@ import {
   DollarSign, RefreshCw, XCircle, Warehouse, TrendingUp, TrendingDown,
   RotateCcw, AlertCircle, Calendar as CalendarIcon, Tag, Wallet, Ban, Percent,
   ArrowUpDown, Filter, ChevronDown, Landmark, CreditCard, Receipt, ArrowDownLeft,
-  FileCheck, Coins, Zap
+  FileCheck, Coins, Zap, ArrowRightLeft
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import { convertToGregorian, formatDateDisplay, toPersianDigits, toEnglishDigits, addCommas, formatNumber as formatNumberUtil, getActiveStoreSettings } from "../../utils/format";
@@ -157,6 +157,15 @@ export default function ReceiptsList(props: any) {
 
   // Helper to get resource label
   const getResourceLabel = (tx: any): string => {
+    if (tx.resourceType === "person" || tx.method === "person_transfer" || tx.targetPersonId) {
+      const p = persons.find((person: any) => String(person.id) === String(tx.targetPersonId || tx.resourceId));
+      const pName = p
+        ? (typeof getPersonDisplayName === 'function'
+            ? getPersonDisplayName(p, persons)
+            : (p.alias || p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim()))
+        : (tx.targetPersonName || tx.resourceName || "طرف‌حساب مقابل");
+      return `حواله شخص: ${pName}`;
+    }
     if (tx.method === "check") {
       return `چک (${toPersianDigits(tx.checkNumber || "")})`;
     }
@@ -295,23 +304,28 @@ export default function ReceiptsList(props: any) {
       if (resourceTabFilter === 'bank') {
         if (tx.resourceType !== 'bank' && tx.method !== 'bank') return false;
       } else if (resourceTabFilter === 'cashbox') {
-        if (tx.resourceType !== 'cashbox' && tx.resourceType !== 'cash' && tx.method !== 'cash') return false;
+        if ((tx.resourceType !== 'cashbox' && tx.resourceType !== 'cash' && tx.method !== 'cash') || tx.method === 'person_transfer' || tx.resourceType === 'person') return false;
       } else if (resourceTabFilter === 'check') {
         if (tx.method !== 'check') return false;
+      } else if (resourceTabFilter === 'person') {
+        if (tx.resourceType !== 'person' && tx.method !== 'person_transfer' && !tx.targetPersonId) return false;
       } else if (resourceTabFilter === 'salary') {
         if (tx.category !== 'salary' && tx.type !== 'salary') return false;
       }
 
       // 2. Person filter
       if (selectedPersonFilter !== 'all') {
-        if (String(tx.personId) !== String(selectedPersonFilter)) return false;
+        const matchesMain = String(tx.personId) === String(selectedPersonFilter);
+        const matchesTarget = String(tx.targetPersonId || tx.resourceId) === String(selectedPersonFilter);
+        if (!matchesMain && !matchesTarget) return false;
       }
 
       // 3. Resource filter dropdown
       if (selectedResourceFilter !== 'all') {
         if (selectedResourceFilter === 'bank' && tx.resourceType !== 'bank') return false;
-        if (selectedResourceFilter === 'cash' && tx.resourceType !== 'cashbox' && tx.resourceType !== 'cash') return false;
+        if (selectedResourceFilter === 'cash' && (tx.resourceType !== 'cashbox' && tx.resourceType !== 'cash' || tx.method === 'person_transfer' || tx.resourceType === 'person')) return false;
         if (selectedResourceFilter === 'check' && tx.method !== 'check') return false;
+        if (selectedResourceFilter === 'person' && tx.resourceType !== 'person' && tx.method !== 'person_transfer' && !tx.targetPersonId) return false;
       }
 
       // 4. Date filter
@@ -530,8 +544,9 @@ export default function ReceiptsList(props: any) {
           {[
             { id: 'all', label: 'همه روش‌ها', count: baseTxs.length },
             { id: 'bank', label: 'واریز به حساب / پوز بانکی', count: baseTxs.filter((t: any) => t.resourceType === 'bank' || t.method === 'bank').length },
-            { id: 'cashbox', label: 'صندوق نقدی', count: baseTxs.filter((t: any) => t.resourceType === 'cashbox' || t.resourceType === 'cash' || t.method === 'cash').length },
+            { id: 'cashbox', label: 'صندوق نقدی', count: baseTxs.filter((t: any) => (t.resourceType === 'cashbox' || t.resourceType === 'cash' || t.method === 'cash') && t.method !== 'person_transfer' && t.resourceType !== 'person').length },
             { id: 'check', label: 'اسناد دریافتنی / چک', count: baseTxs.filter((t: any) => t.method === 'check').length },
+            { id: 'person', label: 'حواله و انتقال بین اشخاص', count: baseTxs.filter((t: any) => t.resourceType === 'person' || t.method === 'person_transfer' || t.targetPersonId).length },
             ...(!isReceive ? [{ id: 'salary', label: 'پرداخت حقوق و دستمزد', count: baseTxs.filter((t: any) => t.category === 'salary' || t.type === 'salary').length }] : []),
           ].map(tab => {
             const isActive = resourceTabFilter === tab.id;
@@ -766,6 +781,7 @@ export default function ReceiptsList(props: any) {
               <option value="bank">حساب‌های بانکی</option>
               <option value="cash">صندوق‌های نقدی</option>
               <option value="check">اسناد چک</option>
+              <option value="person">حواله طرف‌حساب (بین اشخاص)</option>
             </select>
           </div>
         </div>
@@ -971,7 +987,16 @@ export default function ReceiptsList(props: any) {
 
                     {/* Resource / Method */}
                     <td className="p-4 text-xs font-bold text-slate-700">
-                      <div className="font-black text-slate-800">{resLabel}</div>
+                      {(tx.isPersonTransfer || tx.method === 'person_transfer' || tx.resourceType === 'person' || tx.targetPersonId) ? (
+                        <div className="space-y-1">
+                          <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-black bg-indigo-50 text-indigo-700 border border-indigo-200">
+                            <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                            {resLabel}
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="font-black text-slate-800">{resLabel}</div>
+                      )}
                       {tx.note && (
                         <div className="text-[10px] text-slate-500 font-normal mt-0.5 truncate max-w-xs" title={tx.note}>
                           {tx.note}

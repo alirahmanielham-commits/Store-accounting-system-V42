@@ -1365,7 +1365,7 @@ export default function App() {
                         }} />} />
 
 <Route path="/order_templates" element={<OrderTemplatesManager showNotification={showNotification} />} />
-                          <Route path="/workplaces" element={<WorkplacesManager showNotification={showNotification} />} />
+                          <Route path="/workplaces" element={<WorkplacesManager showNotification={showNotification} personsData={persons} />} />
 
 <Route path="/employee_profiles" element={<EmployeeProfilesManager personsData={persons} fetchPersons={fetchPersons} showNotification={showNotification} />} />
 <Route path="/employee_contracts" element={<ContractsManager personsData={persons} personGroups={personGroups} storeSettings={storeSettings} showNotification={showNotification} DatePicker={DatePicker} persian={persian} persian_fa={persian_fa} />} />
