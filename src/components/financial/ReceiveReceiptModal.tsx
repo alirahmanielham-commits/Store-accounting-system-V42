@@ -431,78 +431,28 @@ export default function ReceiveReceiptModal(props: any) {
             </div>
           )}
 
-          {/* Payment Channel Quick Selector */}
-          <div className="bg-slate-50/80 p-2 sm:p-2.5 rounded-2xl border border-slate-200">
-            <span className="block text-[11px] font-bold text-slate-500 mb-2 px-1">
-              روش و کانال دریافت وجه:
-            </span>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-2">
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("transfer")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "transfer"
-                    ? "bg-white text-emerald-700 shadow-sm border border-emerald-300 font-black ring-2 ring-emerald-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-              >
-                <Building2 className="w-4 h-4 text-emerald-600" />
-                واریز به حساب / حواله
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("cashbox")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "cashbox"
-                    ? "bg-white text-emerald-700 shadow-sm border border-emerald-300 font-black ring-2 ring-emerald-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-              >
-                <Wallet className="w-4 h-4 text-emerald-600" />
-                دریافت نقدی (صندوق)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("pos")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "pos"
-                    ? "bg-white text-emerald-700 shadow-sm border border-emerald-300 font-black ring-2 ring-emerald-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-              >
+          {/* Payment Channel Dropdown Selector */}
+          <div className="bg-slate-50/80 p-3 sm:p-4 rounded-2xl border border-slate-200 space-y-2">
+            <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4 text-emerald-600" />
-                دستگاه کارتخوان (POS)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("card")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "card"
-                    ? "bg-white text-emerald-700 shadow-sm border border-emerald-300 font-black ring-2 ring-emerald-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-              >
-                <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
-                کارت به کارت
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("person_transfer")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "person_transfer"
-                    ? "bg-white text-indigo-700 shadow-sm border border-indigo-300 font-black ring-2 ring-indigo-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-                title="دریافت از یک شخص و پرداخت به شخص دیگر و ثبت همزمان در حساب هر دو طرف"
-              >
-                <ArrowRightLeft className="w-4 h-4 text-indigo-600" />
-                حواله بین دو طرف‌حساب
-              </button>
-            </div>
+                روش و کانال دریافت وجه *
+              </span>
+              <span className="text-[11px] font-medium text-slate-500">
+                {paymentChannel === "person_transfer" ? "تهاتر و انتقال دوجانبه بدون درگیری بانک/صندوق" : "انتخاب حساب یا صندوق مقصد"}
+              </span>
+            </label>
+            <select
+              value={paymentChannel}
+              onChange={(e) => handleSelectChannel(e.target.value as any)}
+              className="w-full min-h-[46px] px-3.5 py-2.5 bg-white border border-slate-300 hover:border-emerald-500 rounded-2xl font-bold text-xs sm:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-emerald-500/20 transition-all shadow-2xs cursor-pointer"
+            >
+              <option value="transfer">واریز به حساب / حواله بانکی (پایا / ساتنا)</option>
+              <option value="cashbox">دریافت نقدی (صندوق فروشگاه)</option>
+              <option value="pos">دستگاه کارتخوان (POS)</option>
+              <option value="card">کارت به کارت</option>
+              <option value="person_transfer">🔗 حواله و انتقال مستقیم بین اشخاص (تهاتر دوجانبه)</option>
+            </select>
           </div>
 
           <form id="receive-receipt-form" onSubmit={onFormSubmit} className="space-y-6">

@@ -2899,22 +2899,12 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
     let payeeId = targetPersonId;
 
     if (isPersonTransfer) {
-      if (type === "receive") {
-        if (transferDirection === "from_second_to_first") {
-          payerId = targetPersonId;
-          payeeId = receiptPersonId;
-        } else {
-          payerId = receiptPersonId;
-          payeeId = targetPersonId;
-        }
+      if (transferDirection === "from_second_to_first") {
+        payerId = targetPersonId;
+        payeeId = receiptPersonId;
       } else {
-        if (transferDirection === "from_second_to_first") {
-          payeeId = targetPersonId;
-          payerId = receiptPersonId;
-        } else {
-          payeeId = receiptPersonId;
-          payerId = targetPersonId;
-        }
+        payerId = receiptPersonId;
+        payeeId = targetPersonId;
       }
     }
 
@@ -3108,20 +3098,20 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
 
         await addAccountingDocument({
           date: payload.date || new Date().toISOString().split('T')[0],
-          description: `حواله و انتقال وجه بین اشخاص به مبلغ ${formattedAmt} ${currencyStr} - دریافت از [${payerName}] و پرداخت به [${payeeName}] (شماره رسید: ${finalReceiptNumber})`,
+          description: `حواله و انتقال وجه بین اشخاص به مبلغ ${formattedAmt} ${currencyStr} - پرداخت از [${payerName}] و دریافت توسط [${payeeName}] (شماره رسید: ${finalReceiptNumber})`,
           status: 'approved',
           sourceType: 'person_transfer',
           sourceId: txReceive.id,
           items: [
             {
-              description: `انتقال / حواله وجه به ${payeeName} از محل دریافت از ${payerName} (رسید شماره ${finalReceiptNumber})`,
+              description: `دریافت وجه طی حواله از ${payerName} (رسید شماره ${finalReceiptNumber})`,
               debit: Number(payload.amount),
               credit: 0,
               ledgerAccountId: payeeLedgerId,
               detailedAccountId: payeeId,
             },
             {
-              description: `انتقال / حواله وجه از ${payerName} و پرداخت به ${payeeName} (رسید شماره ${finalReceiptNumber})`,
+              description: `پرداخت وجه طی حواله به ${payeeName} (رسید شماره ${finalReceiptNumber})`,
               debit: 0,
               credit: Number(payload.amount),
               ledgerAccountId: payerLedgerId,

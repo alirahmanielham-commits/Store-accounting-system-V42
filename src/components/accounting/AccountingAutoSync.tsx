@@ -31,7 +31,7 @@ export default function AccountingAutoSync({ showNotification }: any) {
       const installments = await getInstallments();
 
       const invoiceDocs = (docs || []).filter(d => d.sourceType?.includes('invoice'));
-      const transactionDocs = (docs || []).filter(d => ['receipt', 'payment', 'salary'].includes(d.sourceType || ''));
+      const transactionDocs = (docs || []).filter(d => ['receipt', 'payment', 'salary', 'person_transfer'].includes(d.sourceType || ''));
       const balanceDocs = (docs || []).filter(d => d.sourceType === 'opening_balance');
       const checkDocs = (docs || []).filter(d => d.sourceType?.includes('check'));
       const loanDocs = (docs || []).filter(d => d.sourceType === 'loan');
@@ -42,7 +42,8 @@ export default function AccountingAutoSync({ showNotification }: any) {
         t.method !== 'person_transfer' && 
         t.resourceType !== 'person' && 
         !t.isPersonTransfer &&
-        !transactionDocs.some(d => d.sourceId?.toString() === t.id.toString())
+        !t.skipAccounting &&
+        !transactionDocs.some(d => d.sourceId?.toString() === t.id.toString() || (t.pairedTransactionId && d.sourceId?.toString() === t.pairedTransactionId.toString()))
       );
       
       const mChecks = [...(issuedChecks || []).map(c => ({...c, _isIssued: true})), ...(receivedChecks || []).map(c => ({...c, _isIssued: false}))].filter(c => !checkDocs.some(d => d.sourceId?.toString() === c.id.toString()));

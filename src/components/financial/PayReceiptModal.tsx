@@ -422,64 +422,28 @@ export default function PayReceiptModal(props: any) {
             </div>
           )}
 
-          {/* Payment Channel Quick Selector */}
-          <div className="bg-slate-50/80 p-2 sm:p-2.5 rounded-2xl border border-slate-200">
-            <span className="block text-[11px] font-bold text-slate-500 mb-2 px-1">
-              روش و منبع پرداخت وجه:
-            </span>
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("transfer")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "transfer"
-                    ? "bg-white text-rose-700 shadow-sm border border-rose-300 font-black ring-2 ring-rose-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-              >
-                <Building2 className="w-4 h-4 text-rose-600" />
-                پرداخت بانکی (حواله / پایا)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("cashbox")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "cashbox"
-                    ? "bg-white text-rose-700 shadow-sm border border-rose-300 font-black ring-2 ring-rose-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-              >
-                <Wallet className="w-4 h-4 text-rose-600" />
-                پرداخت نقدی (صندوق)
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("card")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "card"
-                    ? "bg-white text-rose-700 shadow-sm border border-rose-300 font-black ring-2 ring-rose-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-              >
-                <ArrowUpRight className="w-4 h-4 text-rose-600" />
-                کارت به کارت
-              </button>
-
-              <button
-                type="button"
-                onClick={() => handleSelectChannel("pos")}
-                className={`py-3 px-3 rounded-xl font-bold text-xs sm:text-sm flex items-center justify-center gap-2 transition-all ${
-                  paymentChannel === "pos"
-                    ? "bg-white text-rose-700 shadow-sm border border-rose-300 font-black ring-2 ring-rose-500/20"
-                    : "bg-white/60 text-slate-600 hover:bg-white border border-slate-200/70"
-                }`}
-              >
+          {/* Payment Channel Dropdown Selector */}
+          <div className="bg-slate-50/80 p-3 sm:p-4 rounded-2xl border border-slate-200 space-y-2">
+            <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
+              <span className="flex items-center gap-1.5">
                 <CreditCard className="w-4 h-4 text-rose-600" />
-                کارتخوان / درگاه آنلاین
-              </button>
-            </div>
+                روش و کانال پرداخت وجه *
+              </span>
+              <span className="text-[11px] font-medium text-slate-500">
+                {paymentChannel === "person_transfer" ? "تهاتر و انتقال دوجانبه بدون درگیری بانک/صندوق" : "انتخاب حساب یا صندوق مبدا"}
+              </span>
+            </label>
+            <select
+              value={paymentChannel}
+              onChange={(e) => handleSelectChannel(e.target.value as any)}
+              className="w-full min-h-[46px] px-3.5 py-2.5 bg-white border border-slate-300 hover:border-rose-500 rounded-2xl font-bold text-xs sm:text-sm text-slate-800 outline-none focus:ring-2 focus:ring-rose-500/20 transition-all shadow-2xs cursor-pointer"
+            >
+              <option value="transfer">پرداخت بانکی (حواله / پایا / ساتنا)</option>
+              <option value="cashbox">پرداخت نقدی (صندوق فروشگاه)</option>
+              <option value="card">کارت به کارت</option>
+              <option value="pos">کارتخوان / درگاه آنلاین</option>
+              <option value="person_transfer">🔗 حواله و انتقال مستقیم بین اشخاص (تهاتر دوجانبه)</option>
+            </select>
           </div>
 
           <form id="pay-receipt-form" onSubmit={onFormSubmit} className="space-y-6">
@@ -720,61 +684,264 @@ export default function PayReceiptModal(props: any) {
                   )}
               </div>
 
-              {/* Resource: Bank or Cashbox (3 cols) */}
-              <div className="lg:col-span-3 space-y-2">
-                <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  {receiptResourceType === "bank" ? (
-                    <Building2 className="w-4 h-4 text-rose-600" />
-                  ) : (
-                    <Wallet className="w-4 h-4 text-rose-600" />
-                  )}
-                  {receiptResourceType === "bank" ? "پرداخت از حساب بانکی *" : "پرداخت از صندوق *"}
-                </label>
+              {/* Resource: Bank / Cashbox OR Person Target */}
+              {paymentChannel === "person_transfer" ? (
+                <div className="lg:col-span-6 space-y-2">
+                  <label className="block text-xs font-bold text-slate-700 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5 text-indigo-700 font-black">
+                      <Users className="w-4 h-4 text-indigo-600" />
+                      طرف‌حساب دوم (مقابل) *
+                    </span>
+                    {internalTargetPersonId && (
+                      <span className="text-[10px] text-indigo-600 font-bold bg-indigo-50 px-2 py-0.5 rounded-md border border-indigo-200">
+                        {(() => {
+                          const tp = (persons || []).find((p: any) => String(p.id) === String(internalTargetPersonId));
+                          return tp ? `کد: ${toPersianDigits(tp.personCode || tp.id)}` : "";
+                        })()}
+                      </span>
+                    )}
+                  </label>
+                  <div className="flex gap-2">
+                    <div className="flex-1">
+                      <Select
+                        isRtl
+                        value={
+                          internalTargetPersonId
+                            ? (() => {
+                                const tp = (persons || []).find((p: any) => String(p.id) === String(internalTargetPersonId));
+                                return tp ? { value: String(tp.id), label: (tp.personCode ? `[${tp.personCode}] ` : "") + resolvePersonName(tp) } : null;
+                              })()
+                            : null
+                        }
+                        onChange={(opt: any) => handleSelectTargetPerson(opt ? opt.value : "")}
+                        options={effectiveActivePersons
+                          .filter((p: any) => String(p.id) !== String(effectivePersonId))
+                          .map(effectiveMapPerson) as any}
+                        filterOption={customPersonFilter}
+                        placeholder="انتخاب یا جستجوی طرف‌حساب دوم (مقابل)..."
+                        noOptionsMessage={() => "شخص دیگری یافت نشد"}
+                        isClearable
+                        menuPortalTarget={typeof document !== "undefined" ? document.body : null}
+                        menuPosition="fixed"
+                        styles={{
+                          menuPortal: (base) => ({ ...base, zIndex: 99999 }),
+                          control: (base) => ({
+                            ...base,
+                            borderRadius: "0.875rem",
+                            borderColor: "#818CF8",
+                            minHeight: "46px",
+                            boxShadow: "none",
+                            backgroundColor: "#EEF2FF",
+                            "&:hover": { borderColor: "#4F46E5" },
+                          }),
+                        }}
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsPersonModalOpen && setIsPersonModalOpen(true)}
+                      className="w-12 h-[46px] shrink-0 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-2xl flex items-center justify-center transition-colors shadow-2xs"
+                      title="تعریف شخص جدید"
+                    >
+                      <UserPlus className="w-5 h-5" />
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="lg:col-span-3 space-y-2">
+                    <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      {receiptResourceType === "bank" ? (
+                        <Building2 className="w-4 h-4 text-rose-600" />
+                      ) : (
+                        <Wallet className="w-4 h-4 text-rose-600" />
+                      )}
+                      {receiptResourceType === "bank" ? "پرداخت از حساب بانکی *" : "پرداخت از صندوق *"}
+                    </label>
 
-                {receiptResourceType === "bank" ? (
-                  <select
-                    value={receiptResourceId}
-                    onChange={(e) => setReceiptResourceId(e.target.value)}
-                    className="w-full min-h-[48px] p-2.5 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-rose-500 font-bold text-xs sm:text-sm text-slate-800 outline-none transition-shadow shadow-2xs"
-                    required
-                  >
-                    <option value="">-- انتخاب حساب بانکی --</option>
-                    {(accounts || []).map((acc: any, idx: number) => (
-                      <option key={acc.id ? `rcpt-acc-${acc.id}` : `acc-idx-${idx}`} value={acc.id}>
-                        {acc.bankName} - {acc.accountNumber} ({acc.accountHolder || "اصلی"})
-                      </option>
-                    ))}
-                  </select>
-                ) : (
-                  <select
-                    value={receiptResourceId}
-                    onChange={(e) => setReceiptResourceId(e.target.value)}
-                    className="w-full min-h-[48px] p-2.5 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-rose-500 font-bold text-xs sm:text-sm text-slate-800 outline-none transition-shadow shadow-2xs"
-                    required
-                  >
-                    <option value="">-- انتخاب صندوق --</option>
-                    {(cashboxes || []).map((cb: any) => (
-                      <option key={cb.id} value={cb.id}>
-                        صندوق: {cb.name}
-                      </option>
-                    ))}
-                  </select>
-                )}
-              </div>
+                    {receiptResourceType === "bank" ? (
+                      <select
+                        value={receiptResourceId}
+                        onChange={(e) => setReceiptResourceId(e.target.value)}
+                        className="w-full min-h-[48px] p-2.5 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-rose-500 font-bold text-xs sm:text-sm text-slate-800 outline-none transition-shadow shadow-2xs"
+                        required
+                      >
+                        <option value="">-- انتخاب حساب بانکی --</option>
+                        {(accounts || []).map((acc: any, idx: number) => (
+                          <option key={acc.id ? `rcpt-acc-${acc.id}` : `acc-idx-${idx}`} value={acc.id}>
+                            {acc.bankName} - {acc.accountNumber} ({acc.accountHolder || "اصلی"})
+                          </option>
+                        ))}
+                      </select>
+                    ) : (
+                      <select
+                        value={receiptResourceId}
+                        onChange={(e) => setReceiptResourceId(e.target.value)}
+                        className="w-full min-h-[48px] p-2.5 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-rose-500 font-bold text-xs sm:text-sm text-slate-800 outline-none transition-shadow shadow-2xs"
+                        required
+                      >
+                        <option value="">-- انتخاب صندوق --</option>
+                        {(cashboxes || []).map((cb: any) => (
+                          <option key={cb.id} value={cb.id}>
+                            صندوق: {cb.name}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                  </div>
 
-              {/* Tracking / Reference Number (3 cols) */}
-              <div className="lg:col-span-3 space-y-2">
-                <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
-                  <Hash className="w-4 h-4 text-rose-600" /> شماره پیگیری / شماره حواله
-                </label>
-                <input
-                  type="text"
-                  value={trackingNumber}
-                  onChange={(e) => setTrackingNumber(e.target.value)}
-                  placeholder="مثال: ۸۹۵۴۲۱۶۳"
-                  className="w-full min-h-[48px] p-3 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-rose-500 font-mono text-center font-bold text-xs sm:text-sm text-slate-800 outline-none shadow-2xs"
-                />
-              </div>
+                  {/* Tracking / Reference Number (3 cols) */}
+                  <div className="lg:col-span-3 space-y-2">
+                    <label className="block text-xs font-bold text-slate-700 flex items-center gap-1.5">
+                      <Hash className="w-4 h-4 text-rose-600" /> شماره پیگیری / شماره حواله
+                    </label>
+                    <input
+                      type="text"
+                      value={trackingNumber}
+                      onChange={(e) => setTrackingNumber(e.target.value)}
+                      placeholder="مثال: ۸۹۵۴۲۱۶۳"
+                      className="w-full min-h-[48px] p-3 border border-slate-200 bg-white rounded-2xl focus:ring-2 focus:ring-rose-500 font-mono text-center font-bold text-xs sm:text-sm text-slate-800 outline-none shadow-2xs"
+                    />
+                  </div>
+                </>
+              )}
+
+              {/* Person-to-Person Interactive Flow & Balances Panel */}
+              {paymentChannel === "person_transfer" && (
+                <div className="lg:col-span-12 bg-gradient-to-l from-indigo-50/90 via-purple-50/40 to-indigo-50/90 border border-indigo-200 rounded-3xl p-4 sm:p-5 shadow-xs space-y-4">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-indigo-200/70 pb-3">
+                    <div className="flex items-center gap-2">
+                      <div className="w-8 h-8 rounded-xl bg-indigo-600 text-white flex items-center justify-center shrink-0 shadow-xs">
+                        <ArrowRightLeft className="w-4 h-4" />
+                      </div>
+                      <div>
+                        <h4 className="font-black text-sm text-indigo-950">
+                          مدیریت و کنترل جریان انتقال بین طرفین
+                        </h4>
+                        <p className="text-[11px] font-medium text-slate-500">
+                          جهت دریافت و پرداخت را مشخص کنید؛ اثر مالی همزمان در حساب هر دو طرف ثبت خواهد شد.
+                        </p>
+                      </div>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={handleSwapDirection}
+                      className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-black rounded-xl flex items-center justify-center gap-2 shadow-sm transition-all cursor-pointer self-start sm:self-auto"
+                    >
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      تعویض جهت انتقال (جابجایی دوطرفه)
+                    </button>
+                  </div>
+
+                  {(() => {
+                    const p1 = selectedPerson;
+                    const p2 = (persons || []).find((p: any) => String(p.id) === String(internalTargetPersonId));
+                    const numAmt = Number(String(receiptAmount || "").replace(/,/g, "")) || 0;
+
+                    const p1Name = p1 ? resolvePersonName(p1) : "طرف اول";
+                    const p2Name = p2 ? resolvePersonName(p2) : "طرف دوم";
+
+                    const p1Bal = p1 && calculatePersonBalance ? calculatePersonBalance(p1.id) : null;
+                    const p2Bal = p2 && calculatePersonBalance ? calculatePersonBalance(p2.id) : null;
+
+                    const isP1Payer = transferDirection === "from_first_to_second";
+
+                    return (
+                      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 sm:gap-4 items-center">
+                        {/* Party 1 Card (5 cols) */}
+                        <div className={`md:col-span-5 p-4 rounded-2xl border transition-all ${
+                          isP1Payer
+                            ? "bg-emerald-50/70 border-emerald-200 ring-2 ring-emerald-500/10"
+                            : "bg-rose-50/70 border-rose-200 ring-2 ring-rose-500/10"
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-black text-slate-500">طرف اول:</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              isP1Payer
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}>
+                              {isP1Payer ? "پرداخت‌کننده (مبدا دریافت)" : "دریافت‌کننده (مقصد پرداخت)"}
+                            </span>
+                          </div>
+                          <div className="font-black text-slate-900 text-sm sm:text-base">
+                            {p1Name}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-black/5 text-xs space-y-1">
+                            <div className="flex justify-between text-slate-500">
+                              <span>مانده حساب فعلی:</span>
+                              <span className="font-bold text-slate-800">
+                                {p1Bal ? `${formatCurrency(p1Bal.amount)} ${storeSettings?.currency || "تومان"} (${p1Bal.status})` : "---"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between font-black">
+                              <span className={isP1Payer ? "text-emerald-700" : "text-rose-700"}>
+                                اثر بر حساب:
+                              </span>
+                              <span className={isP1Payer ? "text-emerald-700" : "text-rose-700"}>
+                                {isP1Payer ? "بستانکار می‌شود (کاهش بدهی)" : "بدهکار می‌شود (افزایش بدهی)"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Direction Arrow & Swap Center (2 cols) */}
+                        <div className="md:col-span-2 flex flex-col items-center justify-center text-center p-2">
+                          <button
+                            type="button"
+                            onClick={handleSwapDirection}
+                            className="w-10 h-10 rounded-2xl bg-indigo-100 hover:bg-indigo-200 text-indigo-700 flex items-center justify-center shadow-2xs transition-transform active:scale-95 cursor-pointer"
+                            title="تغییر جهت انتقال"
+                          >
+                            <ArrowRightLeft className="w-5 h-5" />
+                          </button>
+                          <span className="text-[10px] font-black text-indigo-900 mt-1">
+                            {numAmt > 0 ? `${toPersianDigits(addCommas(numAmt))} ${storeSettings?.currency || "تومان"}` : "مبلغ انتقال"}
+                          </span>
+                        </div>
+
+                        {/* Party 2 Card (5 cols) */}
+                        <div className={`md:col-span-5 p-4 rounded-2xl border transition-all ${
+                          !isP1Payer
+                            ? "bg-emerald-50/70 border-emerald-200 ring-2 ring-emerald-500/10"
+                            : "bg-rose-50/70 border-rose-200 ring-2 ring-rose-500/10"
+                        }`}>
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-[11px] font-black text-slate-500">طرف دوم (مقابل):</span>
+                            <span className={`text-[10px] font-black px-2 py-0.5 rounded-full ${
+                              !isP1Payer
+                                ? "bg-emerald-100 text-emerald-800"
+                                : "bg-rose-100 text-rose-800"
+                            }`}>
+                              {!isP1Payer ? "پرداخت‌کننده (مبدا دریافت)" : "دریافت‌کننده (مقصد پرداخت)"}
+                            </span>
+                          </div>
+                          <div className="font-black text-slate-900 text-sm sm:text-base">
+                            {p2Name}
+                          </div>
+                          <div className="mt-2 pt-2 border-t border-black/5 text-xs space-y-1">
+                            <div className="flex justify-between text-slate-500">
+                              <span>مانده حساب فعلی:</span>
+                              <span className="font-bold text-slate-800">
+                                {p2Bal ? `${formatCurrency(p2Bal.amount)} ${storeSettings?.currency || "تومان"} (${p2Bal.status})` : "---"}
+                              </span>
+                            </div>
+                            <div className="flex justify-between font-black">
+                              <span className={!isP1Payer ? "text-emerald-700" : "text-rose-700"}>
+                                اثر بر حساب:
+                              </span>
+                              <span className={!isP1Payer ? "text-emerald-700" : "text-rose-700"}>
+                                {!isP1Payer ? "بستانکار می‌شود (کاهش بدهی)" : "بدهکار می‌شود (افزایش بدهی)"}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })()}
+                </div>
+              )}
 
               {/* Note / Description (Full 12 cols) */}
               <div className="lg:col-span-12 space-y-2">

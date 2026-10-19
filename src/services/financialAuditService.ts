@@ -106,10 +106,11 @@ export const scanUnvoucheredFinancials = async (): Promise<UnvoucheredAuditResul
   // 1. Scan Transactions (دریافت، پرداخت، انتقال، هزینه، درآمد)
   (rawTransactions || []).forEach((t: any) => {
     if (t.isDeleted) return;
+    if (t.method === 'person_transfer' || t.resourceType === 'person' || t.isPersonTransfer || t.skipAccounting) return;
     const exists = docs.some(
       (d: any) =>
-        ['receipt', 'payment', 'transfer', 'salary', 'expense', 'income'].includes(d.sourceType || '') &&
-        String(d.sourceId) === String(t.id)
+        ['receipt', 'payment', 'transfer', 'salary', 'expense', 'income', 'person_transfer'].includes(d.sourceType || '') &&
+        (String(d.sourceId) === String(t.id) || (t.pairedTransactionId && String(d.sourceId) === String(t.pairedTransactionId)))
     );
 
     if (!exists) {
