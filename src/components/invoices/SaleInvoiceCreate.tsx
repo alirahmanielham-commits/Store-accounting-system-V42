@@ -12,7 +12,7 @@ import {
     Activity, AlertTriangle, Info, HelpCircle, Bell, Clock, Tag, Bookmark, Star, Heart, ThumbsUp,
     ThumbsDown, Share2, Link, Copy, Paperclip, Mail, MessageCircle, MessageSquare, Send, AtSign,
     Globe, Award, Gift, Coffee
-, Calendar, CornerDownLeft, Sparkles, LayoutGrid, Building2, Zap} from "lucide-react";
+, Calendar, CornerDownLeft, Sparkles, LayoutGrid, Building2, Zap, Truck, UserCheck} from "lucide-react";
 import BulkProductPickerModal from "./BulkProductPickerModal";
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
 import { useDirtyForm } from "../../hooks/useDirtyForm";
@@ -105,7 +105,23 @@ export default function SaleInvoiceCreate(props: any) {
     calculateSubtotal,
     getProductStockInfo,
     invoices,
-    customAlert
+    customAlert,
+    driverPersonId,
+    setDriverPersonId,
+    driverName,
+    setDriverName,
+    driverPhone,
+    setDriverPhone,
+    receiverPersonId,
+    setReceiverPersonId,
+    receiverName,
+    setReceiverName,
+    receiverPhone,
+    setReceiverPhone,
+    vehiclePlateNumber,
+    setVehiclePlateNumber,
+    shippingAddress,
+    setShippingAddress,
   } = props;
   const itemsEndRef = useRef<HTMLDivElement>(null);
   const [isBulkModalOpen, setIsBulkModalOpen] = useState(false);
@@ -855,6 +871,163 @@ export default function SaleInvoiceCreate(props: any) {
                         </option>
                       ))}
                   </select>
+                </div>
+              </div>
+
+              {/* Logistics, Driver & Recipient Info Section */}
+              <div className="mt-5 pt-5 border-t border-indigo-100/80 bg-gradient-to-br from-indigo-50/40 via-white to-blue-50/30 rounded-2xl p-4.5 border border-indigo-100 shadow-xs space-y-4">
+                <div className="flex items-center justify-between flex-wrap gap-2">
+                  <div className="flex items-center gap-2 text-sm font-black text-slate-800">
+                    <span className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-xs">
+                      <Truck className="w-4 h-4" />
+                    </span>
+                    <span>اطلاعات راننده، تحویل‌گیرنده و حمل کالا</span>
+                  </div>
+                  <span className="text-xs text-indigo-700 font-bold bg-indigo-100/60 px-2.5 py-1 rounded-lg">
+                    ثبت مشخصات شخص راننده / تحویل گیرنده فاکتور
+                  </span>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                  {/* Driver Selection */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-black text-slate-700 flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>شخص راننده / متصدی حمل</span>
+                    </label>
+                    <SearchableSelect
+                      options={(activePersonsOnly || []).map((p: any) => ({
+                        value: p.id,
+                        label: p.alias || p.name,
+                        subLabel: p.phone || p.mobile || undefined,
+                        badge: getRoleName ? getRoleName(p.role) : undefined,
+                        imageUrl: p.imageUrl,
+                        searchStr: `${p.alias || ""} ${p.name || ""} ${p.phone || ""} ${p.mobile || ""}`,
+                      }))}
+                      value={driverPersonId || ""}
+                      onChange={(val: any) => {
+                        if (setDriverPersonId) setDriverPersonId(val);
+                        const foundPerson = (activePersonsOnly || []).find((p: any) => String(p.id) === String(val));
+                        if (foundPerson) {
+                          if (setDriverName) setDriverName(foundPerson.name || foundPerson.alias || "");
+                          if (setDriverPhone) setDriverPhone(foundPerson.phone || foundPerson.mobile || "");
+                        }
+                      }}
+                      placeholder="-- انتخاب راننده از لیست اشخاص --"
+                      searchPlaceholder="جستجوی راننده..."
+                    />
+                    <div className="flex gap-1.5 pt-1">
+                      <input
+                        type="text"
+                        value={driverName || ""}
+                        onChange={(e) => setDriverName && setDriverName(e.target.value)}
+                        placeholder="نام راننده..."
+                        className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={driverPhone || ""}
+                        onChange={(e) => setDriverPhone && setDriverPhone(e.target.value)}
+                        placeholder="شماره تماس..."
+                        className="w-32 p-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Recipient Selection */}
+                  <div className="space-y-1.5">
+                    <div className="flex items-center justify-between">
+                      <label className="block text-xs font-black text-slate-700 flex items-center gap-1.5">
+                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>شخص تحویل‌گیرنده کالا</span>
+                      </label>
+                      {customerId && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            const foundCustomer = (activePersonsOnly || []).find((p: any) => String(p.id) === String(customerId));
+                            if (foundCustomer) {
+                              if (setReceiverPersonId) setReceiverPersonId(foundCustomer.id);
+                              if (setReceiverName) setReceiverName(foundCustomer.name || foundCustomer.alias || "");
+                              if (setReceiverPhone) setReceiverPhone(foundCustomer.phone || foundCustomer.mobile || "");
+                            }
+                          }}
+                          className="text-[11px] text-indigo-600 hover:text-indigo-800 font-extrabold underline cursor-pointer"
+                        >
+                          خود مشتری
+                        </button>
+                      )}
+                    </div>
+                    <SearchableSelect
+                      options={(activePersonsOnly || []).map((p: any) => ({
+                        value: p.id,
+                        label: p.alias || p.name,
+                        subLabel: p.phone || p.mobile || undefined,
+                        badge: getRoleName ? getRoleName(p.role) : undefined,
+                        imageUrl: p.imageUrl,
+                        searchStr: `${p.alias || ""} ${p.name || ""} ${p.phone || ""} ${p.mobile || ""}`,
+                      }))}
+                      value={receiverPersonId || ""}
+                      onChange={(val: any) => {
+                        if (setReceiverPersonId) setReceiverPersonId(val);
+                        const foundPerson = (activePersonsOnly || []).find((p: any) => String(p.id) === String(val));
+                        if (foundPerson) {
+                          if (setReceiverName) setReceiverName(foundPerson.name || foundPerson.alias || "");
+                          if (setReceiverPhone) setReceiverPhone(foundPerson.phone || foundPerson.mobile || "");
+                        }
+                      }}
+                      placeholder="-- انتخاب تحویل‌گیرنده --"
+                      searchPlaceholder="جستجوی تحویل‌گیرنده..."
+                    />
+                    <div className="flex gap-1.5 pt-1">
+                      <input
+                        type="text"
+                        value={receiverName || ""}
+                        onChange={(e) => setReceiverName && setReceiverName(e.target.value)}
+                        placeholder="نام تحویل‌گیرنده..."
+                        className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                      <input
+                        type="text"
+                        dir="ltr"
+                        value={receiverPhone || ""}
+                        onChange={(e) => setReceiverPhone && setReceiverPhone(e.target.value)}
+                        placeholder="شماره تماس..."
+                        className="w-32 p-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Vehicle Plate */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-black text-slate-700 flex items-center gap-1.5">
+                      <Truck className="w-3.5 h-3.5 text-amber-600" />
+                      <span>پلاک / مشخصات خودرو</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={vehiclePlateNumber || ""}
+                      onChange={(e) => setVehiclePlateNumber && setVehiclePlateNumber(e.target.value)}
+                      placeholder="مثال: کامیون بنز - ۶۸ / ۱۲۳ ب ۴۵"
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
+
+                  {/* Shipping Address */}
+                  <div className="space-y-1.5">
+                    <label className="block text-xs font-black text-slate-700 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-rose-600" />
+                      <span>محل تخلیه / آدرس تحویل</span>
+                    </label>
+                    <input
+                      type="text"
+                      value={shippingAddress || ""}
+                      onChange={(e) => setShippingAddress && setShippingAddress(e.target.value)}
+                      placeholder="نشانی کامل محل تخلیه کالا..."
+                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                    />
+                  </div>
                 </div>
               </div>
 

@@ -1154,6 +1154,16 @@ const [date, setDate] = useState<Date | any>(new Date());
 const [invoiceDueDate, setInvoiceDueDate] = useState<Date | any | null>(null);
 
 const [customerId, setCustomerId] = useState<string | number | "">("");
+const [driverPersonId, setDriverPersonId] = useState<string | number | "">("");
+const [driverName, setDriverName] = useState("");
+const [driverPhone, setDriverPhone] = useState("");
+
+const [receiverPersonId, setReceiverPersonId] = useState<string | number | "">("");
+const [receiverName, setReceiverName] = useState("");
+const [receiverPhone, setReceiverPhone] = useState("");
+
+const [vehiclePlateNumber, setVehiclePlateNumber] = useState("");
+const [shippingAddress, setShippingAddress] = useState("");
 
 const [sourceInvoiceId, setSourceInvoiceId] = useState<string | number | "">(
     "",
@@ -1495,6 +1505,14 @@ const clearDraft = async () => {
     localStorage.removeItem("invoice_draft");
     setHasDraft(false);
     setCustomerId("");
+    setDriverPersonId("");
+    setDriverName("");
+    setDriverPhone("");
+    setReceiverPersonId("");
+    setReceiverName("");
+    setReceiverPhone("");
+    setVehiclePlateNumber("");
+    setShippingAddress("");
     setItems([]);
     setOverallDiscountPercent(0);
     setSourceInvoiceId("");
@@ -5132,6 +5150,14 @@ const handleEditInvoiceAction = async (inv: any) => {
       setInvoiceType(inv.type);
       setInvoiceCurrency(inv.currency || storeSettings.currency);
       setCustomerId(inv.customerId);
+      setDriverPersonId(inv.driverPersonId || "");
+      setDriverName(inv.driverName || "");
+      setDriverPhone(inv.driverPhone || "");
+      setReceiverPersonId(inv.receiverPersonId || "");
+      setReceiverName(inv.receiverName || "");
+      setReceiverPhone(inv.receiverPhone || "");
+      setVehiclePlateNumber(inv.vehiclePlateNumber || "");
+      setShippingAddress(inv.shippingAddress || "");
       setInvoiceWarehouseId(inv.warehouseId || inv.items?.find((i: any) => i?.warehouseId)?.warehouseId || "");
       setSourceInvoiceId(inv.sourceInvoiceId || "");
       setItems((inv.items || []).map((i: any) => ({ ...i, id: i.id || generateId() })));
@@ -5793,6 +5819,14 @@ const getInvoiceNumber = (typeOverride?: string) => {
           date: customPayload.date !== undefined ? convertToGregorian(customPayload.date) : convertToGregorian(date),
           dueDate: (customPayload.dueDate !== undefined ? convertToGregorian(customPayload.dueDate) : (invoiceDueDate ? convertToGregorian(invoiceDueDate) : null)),
           customerId: customPayload.customerId !== undefined ? customPayload.customerId : customerId,
+          driverPersonId: customPayload.driverPersonId !== undefined ? customPayload.driverPersonId : driverPersonId,
+          driverName: customPayload.driverName !== undefined ? customPayload.driverName : driverName,
+          driverPhone: customPayload.driverPhone !== undefined ? customPayload.driverPhone : driverPhone,
+          receiverPersonId: customPayload.receiverPersonId !== undefined ? customPayload.receiverPersonId : receiverPersonId,
+          receiverName: customPayload.receiverName !== undefined ? customPayload.receiverName : receiverName,
+          receiverPhone: customPayload.receiverPhone !== undefined ? customPayload.receiverPhone : receiverPhone,
+          vehiclePlateNumber: customPayload.vehiclePlateNumber !== undefined ? customPayload.vehiclePlateNumber : vehiclePlateNumber,
+          shippingAddress: customPayload.shippingAddress !== undefined ? customPayload.shippingAddress : shippingAddress,
           sourceInvoiceId: customPayload.sourceInvoiceId !== undefined ? customPayload.sourceInvoiceId : sourceInvoiceId,
           items: rawItems,
           overallDiscountPercent: customPayload.overallDiscountPercent !== undefined ? customPayload.overallDiscountPercent : overallDiscountPercent,
@@ -5816,8 +5850,15 @@ const getInvoiceNumber = (typeOverride?: string) => {
           date:
             convertToGregorian(date),
           dueDate: invoiceDueDate ? (convertToGregorian(invoiceDueDate)) : null,
-                      
           customerId,
+          driverPersonId,
+          driverName,
+          driverPhone,
+          receiverPersonId,
+          receiverName,
+          receiverPhone,
+          vehiclePlateNumber,
+          shippingAddress,
           sourceInvoiceId,
           items: baseItems,
           overallDiscountPercent,
@@ -7296,7 +7337,7 @@ const renderTabContent = () => {
 
       case "create_sale":
         return (
-          <SaleInvoiceCreate invoiceDueDate={invoiceDueDate} setInvoiceDueDate={setInvoiceDueDate} setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Plus={Plus} Trash2={Trash2} CheckCircle={CheckCircle} History={History} Save={Save} ShoppingCart={ShoppingCart} RefreshCw={RefreshCw} FileText={FileText} Info={Info} Tag={Tag} invoiceType={invoiceType} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} calculateProductCurrentStock={calculateProductCurrentStock} formatProductStockDetails={formatProductStockDetails} activeTab={activeTab} calculateSubtotal={calculateSubtotal} getProductStockInfo={getProductStockInfo} invoices={invoices} customAlert={customAlert} />
+          <SaleInvoiceCreate driverPersonId={driverPersonId} setDriverPersonId={setDriverPersonId} driverName={driverName} setDriverName={setDriverName} driverPhone={driverPhone} setDriverPhone={setDriverPhone} receiverPersonId={receiverPersonId} setReceiverPersonId={setReceiverPersonId} receiverName={receiverName} setReceiverName={setReceiverName} receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone} vehiclePlateNumber={vehiclePlateNumber} setVehiclePlateNumber={setVehiclePlateNumber} shippingAddress={shippingAddress} setShippingAddress={setShippingAddress} invoiceDueDate={invoiceDueDate} setInvoiceDueDate={setInvoiceDueDate} setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Plus={Plus} Trash2={Trash2} CheckCircle={CheckCircle} History={History} Save={Save} ShoppingCart={ShoppingCart} RefreshCw={RefreshCw} FileText={FileText} Info={Info} Tag={Tag} invoiceType={invoiceType} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} calculateProductCurrentStock={calculateProductCurrentStock} formatProductStockDetails={formatProductStockDetails} activeTab={activeTab} calculateSubtotal={calculateSubtotal} getProductStockInfo={getProductStockInfo} invoices={invoices} customAlert={customAlert} />
         );
 
       case "sales_report":

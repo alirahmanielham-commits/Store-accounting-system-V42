@@ -270,6 +270,14 @@ export type Invoice = {
   dueDate?: string | null;
   customerId?: string | number;
   customerName?: string;
+  driverPersonId?: string | number;
+  driverName?: string;
+  driverPhone?: string;
+  receiverPersonId?: string | number;
+  receiverName?: string;
+  receiverPhone?: string;
+  vehiclePlateNumber?: string;
+  shippingAddress?: string;
   personId?: string | number;
   sourceInvoiceId?: string | number;
   sourceInvoiceNumber?: string;
