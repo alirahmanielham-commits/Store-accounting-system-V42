@@ -32,6 +32,7 @@ export default function Sidebar({ appState, isCollapsed, isDarkMode }: SidebarPr
       label: 'حسابداری و مالی',
       icon: <Calculator className="w-[18px] h-[18px]" />,
       subItems: [
+        { id: 'keyboard_receipt', label: 'ثبت رسید با کیبورد', action: () => setActiveTab('keyboard_receipt') },
         { id: 'financial_report', label: 'گزارشات', action: () => setActiveTab('financial_report') },
         { id: 'account_ledger', label: 'دفتر حساب‌ها', action: () => setActiveTab('account_ledger') },
         { id: 'accounts', label: 'حساب‌های بانکی', action: () => setActiveTab('accounts') },

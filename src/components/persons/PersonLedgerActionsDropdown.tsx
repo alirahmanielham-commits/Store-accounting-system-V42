@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { MoreVertical, DownloadCloud, Activity, Settings, Printer, Edit2, ShoppingCart, RefreshCw, Send, X, Package, Shield, Share2, ChevronDown, FileText, ArrowDownToLine, ArrowUpFromLine, Download } from 'lucide-react';
+import { MoreVertical, DownloadCloud, Activity, Settings, Printer, Edit2, ShoppingCart, RefreshCw, Send, X, Package, Shield, Share2, ChevronDown, FileText, ArrowDownToLine, ArrowUpFromLine, Download, Zap } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import html2pdf from "html2pdf.js";
 import { safePrint } from '../../utils/printHelper';
@@ -142,6 +142,17 @@ function PersonLedgerActionsDropdown({
             >
               <div className="w-6 h-6 rounded-md bg-rose-100 flex items-center justify-center"><ArrowUpFromLine className="w-3.5 h-3.5 text-rose-600" /></div> 
               ثبت رسید پرداخت
+            </button>
+            <button
+              onClick={() => {
+                setIsOpen(false);
+                setActiveTab?.("keyboard_receipt");
+                setReceiptPersonId(ledgerPersonId);
+              }}
+              className="w-full text-right px-3 py-2 text-sm rounded-xl hover:bg-amber-50 text-slate-700 hover:text-amber-800 font-semibold flex items-center gap-2 transition-colors"
+            >
+              <div className="w-6 h-6 rounded-md bg-amber-100 flex items-center justify-center"><Zap className="w-3.5 h-3.5 text-amber-600 animate-pulse" /></div> 
+              ثبت رسید با کیبورد (سریع)
             </button>
 
             <div className="text-xs font-bold text-slate-400 px-3 pb-2 pt-2 border-b border-t border-slate-50 my-1">امکانات</div>

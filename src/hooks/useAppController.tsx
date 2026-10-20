@@ -7425,6 +7425,7 @@ const renderTabContent = () => {
             calculatePersonBalance={calculatePersonBalance}
             onClose={() => setRawActiveTab("list_receive_receipt")}
             showNotification={showNotification}
+            initialPersonId={receiptPersonId}
           />
         );
       case "create_receive_receipt":

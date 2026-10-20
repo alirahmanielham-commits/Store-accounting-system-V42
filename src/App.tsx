@@ -1894,6 +1894,33 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                     </div>
                   </button>
 
+                  {/* Shortcut Item - Keyboard Receipt */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setRawActiveTab("keyboard_receipt");
+                      setIsComposeOpen(false);
+                    }}
+                    className="p-4 border border-slate-200 hover:border-amber-500/50 hover:bg-amber-50/20 rounded-2xl text-right flex gap-4 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer md:col-span-2"
+                  >
+                    <div className="w-11 h-11 bg-amber-50 text-amber-600 rounded-xl flex-shrink-0 flex items-center justify-center font-bold text-lg">
+                      ⌨️
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-extrabold text-sm text-slate-800">
+                          ثبت رسید سریع با کیبورد (بدون ماوس)
+                        </h4>
+                        <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                          سریع و آسان
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        ثبت دریافت وجه، پرداخت وجه و حواله بین طرفین حساب با اعداد و کلیدهای میانبر کیبورد.
+                      </p>
+                    </div>
+                  </button>
+
                   {/* Shortcut Item 5 */}
                   <button
                     type="button"
