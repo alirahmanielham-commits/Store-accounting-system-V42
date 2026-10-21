@@ -1,5 +1,5 @@
 import { exportToExcel, formatDecimalForExcel } from "../utils/exportUtils";
-import { autoGenerateRentCommitments } from "../services/hrService";
+import { autoGenerateRentCommitments, settleRentInstallmentWithPayment } from "../services/hrService";
 import { hasPagePermission, getPageTitle } from "../utils/permissionUtils";
 import { suspendAppDataChanged, resumeAppDataChanged, invalidateCache, getAuthHeaders } from "../services/coreService";
 import { syncBusinessDataToIndexedDb } from "../services/indexedDbService";
@@ -2945,6 +2945,7 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
       note: receiptNote,
       receiptNumber: receiptNumber,
       linkedInvoices: { ...receiptLinkedInvoices },
+      linkedRentInstallment: customData?.linkedRentInstallment || null,
       resourceType: isPersonTransfer ? "person" : receiptResourceType,
       resourceId: isPersonTransfer ? targetPersonId : receiptResourceId,
     };
@@ -3249,6 +3250,27 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
             }
           })
         );
+      }
+
+      // Settle linked rent contract installment if present
+      if (payload.linkedRentInstallment) {
+        try {
+          updateAppProcessing("به‌روزرسانی و تسویه تعهد قرارداد اجاره...");
+          await settleRentInstallmentWithPayment(
+            payload.linkedRentInstallment.contractId,
+            payload.linkedRentInstallment.installmentId,
+            {
+              paymentDocId: finalReceiptNumber || createdReceiptObj?.receiptNumber || String(createdReceiptObj?.id || ''),
+              amount: Number(payload.amount),
+              paidDate: payload.date || new Date().toISOString(),
+              paymentMethod: payload.method === 'cash' ? payload.resourceType : payload.method,
+              paymentSourceId: payload.resourceId,
+              paymentRefNumber: payload.receiptNumber || payload.trackingNumber,
+            }
+          );
+        } catch (rErr) {
+          console.error("Failed to settle rent installment in confirmReceiptSubmit:", rErr);
+        }
       }
 
       const typeTmp = payload.type;

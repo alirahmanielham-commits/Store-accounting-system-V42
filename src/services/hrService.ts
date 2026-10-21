@@ -350,3 +350,85 @@ export const getPendingRentCommitments = async () => {
     return [];
   }
 };
+
+export const settleRentInstallmentWithPayment = async (
+  contractId: string | number,
+  installmentId: string,
+  paymentInfo: {
+    paymentDocId: string;
+    amount: number;
+    paidDate?: string;
+    paymentMethod?: 'cashbox' | 'bank' | string | null;
+    paymentSourceId?: string | null;
+    paymentRefNumber?: string | null;
+  }
+) => {
+  try {
+    const contracts = await getRentContracts();
+    const contract = contracts.find(c => String(c.id) === String(contractId));
+    if (!contract) return null;
+
+    const updatedSchedule = (contract.schedule || []).map((inst: any) => {
+      if (inst.id === installmentId) {
+        const currentPaid = Number(inst.paidAmount) || 0;
+        const newPaid = currentPaid + Number(paymentInfo.amount);
+        const isFullyPaid = newPaid >= Number(inst.amount);
+        return {
+          ...inst,
+          paymentStatus: isFullyPaid ? 'paid' : 'unpaid',
+          paidAmount: newPaid,
+          paymentDocId: paymentInfo.paymentDocId,
+          paidDate: paymentInfo.paidDate || new Date().toISOString(),
+          paymentMethod: paymentInfo.paymentMethod || null,
+          paymentSourceId: paymentInfo.paymentSourceId || null,
+          paymentRefNumber: paymentInfo.paymentRefNumber || null
+        };
+      }
+      return inst;
+    });
+
+    const updated = { ...contract, schedule: updatedSchedule };
+    await updateRentContract(contract.id, updated);
+    return updated;
+  } catch (err) {
+    console.error('Error settling rent installment:', err);
+    throw err;
+  }
+};
+
+export const getCommittedRentInstallmentsForPerson = async (personId: string | number) => {
+  try {
+    const contracts = await getRentContracts();
+    const activeContracts = contracts.filter(c => 
+      String(c.personId) === String(personId) && c.status === 'active'
+    );
+    
+    const pendingItems: Array<{
+      contractId: string | number;
+      contractNumber: string;
+      installment: any;
+      remainingAmount: number;
+    }> = [];
+
+    for (const c of activeContracts) {
+      for (const inst of (c.schedule || [])) {
+        if (inst.commitmentStatus === 'committed' && inst.paymentStatus !== 'paid') {
+          const remaining = Math.max(0, Number(inst.amount || 0) - (Number(inst.paidAmount) || 0));
+          if (remaining > 0) {
+            pendingItems.push({
+              contractId: c.id,
+              contractNumber: c.contractNumber || '',
+              installment: inst,
+              remainingAmount: remaining
+            });
+          }
+        }
+      }
+    }
+
+    return pendingItems;
+  } catch (err) {
+    console.error('Error getting committed rent installments for person:', err);
+    return [];
+  }
+};

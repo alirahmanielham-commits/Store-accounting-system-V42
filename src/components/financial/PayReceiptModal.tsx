@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { addCommas } from "../../utils/format";
+import { addCommas, convertToGregorian } from "../../utils/format";
 import { motion, AnimatePresence } from "framer-motion";
 import {
   RefreshCw,
@@ -25,7 +25,10 @@ import {
   Check,
   Zap,
   ArrowRightLeft,
-  Users
+  Users,
+  Home,
+  KeyRound,
+  ShieldCheck
 } from "lucide-react";
 import Select from "react-select";
 import CurrencyInput from "../common/CurrencyInput";
@@ -33,6 +36,17 @@ import CustomDatePicker from "../ui/CustomDatePicker";
 const DatePicker = CustomDatePicker;
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
+import { 
+  getCommittedRentInstallmentsForPerson, 
+  settleRentInstallmentWithPayment, 
+  ensurePayableAccount 
+} from "../../services/hrService";
+import { 
+  addTransaction, 
+  getPersons, 
+  getAccounts, 
+  getCashboxes 
+} from "../../services/dataService";
 
 export default function PayReceiptModal(props: any) {
   const { isOpen, onClose, ...rest } = props;
@@ -59,9 +73,9 @@ export default function PayReceiptModal(props: any) {
     receiptNote,
     setReceiptNote,
     formatNumber,
-    submittingReceipt,
+    submittingReceipt: externalSubmittingReceipt,
     lastCreatedReceipt,
-    toPersianDigits,
+    toPersianDigits = (s: any) => String(s ?? ''),
     storeSettings,
     setPrintingTransaction,
     setLastCreatedReceipt,
@@ -71,23 +85,41 @@ export default function PayReceiptModal(props: any) {
     mapPersonToOption,
     customPersonFilter,
     renderPersonInfoBox,
-    numToPersianWords,
+    numToPersianWords = (s: any) => '',
     receiptResourceType,
     setReceiptResourceType,
     receiptResourceId,
     setReceiptResourceId,
     invoices,
     getDefaultExchangeRate,
-    receiptLinkedInvoices,
-    formatDateDisplay,
-    formatCurrency,
-    customAlert,
+    receiptLinkedInvoices = {},
+    formatDateDisplay = (d: any) => String(d ?? ''),
+    formatCurrency = (c: any) => addCommas(c),
+    customAlert = (msg: string) => alert(msg),
     receiptTargetPersonId,
     setReceiptTargetPersonId,
     receiptTransferDirection,
     setReceiptTransferDirection,
     calculatePersonBalance = props.calculatePersonBalance,
   } = props;
+
+  // Standalone fallback states in case props aren't provided by parent
+  const [internalPersonId, setInternalPersonId] = useState<string>(String(props.initialPersonId || props.personId || ""));
+  const [internalAmount, setInternalAmount] = useState<string>(props.initialAmount ? String(props.initialAmount) : "");
+  const [internalDate, setInternalDate] = useState<any>(new Date());
+  const [internalNote, setInternalNote] = useState<string>(props.initialNote || "");
+  const [internalResourceType, setInternalResourceType] = useState<string>("bank");
+  const [internalResourceId, setInternalResourceId] = useState<string>("");
+  const [internalLinkedInvoices, setInternalLinkedInvoices] = useState<any>({});
+  const [internalPersons, setInternalPersons] = useState<any[]>(persons || []);
+  const [internalAccounts, setInternalAccounts] = useState<any[]>(accounts || []);
+  const [internalCashboxes, setInternalCashboxes] = useState<any[]>(cashboxes || []);
+  const [internalSubmitting, setInternalSubmitting] = useState(false);
+
+  // Rent Commitments State
+  const [personRentCommitments, setPersonRentCommitments] = useState<any[]>([]);
+  const [isRentCommitmentsExpanded, setIsRentCommitmentsExpanded] = useState<boolean>(true);
+  const [selectedRentCommitment, setSelectedRentCommitment] = useState<any | null>(null);
 
   // Active channel within cash/bank payment methods
   const [paymentChannel, setPaymentChannel] = useState<"transfer" | "cashbox" | "pos" | "card" | "person_transfer">("transfer");
@@ -100,6 +132,94 @@ export default function PayReceiptModal(props: any) {
   const [trackingNumber, setTrackingNumber] = useState<string>("");
   const [isInvoicesExpanded, setIsInvoicesExpanded] = useState<boolean>(true);
 
+  // Effective state bindings
+  const effectivePersonId = receiptPersonId !== undefined ? receiptPersonId : ((props as any).personId !== undefined ? (props as any).personId : internalPersonId);
+  const effectiveSetPersonId = (id: string) => {
+    if (typeof setReceiptPersonId === "function") setReceiptPersonId(id);
+    if (typeof (props as any).setPersonId === "function") (props as any).setPersonId(id);
+    setInternalPersonId(id);
+  };
+
+  const effectiveAmount = receiptAmount !== undefined ? receiptAmount : internalAmount;
+  const effectiveSetAmount = (amt: string) => {
+    if (typeof setReceiptAmount === "function") setReceiptAmount(amt);
+    setInternalAmount(amt);
+  };
+
+  const effectiveDate = receiptDate !== undefined ? receiptDate : internalDate;
+  const effectiveSetDate = (d: any) => {
+    if (typeof setReceiptDate === "function") setReceiptDate(d);
+    setInternalDate(d);
+  };
+
+  const effectiveNote = receiptNote !== undefined ? receiptNote : internalNote;
+  const effectiveSetNote = (n: any) => {
+    if (typeof setReceiptNote === "function") setReceiptNote(n);
+    setInternalNote(n);
+  };
+
+  const effectiveResourceType = receiptResourceType !== undefined ? receiptResourceType : internalResourceType;
+  const effectiveSetResourceType = (r: string) => {
+    if (typeof setReceiptResourceType === "function") setReceiptResourceType(r);
+    setInternalResourceType(r);
+  };
+
+  const effectiveResourceId = receiptResourceId !== undefined ? receiptResourceId : internalResourceId;
+  const effectiveSetResourceId = (id: string) => {
+    if (typeof setReceiptResourceId === "function") setReceiptResourceId(id);
+    setInternalResourceId(id);
+  };
+
+  const effectivePersons = (persons && persons.length > 0) ? persons : internalPersons;
+  const effectiveAccounts = (accounts && accounts.length > 0) ? accounts : internalAccounts;
+  const effectiveCashboxes = (cashboxes && cashboxes.length > 0) ? cashboxes : internalCashboxes;
+  const effectiveLinkedInvoices = receiptLinkedInvoices !== undefined ? receiptLinkedInvoices : internalLinkedInvoices;
+  const effectiveSetLinkedInvoices = typeof setReceiptLinkedInvoices === "function" ? setReceiptLinkedInvoices : setInternalLinkedInvoices;
+  const submittingReceipt = externalSubmittingReceipt || internalSubmitting;
+
+  // Load fallback data if standalone
+  useEffect(() => {
+    if (!persons || persons.length === 0) {
+      getPersons().then(res => setInternalPersons(res || [])).catch(() => {});
+    }
+    if (!accounts || accounts.length === 0) {
+      getAccounts().then(res => setInternalAccounts(res || [])).catch(() => {});
+    }
+    if (!cashboxes || cashboxes.length === 0) {
+      getCashboxes().then(res => setInternalCashboxes(res || [])).catch(() => {});
+    }
+  }, []);
+
+  // Fetch pending rent commitments for the chosen person
+  useEffect(() => {
+    if (effectivePersonId) {
+      getCommittedRentInstallmentsForPerson(effectivePersonId)
+        .then((items) => {
+          setPersonRentCommitments(items || []);
+          if (props.initialRentContractId && props.initialRentInstallmentId) {
+            const found = (items || []).find(
+              (it: any) =>
+                String(it.contractId) === String(props.initialRentContractId) &&
+                String(it.installment?.id) === String(props.initialRentInstallmentId)
+            );
+            if (found) {
+              setSelectedRentCommitment(found);
+              if (!effectiveAmount || effectiveAmount === "0") {
+                effectiveSetAmount(String(found.remainingAmount));
+              }
+              if (!effectiveNote) {
+                effectiveSetNote(`بابت پرداخت و تسویه تعهد اجاره ${found.installment?.title || ''} - قرارداد ${found.contractNumber || ''}`);
+              }
+            }
+          }
+        })
+        .catch(console.error);
+    } else {
+      setPersonRentCommitments([]);
+      setSelectedRentCommitment(null);
+    }
+  }, [effectivePersonId, props.initialRentContractId, props.initialRentInstallmentId]);
+
   // Guarantee method is always cash or person_transfer
   useEffect(() => {
     if (typeof setReceiptMethod === "function" && receiptMethod !== "cash" && receiptMethod !== "person_transfer") {
@@ -111,22 +231,20 @@ export default function PayReceiptModal(props: any) {
   const handleSelectChannel = (channel: "transfer" | "cashbox" | "pos" | "card" | "person_transfer") => {
     setPaymentChannel(channel);
     if (channel === "person_transfer") {
-      if (typeof setReceiptResourceType === "function") setReceiptResourceType("person");
-      if (typeof setReceiptResourceId === "function") {
-        setReceiptResourceId(internalTargetPersonId || "");
-      }
+      effectiveSetResourceType("person");
+      effectiveSetResourceId(internalTargetPersonId || "");
     } else if (channel === "cashbox") {
-      if (typeof setReceiptResourceType === "function") setReceiptResourceType("cashbox");
-      if (typeof setReceiptResourceId === "function" && cashboxes && cashboxes.length > 0) {
-        if (!cashboxes.some((c: any) => String(c.id) === String(receiptResourceId))) {
-          setReceiptResourceId(cashboxes[0].id);
+      effectiveSetResourceType("cashbox");
+      if (effectiveCashboxes && effectiveCashboxes.length > 0) {
+        if (!effectiveCashboxes.some((c: any) => String(c.id) === String(effectiveResourceId))) {
+          effectiveSetResourceId(effectiveCashboxes[0].id);
         }
       }
     } else {
-      if (typeof setReceiptResourceType === "function") setReceiptResourceType("bank");
-      if (typeof setReceiptResourceId === "function" && accounts && accounts.length > 0) {
-        if (!accounts.some((a: any) => String(a.id) === String(receiptResourceId))) {
-          setReceiptResourceId(accounts[0].id);
+      effectiveSetResourceType("bank");
+      if (effectiveAccounts && effectiveAccounts.length > 0) {
+        if (!effectiveAccounts.some((a: any) => String(a.id) === String(effectiveResourceId))) {
+          effectiveSetResourceId(effectiveAccounts[0].id);
         }
       }
     }
@@ -137,8 +255,8 @@ export default function PayReceiptModal(props: any) {
     if (typeof setReceiptTargetPersonId === "function") {
       setReceiptTargetPersonId(id);
     }
-    if (paymentChannel === "person_transfer" && typeof setReceiptResourceId === "function") {
-      setReceiptResourceId(id);
+    if (paymentChannel === "person_transfer") {
+      effectiveSetResourceId(id);
     }
   };
 
@@ -159,9 +277,6 @@ export default function PayReceiptModal(props: any) {
   const themeBorder = "border-rose-200";
   const themeIcon = "text-rose-500";
   const themeBadge = "bg-rose-100 text-rose-800";
-
-  const effectivePersonId = receiptPersonId || (props as any).personId || "";
-  const effectiveSetPersonId = setReceiptPersonId || (props as any).setPersonId || (() => {});
 
   const resolvePersonName = (p: any): string => {
     if (!p) return "نامشخص";
@@ -250,17 +365,39 @@ export default function PayReceiptModal(props: any) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [submittingReceipt]);
 
-  const onFormSubmit = (e: React.FormEvent) => {
+  const handleSelectRentCommitment = (item: any) => {
+    if (selectedRentCommitment?.installment?.id === item.installment?.id) {
+      // Toggle off
+      setSelectedRentCommitment(null);
+    } else {
+      setSelectedRentCommitment(item);
+      effectiveSetAmount(String(item.remainingAmount));
+      const autoText = `بابت پرداخت و تسویه تعهد اجاره ${item.installment?.title || ''} - قرارداد ${item.contractNumber || ''}`;
+      effectiveSetNote(autoText);
+    }
+  };
+
+  const onFormSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!effectivePersonId) {
       if (typeof customAlert === "function") customAlert("لطفاً طرف حساب دریافت‌کننده وجه را انتخاب کنید");
       return;
     }
-    const numAmount = Number(String(receiptAmount).replace(/,/g, ""));
+    const numAmount = Number(String(effectiveAmount).replace(/,/g, ""));
     if (!numAmount || numAmount <= 0) {
       if (typeof customAlert === "function") customAlert("مبلغ پرداختی باید بیشتر از صفر باشد");
       return;
     }
+
+    const rentPayload = selectedRentCommitment ? {
+      linkedRentInstallment: {
+        contractId: selectedRentCommitment.contractId,
+        installmentId: selectedRentCommitment.installment?.id,
+        title: selectedRentCommitment.installment?.title,
+        amount: numAmount,
+        contractNumber: selectedRentCommitment.contractNumber
+      }
+    } : {};
 
     if (paymentChannel === "person_transfer") {
       if (!internalTargetPersonId) {
@@ -271,15 +408,75 @@ export default function PayReceiptModal(props: any) {
         if (typeof customAlert === "function") customAlert("طرف‌حساب مبدا و مقصد نمی‌توانند یک شخص باشند");
         return;
       }
-      handleSubmitReceipt("pay", e, {
-        isPersonTransfer: true,
-        targetPersonId: internalTargetPersonId,
-        transferDirection,
-      });
+      if (typeof handleSubmitReceipt === "function") {
+        handleSubmitReceipt("pay", e, {
+          isPersonTransfer: true,
+          targetPersonId: internalTargetPersonId,
+          transferDirection,
+          ...rentPayload
+        });
+        return;
+      }
+    }
+
+    if (typeof handleSubmitReceipt === "function") {
+      handleSubmitReceipt("pay", e, rentPayload);
       return;
     }
 
-    handleSubmitReceipt("pay", e);
+    // Standalone fallback submission
+    try {
+      setInternalSubmitting(true);
+      const payDateIso = convertToGregorian(effectiveDate);
+      const resType = paymentChannel === 'cashbox' ? 'cashbox' : 'bank';
+      const resId = effectiveResourceId || (resType === 'bank' ? effectiveAccounts[0]?.id : effectiveCashboxes[0]?.id);
+      const generatedNum = `PD-${Math.floor(100000 + Math.random() * 900000)}`;
+
+      const newTx = await addTransaction({
+        type: 'pay',
+        receiptNumber: generatedNum,
+        personId: effectivePersonId,
+        amount: numAmount,
+        date: payDateIso,
+        resourceType: resType,
+        resourceId: resId,
+        trackingNumber: trackingNumber || undefined,
+        note: effectiveNote || 'پرداخت وجه',
+        description: effectiveNote || 'پرداخت وجه',
+        method: 'cash',
+        linkedRentInstallment: rentPayload.linkedRentInstallment
+      });
+
+      if (selectedRentCommitment) {
+        await settleRentInstallmentWithPayment(
+          selectedRentCommitment.contractId,
+          selectedRentCommitment.installment?.id,
+          {
+            paymentDocId: generatedNum,
+            amount: numAmount,
+            paidDate: payDateIso,
+            paymentMethod: resType,
+            paymentSourceId: resId,
+            paymentRefNumber: trackingNumber || generatedNum
+          }
+        );
+      }
+
+      if (typeof props.onRentPaymentSuccess === "function") {
+        props.onRentPaymentSuccess(selectedRentCommitment?.contractId, selectedRentCommitment?.installment?.id, newTx);
+      }
+      if (typeof props.onSuccess === "function") {
+        props.onSuccess(newTx);
+      }
+      if (typeof onClose === "function") {
+        onClose();
+      }
+    } catch (sErr) {
+      console.error(sErr);
+      if (typeof customAlert === "function") customAlert("خطا در ثبت رسید پرداخت");
+    } finally {
+      setInternalSubmitting(false);
+    }
   };
 
   return (
@@ -546,7 +743,7 @@ export default function PayReceiptModal(props: any) {
                         <button
                           type="button"
                           onClick={() => {
-                            setReceiptAmount(String(totalUnpaidInvoices));
+                            effectiveSetAmount(String(totalUnpaidInvoices));
                             let remaining = totalUnpaidInvoices;
                             const newAlloc: Record<string, number> = {};
                             for (const inv of personInvoices) {
@@ -563,9 +760,9 @@ export default function PayReceiptModal(props: any) {
                                 remaining -= alloc;
                               }
                             }
-                            setReceiptLinkedInvoices(newAlloc);
+                            effectiveSetLinkedInvoices(newAlloc);
                           }}
-                          className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-200 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors"
+                          className="px-2.5 py-1 bg-amber-100 hover:bg-amber-200 text-amber-900 border border-amber-200 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer"
                           title="تنظیم مبلغ پرداختی به اندازه کل فاکتورهای باز"
                         >
                           <Sparkles className="w-3 h-3 text-amber-600" />
@@ -575,6 +772,30 @@ export default function PayReceiptModal(props: any) {
                         <span className="text-slate-600 bg-slate-200/80 px-2 py-0.5 rounded-lg font-bold text-[11px]">
                           فاکتور پرداخت‌نشده‌ای ندارد
                         </span>
+                      )}
+
+                      {personRentCommitments.length > 0 && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (personRentCommitments.length > 0) {
+                              handleSelectRentCommitment(personRentCommitments[0]);
+                            }
+                          }}
+                          className={`px-2.5 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1 transition-colors cursor-pointer ${
+                            selectedRentCommitment
+                              ? "bg-emerald-600 text-white shadow-xs"
+                              : "bg-emerald-100 hover:bg-emerald-200 text-emerald-950 border border-emerald-300"
+                          }`}
+                          title="اتصال به اولین قسط اجاره معوق"
+                        >
+                          <Building2 className="w-3 h-3 text-emerald-700" />
+                          {selectedRentCommitment ? (
+                            <span>متصل به تعهد: {selectedRentCommitment.installment?.title}</span>
+                          ) : (
+                            <span>تعهد اجاره: {toPersianDigits(personRentCommitments.length)} قسط</span>
+                          )}
+                        </button>
                       )}
                     </div>
                   </div>
@@ -978,6 +1199,191 @@ export default function PayReceiptModal(props: any) {
               </div>
 
             </div>
+
+            {/* Rent Commitments Allocation Section */}
+            {personRentCommitments.length > 0 && (
+              <div className="bg-emerald-50/70 rounded-2xl border border-emerald-200 overflow-hidden shadow-xs">
+                <button
+                  type="button"
+                  onClick={() => setIsRentCommitmentsExpanded(!isRentCommitmentsExpanded)}
+                  className="w-full p-4 flex items-center justify-between bg-emerald-100/60 hover:bg-emerald-100 transition-colors text-right cursor-pointer"
+                >
+                  <div className="flex items-center gap-2">
+                    <Building2 className="w-5 h-5 text-emerald-700" />
+                    <span className="font-black text-xs sm:text-sm text-emerald-950">
+                      اتصال به سند تعهد اجاره ({toPersianDigits(personRentCommitments.length)} قسط در انتظار تسویه)
+                    </span>
+                    <span className="text-[11px] font-bold text-emerald-800 bg-white px-2.5 py-0.5 rounded-md border border-emerald-300">
+                      مانده تعهدات: {toPersianDigits(addCommas(personRentCommitments.reduce((sum, it) => sum + (it.remainingAmount || 0), 0)))} {storeSettings?.currency || "تومان"}
+                    </span>
+                  </div>
+                  <ChevronDown
+                    className={`w-4 h-4 text-emerald-700 transition-transform ${
+                      isRentCommitmentsExpanded ? "rotate-180" : ""
+                    }`}
+                  />
+                </button>
+
+                {isRentCommitmentsExpanded && (
+                  <div className="p-4 space-y-3">
+                    <p className="text-xs text-emerald-900 font-medium">
+                      با انتخاب هر یک از اقساط زیر، این رسید پرداخت مستقیماً به سند تعهد اجاره متصل شده و هشدار سررسید آن تسویه و خاموش می‌شود:
+                    </p>
+
+                    {/* Desktop Table View */}
+                    <div className="hidden md:block overflow-x-auto">
+                      <table className="w-full text-xs text-right bg-white rounded-xl border border-emerald-200 overflow-hidden">
+                        <thead>
+                          <tr className="bg-emerald-50 text-emerald-900 font-bold border-b border-emerald-200">
+                            <th className="p-3">شماره قرارداد</th>
+                            <th className="p-3">عنوان قسط / دوره</th>
+                            <th className="p-3">تاریخ سررسید</th>
+                            <th className="p-3">مبلغ تعهد</th>
+                            <th className="p-3">شناسه سند تعهد</th>
+                            <th className="p-3">مانده تسویه‌نشده</th>
+                            <th className="p-3 text-center">عملیات اتصال</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {personRentCommitments.map((item: any) => {
+                            const isSelected = selectedRentCommitment?.installment?.id === item.installment?.id;
+                            return (
+                              <tr
+                                key={item.installment?.id}
+                                className={`border-b border-slate-100 last:border-0 transition-colors ${
+                                  isSelected ? "bg-emerald-50/90 font-bold ring-1 ring-inset ring-emerald-500" : "hover:bg-slate-50/80"
+                                }`}
+                              >
+                                <td className="p-3 font-mono font-bold text-slate-800">
+                                  {item.contractNumber ? toPersianDigits(item.contractNumber) : `#${toPersianDigits(item.contractId)}`}
+                                </td>
+                                <td className="p-3 font-bold text-emerald-950">
+                                  {item.installment?.title}
+                                </td>
+                                <td className="p-3 font-mono text-slate-700">
+                                  {toPersianDigits(item.installment?.dueDate)}
+                                </td>
+                                <td className="p-3 font-mono font-bold text-slate-800">
+                                  {toPersianDigits(addCommas(item.installment?.amount))} {storeSettings?.currency || "تومان"}
+                                </td>
+                                <td className="p-3 font-mono text-slate-500 text-[11px]">
+                                  {item.installment?.commitmentDocId ? toPersianDigits(item.installment.commitmentDocId) : "سند ثبت‌شده"}
+                                </td>
+                                <td className="p-3 font-mono font-black text-rose-600">
+                                  {toPersianDigits(addCommas(item.remainingAmount))} {storeSettings?.currency || "تومان"}
+                                </td>
+                                <td className="p-3 text-center">
+                                  <button
+                                    type="button"
+                                    onClick={() => handleSelectRentCommitment(item)}
+                                    className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 mx-auto cursor-pointer ${
+                                      isSelected
+                                        ? "bg-emerald-600 text-white shadow-xs"
+                                        : "bg-emerald-50 text-emerald-800 hover:bg-emerald-100 border border-emerald-300"
+                                    }`}
+                                  >
+                                    {isSelected ? (
+                                      <>
+                                        <Check className="w-3.5 h-3.5" />
+                                        <span>متصل شد (لغو)</span>
+                                      </>
+                                    ) : (
+                                      <>
+                                        <CheckCircle className="w-3.5 h-3.5 text-emerald-600" />
+                                        <span>اتصال و تسویه این قسط</span>
+                                      </>
+                                    )}
+                                  </button>
+                                </td>
+                              </tr>
+                            );
+                          })}
+                        </tbody>
+                      </table>
+                    </div>
+
+                    {/* Mobile Cards View */}
+                    <div className="md:hidden space-y-2">
+                      {personRentCommitments.map((item: any) => {
+                        const isSelected = selectedRentCommitment?.installment?.id === item.installment?.id;
+                        return (
+                          <div
+                            key={item.installment?.id}
+                            className={`p-3.5 rounded-xl border transition-all space-y-2.5 ${
+                              isSelected
+                                ? "bg-emerald-50/90 border-emerald-400 ring-2 ring-emerald-500/20"
+                                : "bg-white border-emerald-200"
+                            }`}
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="font-bold text-xs text-emerald-950">
+                                {item.installment?.title}
+                              </span>
+                              <span className="text-[10px] font-mono text-slate-500">
+                                سررسید: {toPersianDigits(item.installment?.dueDate)}
+                              </span>
+                            </div>
+                            <div className="grid grid-cols-2 gap-2 text-xs py-1 border-y border-emerald-100">
+                              <div>
+                                <span className="text-slate-400 block text-[10px]">قرارداد:</span>
+                                <span className="font-mono font-bold text-slate-800">
+                                  {item.contractNumber ? toPersianDigits(item.contractNumber) : `#${toPersianDigits(item.contractId)}`}
+                                </span>
+                              </div>
+                              <div className="text-left">
+                                <span className="text-slate-400 block text-[10px]">مانده تعهد:</span>
+                                <span className="font-mono font-black text-rose-600">
+                                  {toPersianDigits(addCommas(item.remainingAmount))} {storeSettings?.currency || "تومان"}
+                                </span>
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleSelectRentCommitment(item)}
+                              className={`w-full py-2 rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                                isSelected
+                                  ? "bg-emerald-600 text-white"
+                                  : "bg-emerald-100 hover:bg-emerald-200 text-emerald-900 border border-emerald-300"
+                              }`}
+                            >
+                              {isSelected ? (
+                                <>
+                                  <Check className="w-4 h-4" />
+                                  <span>متصل به این تعهد (کلیک برای لغو)</span>
+                                </>
+                              ) : (
+                                <>
+                                  <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                  <span>اتصال و تسویه این قسط</span>
+                                </>
+                              )}
+                            </button>
+                          </div>
+                        );
+                      })}
+                    </div>
+
+                    {selectedRentCommitment && (
+                      <div className="p-3 bg-emerald-100/70 border border-emerald-300 rounded-xl text-xs text-emerald-900 flex items-center justify-between font-bold">
+                        <div className="flex items-center gap-2">
+                          <CheckCircle className="w-4 h-4 text-emerald-700" />
+                          <span>
+                            این رسید به قسط <strong>{selectedRentCommitment.installment?.title}</strong> متصل شد. با ثبت پرداخت، قسط تسویه خواهد شد.
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setSelectedRentCommitment(null)}
+                          className="text-xs text-rose-600 hover:text-rose-800 font-bold underline cursor-pointer"
+                        >
+                          لغو اتصال
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Invoices Allocation Section */}
             {personInvoices.length > 0 && (
