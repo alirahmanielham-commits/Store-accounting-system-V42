@@ -91,6 +91,33 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
     }
   };
 
+  const parseDateToPersian = (dateVal: any) => {
+    if (!dateVal) return null;
+    try {
+      if (typeof dateVal === 'number' || (!isNaN(Number(dateVal)) && String(dateVal).trim() !== '')) {
+        const ts = Number(dateVal);
+        const d = new Date(ts);
+        if (!isNaN(d.getTime())) {
+          const dObj = new DateObject({ date: d, calendar: persian, locale: persian_fa });
+          return { year: dObj.year, month: dObj.month.number, day: dObj.day, timestamp: ts };
+        }
+      }
+      if (typeof dateVal === 'string') {
+        const cleaned = dateVal.replace(/[۰-۹]/g, (d: string) => '۰۱۲۳۴۵۶۷۸۹'.indexOf(d).toString()).trim();
+        const parts = cleaned.split(/[\/\-]/).map(Number);
+        if (parts.length === 3 && parts[0] > 1300 && parts[0] < 1500) {
+          return { year: parts[0], month: parts[1], day: parts[2] };
+        }
+        const gDate = new Date(dateVal);
+        if (!isNaN(gDate.getTime())) {
+          const dObj = new DateObject({ date: gDate, calendar: persian, locale: persian_fa });
+          return { year: dObj.year, month: dObj.month.number, day: dObj.day, timestamp: gDate.getTime() };
+        }
+      }
+    } catch (e) {}
+    return null;
+  };
+
   const handleChange = (personId, field, value) => {
     setAttendances(prev => prev.map(a => a.personId === personId ? {...a, [field]: value} : a));
   };
@@ -98,10 +125,13 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
   const handleSave = async (targetIds?: string[]) => {
     if (loading) return;
     setLoading(true);
-    const idsToSave = Array.isArray(targetIds) ? targetIds : (selectedPersonIds.length > 0 ? selectedPersonIds : attendances.map(a => a.personId));
-    if (idsToSave.length === 0) return showNotification('پرسنلی برای ذخیره یافت نشد (لطفا چک باکس موارد دلخواه را انتخاب کنید)', 'error');
-
     try {
+      const idsToSave = Array.isArray(targetIds) ? targetIds : (selectedPersonIds.length > 0 ? selectedPersonIds : attendances.map(a => a.personId));
+      if (idsToSave.length === 0) {
+        showNotification('پرسنلی برای ذخیره یافت نشد (لطفا چک باکس موارد دلخواه را انتخاب کنید)', 'error');
+        return;
+      }
+
       const targets = attendances.filter(a => {
         if (!idsToSave.includes(a.personId)) return false;
         const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));
@@ -109,11 +139,14 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
         return true;
       });
       
-      if (targets.length === 0) return showNotification('رکوردی برای ذخیره یافت نشد (ممکن است فیش صادر شده باشد)', 'error');
+      if (targets.length === 0) {
+        showNotification('رکوردی برای ذخیره یافت نشد (ممکن است فیش صادر شده باشد)', 'error');
+        return;
+      }
 
       for (const a of targets) {
         if (a.isNew) {
-          const payload = { ...a, id: Date.now().toString() + Math.random().toString() };
+          const payload = { ...a, id: Date.now().toString() + Math.random().toString().slice(2, 8) };
           delete payload.isNew;
           await addMonthlyAttendance(payload);
         } else {
@@ -123,6 +156,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
       showNotification(`کارکرد ${toPersianDigits(targets.length)} نفر با موفقیت ذخیره شد`, 'success');
       await fetchAttendance();
     } catch (e) {
+      console.error(e);
       showNotification('خطا در ذخیره سازی', 'error');
     } finally {
       setLoading(false);
@@ -132,160 +166,201 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
   const handleCalculateFromDaily = async (targetIds?: string[]) => {
     if (loading) return;
     setLoading(true);
-    const idsToCalc = Array.isArray(targetIds) ? targetIds : (selectedPersonIds.length > 0 ? selectedPersonIds : attendances.map(a => a.personId));
-    if (idsToCalc.length === 0) return showNotification('پرسنلی برای محاسبه یافت نشد (لطفا چک باکس موارد دلخواه را انتخاب کنید)', 'error');
-
     try {
+      const idsToCalc = Array.isArray(targetIds) ? targetIds : (selectedPersonIds.length > 0 ? selectedPersonIds : attendances.map(a => a.personId));
+      if (idsToCalc.length === 0) {
+        showNotification('پرسنلی برای محاسبه یافت نشد (لطفا پرسنل را انتخاب کنید)', 'error');
+        return;
+      }
+
       const dailyLogs = await getDailyAttendances();
       const leaves = await getLeaves();
       const missions = await getMissions();
       
-      const dObjTotal = new DateObject({ calendar: persian, locale: persian_fa });
-      dObjTotal.year = year;
-      dObjTotal.month = month;
-      const totalDaysInMonth = dObjTotal.month.length;
+      let totalDaysInMonth = 30;
+      try {
+        const dObjTotal = new DateObject({ calendar: persian, locale: persian_fa, year: Number(year), month: Number(month), day: 1 });
+        totalDaysInMonth = dObjTotal.month ? dObjTotal.month.length : (month <= 6 ? 31 : (month <= 11 ? 30 : 29));
+      } catch (e) {
+        totalDaysInMonth = month <= 6 ? 31 : (month <= 11 ? 30 : 29);
+      }
 
-      setAttendances(prev => {
-        const next = [...prev];
-        next.forEach(a => {
-           if (!idsToCalc.includes(a.personId)) return;
-           if (a.status === 'approved') return;
-           const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));
-           if (hasPayslip) return;
-           
-           // 1. Calculate work days, shortage and overtime from daily logs
-           let workDaysCount = 0;
-           let overtimeCount = 0;
-           let shortageCount = 0;
-           
-           const personLogs = dailyLogs.filter(l => {
-              if (String(l.personId) !== String(a.personId)) return false;
-              if (!l.date) return false;
-              
-              try {
-                  const dObj = new DateObject({ date: new Date(Number(l.date)), calendar: persian, locale: persian_fa });
-                  return dObj.year === year && dObj.month.number === month;
-              } catch(e) { return false; }
-           });
-           
-           const logsByDay = personLogs.reduce((acc: any, log: any) => {
-             const d = new Date(Number(log.date)).toLocaleDateString('en-US');
-             if (!acc[d]) acc[d] = [];
-             acc[d].push(log);
-             return acc;
-           }, {});
-           
-           Object.values(logsByDay).forEach((dayLogs: any) => {
-             let dayWorkH = 0;
-             dayLogs.forEach((l: any) => {
-               const [inH, inM] = (l.checkIn || '00:00').split(':').map(Number);
-               const [outH, outM] = (l.checkOut || '00:00').split(':').map(Number);
-               let diff = (outH * 60 + outM) - (inH * 60 + inM);
-               if (diff < 0) diff += 24 * 60;
-               let hrs = diff / 60;
-               const type = l.recordType || 'work';
-               if (type === 'work') {
-                 dayWorkH += hrs;
-               } else if (type === 'overtime') {
-                 overtimeCount += hrs;
-               }
-             });
-             
-             if (dayWorkH >= 7.33) {
-               workDaysCount += 1;
-               if (dayWorkH > 7.33) {
-                 overtimeCount += (dayWorkH - 7.33);
-               }
-             } else if (dayWorkH > 0) {
-               workDaysCount += 1;
-               shortageCount += (7.33 - dayWorkH);
-             }
-           });
-           
-           // 2. Calculate Leaves
-           let pLeave = 0, sLeave = 0, uLeave = 0;
-           const personLeaves = leaves.filter(l => String(l.personId) === String(a.personId));
-           personLeaves.forEach(l => {
-             const start = new Date(Number(l.startDate));
-             const end = new Date(Number(l.endDate));
-             
-             let curr = new Date(start);
-             curr.setHours(0,0,0,0);
-             const endDay = new Date(end);
-             endDay.setHours(23,59,59,999);
-             
-             while (curr <= endDay) {
-               try {
-                   const dObj = new DateObject({ date: curr, calendar: persian, locale: persian_fa });
-                   if (dObj.year === year && dObj.month.number === month) {
-                     if (l.leaveType === 'paid') pLeave += 1;
-                     else if (l.leaveType === 'sick') sLeave += 1;
-                     else if (l.leaveType === 'unpaid') uLeave += 1;
-                   }
-               } catch(e) {}
-               curr.setDate(curr.getDate() + 1);
-               curr.setHours(0,0,0,0);
-             }
-           });
-           
-           // 3. Calculate Missions
-           let missionDays = 0;
-           const personMissions = missions.filter(m => String(m.personId) === String(a.personId));
-           personMissions.forEach(m => {
-             const start = new Date(Number(m.startDate));
-             const end = new Date(Number(m.endDate));
-             
-             let curr = new Date(start);
-             curr.setHours(0,0,0,0);
-             const endDay = new Date(end);
-             endDay.setHours(23,59,59,999);
-             
-             while (curr <= endDay) {
-               try {
-                   const dObj = new DateObject({ date: curr, calendar: persian, locale: persian_fa });
-                   if (dObj.year === year && dObj.month.number === month) {
-                     missionDays += 1;
-                   }
-               } catch(e) {}
-               curr.setDate(curr.getDate() + 1);
-               curr.setHours(0,0,0,0);
-             }
-           });
+      // Calculate Fridays in the selected month
+      let fridays = 0;
+      for (let i = 1; i <= totalDaysInMonth; i++) {
+        try {
+          const fObj = new DateObject({ calendar: persian, locale: persian_fa, year: Number(year), month: Number(month), day: i });
+          if (fObj.weekDay && fObj.weekDay.index === 6) {
+            fridays++;
+          }
+        } catch (e) {}
+      }
 
-           a.workDays = parseFloat(workDaysCount.toFixed(2));
-           a.overtimeHours = parseFloat(overtimeCount.toFixed(2));
-           a.shortageHours = parseFloat(shortageCount.toFixed(2));
-           a.paidLeaveDays = pLeave;
-           a.sickLeaveDays = sLeave;
-           a.unpaidLeaveDays = uLeave;
-           a.missionDays = missionDays;
+      const updatedAttendances = [...attendances];
+      let calculatedCount = 0;
 
-           // Calculate absent days (Total days - everything else)
-           let totalRecorded = Math.ceil(a.workDays) + pLeave + sLeave + uLeave + missionDays;
-           
-           // Typically, Friday is a weekend. If we want to be exact, we should count fridays.
-           let fridays = 0;
-           for (let i = 1; i <= totalDaysInMonth; i++) {
-               try {
-                   let fObj = new DateObject({ calendar: persian, locale: persian_fa });
-                   fObj.year = year;
-                   fObj.month = month;
-                   fObj.day = i;
-                   if (fObj.weekDay.index === 6) { // Friday in persian calendar index is 6 (starts Saturday=0)
-                       fridays++;
-                   }
-               } catch(e){}
-           }
-           
-           let remainingDays = totalDaysInMonth - totalRecorded - fridays;
-           a.absentDays = remainingDays > 0 ? remainingDays : 0;
+      for (let i = 0; i < updatedAttendances.length; i++) {
+        const a = { ...updatedAttendances[i] };
+        if (!idsToCalc.includes(a.personId)) continue;
+        if (a.status === 'approved') continue;
+        const hasPayslip = !a.isNew && monthPayslips.some(p => String(p.attendanceId) === String(a.id));
+        if (hasPayslip) continue;
+
+        // 1. Calculate worked days, shortage and overtime from daily logs
+        let workDaysCount = 0;
+        let overtimeCount = 0;
+        let shortageCount = 0;
+
+        const personLogs = dailyLogs.filter(l => {
+          if (String(l.personId) !== String(a.personId)) return false;
+          const p = parseDateToPersian(l.date);
+          return p && Number(p.year) === Number(year) && Number(p.month) === Number(month);
         });
-        return next;
-      });
-      showNotification('کارکرد از فرم‌های تردد، مرخصی و ماموریت با موفقیت محاسبه شد', 'success');
+
+        const logsByDay: { [key: string]: any[] } = {};
+        personLogs.forEach(l => {
+          const p = parseDateToPersian(l.date);
+          const dayKey = p ? `${p.year}-${p.month}-${p.day}` : String(l.date);
+          if (!logsByDay[dayKey]) logsByDay[dayKey] = [];
+          logsByDay[dayKey].push(l);
+        });
+
+        Object.values(logsByDay).forEach((dayLogs: any[]) => {
+          let dayWorkH = 0;
+          dayLogs.forEach(l => {
+            let hrs = 0;
+            if (l.checkIn && l.checkOut) {
+              const [inH, inM] = l.checkIn.split(':').map(Number);
+              const [outH, outM] = l.checkOut.split(':').map(Number);
+              let diff = (outH * 60 + outM) - (inH * 60 + inM);
+              if (diff < 0) diff += 24 * 60;
+              hrs = diff / 60;
+            } else if (l.checkIn || l.checkOut) {
+              hrs = 7.33;
+            }
+
+            const type = l.recordType || 'work';
+            if (type === 'work') {
+              dayWorkH += hrs;
+            } else if (type === 'overtime') {
+              overtimeCount += hrs;
+            }
+          });
+
+          if (dayWorkH >= 7.33) {
+            workDaysCount += 1;
+            if (dayWorkH > 7.33) {
+              overtimeCount += (dayWorkH - 7.33);
+            }
+          } else if (dayWorkH > 0) {
+            workDaysCount += 1;
+            shortageCount += (7.33 - dayWorkH);
+          }
+        });
+
+        // 2. Calculate Leaves
+        let pLeave = 0, sLeave = 0, uLeave = 0;
+        const personLeaves = leaves.filter(l => String(l.personId) === String(a.personId));
+        for (let d = 1; d <= totalDaysInMonth; d++) {
+          try {
+            const dObj = new DateObject({ calendar: persian, locale: persian_fa, year: Number(year), month: Number(month), day: d });
+            const dayTs = dObj.toDate().getTime();
+            const dayStart = new Date(dayTs).setHours(0, 0, 0, 0);
+            const dayEnd = new Date(dayTs).setHours(23, 59, 59, 999);
+
+            for (const l of personLeaves) {
+              let sTs = Number(l.startDate);
+              let eTs = Number(l.endDate);
+              if (isNaN(sTs)) {
+                const sp = parseDateToPersian(l.startDate);
+                if (sp) sTs = new DateObject({ calendar: persian, locale: persian_fa, year: sp.year, month: sp.month, day: sp.day }).toDate().getTime();
+              }
+              if (isNaN(eTs)) {
+                const ep = parseDateToPersian(l.endDate);
+                if (ep) eTs = new DateObject({ calendar: persian, locale: persian_fa, year: ep.year, month: ep.month, day: ep.day }).toDate().getTime();
+              }
+
+              if (!isNaN(sTs) && !isNaN(eTs)) {
+                const sNorm = new Date(sTs).setHours(0, 0, 0, 0);
+                const eNorm = new Date(eTs).setHours(23, 59, 59, 999);
+                if (dayStart <= eNorm && dayEnd >= sNorm) {
+                  if (l.leaveType === 'paid') pLeave += 1;
+                  else if (l.leaveType === 'sick') sLeave += 1;
+                  else if (l.leaveType === 'unpaid') uLeave += 1;
+                  break;
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        // 3. Calculate Missions
+        let missionDays = 0;
+        const personMissions = missions.filter(m => String(m.personId) === String(a.personId));
+        for (let d = 1; d <= totalDaysInMonth; d++) {
+          try {
+            const dObj = new DateObject({ calendar: persian, locale: persian_fa, year: Number(year), month: Number(month), day: d });
+            const dayTs = dObj.toDate().getTime();
+            const dayStart = new Date(dayTs).setHours(0, 0, 0, 0);
+            const dayEnd = new Date(dayTs).setHours(23, 59, 59, 999);
+
+            for (const m of personMissions) {
+              let sTs = Number(m.startDate);
+              let eTs = Number(m.endDate);
+              if (isNaN(sTs)) {
+                const sp = parseDateToPersian(m.startDate);
+                if (sp) sTs = new DateObject({ calendar: persian, locale: persian_fa, year: sp.year, month: sp.month, day: sp.day }).toDate().getTime();
+              }
+              if (isNaN(eTs)) {
+                const ep = parseDateToPersian(m.endDate);
+                if (ep) eTs = new DateObject({ calendar: persian, locale: persian_fa, year: ep.year, month: ep.month, day: ep.day }).toDate().getTime();
+              }
+
+              if (!isNaN(sTs) && !isNaN(eTs)) {
+                const sNorm = new Date(sTs).setHours(0, 0, 0, 0);
+                const eNorm = new Date(eTs).setHours(23, 59, 59, 999);
+                if (dayStart <= eNorm && dayEnd >= sNorm) {
+                  missionDays += 1;
+                  break;
+                }
+              }
+            }
+          } catch (e) {}
+        }
+
+        a.workDays = parseFloat(workDaysCount.toFixed(2));
+        a.overtimeHours = parseFloat(overtimeCount.toFixed(2));
+        a.shortageHours = parseFloat(shortageCount.toFixed(2));
+        a.paidLeaveDays = pLeave;
+        a.sickLeaveDays = sLeave;
+        a.unpaidLeaveDays = uLeave;
+        a.missionDays = missionDays;
+
+        // Calculate absent days (Total days - everything else)
+        const totalRecorded = Math.ceil(a.workDays) + pLeave + sLeave + uLeave + missionDays;
+        const remainingDays = totalDaysInMonth - totalRecorded - fridays;
+        a.absentDays = remainingDays > 0 ? remainingDays : 0;
+
+        // Auto-save the calculated record immediately to persistence
+        if (a.isNew) {
+          const payload = { ...a, id: Date.now().toString() + Math.random().toString().slice(2, 8) };
+          delete payload.isNew;
+          await addMonthlyAttendance(payload);
+          updatedAttendances[i] = payload;
+        } else {
+          await updateMonthlyAttendance(a.id, a);
+          updatedAttendances[i] = a;
+        }
+        calculatedCount++;
+      }
+
+      setAttendances(updatedAttendances);
+      showNotification(`کارکرد ${toPersianDigits(calculatedCount)} نفر از تردد روزانه، مرخصی و مأموریت محاسبه و ذخیره گردید`, 'success');
     } catch (e) {
       console.error(e);
-      showNotification('خطا در محاسبه کارکرد', 'error');
+      showNotification('خطا در محاسبه کارکرد پرسنل', 'error');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -468,12 +543,13 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                   {(() => {
                     const personLogs = allDailyLogs.filter(l => {
                       if (String(l.personId) !== String(viewDetailsPersonId)) return false;
-                      if (!l.date) return false;
-                      try {
-                          const dObj = new DateObject({ date: new Date(Number(l.date)), calendar: persian, locale: persian_fa });
-                          return dObj.year === year && dObj.month.number === month;
-                      } catch(e) { return false; }
-                    }).sort((a, b) => Number(a.date) - Number(b.date));
+                      const p = parseDateToPersian(l.date);
+                      return p && Number(p.year) === Number(year) && Number(p.month) === Number(month);
+                    }).sort((a, b) => {
+                      const pA = parseDateToPersian(a.date);
+                      const pB = parseDateToPersian(b.date);
+                      return (pA?.day || 0) - (pB?.day || 0);
+                    });
 
                     if (personLogs.length === 0) {
                       return <tr><td colSpan={5} className="p-8 text-center text-slate-500">رکوردی برای این ماه ثبت نشده است</td></tr>;
@@ -481,6 +557,7 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
 
                     const RECORD_TYPES = {
                       work: 'کارکرد عادی',
+                      overtime: 'اضافه کاری',
                       paid_leave: 'مرخصی استحقاقی',
                       sick_leave: 'مرخصی استعلاجی',
                       unpaid_leave: 'مرخصی بدون حقوق',
@@ -489,13 +566,18 @@ export default function MonthlyAttendance({ personsData, showNotification }) {
                     };
 
                     return personLogs.map((l, i) => {
-                      const d = new Date(Number(l.date));
-                      const ds = new Intl.DateTimeFormat('fa-IR', { year: 'numeric', month: '2-digit', day: '2-digit' }).format(d);
-                      const [inH, inM] = (l.checkIn || '00:00').split(':').map(Number);
-                      const [outH, outM] = (l.checkOut || '00:00').split(':').map(Number);
-                      let diff = (outH * 60 + outM) - (inH * 60 + inM);
-                      if (diff < 0) diff += 24 * 60;
-                      let hrs = (diff / 60).toFixed(1);
+                      const p = parseDateToPersian(l.date);
+                      const ds = p ? `${p.year}/${String(p.month).padStart(2, '0')}/${String(p.day).padStart(2, '0')}` : '-';
+                      let hrs = '0.0';
+                      if (l.checkIn && l.checkOut) {
+                        const [inH, inM] = l.checkIn.split(':').map(Number);
+                        const [outH, outM] = l.checkOut.split(':').map(Number);
+                        let diff = (outH * 60 + outM) - (inH * 60 + inM);
+                        if (diff < 0) diff += 24 * 60;
+                        hrs = (diff / 60).toFixed(1);
+                      } else if (l.checkIn || l.checkOut) {
+                        hrs = '7.3';
+                      }
 
                       return (
                         <tr key={i} className="hover:bg-slate-50">

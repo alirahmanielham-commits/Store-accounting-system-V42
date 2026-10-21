@@ -162,7 +162,7 @@ export const deleteMission = async (id: string | number) => {
 };
 
 
-const ensurePayableAccount = async () => {
+export const ensurePayableAccount = async () => {
   const { getLedgerAccounts, addLedgerAccount, generateId } = await import('./dataService');
   const accs = await getLedgerAccounts();
   let payableAcc = accs.find((a: any) => a.code === '2001' || a.title === 'حسابهای پرداختنی' || a.title === 'بدهی به پرسنل' || a.title === 'حقوق پرداختنی');
