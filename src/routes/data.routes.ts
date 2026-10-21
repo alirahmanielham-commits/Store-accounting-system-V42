@@ -1,6 +1,6 @@
 
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
-import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
+import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables, preparePgItem } from '../db/schema-sync';
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
 // import { loginSchema } from '../schemas/validation';
@@ -479,28 +479,7 @@ async function dispatchAdminNotificationIfSensitive(logEntry: any) {
   }
 }
 
-export function preparePgItem(key: string, item: Record<string, any>) {
-  const colTypes = tableSchemas.get(key);
-  const itemKeys: string[] = [];
-  const itemVals: any[] = [];
-  for (const [k, rawVal] of Object.entries(item)) {
-    if (rawVal === undefined) continue;
-    itemKeys.push(k);
-    let val = rawVal;
-    if (val instanceof Date) {
-      val = val.toISOString();
-    } else if (val !== null && typeof val === 'object') {
-      val = JSON.stringify(val);
-    }
-    const colType = colTypes?.get(k);
-    const isNumCol = colType && ['double precision', 'real', 'numeric', 'integer', 'bigint', 'smallint'].includes(colType);
-    if (isNumCol && typeof val === 'string' && isNaN(Number(val))) {
-      val = null;
-    }
-    itemVals.push(val);
-  }
-  return { itemKeys, itemVals };
-}
+export { preparePgItem };
 
 // Dedicated System Logs Endpoints
 router.get('/api/system_logs', async (req, res) => {

@@ -1,6 +1,6 @@
 
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE, loadPgPoolForStore } from '../db/connection';
-import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
+import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables, preparePgItem } from '../db/schema-sync';
 import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
 const loginSchema = z.object({ username: z.string().min(3), password: z.string().min(1) });
@@ -118,7 +118,17 @@ const router = Router();
 
       sysLogs.unshift(log);
       if (sysLogs.length > 3000) sysLogs.length = 3000;
-      await setDbData('system_logs', sysLogs);
+
+      if (isPgActive() && getActivePgPool()) {
+        const pool = getActivePgPool();
+        await syncTableSchema(pool, 'system_logs', log);
+        const { itemKeys: keys, itemVals: vals } = preparePgItem('system_logs', log);
+        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+        const colNames = keys.map(k => `"${k}"`).join(', ');
+        await pool.query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
+      } else {
+        await setDbData('system_logs', sysLogs);
+      }
     } catch (e) {
       console.error('Error logging auth event:', e);
     }

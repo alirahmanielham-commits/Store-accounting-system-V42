@@ -4,7 +4,8 @@ import {
   Eye, Calendar, ArrowRight, CreditCard, Clock, 
   AlertTriangle, ShieldCheck, Printer, RefreshCw, 
   Wallet, Building, ArrowLeft, Info, HelpCircle,
-  History, ExternalLink, CheckCheck, Layers, ArrowUpRight
+  History, ExternalLink, CheckCheck, Layers, ArrowUpRight,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import Select from 'react-select';
 import { 
@@ -28,6 +29,14 @@ import gregorian_en from 'react-date-object/locales/gregorian_en';
 
 const DateObject = (DateObjectModule as any).default || DateObjectModule;
 
+export interface RentInstallmentPayment {
+  paymentId: string; // transaction.id or receiptNumber
+  amount: number; // amount of this payment allocated to this installment
+  date?: string;
+  refNumber?: string;
+  source?: string;
+}
+
 export interface RentInstallment {
   id: string;
   periodIndex: number;
@@ -45,6 +54,91 @@ export interface RentInstallment {
   paymentMethod?: 'cashbox' | 'bank' | null;
   paymentSourceId?: string | null;
   paymentRefNumber?: string | null;
+  payments?: RentInstallmentPayment[];
+}
+
+export interface PaymentAllocationInfo {
+  payment: any;
+  totalAmount: number;
+  invoiceAllocated: number;
+  rentAllocated: number;
+  totalUsed: number;
+  remainingAvailable: number;
+  invoiceDetails: Array<{ id: string; amount: number }>;
+  rentDetails: Array<{ contractNumber: string; installmentTitle: string; amount: number }>;
+}
+
+export function calculatePaymentAllocations(
+  payment: any,
+  allContracts: any[]
+): PaymentAllocationInfo {
+  const totalAmount = Number(payment.amount) || 0;
+
+  // 1. Allocations to invoices
+  let invoiceAllocated = 0;
+  const invoiceDetails: Array<{ id: string; amount: number }> = [];
+  if (payment.linkedInvoices && typeof payment.linkedInvoices === 'object') {
+    for (const [invId, invAmt] of Object.entries(payment.linkedInvoices)) {
+      const num = Number(invAmt) || 0;
+      if (num > 0) {
+        invoiceAllocated += num;
+        invoiceDetails.push({ id: invId, amount: num });
+      }
+    }
+  } else if (payment.invoiceId || payment.relatedInvoiceId) {
+    invoiceAllocated = totalAmount;
+    invoiceDetails.push({ id: String(payment.invoiceId || payment.relatedInvoiceId), amount: totalAmount });
+  }
+
+  // 2. Allocations to rent contract installments
+  let rentAllocated = 0;
+  const rentDetails: Array<{ contractNumber: string; installmentTitle: string; amount: number }> = [];
+
+  (allContracts || []).forEach(c => {
+    (c.schedule || []).forEach((inst: any) => {
+      if (Array.isArray(inst.payments) && inst.payments.length > 0) {
+        inst.payments.forEach((p: any) => {
+          if (String(p.paymentId) === String(payment.id) || String(p.paymentId) === String(payment.receiptNumber)) {
+            const amt = Number(p.amount) || 0;
+            if (amt > 0) {
+              rentAllocated += amt;
+              rentDetails.push({
+                contractNumber: c.contractNumber || '',
+                installmentTitle: inst.title || '',
+                amount: amt
+              });
+            }
+          }
+        });
+      } else if (inst.paymentDocId) {
+        if (String(inst.paymentDocId) === String(payment.receiptNumber) || String(inst.paymentDocId) === String(payment.id)) {
+          const amt = Number(inst.paidAmount) || 0;
+          if (amt > 0) {
+            rentAllocated += amt;
+            rentDetails.push({
+              contractNumber: c.contractNumber || '',
+              installmentTitle: inst.title || '',
+              amount: amt
+            });
+          }
+        }
+      }
+    });
+  });
+
+  const totalUsed = invoiceAllocated + rentAllocated;
+  const remainingAvailable = Math.max(0, totalAmount - totalUsed);
+
+  return {
+    payment,
+    totalAmount,
+    invoiceAllocated,
+    rentAllocated,
+    totalUsed,
+    remainingAvailable,
+    invoiceDetails,
+    rentDetails
+  };
 }
 
 export function generateRentSchedule(
@@ -130,7 +224,8 @@ export function generateRentSchedule(
       paidDate: existing?.paidDate || null,
       paymentMethod: existing?.paymentMethod || null,
       paymentSourceId: existing?.paymentSourceId || null,
-      paymentRefNumber: existing?.paymentRefNumber || null
+      paymentRefNumber: existing?.paymentRefNumber || null,
+      payments: existing?.payments || []
     });
 
     periodIdx++;
@@ -159,6 +254,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
   // Dedicated Detailed Dossier View
   const [selectedContractDetail, setSelectedContractDetail] = useState<any | null>(null);
   const [detailActiveTab, setDetailActiveTab] = useState<'schedule' | 'accounting' | 'details'>('schedule');
+  const [showAllAlerts, setShowAllAlerts] = useState(false);
 
   // Modals state
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -180,14 +276,8 @@ export default function RentContractsManager({ personsData, storeSettings, showN
   const [paymentModal, setPaymentModal] = useState<{
     contract: any;
     installment: RentInstallment;
-    mode: 'previous_payments' | 'system_form' | 'direct_payment';
-    paymentMethod: 'cashbox' | 'bank';
-    sourceId: string;
-    amount: number;
-    date: any;
-    refNumber: string;
-    description: string;
-    selectedPreviousPaymentId?: string | null;
+    mode: 'previous_payments' | 'system_form';
+    selectedAllocations: Record<string, number>; // paymentId -> allocated amount
   } | null>(null);
 
   // Contract Form State
@@ -268,10 +358,10 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       setAllAccountingDocs(docs || []);
       setAllTransactions(txs || []);
 
-      if (selectedContractDetail) {
-        const refreshed = enrichedContracts.find((c: any) => String(c.id) === String(selectedContractDetail.id));
-        if (refreshed) setSelectedContractDetail(refreshed);
-      }
+      setSelectedContractDetail(prev => {
+        if (!prev) return null;
+        return enrichedContracts.find((c: any) => String(c.id) === String(prev.id)) || prev;
+      });
     } catch (e) {
       console.error(e);
       notify('خطا در بارگذاری اطلاعات قراردادهای اجاره', 'error');
@@ -596,11 +686,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
 
   // Open 1-Click Payment & Settlement Modal
   const openPaymentModal = (contract: any, installment: RentInstallment) => {
-    const defaultCashbox = cashboxes.length > 0 ? cashboxes[0].id : '';
-    const defaultBank = bankAccounts.length > 0 ? bankAccounts[0].id : '';
-    const initialMethod: 'cashbox' | 'bank' = defaultBank ? 'bank' : 'cashbox';
-    const initialSource = initialMethod === 'bank' ? defaultBank : defaultCashbox;
-    const remainingAmount = installment.amount - (installment.paidAmount || 0);
+    const remainingNeed = Math.max(0, installment.amount - (installment.paidAmount || 0));
 
     const matchingPayments = (allTransactions || []).filter(
       (t: any) =>
@@ -608,151 +694,74 @@ export default function RentContractsManager({ personsData, storeSettings, showN
         String(t.personId) === String(contract.personId)
     );
 
-    const initialMode: 'previous_payments' | 'system_form' | 'direct_payment' = 
-      matchingPayments.length > 0 ? 'previous_payments' : 'direct_payment';
+    // Calculate allocation info for each payment
+    const paymentInfos = matchingPayments.map(p => calculatePaymentAllocations(p, contracts));
+    const availablePayments = paymentInfos.filter(pi => pi.remainingAvailable > 0);
+
+    // Auto-select available payment(s) to fulfill remainingNeed
+    const initialAllocations: Record<string, number> = {};
+    let need = remainingNeed;
+    for (const pi of availablePayments) {
+      if (need <= 0) break;
+      const take = Math.min(need, pi.remainingAvailable);
+      initialAllocations[String(pi.payment.id)] = take;
+      need -= take;
+    }
 
     setPaymentModal({
       contract,
       installment,
-      mode: initialMode,
-      paymentMethod: initialMethod,
-      sourceId: initialSource,
-      amount: remainingAmount > 0 ? remainingAmount : installment.amount,
-      date: new Date(),
-      refNumber: '',
-      description: `پرداخت و تسویه ${installment.title} به موجر: ${getPersonName(contract.personId)}`,
-      selectedPreviousPaymentId: matchingPayments.length > 0 ? String(matchingPayments[0].id) : null
+      mode: 'previous_payments',
+      selectedAllocations: initialAllocations
     });
   };
 
-  // Settle with a previously registered payment made to this person
+  // Settle commitment with selected previous payment(s)
   const handleSettleWithPreviousPayment = async () => {
-    if (!paymentModal || !paymentModal.selectedPreviousPaymentId) {
-      notify('لطفاً یکی از پرداخت‌های قبلی را انتخاب کنید', 'error');
-      return;
-    }
-    const { contract, installment, selectedPreviousPaymentId } = paymentModal;
-    const selectedPayment = allTransactions.find(t => String(t.id) === String(selectedPreviousPaymentId));
-    if (!selectedPayment) {
-      notify('سند پرداخت انتخاب شده یافت نشد', 'error');
-      return;
-    }
-
-    try {
-      setLoading(true);
-      const payAmount = Math.min(Number(selectedPayment.amount) || installment.amount, installment.amount);
-      await settleRentInstallmentWithPayment(
-        contract.id,
-        installment.id,
-        {
-          paymentDocId: selectedPayment.receiptNumber || String(selectedPayment.id),
-          amount: payAmount,
-          paidDate: selectedPayment.date || selectedPayment.rawDate || new Date().toISOString(),
-          paymentMethod: selectedPayment.resourceType || selectedPayment.method || 'bank',
-          paymentSourceId: selectedPayment.resourceId || selectedPayment.accountId || selectedPayment.cashboxId || null,
-          paymentRefNumber: selectedPayment.trackingNumber || selectedPayment.receiptNumber || null
-        }
-      );
-
-      notify(`قسط ${installment.title} با موفقیت با رسید پرداخت شماره ${selectedPayment.receiptNumber || selectedPayment.id} تسویه گردید`, 'success');
-      setPaymentModal(null);
-      await fetchData();
-    } catch (err) {
-      console.error(err);
-      notify('خطا در تسویه تعهد با پرداخت قبلی', 'error');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Confirm Payment & Settle Commitment
-  const handleConfirmPayment = async () => {
     if (!paymentModal) return;
-    const { contract, installment, paymentMethod, sourceId, amount, date, refNumber, description } = paymentModal;
+    const { contract, installment, selectedAllocations } = paymentModal;
 
-    if (!sourceId) {
-      notify('لطفاً صندوق یا حساب بانکی پرداخت را انتخاب کنید', 'error');
+    const entries = Object.entries(selectedAllocations).filter(([_, amt]) => Number(amt) > 0);
+    if (entries.length === 0) {
+      notify('لطفاً حداقل یک پرداخت با مبلغ معتبر را جهت تسویه انتخاب نمایید', 'error');
       return;
     }
-    if (!amount || amount <= 0) {
-      notify('مبلغ پرداختی نامعتبر است', 'error');
-      return;
-    }
+
+    const totalAllocated = entries.reduce((s, [_, amt]) => s + Number(amt), 0);
 
     try {
       setLoading(true);
-      const payableAcc = await ensurePayableAccount();
 
-      let sourceLedgerAccId = '';
-      if (paymentMethod === 'cashbox') {
-        const cb = cashboxes.find(c => String(c.id) === String(sourceId));
-        sourceLedgerAccId = cb?.ledgerAccountId || 
-          ledgerAccounts.find(a => a.code === '1001' || a.title?.includes('صندوق'))?.id || payableAcc.id;
-      } else {
-        const bank = bankAccounts.find(b => String(b.id) === String(sourceId));
-        sourceLedgerAccId = bank?.ledgerAccountId || 
-          ledgerAccounts.find(a => a.code === '1002' || a.title?.includes('بانک'))?.id || payableAcc.id;
-      }
+      const existingPayments = Array.isArray(installment.payments) ? [...installment.payments] : [];
+      const newPaymentsList = [...existingPayments];
+      const linkedDocIds: string[] = [];
 
-      const payDateIso = convertToGregorian(date);
-
-      // 1. Issue Payment Accounting Document
-      const paymentDoc = {
-        date: payDateIso,
-        description: description || `پرداخت و تسویه اجاره ${installment.title}`,
-        status: 'approved',
-        sourceType: 'rent_payment',
-        sourceId: `${contract.id}_${installment.id}`,
-        items: [
-          {
-            ledgerAccountId: payableAcc.id,
-            detailedAccountId: contract.personId,
-            debit: Number(amount),
-            credit: 0,
-            description: `تسویه بدهی اجاره - ${installment.title}`
-          },
-          {
-            ledgerAccountId: sourceLedgerAccId,
-            detailedAccountId: sourceId,
-            debit: 0,
-            credit: Number(amount),
-            description: `پرداخت از ${paymentMethod === 'cashbox' ? 'صندوق' : 'بانک'} بابت ${installment.title}`
-          }
-        ]
-      };
-
-      const createdPaymentDoc = await addAccountingDocument(paymentDoc);
-
-      // 2. Add Financial Transaction
-      try {
-        await addTransaction({
-          type: 'payment',
-          personId: contract.personId,
-          amount: Number(amount),
-          date: payDateIso,
-          cashboxId: paymentMethod === 'cashbox' ? sourceId : undefined,
-          accountId: paymentMethod === 'bank' ? sourceId : undefined,
-          trackingNumber: refNumber || undefined,
-          description: description || `پرداخت اجاره ${installment.title}`
+      for (const [paymentId, allocAmt] of entries) {
+        const paymentTx = allTransactions.find(t => String(t.id) === String(paymentId));
+        const refNum = paymentTx?.receiptNumber || paymentTx?.trackingNumber || String(paymentId);
+        linkedDocIds.push(refNum);
+        newPaymentsList.push({
+          paymentId: String(paymentId),
+          amount: Number(allocAmt),
+          date: paymentTx?.date || paymentTx?.rawDate || new Date().toISOString(),
+          refNumber: refNum,
+          source: paymentTx?.resourceType || paymentTx?.method || 'پرداخت'
         });
-      } catch (txErr) {
-        console.warn('Transaction logging skipped or handled by backend:', txErr);
       }
 
-      // 3. Mark Installment as Paid
+      const currentPaid = Number(installment.paidAmount) || 0;
+      const newPaidAmount = currentPaid + totalAllocated;
+      const isFullySettled = newPaidAmount >= installment.amount;
+
       const updatedSchedule = (contract.schedule || []).map((inst: RentInstallment) => {
         if (inst.id === installment.id) {
-          const newPaidAmount = (Number(inst.paidAmount) || 0) + Number(amount);
-          const isFullySettled = newPaidAmount >= inst.amount;
           return {
             ...inst,
             paymentStatus: (isFullySettled ? 'paid' : 'unpaid') as any,
             paidAmount: newPaidAmount,
-            paymentDocId: createdPaymentDoc?.id || `pay_${Date.now()}`,
-            paidDate: payDateIso,
-            paymentMethod,
-            paymentSourceId: sourceId,
-            paymentRefNumber: refNumber || null
+            paymentDocId: linkedDocIds.join(', ') || inst.paymentDocId || `pay_${Date.now()}`,
+            paidDate: new Date().toISOString(),
+            payments: newPaymentsList
           };
         }
         return inst;
@@ -761,12 +770,12 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       const updatedContract = { ...contract, schedule: updatedSchedule };
       await updateRentContract(contract.id, updatedContract);
 
-      notify(`پرداخت ${Number(amount).toLocaleString()} ${currencyUnit} ثبت و قسط با موفقیت تسویه گردید`, 'success');
+      notify(`قسط «${installment.title}» با موفقیت با پرداخت‌های انتخابی (${Number(totalAllocated).toLocaleString()} ${currencyUnit}) تسویه شد`, 'success');
       setPaymentModal(null);
       await fetchData();
-    } catch (e) {
-      console.error(e);
-      notify('خطا در ثبت پرداخت و تسویه تعهد', 'error');
+    } catch (err) {
+      console.error(err);
+      notify('خطا در تسویه تعهد با پرداخت‌های قبلی', 'error');
     } finally {
       setLoading(false);
     }
@@ -865,6 +874,86 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                 </button>
               </div>
             </div>
+
+            {/* Active Alerts for this contract */}
+            {(() => {
+              const contractAlerts = activeAlerts.filter(a => String(a.contract?.id) === String(c.id));
+              if (contractAlerts.length === 0) return null;
+              return (
+                <div className="bg-amber-50/90 border border-amber-300 rounded-2xl p-4 shadow-xs space-y-3">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-amber-500 text-white flex items-center justify-center flex-shrink-0 shadow-2xs">
+                        <AlertTriangle className="w-5 h-5" />
+                      </div>
+                      <div>
+                        <h4 className="text-sm font-extrabold text-amber-950 flex items-center gap-2">
+                          <span>هشدارهای مالی فعال این قرارداد</span>
+                          <span className="px-2 py-0.5 rounded-full text-xs bg-amber-200 text-amber-900 font-bold">
+                            {toPersianDigits(contractAlerts.length)} مورد نیازمند اقدام
+                          </span>
+                        </h4>
+                        <p className="text-xs text-amber-800 mt-0.5">
+                          اقساط زیر موعدشان گذشته یا در آستانه سررسید هستند. صدور یک تعهد، هشدارهای سایر دوره‌ها را غیرفعال نمی‌کند.
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5 pt-1">
+                    {contractAlerts.map((alt, aIdx) => {
+                      const isCommitment = alt.type === 'commitment_due';
+                      const isPast = alt.daysDiff < 0;
+                      return (
+                        <div
+                          key={aIdx}
+                          className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                            isPast
+                              ? 'bg-rose-50/90 border-rose-200 text-rose-950 shadow-2xs'
+                              : 'bg-white border-amber-200 text-slate-800 shadow-2xs'
+                          }`}
+                        >
+                          <div className="min-w-0 flex-1">
+                            <div className="font-bold flex items-center gap-1.5 truncate">
+                              <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isPast ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}`} />
+                              <span className="truncate">{alt.installment.title}</span>
+                            </div>
+                            <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                              موعد: {toPersianDigits(alt.installment.dueDate)}
+                            </div>
+                            <div className={`text-[11px] mt-0.5 font-bold ${isPast ? 'text-rose-700' : 'text-amber-800'}`}>
+                              {alt.label}
+                            </div>
+                          </div>
+
+                          <div className="flex items-center gap-1.5 flex-shrink-0">
+                            {isCommitment ? (
+                              <button
+                                type="button"
+                                onClick={() => openCommitmentModal(c, alt.installment)}
+                                className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                              >
+                                <FileText className="w-3.5 h-3.5" />
+                                <span>صدور تعهد</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => openPaymentModal(c, alt.installment)}
+                                className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                              >
+                                <Wallet className="w-3.5 h-3.5" />
+                                <span>تسویه</span>
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              );
+            })()}
 
             {/* Live Financial KPI Dashboard */}
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -1027,10 +1116,20 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                                     <Check className="w-3.5 h-3.5" />
                                     <span>سند تعهد صادر شد</span>
                                   </span>
+                                ) : isPastDue ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-300">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    <span>⚠️ عدم صدور تعهد (معوق)</span>
+                                  </span>
+                                ) : isDueSoon ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-300">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    <span>⚠️ در آستانه سررسید تعهد</span>
+                                  </span>
                                 ) : (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-500 border border-slate-200">
                                     <Clock className="w-3.5 h-3.5" />
-                                    <span>تعهد ثبت نشده</span>
+                                    <span>در انتظار موعد</span>
                                   </span>
                                 )}
                               </td>
@@ -1039,12 +1138,32 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                                 {isPaid ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-emerald-50 text-emerald-700 border border-emerald-200">
                                     <ShieldCheck className="w-3.5 h-3.5" />
-                                    <span>تسویه کامل ({Number(inst.paidAmount).toLocaleString()})</span>
+                                    <span>✓ تسویه کامل ({Number(inst.paidAmount).toLocaleString()})</span>
                                   </span>
-                                ) : (
+                                ) : (inst.paidAmount || 0) > 0 ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-cyan-50 text-cyan-800 border border-cyan-300">
+                                    <Wallet className="w-3.5 h-3.5" />
+                                    <span>تسویه جزئی ({Number(inst.paidAmount).toLocaleString()} از {Number(inst.amount).toLocaleString()})</span>
+                                  </span>
+                                ) : isCommitted && isPastDue ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-rose-50 text-rose-700 border border-rose-200">
+                                    <AlertTriangle className="w-3.5 h-3.5" />
+                                    <span>⚠️ پرداخت معوق</span>
+                                  </span>
+                                ) : isCommitted && isDueSoon ? (
                                   <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-amber-50 text-amber-700 border border-amber-200">
                                     <Clock className="w-3.5 h-3.5" />
+                                    <span>در انتظار پرداخت</span>
+                                  </span>
+                                ) : isCommitted ? (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-100 text-slate-600 border border-slate-200">
+                                    <Clock className="w-3.5 h-3.5" />
                                     <span>پرداخت نشده</span>
+                                  </span>
+                                ) : (
+                                  <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-bold bg-slate-50 text-slate-400 border border-slate-200">
+                                    <Clock className="w-3.5 h-3.5" />
+                                    <span>پس از ثبت تعهد</span>
                                   </span>
                                 )}
                               </td>
@@ -1177,41 +1296,113 @@ export default function RentContractsManager({ personsData, storeSettings, showN
         <div className="space-y-6 animate-in fade-in">
           {/* Active Alerts Strip */}
           {activeAlerts.length > 0 && (
-            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-xs flex flex-wrap items-center justify-between gap-4">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0">
-                  <AlertTriangle className="w-5 h-5 text-amber-600" />
+            <div className="bg-amber-50 border border-amber-200 p-4 rounded-2xl shadow-xs space-y-3">
+              <div className="flex flex-wrap items-center justify-between gap-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-xl bg-amber-100 text-amber-800 flex items-center justify-center flex-shrink-0">
+                    <AlertTriangle className="w-5 h-5 text-amber-600" />
+                  </div>
+                  <div>
+                    <div className="font-extrabold text-sm text-slate-900">
+                      {toPersianDigits(activeAlerts.length)} تعهد اجاره نیازمند اقدام است!
+                    </div>
+                    <div className="text-xs text-amber-800 mt-0.5">
+                      اقساطی در آستانه سررسید یا معوق هستند که سند تعهد یا تسویه آن‌ها در انتظار تایید شماست.
+                    </div>
+                  </div>
                 </div>
-                <div>
-                  <div className="font-extrabold text-sm text-slate-900">
-                    {toPersianDigits(activeAlerts.length)} تعهد اجاره نیازمند اقدام فوری است!
-                  </div>
-                  <div className="text-xs text-amber-800 mt-0.5">
-                    اقساطی در آستانه سررسید (۳ روز مانده) یا معوق هستند که سند تعهد یا تسویه آن‌ها در انتظار تایید شماست.
-                  </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowAllAlerts(!showAllAlerts)}
+                    className="px-3.5 py-2 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                  >
+                    <span>{showAllAlerts ? 'بستن لیست کامل' : `مشاهده تمام هشدارها (${toPersianDigits(activeAlerts.length)})`}</span>
+                    {showAllAlerts ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const first = activeAlerts[0];
+                      if (first) {
+                        setSelectedContractDetail(first.contract);
+                        if (first.type === 'commitment_due') {
+                          openCommitmentModal(first.contract, first.installment);
+                        } else {
+                          openPaymentModal(first.contract, first.installment);
+                        }
+                      }
+                    }}
+                    className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
+                  >
+                    <span>اقدام سریع اولین مورد</span>
+                    <ArrowLeft className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const first = activeAlerts[0];
-                    if (first) {
-                      setSelectedContractDetail(first.contract);
-                      if (first.type === 'commitment_due') {
-                        openCommitmentModal(first.contract, first.installment);
-                      } else {
-                        openPaymentModal(first.contract, first.installment);
-                      }
-                    }
-                  }}
-                  className="px-4 py-2 bg-amber-600 hover:bg-amber-700 text-white font-bold rounded-xl text-xs flex items-center gap-1.5 shadow-2xs transition-all cursor-pointer"
-                >
-                  <span>مشاهده و اقدام سریع</span>
-                  <ArrowLeft className="w-4 h-4" />
-                </button>
-              </div>
+              {/* Expandable list of all alerts across all contracts */}
+              {showAllAlerts && (
+                <div className="mt-3 pt-3 border-t border-amber-200/80 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
+                  {activeAlerts.map((alt, idx) => {
+                    const isCommitment = alt.type === 'commitment_due';
+                    const isPast = alt.daysDiff < 0;
+                    return (
+                      <div
+                        key={idx}
+                        className={`p-3 rounded-xl border flex items-center justify-between gap-3 text-xs ${
+                          isPast
+                            ? 'bg-rose-50/90 border-rose-200 text-rose-950 shadow-2xs'
+                            : 'bg-white border-amber-200 text-slate-800 shadow-2xs'
+                        }`}
+                      >
+                        <div className="min-w-0 flex-1">
+                          <div className="font-bold flex items-center gap-1.5 truncate">
+                            <span className={`w-2 h-2 rounded-full flex-shrink-0 ${isPast ? 'bg-rose-500 animate-pulse' : 'bg-amber-500'}`} />
+                            <span className="truncate">{getPersonName(alt.contract.personId)} - {alt.installment.title}</span>
+                          </div>
+                          <div className="text-[11px] font-mono text-slate-500 mt-0.5">
+                            قرارداد: {alt.contract.contractNumber} • موعد: {toPersianDigits(alt.installment.dueDate)}
+                          </div>
+                          <div className={`text-[11px] mt-0.5 font-bold ${isPast ? 'text-rose-700' : 'text-amber-800'}`}>
+                            {alt.label}
+                          </div>
+                        </div>
+
+                        <div className="flex items-center gap-1.5 flex-shrink-0">
+                          {isCommitment ? (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedContractDetail(alt.contract);
+                                openCommitmentModal(alt.contract, alt.installment);
+                              }}
+                              className="px-2.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              <FileText className="w-3.5 h-3.5" />
+                              <span>صدور تعهد</span>
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSelectedContractDetail(alt.contract);
+                                openPaymentModal(alt.contract, alt.installment);
+                              }}
+                              className="px-2.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white font-bold rounded-lg text-xs flex items-center gap-1 shadow-2xs transition-colors cursor-pointer"
+                            >
+                              <Wallet className="w-3.5 h-3.5" />
+                              <span>تسویه</span>
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
 
@@ -1677,258 +1868,405 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       )}
 
       {/* 3. REGISTER PAYMENT & SETTLEMENT MODAL */}
-      {paymentModal && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4 overflow-y-auto">
-          <div className="bg-white rounded-2xl w-full max-w-xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[92vh]">
-            {/* Modal Header */}
-            <div className="px-6 py-5 bg-gradient-to-r from-emerald-600 to-teal-700 flex justify-between items-center text-white shrink-0">
-              <div className="flex items-center gap-2.5">
-                <div className="w-10 h-10 rounded-xl bg-white/10 flex items-center justify-center">
-                  <Wallet className="w-5 h-5 text-white" />
-                </div>
-                <div>
-                  <h3 className="font-extrabold text-base sm:text-lg">ثبت پرداخت و تسویه تعهد اجاره</h3>
-                  <p className="text-[11px] text-emerald-100 font-medium">
-                    {paymentModal.installment.title} - موجر: {getPersonName(paymentModal.contract.personId)}
-                  </p>
-                </div>
-              </div>
-              <button 
-                type="button"
-                onClick={() => setPaymentModal(null)} 
-                className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors text-white cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+      {paymentModal && (() => {
+        const remainingNeed = Math.max(0, paymentModal.installment.amount - (paymentModal.installment.paidAmount || 0));
 
-            {/* Installment Summary Banner */}
-            <div className="p-4 bg-emerald-50/80 border-b border-emerald-100 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
-              <div className="space-y-0.5">
-                <span className="text-slate-500 block text-[10px] font-bold">قرارداد و قسط:</span>
-                <span className="font-extrabold text-slate-800">
-                  قرارداد {paymentModal.contract.contractNumber || '---'} ({paymentModal.installment.title})
-                </span>
-              </div>
-              <div className="space-y-0.5">
-                <span className="text-slate-500 block text-[10px] font-bold">سررسید:</span>
-                <span className="font-mono font-bold text-slate-700">
-                  {toPersianDigits(paymentModal.installment.dueDate)}
-                </span>
-              </div>
-              <div className="space-y-0.5 text-left">
-                <span className="text-slate-500 block text-[10px] font-bold">مانده قابل پرداخت:</span>
-                <span className="font-mono font-black text-sm text-emerald-700">
-                  {toPersianDigits(addCommas(paymentModal.installment.amount - (paymentModal.installment.paidAmount || 0)))} {currencyUnit}
-                </span>
-              </div>
-            </div>
+        const matchingPayments = (allTransactions || []).filter(
+          (t: any) =>
+            (t.type === 'pay' || t.type === 'payment') &&
+            String(t.personId) === String(paymentModal.contract.personId)
+        );
 
-            {/* Mode Switcher Tabs */}
-            {(() => {
-              const matchingPayments = (allTransactions || []).filter(
-                (t: any) =>
-                  (t.type === 'pay' || t.type === 'payment') &&
-                  String(t.personId) === String(paymentModal.contract.personId)
-              );
+        const paymentInfos = matchingPayments.map(p => calculatePaymentAllocations(p, contracts));
+        const totalSelectedAllocated = Object.entries(paymentModal.selectedAllocations || {}).reduce(
+          (sum, [_, amt]) => sum + (Number(amt) || 0),
+          0
+        );
 
-              return (
-                <div className="p-4 border-b border-slate-100 bg-slate-50/60 shrink-0">
-                  <div className="grid grid-cols-3 gap-1.5 p-1 bg-slate-200/70 rounded-xl text-xs font-bold">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentModal({ ...paymentModal, mode: 'previous_payments' })}
-                      className={`py-2 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                        paymentModal.mode === 'previous_payments'
-                          ? 'bg-white text-emerald-800 shadow-xs ring-1 ring-emerald-500/20'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <History className="w-3.5 h-3.5" />
-                      <span>پرداخت‌های قبلی ({toPersianDigits(matchingPayments.length)})</span>
-                    </button>
+        const isFullyCovered = totalSelectedAllocated >= remainingNeed && remainingNeed > 0;
+        const deficit = Math.max(0, remainingNeed - totalSelectedAllocated);
 
-                    <button
-                      type="button"
-                      onClick={() => setPaymentModal({ ...paymentModal, mode: 'system_form' })}
-                      className={`py-2 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                        paymentModal.mode === 'system_form'
-                          ? 'bg-white text-rose-800 shadow-xs ring-1 ring-rose-500/20'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <ExternalLink className="w-3.5 h-3.5" />
-                      <span>فرم پرداخت سیستم</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setPaymentModal({ ...paymentModal, mode: 'direct_payment' })}
-                      className={`py-2 px-2 rounded-lg transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                        paymentModal.mode === 'direct_payment'
-                          ? 'bg-white text-slate-900 shadow-xs ring-1 ring-slate-400/20'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Wallet className="w-3.5 h-3.5" />
-                      <span>ثبت مستقیم</span>
-                    </button>
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-3 sm:p-4 overflow-y-auto">
+            <div className="bg-white rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col my-auto max-h-[94vh] animate-in fade-in zoom-in-95 duration-200">
+              {/* Modal Header */}
+              <div className="px-6 py-4.5 bg-gradient-to-r from-emerald-600 via-teal-700 to-emerald-800 flex justify-between items-center text-white shrink-0">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-white/15 backdrop-blur-xs flex items-center justify-center border border-white/20">
+                    <Wallet className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <h3 className="font-extrabold text-base sm:text-lg">ثبت پرداخت و تسویه تعهد اجاره</h3>
+                    <p className="text-xs text-emerald-100 font-medium">
+                      {paymentModal.installment.title} • موجر: <span className="font-bold text-white">{getPersonName(paymentModal.contract.personId)}</span>
+                    </p>
                   </div>
                 </div>
-              );
-            })()}
+                <button 
+                  type="button"
+                  onClick={() => setPaymentModal(null)} 
+                  className="p-2 bg-white/10 hover:bg-white/20 rounded-xl transition-colors text-white cursor-pointer"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
 
-            {/* Modal Body depending on Mode */}
-            <div className="p-6 overflow-y-auto space-y-4">
-              {/* TAB 1: PREVIOUS PAYMENTS */}
-              {paymentModal.mode === 'previous_payments' && (() => {
-                const matchingPayments = (allTransactions || []).filter(
-                  (t: any) =>
-                    (t.type === 'pay' || t.type === 'payment') &&
-                    String(t.personId) === String(paymentModal.contract.personId)
-                );
+              {/* Installment Summary Banner */}
+              <div className="p-4 bg-emerald-50/90 border-b border-emerald-100/80 flex flex-wrap items-center justify-between gap-3 text-xs shrink-0">
+                <div className="space-y-0.5">
+                  <span className="text-slate-500 block text-[10px] font-bold">قرارداد و قسط:</span>
+                  <span className="font-extrabold text-slate-800">
+                    قرارداد {paymentModal.contract.contractNumber || '---'} ({paymentModal.installment.title})
+                  </span>
+                </div>
+                <div className="space-y-0.5">
+                  <span className="text-slate-500 block text-[10px] font-bold">سررسید قسط:</span>
+                  <span className="font-mono font-bold text-slate-700">
+                    {toPersianDigits(paymentModal.installment.dueDate)}
+                  </span>
+                </div>
+                <div className="space-y-0.5 text-left">
+                  <span className="text-slate-500 block text-[10px] font-bold">مانده قابل پرداخت:</span>
+                  <span className="font-mono font-black text-sm text-emerald-700">
+                    {toPersianDigits(addCommas(remainingNeed))} {currencyUnit}
+                  </span>
+                </div>
+              </div>
 
-                if (matchingPayments.length === 0) {
+              {/* Mode Switcher Tabs (2 Tabs Only - Direct Payment Removed) */}
+              <div className="p-3 border-b border-slate-100 bg-slate-50/70 shrink-0">
+                <div className="grid grid-cols-2 gap-2 p-1 bg-slate-200/80 rounded-2xl text-xs font-bold">
+                  <button
+                    type="button"
+                    onClick={() => setPaymentModal({ ...paymentModal, mode: 'previous_payments' })}
+                    className={`py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      paymentModal.mode === 'previous_payments'
+                        ? 'bg-white text-emerald-800 shadow-sm ring-1 ring-emerald-500/20'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <History className="w-4 h-4 text-emerald-600" />
+                    <span>انتخاب از پرداخت‌های قبلی شخص ({toPersianDigits(matchingPayments.length)})</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setPaymentModal({ ...paymentModal, mode: 'system_form' })}
+                    className={`py-2.5 px-3 rounded-xl transition-all flex items-center justify-center gap-2 cursor-pointer ${
+                      paymentModal.mode === 'system_form'
+                        ? 'bg-white text-rose-800 shadow-sm ring-1 ring-rose-500/20'
+                        : 'text-slate-600 hover:text-slate-900'
+                    }`}
+                  >
+                    <ExternalLink className="w-4 h-4 text-rose-600" />
+                    <span>ثبت پرداخت جدید با فرم رسمی سیستم</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Modal Body */}
+              <div className="p-5 overflow-y-auto space-y-4">
+                {/* TAB 1: PREVIOUS PAYMENTS MULTI-SELECT & ALLOCATION */}
+                {paymentModal.mode === 'previous_payments' && (() => {
+                  if (matchingPayments.length === 0) {
+                    return (
+                      <div className="py-10 px-4 text-center space-y-4">
+                        <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
+                          <History className="w-7 h-7" />
+                        </div>
+                        <div className="space-y-1">
+                          <h4 className="font-black text-slate-800 text-sm">هیچ سند پرداختی قبلی برای این شخص یافت نشد</h4>
+                          <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
+                            تاکنون رسید پرداختی برای موجر «{getPersonName(paymentModal.contract.personId)}» در سیستم ثبت نشده است. برای تسویه این قسط می‌توانید از فرم رسمی پرداخت وجه سیستم استفاده کنید.
+                          </p>
+                        </div>
+                        <div className="flex justify-center pt-2">
+                          <button
+                            type="button"
+                            onClick={() => setPaymentModal({ ...paymentModal, mode: 'system_form' })}
+                            className="px-5 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs flex items-center gap-2 shadow-sm shadow-rose-200 transition-all cursor-pointer"
+                          >
+                            <ExternalLink className="w-4 h-4" />
+                            <span>ثبت پرداخت جدید در فرم رسمی سیستم</span>
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  }
+
                   return (
-                    <div className="py-8 px-4 text-center space-y-4">
-                      <div className="w-14 h-14 rounded-2xl bg-amber-50 text-amber-600 flex items-center justify-center mx-auto border border-amber-200">
-                        <History className="w-7 h-7" />
+                    <div className="space-y-3.5">
+                      <div className="bg-blue-50/70 border border-blue-200/80 rounded-2xl p-3 text-xs text-blue-900 flex items-start gap-2.5">
+                        <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
+                        <div className="space-y-1 leading-relaxed">
+                          <p className="font-bold">راهنمای تخصیص و تسویه هوشمند:</p>
+                          <p className="text-[11px] text-blue-800">
+                            رسیدهای پرداخت قبلی بر اساس مانده آزاد قابل انتخاب هستند. مبالغی که قبلاً بابت فاکتورها یا سایر تعهدات اجاره مصرف شده‌اند کسر گردیده و مبالغ مازاد برای اقساط بعدی باقی خواهند ماند. در صورت نیاز به ترکیب چند پرداخت، می‌توانید چند رسید را همزمان انتخاب نمایید.
+                          </p>
+                        </div>
                       </div>
-                      <div className="space-y-1">
-                        <h4 className="font-black text-slate-800 text-sm">هیچ پرداختی قبلی برای این شخص یافت نشد</h4>
-                        <p className="text-xs text-slate-500 max-w-sm mx-auto leading-relaxed">
-                          تاکنون هیچ سند پرداختی در سیستم برای موجر «{getPersonName(paymentModal.contract.personId)}» ثبت نشده است. می‌توانید پرداخت جدید را با فرم رسمی سیستم یا مستقیماً در همین پنجره ثبت کنید.
-                        </p>
+
+                      <div className="space-y-2.5 max-h-72 overflow-y-auto pr-1">
+                        {paymentInfos.map(pi => {
+                          const p = pi.payment;
+                          const pIdStr = String(p.id);
+                          const isSelected = paymentModal.selectedAllocations?.[pIdStr] !== undefined && paymentModal.selectedAllocations[pIdStr] > 0;
+                          const allocatedAmt = paymentModal.selectedAllocations?.[pIdStr] || 0;
+                          const isExhausted = pi.remainingAvailable <= 0;
+
+                          const pDate = p.displayDate || formatDateDisplay(p.date || p.rawDate);
+                          const pNum = p.receiptNumber || p.trackingNumber || p.id;
+                          const pSource = p.resourceType === 'cashbox' ? 'صندوق' : (p.resourceType === 'bank' ? 'بانک' : (p.method || 'پرداخت'));
+
+                          const handleTogglePayment = () => {
+                            if (isExhausted) return;
+                            const next = { ...(paymentModal.selectedAllocations || {}) };
+                            if (isSelected) {
+                              delete next[pIdStr];
+                            } else {
+                              const curAllocTotal = Object.entries(next).reduce((s, [_, a]) => s + (Number(a) || 0), 0);
+                              const stillNeed = Math.max(0, remainingNeed - curAllocTotal);
+                              const take = stillNeed > 0 ? Math.min(stillNeed, pi.remainingAvailable) : pi.remainingAvailable;
+                              next[pIdStr] = take;
+                            }
+                            setPaymentModal({ ...paymentModal, selectedAllocations: next });
+                          };
+
+                          const handleCustomAmountChange = (newVal: number) => {
+                            const val = Math.max(0, Math.min(newVal, pi.remainingAvailable));
+                            const next = { ...(paymentModal.selectedAllocations || {}) };
+                            if (val > 0) {
+                              next[pIdStr] = val;
+                            } else {
+                              delete next[pIdStr];
+                            }
+                            setPaymentModal({ ...paymentModal, selectedAllocations: next });
+                          };
+
+                          return (
+                            <div
+                              key={p.id}
+                              className={`p-3.5 rounded-2xl border transition-all ${
+                                isExhausted 
+                                  ? 'bg-slate-50 border-slate-200 opacity-60' 
+                                  : isSelected
+                                    ? 'bg-emerald-50/90 border-emerald-400 ring-2 ring-emerald-500/20 shadow-xs'
+                                    : 'bg-white border-slate-200 hover:border-emerald-300 hover:bg-slate-50/50'
+                              }`}
+                            >
+                              <div className="flex items-start justify-between gap-3">
+                                <div 
+                                  onClick={handleTogglePayment}
+                                  className={`flex items-start gap-3 flex-1 ${isExhausted ? 'cursor-not-allowed' : 'cursor-pointer'}`}
+                                >
+                                  <div className={`w-5 h-5 rounded-md flex items-center justify-center shrink-0 border mt-0.5 transition-all ${
+                                    isExhausted
+                                      ? 'border-slate-300 bg-slate-200 text-slate-400'
+                                      : isSelected 
+                                        ? 'border-emerald-600 bg-emerald-600 text-white shadow-xs' 
+                                        : 'border-slate-300 bg-white hover:border-emerald-400'
+                                  }`}>
+                                    {isSelected && <Check className="w-3.5 h-3.5" />}
+                                  </div>
+
+                                  <div>
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="font-mono font-extrabold text-xs text-slate-900">
+                                        رسید شماره {toPersianDigits(pNum)}
+                                      </span>
+                                      <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-2 py-0.5 rounded-md">
+                                        {pSource}
+                                      </span>
+                                      <span className="text-[10px] font-mono text-slate-400">
+                                        {toPersianDigits(pDate)}
+                                      </span>
+                                    </div>
+
+                                    {p.description && (
+                                      <p className="text-[11px] text-slate-500 mt-1 line-clamp-1">
+                                        {p.description || p.note}
+                                      </p>
+                                    )}
+
+                                    {/* Financial Breakdown Badges */}
+                                    <div className="flex flex-wrap items-center gap-1.5 mt-2 text-[10px]">
+                                      <span className="font-mono text-slate-500 bg-slate-100 px-1.5 py-0.5 rounded">
+                                        مبلغ کل: {toPersianDigits(addCommas(pi.totalAmount))}
+                                      </span>
+                                      {pi.invoiceAllocated > 0 && (
+                                        <span className="font-mono text-amber-700 bg-amber-50 border border-amber-200 px-1.5 py-0.5 rounded">
+                                          مصرف در فاکتور: {toPersianDigits(addCommas(pi.invoiceAllocated))}
+                                        </span>
+                                      )}
+                                      {pi.rentAllocated > 0 && (
+                                        <span className="font-mono text-indigo-700 bg-indigo-50 border border-indigo-200 px-1.5 py-0.5 rounded">
+                                          مصرف در سایر تعهدات: {toPersianDigits(addCommas(pi.rentAllocated))}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <div className="text-left shrink-0">
+                                  {isExhausted ? (
+                                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200 px-2 py-1 rounded-md block">
+                                      تسویه کامل شده
+                                    </span>
+                                  ) : (
+                                    <div>
+                                      <span className="text-[10px] text-slate-400 block font-medium">مانده قابل تخصیص:</span>
+                                      <span className="font-mono font-black text-xs text-emerald-800 block">
+                                        {toPersianDigits(addCommas(pi.remainingAvailable))} {currencyUnit}
+                                      </span>
+                                    </div>
+                                  )}
+                                </div>
+                              </div>
+
+                              {/* Allocated Amount Row for this Payment */}
+                              {isSelected && !isExhausted && (
+                                <div className="mt-3 pt-2.5 border-t border-emerald-200/70 flex flex-wrap items-center justify-between gap-2 bg-emerald-100/40 -mx-3.5 -mb-3.5 p-3 rounded-b-2xl">
+                                  <div className="flex items-center gap-1.5 text-xs text-emerald-900 font-bold">
+                                    <CheckCircle className="w-4 h-4 text-emerald-600" />
+                                    <span>مبلغ تخصیص‌یافته از این رسید:</span>
+                                  </div>
+                                  <div className="flex items-center gap-2">
+                                    <input
+                                      type="number"
+                                      value={allocatedAmt || ''}
+                                      max={pi.remainingAvailable}
+                                      min={1}
+                                      onChange={(e) => handleCustomAmountChange(Number(e.target.value) || 0)}
+                                      className="w-32 py-1 px-2.5 bg-white border border-emerald-300 rounded-xl text-left font-mono font-bold text-xs text-emerald-950 outline-none focus:border-emerald-600 focus:ring-1 focus:ring-emerald-500"
+                                    />
+                                    <span className="text-[11px] font-bold text-emerald-800">{currencyUnit}</span>
+                                    {allocatedAmt < pi.remainingAvailable && (
+                                      <span className="text-[10px] text-slate-500 bg-white/80 px-2 py-0.5 rounded-lg border border-slate-200 font-mono">
+                                        مازاد محفوظ: {toPersianDigits(addCommas(pi.remainingAvailable - allocatedAmt))}
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              )}
+                            </div>
+                          );
+                        })}
                       </div>
-                      <div className="flex justify-center gap-2 pt-2">
-                        <button
-                          type="button"
-                          onClick={() => setPaymentModal({ ...paymentModal, mode: 'system_form' })}
-                          className="px-4 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
-                        >
-                          <ExternalLink className="w-4 h-4" />
-                          <span>ثبت با فرم رسمی پرداخت سیستم</span>
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setPaymentModal({ ...paymentModal, mode: 'direct_payment' })}
-                          className="px-4 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-800 rounded-xl font-bold text-xs transition-colors cursor-pointer"
-                        >
-                          ثبت مستقیم در همین فرم
-                        </button>
+
+                      {/* Settlement Summary & Reconciliation Box */}
+                      <div className="p-4 bg-gradient-to-r from-slate-50 to-emerald-50/50 rounded-2xl border border-slate-200 text-xs space-y-2.5">
+                        <div className="flex justify-between items-center text-slate-700">
+                          <span className="font-bold">مانده مورد نیاز قسط:</span>
+                          <span className="font-mono font-bold text-slate-900">
+                            {toPersianDigits(addCommas(remainingNeed))} {currencyUnit}
+                          </span>
+                        </div>
+                        <div className="flex justify-between items-center text-emerald-900">
+                          <span className="font-bold">مجموع پرداختی‌های انتخابی:</span>
+                          <span className="font-mono font-black text-sm text-emerald-700">
+                            {toPersianDigits(addCommas(totalSelectedAllocated))} {currencyUnit}
+                          </span>
+                        </div>
+
+                        <div className="pt-2 border-t border-slate-200/80">
+                          {isFullyCovered ? (
+                            <div className="flex items-center gap-2 text-emerald-800 font-extrabold text-[11px] bg-emerald-100/70 p-2 rounded-xl">
+                              <CheckCheck className="w-4 h-4 text-emerald-600 shrink-0" />
+                              <span>این تعهد اجاره به صورت کامل (۱۰۰٪) تسویه شده و هشدار آن خاموش خواهد شد.</span>
+                            </div>
+                          ) : totalSelectedAllocated > 0 ? (
+                            <div className="flex items-center gap-2 text-amber-800 font-bold text-[11px] bg-amber-50 p-2 rounded-xl border border-amber-200">
+                              <AlertCircle className="w-4 h-4 text-amber-600 shrink-0" />
+                              <span>تسویه بخشی از تعهد انجام می‌شود. مانده پس از تسویه: {toPersianDigits(addCommas(deficit))} {currencyUnit}</span>
+                            </div>
+                          ) : (
+                            <p className="text-[11px] text-slate-500">
+                              لطفاً یک یا چند رسید پرداخت بالا را با فعال‌کردن تیک انتخاب نمایید.
+                            </p>
+                          )}
+                        </div>
                       </div>
                     </div>
                   );
-                }
+                })()}
 
-                const selectedPayment = matchingPayments.find(p => String(p.id) === String(paymentModal.selectedPreviousPaymentId));
-
-                return (
-                  <div className="space-y-3">
-                    <p className="text-xs text-slate-600 leading-relaxed font-medium">
-                      یکی از پرداخت‌های قبلی ثبت‌شده برای موجر را انتخاب نمایید تا این قسط با آن تطبیق داده شده و وضعیت آن تسویه گردد:
-                    </p>
-
-                    <div className="space-y-2 max-h-64 overflow-y-auto pr-1">
-                      {matchingPayments.map((p: any) => {
-                        const isSelected = String(p.id) === String(paymentModal.selectedPreviousPaymentId);
-                        const pAmt = Number(p.amount) || 0;
-                        const pDate = p.displayDate || formatDateDisplay(p.date || p.rawDate);
-                        const pNum = p.receiptNumber || p.trackingNumber || p.id;
-                        const pSource = p.resourceType === 'cashbox' ? 'صندوق' : (p.resourceType === 'bank' ? 'بانک' : (p.method || 'پرداخت'));
-
-                        return (
-                          <div
-                            key={p.id}
-                            onClick={() => setPaymentModal({ ...paymentModal, selectedPreviousPaymentId: String(p.id) })}
-                            className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                              isSelected
-                                ? 'bg-emerald-50/90 border-emerald-400 ring-2 ring-emerald-500/20 shadow-xs'
-                                : 'bg-white border-slate-200 hover:border-emerald-300 hover:bg-slate-50/50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 border transition-all ${
-                                isSelected ? 'border-emerald-600 bg-emerald-600 text-white' : 'border-slate-300 bg-white'
-                              }`}>
-                                {isSelected && <Check className="w-3.5 h-3.5" />}
-                              </div>
-                              <div>
-                                <div className="flex items-center gap-2">
-                                  <span className="font-mono font-extrabold text-xs text-slate-900">
-                                    رسید {toPersianDigits(pNum)}
-                                  </span>
-                                  <span className="text-[10px] font-bold bg-slate-100 text-slate-600 px-1.5 py-0.5 rounded">
-                                    {pSource}
-                                  </span>
-                                </div>
-                                <p className="text-[11px] text-slate-500 mt-0.5 max-w-xs truncate">
-                                  {p.description || p.note || 'پرداخت وجه'}
-                                </p>
-                              </div>
-                            </div>
-
-                            <div className="text-left shrink-0">
-                              <span className="font-mono font-black text-xs text-emerald-800 block">
-                                {toPersianDigits(addCommas(pAmt))} {currencyUnit}
-                              </span>
-                              <span className="text-[10px] font-mono text-slate-400 block mt-0.5">
-                                {toPersianDigits(pDate)}
-                              </span>
-                            </div>
-                          </div>
-                        );
-                      })}
-                    </div>
-
-                    {selectedPayment && (
-                      <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 text-xs text-emerald-950 font-medium space-y-1">
-                        <div className="flex items-center gap-1.5 font-bold text-emerald-900">
-                          <CheckCheck className="w-4 h-4 text-emerald-600" />
-                          <span>خلاصه انطباق و تسویه قسط با پرداخت قبلی:</span>
+                {/* TAB 2: SYSTEM OFFICIAL FORM */}
+                {paymentModal.mode === 'system_form' && (
+                  <div className="py-4 space-y-4">
+                    <div className="p-4.5 bg-gradient-to-r from-rose-50/90 to-orange-50/50 rounded-2xl border border-rose-200 space-y-3">
+                      <div className="flex items-center gap-2.5">
+                        <div className="w-10 h-10 rounded-2xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-sm shadow-rose-200">
+                          <ArrowUpRight className="w-5 h-5" />
                         </div>
-                        <p className="text-[11px] text-emerald-800 leading-relaxed">
-                          قسط <strong>{paymentModal.installment.title}</strong> به مبلغ {toPersianDigits(addCommas(paymentModal.installment.amount))} {currencyUnit} با سند شماره <strong>{selectedPayment.receiptNumber || selectedPayment.id}</strong> به مبلغ {toPersianDigits(addCommas(selectedPayment.amount))} {currencyUnit} تسویه شده و هشدار آن خاموش خواهد شد.
-                        </p>
+                        <div>
+                          <h4 className="font-black text-sm text-slate-900">فرم رسمی ثبت رسید پرداخت وجه سیستم</h4>
+                          <p className="text-[11px] text-slate-500">
+                            خزانه‌داری جامع با پشتیبانی از حساب‌های بانکی، چک، کارت، صندوق و صدور سند اتوماتیک
+                          </p>
+                        </div>
                       </div>
-                    )}
-                  </div>
-                );
-              })()}
 
-              {/* TAB 2: SYSTEM OFFICIAL FORM */}
-              {paymentModal.mode === 'system_form' && (
-                <div className="py-4 space-y-4">
-                  <div className="p-4 bg-gradient-to-r from-rose-50/80 to-orange-50/40 rounded-2xl border border-rose-200/80 space-y-3">
-                    <div className="flex items-center gap-2.5">
-                      <div className="w-9 h-9 rounded-xl bg-rose-600 text-white flex items-center justify-center shrink-0 shadow-xs">
-                        <ArrowUpRight className="w-5 h-5" />
-                      </div>
-                      <div>
-                        <h4 className="font-black text-sm text-slate-900">فرم رسمی ثبت رسید پرداخت وجه سیستم</h4>
-                        <p className="text-[11px] text-slate-500">
-                          خزانه‌داری یکپارچه با قابلیت انتخاب بانک، چک، کارت، صندوق و صدور سند دوبل
-                        </p>
+                      <div className="space-y-1.5 text-xs text-slate-700 pt-1">
+                        <div className="flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>موجر و مانده قسط ({toPersianDigits(addCommas(remainingNeed))} {currencyUnit}) به صورت خودکار بارگذاری می‌شوند.</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>این پرداخت مستقیماً به سند تعهد قسط متصل شده و بلافاصله تسویه را اعمال می‌کند.</span>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Check className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                          <span>رسید چاپ و پیامک اطلاع‌رسانی به موجر قابل صدور است.</span>
+                        </div>
                       </div>
                     </div>
 
-                    <div className="space-y-1.5 text-xs text-slate-700 pt-1">
-                      <div className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>طرف‌حساب (موجر) و مبلغ قسط به صورت خودکار در فرم بارگذاری می‌شود.</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>پرداخت مستقیماً به سند تعهد این قسط متصل شده و بلافاصله تسویه را اعمال می‌کند.</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Check className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>امکان چاپ فیش پرداخت و ارسال پیامک خودکار برای موجر.</span>
-                      </div>
-                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSystemPayModal({
+                          contract: paymentModal.contract,
+                          installment: paymentModal.installment
+                        });
+                      }}
+                      className="w-full py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-rose-600/20 transition-all cursor-pointer min-h-[46px]"
+                    >
+                      <ExternalLink className="w-4 h-4" />
+                      <span>باز کردن فرم رسمی پرداخت وجه سیستم</span>
+                    </button>
                   </div>
+                )}
+              </div>
 
-                  <button
+              {/* Modal Footer */}
+              <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center gap-3 shrink-0">
+                <button 
+                  type="button"
+                  onClick={() => setPaymentModal(null)} 
+                  className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                >
+                  انصراف
+                </button>
+
+                {paymentModal.mode === 'previous_payments' ? (
+                  <button 
+                    type="button"
+                    onClick={handleSettleWithPreviousPayment} 
+                    disabled={loading || totalSelectedAllocated <= 0}
+                    className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm shadow-emerald-200 transition-all flex items-center gap-2 cursor-pointer disabled:opacity-50"
+                  >
+                    <CheckCheck className="w-4 h-4" />
+                    <span>
+                      {loading 
+                        ? 'در حال ثبت...' 
+                        : totalSelectedAllocated > 0 
+                          ? `تایید و تسویه تعهد (${toPersianDigits(addCommas(totalSelectedAllocated))} ${currencyUnit})`
+                          : 'انتخاب پرداخت برای تسویه'}
+                    </span>
+                  </button>
+                ) : (
+                  <button 
                     type="button"
                     onClick={() => {
                       setSystemPayModal({
@@ -1936,181 +2274,17 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                         installment: paymentModal.installment
                       });
                     }}
-                    className="w-full py-3.5 bg-rose-600 hover:bg-rose-700 text-white rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md shadow-rose-600/20 transition-all cursor-pointer min-h-[46px]"
+                    className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-sm shadow-rose-200 transition-all flex items-center gap-2 cursor-pointer"
                   >
                     <ExternalLink className="w-4 h-4" />
-                    <span>باز کردن فرم رسمی پرداخت وجه سیستم</span>
+                    <span>انتقال به فرم پرداخت رسمی سیستم</span>
                   </button>
-                </div>
-              )}
-
-              {/* TAB 3: DIRECT QUICK PAYMENT */}
-              {paymentModal.mode === 'direct_payment' && (
-                <div className="space-y-4">
-                  {/* Payment Method Tabs */}
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">روش پرداخت</label>
-                    <div className="grid grid-cols-2 gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const defaultBank = bankAccounts.length > 0 ? bankAccounts[0].id : '';
-                          setPaymentModal({ ...paymentModal, paymentMethod: 'bank', sourceId: defaultBank });
-                        }}
-                        className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                          paymentModal.paymentMethod === 'bank'
-                            ? 'border-emerald-600 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-500/20'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <CreditCard className="w-4 h-4" />
-                        <span>حساب بانکی</span>
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const defaultCb = cashboxes.length > 0 ? cashboxes[0].id : '';
-                          setPaymentModal({ ...paymentModal, paymentMethod: 'cashbox', sourceId: defaultCb });
-                        }}
-                        className={`py-2 px-3 rounded-xl border text-xs font-bold flex items-center justify-center gap-2 transition-all cursor-pointer ${
-                          paymentModal.paymentMethod === 'cashbox'
-                            ? 'border-emerald-600 bg-emerald-50 text-emerald-700 ring-2 ring-emerald-500/20'
-                            : 'border-slate-200 text-slate-600 hover:bg-slate-50'
-                        }`}
-                      >
-                        <Wallet className="w-4 h-4" />
-                        <span>صندوق نقدی</span>
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      {paymentModal.paymentMethod === 'bank' ? 'انتخاب حساب بانکی پرداخت‌کننده' : 'انتخاب صندوق نقدی'} <span className="text-rose-500">*</span>
-                    </label>
-                    <select
-                      value={paymentModal.sourceId}
-                      onChange={(e) => setPaymentModal({ ...paymentModal, sourceId: e.target.value })}
-                      className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-emerald-500 text-xs font-bold bg-white cursor-pointer"
-                    >
-                      {paymentModal.paymentMethod === 'bank' ? (
-                        bankAccounts.map(b => (
-                          <option key={b.id} value={b.id}>
-                            {b.bankName || b.title} - شماره حساب: {b.accountNumber || b.accountNo || b.id}
-                          </option>
-                        ))
-                      ) : (
-                        cashboxes.map(c => (
-                          <option key={c.id} value={c.id}>
-                            {c.name || c.title || 'صندوق اصلی'}
-                          </option>
-                        ))
-                      )}
-                    </select>
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">
-                      مبلغ پرداختی ({currencyUnit}) <span className="text-rose-500">*</span>
-                    </label>
-                    <CurrencyInput
-                      value={paymentModal.amount}
-                      onChange={(e: any) => setPaymentModal({ ...paymentModal, amount: Number(e.target.value) || 0 })}
-                      storeSettings={storeSettings}
-                      hideWords={true}
-                      className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-emerald-500 text-left font-mono font-bold"
-                      placeholder="0"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5 flex items-center gap-1.5">
-                      <Calendar className="w-4 h-4 text-emerald-600" /> تاریخ پرداخت
-                    </label>
-                    <DatePicker
-                      value={paymentModal.date}
-                      onChange={(d: any) => setPaymentModal({ ...paymentModal, date: d })}
-                      calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
-                      locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
-                      calendarPosition="bottom-right"
-                      inputClass="w-full p-2.5 bg-white border border-slate-200 rounded-xl focus:border-emerald-500 outline-none text-center font-bold text-slate-900 cursor-pointer"
-                      containerClassName="w-full"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">شماره پیگیری / ارجاع بانکی</label>
-                    <input
-                      type="text"
-                      value={paymentModal.refNumber}
-                      onChange={(e) => setPaymentModal({ ...paymentModal, refNumber: e.target.value })}
-                      placeholder="مثال: 98234123"
-                      className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-emerald-500 font-mono text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-xs font-bold text-slate-700 mb-1.5">شرح پرداخت</label>
-                    <input
-                      type="text"
-                      value={paymentModal.description}
-                      onChange={(e) => setPaymentModal({ ...paymentModal, description: e.target.value })}
-                      className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-emerald-500 text-xs"
-                    />
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Modal Footer */}
-            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-between items-center gap-3 shrink-0">
-              <button 
-                type="button"
-                onClick={() => setPaymentModal(null)} 
-                className="px-5 py-2.5 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-bold text-xs transition-colors cursor-pointer"
-              >
-                انصراف
-              </button>
-
-              {paymentModal.mode === 'previous_payments' ? (
-                <button 
-                  type="button"
-                  onClick={handleSettleWithPreviousPayment} 
-                  disabled={loading || !paymentModal.selectedPreviousPaymentId}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm shadow-emerald-200 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <CheckCheck className="w-4 h-4" />
-                  <span>{loading ? 'در حال ثبت...' : 'تایید و تسویه تعهد با پرداخت قبلی'}</span>
-                </button>
-              ) : paymentModal.mode === 'system_form' ? (
-                <button 
-                  type="button"
-                  onClick={() => {
-                    setSystemPayModal({
-                      contract: paymentModal.contract,
-                      installment: paymentModal.installment
-                    });
-                  }}
-                  className="px-6 py-2.5 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-sm shadow-rose-200 transition-all flex items-center gap-1.5 cursor-pointer"
-                >
-                  <ExternalLink className="w-4 h-4" />
-                  <span>انتقال به فرم پرداخت سیستم</span>
-                </button>
-              ) : (
-                <button 
-                  type="button"
-                  onClick={handleConfirmPayment} 
-                  disabled={loading}
-                  className="px-6 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm shadow-emerald-200 transition-all flex items-center gap-1.5 cursor-pointer disabled:opacity-50"
-                >
-                  <Check className="w-4 h-4" />
-                  <span>{loading ? 'در حال ثبت...' : 'ثبت مستقیم پرداخت و تسویه تعهد'}</span>
-                </button>
-              )}
+                )}
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
 
       {/* 3.5 SYSTEM OFFICIAL PAYMENT MODAL OVERLAY */}
       {systemPayModal && (

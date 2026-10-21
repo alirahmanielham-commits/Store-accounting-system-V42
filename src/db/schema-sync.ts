@@ -151,27 +151,59 @@ export function findMatchingColumn(knownCols: Map<string, string>, propKey: stri
   if (knownCols.has(propKey)) {
     return { dbColName: propKey, colType: knownCols.get(propKey) || '' };
   }
-  // 2. Lowercase match
-  const lowerProp = propKey.toLowerCase();
-  if (knownCols.has(lowerProp)) {
-    return { dbColName: lowerProp, colType: knownCols.get(lowerProp) || '' };
-  }
-  for (const [colName, colType] of knownCols.entries()) {
-    if (colName.toLowerCase() === lowerProp) {
-      return { dbColName: colName, colType };
+
+  // 2. Critical disambiguation for 'userName' vs 'username':
+  // In the application, 'username' is the login account identifier, while 'userName' is the user's display/full name.
+  // 'userName' must NEVER be mapped to database column 'username'!
+  if (propKey === 'userName') {
+    if (knownCols.has('user_name')) {
+      return { dbColName: 'user_name', colType: knownCols.get('user_name') || '' };
     }
+    for (const [colName, colType] of knownCols.entries()) {
+      if (colName === 'userName' || colName.toLowerCase() === 'user_name') {
+        return { dbColName: colName, colType };
+      }
+    }
+    // Return null so syncTableSchema will create the separate "userName" column
+    return null;
   }
+  if (propKey === 'username') {
+    if (knownCols.has('username')) {
+      return { dbColName: 'username', colType: knownCols.get('username') || '' };
+    }
+    for (const [colName, colType] of knownCols.entries()) {
+      if (colName === 'username') {
+        return { dbColName: colName, colType };
+      }
+    }
+    return null;
+  }
+
   // 3. Snake case conversion: e.g. createdAt -> created_at
   const snakeProp = propKey.replace(/[A-Z]/g, letter => `_${letter.toLowerCase()}`).toLowerCase();
-  if (knownCols.has(snakeProp)) {
-    return { dbColName: snakeProp, colType: knownCols.get(snakeProp) || '' };
+  if (snakeProp !== propKey.toLowerCase()) {
+    if (knownCols.has(snakeProp)) {
+      return { dbColName: snakeProp, colType: knownCols.get(snakeProp) || '' };
+    }
+    for (const [colName, colType] of knownCols.entries()) {
+      if (colName.toLowerCase() === snakeProp) {
+        return { dbColName: colName, colType };
+      }
+    }
   }
+
+  // 4. Exact case-insensitive match against actual column names in knownCols
+  const lowerProp = propKey.toLowerCase();
   for (const [colName, colType] of knownCols.entries()) {
-    if (colName.toLowerCase() === snakeProp) {
+    if (colName.toLowerCase() === lowerProp) {
+      if (propKey === 'userName' && colName.toLowerCase() === 'username') {
+        continue;
+      }
       return { dbColName: colName, colType };
     }
   }
-  // 4. Camel case conversion: e.g. created_at -> createdAt
+
+  // 5. Camel case conversion: e.g. created_at -> createdAt
   const camelProp = propKey.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()).toLowerCase();
   for (const [colName, colType] of knownCols.entries()) {
     if (colName.toLowerCase() === camelProp) {
@@ -185,6 +217,7 @@ export function preparePgItem(key: string, item: Record<string, any>) {
   const colMap = tableSchemas.get(key);
   const itemKeys: string[] = [];
   const itemVals: any[] = [];
+  const seenCols = new Set<string>();
   
   for (const [k, rawVal] of Object.entries(item)) {
     if (rawVal === undefined) continue;
@@ -198,6 +231,13 @@ export function preparePgItem(key: string, item: Record<string, any>) {
         colType = matched.colType;
       }
     }
+
+    // Deduplication check: NEVER allow the same column name to appear twice in itemKeys.
+    // This strictly prevents PostgreSQL 42701 "column specified more than once" errors.
+    if (seenCols.has(targetCol)) {
+      continue;
+    }
+    seenCols.add(targetCol);
 
     itemKeys.push(targetCol);
     let val = rawVal;
@@ -397,6 +437,21 @@ export async function ensurePostgresTables(poolOverride?: any) {
           ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "rawDate" TEXT;
           ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "displayDate" TEXT;
         `);
+        if (key === 'system_logs') {
+          try {
+            await p.query(`
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "username" TEXT;
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "userName" TEXT;
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "userId" TEXT;
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "userRole" TEXT;
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "action" TEXT;
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "details" TEXT;
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "entityType" TEXT;
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "entityId" TEXT;
+              ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "timestamp" NUMERIC;
+            `);
+          } catch (sysLogErr: any) {}
+        }
       } catch (err: any) {
         console.error(`Error creating/updating table ${key}:`, err.message);
       }
