@@ -21,6 +21,7 @@ import { formatDecimalForExcel } from "../../utils/exportUtils";
 import { getUnitRatioDirection, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../../utils/unitConversion";
 import { safePrint } from "../../utils/printHelper";
 import InvoiceRowActionsDropdown from "./InvoiceRowActionsDropdown";
+import QueueSmsModal from "../messaging/QueueSmsModal";
 
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_year' | 'all' | 'custom';
 
@@ -113,6 +114,9 @@ export default function InvoicesList(props: any) {
   // Fast warehouse receipt modal
   const [fastReceiptInvoice, setFastReceiptInvoice] = useState<any>(null);
   const [fastReceiptWarehouseId, setFastReceiptWarehouseId] = useState<string>('');
+
+  // Queue SMS modal
+  const [queueSmsInvoice, setQueueSmsInvoice] = useState<any>(null);
 
   // Reset tab filter on activeTab change
   useEffect(() => {
@@ -1563,6 +1567,7 @@ export default function InvoicesList(props: any) {
                                   onEdit={!isVoided && handleEditInvoiceAction ? () => handleEditInvoiceAction(inv) : undefined}
                                   onVoid={!isVoided && handleVoidInvoice ? () => handleVoidInvoice(inv.id) : undefined}
                                   onDelete={!isVoided && handleDeleteInvoice ? () => handleDeleteInvoice(inv.id) : undefined}
+                                  onQueueSms={() => setQueueSmsInvoice(inv)}
                                 />
                               </div>
                             </td>
@@ -1817,6 +1822,7 @@ export default function InvoicesList(props: any) {
                               onEdit={!isVoided && handleEditInvoiceAction ? () => handleEditInvoiceAction(inv) : undefined}
                               onVoid={!isVoided && handleVoidInvoice ? () => handleVoidInvoice(inv.id) : undefined}
                               onDelete={!isVoided && handleDeleteInvoice ? () => handleDeleteInvoice(inv.id) : undefined}
+                              onQueueSms={() => setQueueSmsInvoice(inv)}
                             />
                           </div>
                         </div>
@@ -2053,6 +2059,24 @@ export default function InvoicesList(props: any) {
           </motion.div>
         )}
       </AnimatePresence>
+
+      {/* Queue SMS Modal */}
+      {queueSmsInvoice && (
+        <QueueSmsModal
+          isOpen={!!queueSmsInvoice}
+          onClose={() => setQueueSmsInvoice(null)}
+          documentType="invoice"
+          data={queueSmsInvoice}
+          persons={persons}
+          storeSettings={storeSettings}
+          onSuccess={(record) => {
+            if (setSuccessMsg) {
+              setSuccessMsg(`پیامک اطلاع‌رسانی فاکتور #${toPersianDigits(record.id)} در صف ارسال پیامک قرار گرفت.`);
+            }
+          }}
+          onNavigateToSmsManager={setActiveTab ? () => setActiveTab('messaging') : undefined}
+        />
+      )}
     </div>
   );
 }

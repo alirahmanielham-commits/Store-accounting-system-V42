@@ -12,12 +12,13 @@ import {
   DollarSign, RefreshCw, XCircle, Warehouse, TrendingUp, TrendingDown,
   RotateCcw, AlertCircle, Calendar as CalendarIcon, Tag, Wallet, Ban, Percent,
   ArrowUpDown, Filter, ChevronDown, Landmark, CreditCard, Receipt, ArrowDownLeft,
-  FileCheck, Coins, Zap, ArrowRightLeft
+  FileCheck, Coins, Zap, ArrowRightLeft, MessageSquare
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import { convertToGregorian, formatDateDisplay, toPersianDigits, toEnglishDigits, addCommas, formatNumber as formatNumberUtil, getActiveStoreSettings } from "../../utils/format";
 import { formatDecimalForExcel } from "../../utils/exportUtils";
 import { safePrint } from "../../utils/printHelper";
+import QueueSmsModal from "../messaging/QueueSmsModal";
 
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_year' | 'all' | 'custom';
 
@@ -67,6 +68,9 @@ export default function ReceiptsList(props: any) {
   // Pagination state
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
+
+  // Queue SMS state
+  const [queueSmsReceipt, setQueueSmsReceipt] = useState<any>(null);
 
   // Reset filters on tab change
   React.useEffect(() => {
@@ -878,6 +882,16 @@ export default function ReceiptsList(props: any) {
                     </button>
 
                     <button
+                      type="button"
+                      onClick={() => setQueueSmsReceipt(tx)}
+                      className="px-2.5 py-1.5 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200/80 rounded-lg text-xs font-bold flex items-center gap-1 cursor-pointer transition-colors"
+                      title="ارسال پیامک رسید (افزودن به صف ارسال)"
+                    >
+                      <MessageSquare className="w-3.5 h-3.5 text-emerald-600" />
+                      <span>پیامک</span>
+                    </button>
+
+                    <button
                       onClick={() => {
                         if (setEditingReceipt) setEditingReceipt(tx);
                         if (setIsEditReceiptModalOpen) setIsEditReceiptModalOpen(true);
@@ -1032,6 +1046,15 @@ export default function ReceiptsList(props: any) {
 
                         <button
                           type="button"
+                          onClick={() => setQueueSmsReceipt(tx)}
+                          className="p-1.5 text-slate-400 hover:bg-emerald-50 hover:text-emerald-600 rounded-lg cursor-pointer transition-colors"
+                          title="ارسال پیامک اطلاع‌رسانی رسید (افزودن به صف ارسال)"
+                        >
+                          <MessageSquare className="w-4 h-4 text-emerald-600" />
+                        </button>
+
+                        <button
+                          type="button"
                           onClick={() => {
                             if (setEditingReceipt) setEditingReceipt(tx);
                             if (setIsEditReceiptModalOpen) setIsEditReceiptModalOpen(true);
@@ -1163,6 +1186,24 @@ export default function ReceiptsList(props: any) {
           </div>
         )}
       </div>
+
+      {/* Queue SMS Modal */}
+      {queueSmsReceipt && (
+        <QueueSmsModal
+          isOpen={!!queueSmsReceipt}
+          onClose={() => setQueueSmsReceipt(null)}
+          documentType="receipt"
+          data={queueSmsReceipt}
+          persons={persons}
+          storeSettings={storeSettings}
+          onSuccess={(record) => {
+            if (props.setSuccessMsg) {
+              props.setSuccessMsg(`پیامک رسید #${toPersianDigits(record.id)} در صف ارسال قرار گرفت.`);
+            }
+          }}
+          onNavigateToSmsManager={setActiveTab ? () => setActiveTab('messaging') : undefined}
+        />
+      )}
     </div>
   );
 }

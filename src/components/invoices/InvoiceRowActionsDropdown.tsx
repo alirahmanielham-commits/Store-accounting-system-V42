@@ -15,7 +15,8 @@ import {
   Barcode,
   RotateCcw,
   FilePlus,
-  Truck
+  Truck,
+  MessageSquare
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -40,6 +41,7 @@ interface InvoiceRowActionsDropdownProps {
   onDelete?: () => void;
   onApprovePurchase?: () => void;
   onApproveWarehouseReceipt?: () => void;
+  onQueueSms?: () => void;
 }
 
 export default function InvoiceRowActionsDropdown({
@@ -62,7 +64,8 @@ export default function InvoiceRowActionsDropdown({
   onVoid,
   onDelete,
   onApprovePurchase,
-  onApproveWarehouseReceipt
+  onApproveWarehouseReceipt,
+  onQueueSms
 }: InvoiceRowActionsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; openUp: boolean }>({
@@ -219,6 +222,25 @@ export default function InvoiceRowActionsDropdown({
                   </div>
                   <span className="text-[10px] text-slate-400">سریع</span>
                 </button>
+
+                {onQueueSms && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOpen(false);
+                      onQueueSms();
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-emerald-50/80 hover:text-emerald-700 rounded-xl transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+                      <span>ارسال پیامک اطلاع‌رسانی</span>
+                    </div>
+                    <span className="text-[9px] bg-emerald-100 text-emerald-800 font-bold px-1.5 py-0.5 rounded-md">
+                      صف انتظار
+                    </span>
+                  </button>
+                )}
               </div>
 
               {/* Group 2: Approvals & Workflow Actions */}

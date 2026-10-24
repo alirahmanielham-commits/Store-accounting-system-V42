@@ -5,7 +5,8 @@ import {
   AlertTriangle, ShieldCheck, Printer, RefreshCw, 
   Wallet, Building, ArrowLeft, Info, HelpCircle,
   History, ExternalLink, CheckCheck, Layers, ArrowUpRight,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, FileX2, FileCheck, CheckSquare,
+  Ban, PauseCircle, PlayCircle, SlidersHorizontal, BookOpen, ScrollText, FileSignature
 } from 'lucide-react';
 import Select from 'react-select';
 import { 
@@ -18,7 +19,7 @@ import {
 } from '../../services/dataService';
 import { getTransactions } from '../../services/invoiceService';
 import PayReceiptModal from '../financial/PayReceiptModal';
-import { convertToGregorian, formatDateDisplay, toPersianDigits, addCommas } from '../../utils/format';
+import { convertToGregorian, formatDateDisplay, toPersianDigits, addCommas, numberToWords } from '../../utils/format';
 import CurrencyInput from '../common/CurrencyInput';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import DateObjectModule from 'react-date-object';
@@ -44,7 +45,7 @@ export interface RentInstallment {
   dueDate: string; // '1403/01/25'
   dueDateTimestamp: number;
   amount: number;
-  commitmentStatus: 'uncommitted' | 'committed';
+  commitmentStatus: 'uncommitted' | 'committed' | 'cancelled';
   commitmentDocId?: string | null;
   commitmentDate?: string | null;
   paymentStatus: 'unpaid' | 'paid';
@@ -55,6 +56,40 @@ export interface RentInstallment {
   paymentSourceId?: string | null;
   paymentRefNumber?: string | null;
   payments?: RentInstallmentPayment[];
+}
+
+export interface RentContractAmendment {
+  id: string;
+  date: string;
+  type: 'rent_amount' | 'extend_term' | 'terms_change';
+  title: string;
+  oldMonthlyAmount?: number;
+  newMonthlyAmount?: number;
+  oldEndDate?: string | null;
+  newEndDate?: string | null;
+  description: string;
+  createdAt: string;
+}
+
+export interface RentContractTerminationInfo {
+  date: string;
+  reason: string;
+  penaltyAmount?: number;
+  depositStatus: string;
+  notes: string;
+  cancelFutureInstallments?: boolean;
+  createdAt: string;
+}
+
+export interface RentContractCompletionInfo {
+  date: string;
+  depositRefundAmount?: number;
+  depositRefundStatus: string;
+  notes: string;
+  vacated?: boolean;
+  utilitiesSettled?: boolean;
+  rentSettled?: boolean;
+  createdAt: string;
 }
 
 export interface PaymentAllocationInfo {
@@ -214,7 +249,7 @@ export function generateRentSchedule(
       title,
       dueDate: dueDateStr,
       dueDateTimestamp: dueDateTs,
-      amount: Number(amount) || 0,
+      amount: existing?.amount !== undefined ? Number(existing.amount) : (Number(amount) || 0),
       commitmentStatus: existing?.commitmentStatus || 'uncommitted',
       commitmentDocId: existing?.commitmentDocId || null,
       commitmentDate: existing?.commitmentDate || null,
@@ -253,7 +288,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
 
   // Dedicated Detailed Dossier View
   const [selectedContractDetail, setSelectedContractDetail] = useState<any | null>(null);
-  const [detailActiveTab, setDetailActiveTab] = useState<'schedule' | 'accounting' | 'details'>('schedule');
+  const [detailActiveTab, setDetailActiveTab] = useState<'schedule' | 'accounting' | 'details' | 'amendments'>('schedule');
   const [showAllAlerts, setShowAllAlerts] = useState(false);
 
   // Modals state
@@ -262,6 +297,43 @@ export default function RentContractsManager({ personsData, storeSettings, showN
   const [deleteId, setDeleteId] = useState<string | null>(null);
   const [printContract, setPrintContract] = useState<any | null>(null);
   const [systemPayModal, setSystemPayModal] = useState<{ contract: any; installment: RentInstallment } | null>(null);
+
+  // Advanced Contract Lifecycle Modals
+  const [terminateModal, setTerminateModal] = useState<{
+    contract: any;
+    date: any;
+    reason: string;
+    penaltyAmount: string;
+    depositStatus: string;
+    cancelFutureInstallments: boolean;
+    notes: string;
+  } | null>(null);
+
+  const [completeModal, setCompleteModal] = useState<{
+    contract: any;
+    date: any;
+    depositRefundAmount: string;
+    depositRefundStatus: string;
+    vacated: boolean;
+    utilitiesSettled: boolean;
+    rentSettled: boolean;
+    notes: string;
+  } | null>(null);
+
+  const [amendmentModal, setAmendmentModal] = useState<{
+    contract: any;
+    date: any;
+    type: 'rent_amount' | 'extend_term' | 'terms_change';
+    newMonthlyAmount: string;
+    newEndDate: any;
+    applyToFutureOnly: boolean;
+    description: string;
+  } | null>(null);
+
+  const [statusChangeModal, setStatusChangeModal] = useState<{
+    contract: any;
+    newStatus: string;
+  } | null>(null);
 
   // Commitment & Payment Quick Modals
   const [commitmentModal, setCommitmentModal] = useState<{
@@ -293,7 +365,12 @@ export default function RentContractsManager({ personsData, storeSettings, showN
     reminderDaysBefore: number;
     expenseAccountId: string;
     description: string;
-    status: 'draft' | 'active' | 'expired';
+    status: 'draft' | 'active' | 'suspended' | 'completed' | 'terminated';
+    propertyUsage: 'commercial' | 'office' | 'warehouse' | 'residential';
+    propertyArea: string;
+    propertyAddress: string;
+    propertyRegistryCode: string;
+    lesseeName: string;
   }>({
     personId: null,
     contractNumber: '',
@@ -306,7 +383,12 @@ export default function RentContractsManager({ personsData, storeSettings, showN
     reminderDaysBefore: 3,
     expenseAccountId: '',
     description: '',
-    status: 'active'
+    status: 'active',
+    propertyUsage: 'commercial',
+    propertyArea: '',
+    propertyAddress: '',
+    propertyRegistryCode: '',
+    lesseeName: ''
   });
 
   const currencyUnit = storeSettings?.currency || 'ریال';
@@ -457,7 +539,12 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       reminderDaysBefore: 3,
       expenseAccountId: '',
       description: '',
-      status: 'active'
+      status: 'active',
+      propertyUsage: 'commercial',
+      propertyArea: '',
+      propertyAddress: '',
+      propertyRegistryCode: '',
+      lesseeName: storeSettings?.name || storeSettings?.storeName || ''
     });
     setIsModalOpen(true);
   };
@@ -480,7 +567,12 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       reminderDaysBefore: c.reminderDaysBefore ?? 3,
       expenseAccountId: c.expenseAccountId || '',
       description: c.description || '',
-      status: c.status || 'draft'
+      status: c.status || 'draft',
+      propertyUsage: c.propertyUsage || 'commercial',
+      propertyArea: String(c.propertyArea || ''),
+      propertyAddress: c.propertyAddress || '',
+      propertyRegistryCode: c.propertyRegistryCode || '',
+      lesseeName: c.lesseeName || storeSettings?.name || storeSettings?.storeName || ''
     });
     setIsModalOpen(true);
   };
@@ -539,6 +631,7 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       const cleanDeposit = Number(String(form.depositAmount || '').replace(/,/g, '').trim()) || 0;
 
       const payload = {
+        ...(existingContract || {}),
         personId: personIdVal,
         contractNumber: form.contractNumber || `RC-${Date.now().toString().slice(-4)}`,
         startDate: startDateIso,
@@ -551,6 +644,11 @@ export default function RentContractsManager({ personsData, storeSettings, showN
         expenseAccountId: form.expenseAccountId || '',
         description: form.description || '',
         status: form.status,
+        propertyUsage: form.propertyUsage,
+        propertyArea: form.propertyArea,
+        propertyAddress: form.propertyAddress,
+        propertyRegistryCode: form.propertyRegistryCode,
+        lesseeName: form.lesseeName,
         schedule: generatedSchedule
       };
 
@@ -570,9 +668,247 @@ export default function RentContractsManager({ personsData, storeSettings, showN
       await fetchData();
     } catch (e) {
       console.error(e);
-      notify('خطا در ثبت قرارداد اجاره', 'error');
+      notify('خطا در ذخیره اطلاعات قرارداد', 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Quick Status Changer
+  const handleQuickStatusChange = async (contract: any, newStatus: string) => {
+    try {
+      setLoading(true);
+      const updated = { ...contract, status: newStatus };
+      await updateRentContract(contract.id, updated);
+      notify(`وضعیت قرارداد ${contract.contractNumber || ''} به «${getStatusLabel(newStatus)}» تغییر یافت`, 'success');
+      setStatusChangeModal(null);
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      notify('خطا در تغییر وضعیت قرارداد', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Terminate Contract Handler
+  const handleTerminateSubmit = async () => {
+    if (!terminateModal) return;
+    const { contract, date, reason, penaltyAmount, depositStatus, cancelFutureInstallments, notes } = terminateModal;
+    try {
+      setLoading(true);
+      const termDateIso = convertToGregorian(date);
+      const termDateTs = new Date(termDateIso).getTime();
+
+      let updatedSchedule = [...(contract.schedule || [])];
+      if (cancelFutureInstallments) {
+        updatedSchedule = updatedSchedule.map((inst: RentInstallment) => {
+          if (inst.commitmentStatus === 'uncommitted' && inst.dueDateTimestamp >= termDateTs) {
+            return {
+              ...inst,
+              commitmentStatus: 'cancelled' as const
+            };
+          }
+          return inst;
+        });
+      }
+
+      const termInfo: RentContractTerminationInfo = {
+        date: termDateIso,
+        reason,
+        penaltyAmount: Number(String(penaltyAmount || '').replace(/,/g, '')) || 0,
+        depositStatus,
+        cancelFutureInstallments,
+        notes,
+        createdAt: new Date().toISOString()
+      };
+
+      const updatedContract = {
+        ...contract,
+        status: 'terminated',
+        terminationInfo: termInfo,
+        schedule: updatedSchedule
+      };
+
+      await updateRentContract(contract.id, updatedContract);
+      notify(`قرارداد ${contract.contractNumber || ''} با موفقیت فسخ و سوابق آن ثبت شد`, 'warning');
+      setTerminateModal(null);
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      notify('خطا در ثبت فسخ قرارداد', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Complete Contract Handler
+  const handleCompleteSubmit = async () => {
+    if (!completeModal) return;
+    const { contract, date, depositRefundAmount, depositRefundStatus, vacated, utilitiesSettled, rentSettled, notes } = completeModal;
+    try {
+      setLoading(true);
+      const compDateIso = convertToGregorian(date);
+      const compInfo: RentContractCompletionInfo = {
+        date: compDateIso,
+        depositRefundAmount: Number(String(depositRefundAmount || '').replace(/,/g, '')) || 0,
+        depositRefundStatus,
+        vacated,
+        utilitiesSettled,
+        rentSettled,
+        notes,
+        createdAt: new Date().toISOString()
+      };
+
+      const updatedContract = {
+        ...contract,
+        status: 'completed',
+        completionInfo: compInfo
+      };
+
+      await updateRentContract(contract.id, updatedContract);
+      notify(`خاتمه قرارداد ${contract.contractNumber || ''} و تحویل ملک با موفقیت ثبت شد`, 'success');
+      setCompleteModal(null);
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      notify('خطا در ثبت خاتمه قرارداد', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Amendment Submit Handler
+  const handleAmendmentSubmit = async () => {
+    if (!amendmentModal) return;
+    const { contract, date, type, newMonthlyAmount, newEndDate, applyToFutureOnly, description } = amendmentModal;
+    const cleanNewAmount = Number(String(newMonthlyAmount || '').replace(/,/g, '')) || Number(contract.monthlyAmount);
+
+    if (type === 'rent_amount' && cleanNewAmount <= 0) {
+      notify('مبلغ جدید اجاره‌بها باید بزرگتر از صفر باشد', 'error');
+      return;
+    }
+
+    try {
+      setLoading(true);
+      const amdDateIso = convertToGregorian(date);
+      const amdDateTs = new Date(amdDateIso).getTime();
+      let updatedSchedule = [...(contract.schedule || [])];
+      let updatedMonthlyAmount = contract.monthlyAmount;
+      let updatedEndDate = contract.endDate;
+
+      if (type === 'rent_amount') {
+        updatedMonthlyAmount = cleanNewAmount;
+        updatedSchedule = updatedSchedule.map((inst: RentInstallment) => {
+          if (inst.commitmentStatus === 'uncommitted' && (!applyToFutureOnly || inst.dueDateTimestamp >= amdDateTs)) {
+            return {
+              ...inst,
+              amount: cleanNewAmount
+            };
+          }
+          return inst;
+        });
+      } else if (type === 'extend_term') {
+        if (!newEndDate) {
+          notify('تاریخ پایان جدید برای تمدید الزامی است', 'error');
+          setLoading(false);
+          return;
+        }
+        const newEndIso = convertToGregorian(newEndDate);
+        updatedEndDate = newEndIso;
+        if (cleanNewAmount > 0) {
+          updatedMonthlyAmount = cleanNewAmount;
+        }
+
+        const regenerated = generateRentSchedule(
+          contract.startDate,
+          newEndIso,
+          contract.paymentCycle || 'monthly',
+          Number(contract.paymentDay) || 1,
+          cleanNewAmount,
+          contract.schedule
+        );
+        updatedSchedule = regenerated;
+      }
+
+      const amdTitle = type === 'rent_amount'
+        ? `الحاقیه تغییر مبلغ اجاره‌بها به ${cleanNewAmount.toLocaleString()} ${currencyUnit}`
+        : type === 'extend_term'
+          ? `الحاقیه تمدید مدت قرارداد تا تاریخ ${formatDateDisplay(updatedEndDate, storeSettings?.calendarType)}`
+          : 'الحاقیه تغییر شرایط و توافقات قرارداد';
+
+      const newAmendment: RentContractAmendment = {
+        id: `amd_${Date.now()}`,
+        date: amdDateIso,
+        type,
+        title: amdTitle,
+        oldMonthlyAmount: Number(contract.monthlyAmount),
+        newMonthlyAmount: cleanNewAmount,
+        oldEndDate: contract.endDate,
+        newEndDate: updatedEndDate,
+        description,
+        createdAt: new Date().toISOString()
+      };
+
+      const updatedContract = {
+        ...contract,
+        monthlyAmount: updatedMonthlyAmount,
+        endDate: updatedEndDate,
+        schedule: updatedSchedule,
+        amendments: [...(contract.amendments || []), newAmendment]
+      };
+
+      await updateRentContract(contract.id, updatedContract);
+      notify(`الحاقیه قرارداد با موفقیت ثبت و بر روی جدول اقساط اعمال شد`, 'success');
+      setAmendmentModal(null);
+      await fetchData();
+    } catch (e) {
+      console.error(e);
+      notify('خطا در ثبت الحاقیه قرارداد', 'error');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const getStatusLabel = (status: string) => {
+    switch (status) {
+      case 'active': return 'فعال (جاری)';
+      case 'suspended':
+      case 'inactive': return 'معلق / غیرفعال';
+      case 'draft': return 'پیش‌نویس';
+      case 'completed':
+      case 'expired': return 'خاتمه‌یافته';
+      case 'terminated': return 'فسخ‌شده';
+      default: return status || 'نامشخص';
+    }
+  };
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case 'active':
+        return { label: 'فعال (جاری)', bg: 'bg-emerald-50 text-emerald-700 border-emerald-200' };
+      case 'suspended':
+      case 'inactive':
+        return { label: 'معلق / غیرفعال', bg: 'bg-amber-50 text-amber-800 border-amber-300' };
+      case 'draft':
+        return { label: 'پیش‌نویس', bg: 'bg-slate-100 text-slate-700 border-slate-200' };
+      case 'completed':
+      case 'expired':
+        return { label: 'خاتمه‌یافته', bg: 'bg-blue-50 text-blue-700 border-blue-200' };
+      case 'terminated':
+        return { label: 'فسخ‌شده', bg: 'bg-rose-50 text-rose-700 border-rose-200' };
+      default:
+        return { label: status || 'نامشخص', bg: 'bg-slate-100 text-slate-700 border-slate-200' };
+    }
+  };
+
+  const getUsageLabel = (usage: string) => {
+    switch (usage) {
+      case 'commercial': return 'واحد تجاری / فروشگاه';
+      case 'office': return 'واحد اداری / دفتر کار';
+      case 'warehouse': return 'انبار تجاری / سوله';
+      case 'residential': return 'واحد مسکونی';
+      default: return 'ملک تجاری / اداری';
     }
   };
 
@@ -831,13 +1167,20 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                     <h1 className="text-xl font-extrabold text-slate-900">
                       قرارداد اجاره {c.contractNumber ? `(${c.contractNumber})` : ''}
                     </h1>
-                    <span className={`px-3 py-0.5 rounded-full text-xs font-bold border ${
-                      c.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                      c.status === 'expired' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                      'bg-slate-100 text-slate-700 border-slate-200'
-                    }`}>
-                      {c.status === 'active' ? 'فعال' : c.status === 'expired' ? 'خاتمه‌یافته' : 'پیش‌نویس'}
-                    </span>
+                    {(() => {
+                      const badge = getStatusBadge(c.status);
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setStatusChangeModal({ contract: c, newStatus: c.status })}
+                          className={`px-3 py-1 rounded-full text-xs font-bold border transition-all hover:scale-105 cursor-pointer flex items-center gap-1 ${badge.bg}`}
+                          title="برای تغییر وضعیت قرارداد کلیک کنید"
+                        >
+                          <span>{badge.label}</span>
+                          <ChevronDown className="w-3.5 h-3.5 opacity-70" />
+                        </button>
+                      );
+                    })()}
                   </div>
                   <p className="text-xs text-slate-500 mt-1">
                     طرف حساب و موجر: <span className="font-bold text-slate-800">{getPersonName(c.personId)}</span>
@@ -847,23 +1190,82 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                 </div>
               </div>
 
-              <div className="flex items-center gap-2">
+              {/* Action Toolbar */}
+              <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
-                  onClick={() => setPrintContract(c)}
-                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  onClick={() => setPrintContract({ contract: c, activeTab: 'agreement' })}
+                  className="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors cursor-pointer"
                 >
                   <Printer className="w-4 h-4" />
-                  <span>چاپ اقساط</span>
+                  <span>چاپ قرارداد و مالی</span>
                 </button>
+
+                <button
+                  type="button"
+                  onClick={() => setAmendmentModal({
+                    contract: c,
+                    date: new Date(),
+                    type: 'rent_amount',
+                    newMonthlyAmount: String(c.monthlyAmount || ''),
+                    newEndDate: c.endDate ? new Date(convertToGregorian(c.endDate)) : null,
+                    applyToFutureOnly: true,
+                    description: ''
+                  })}
+                  className="px-3.5 py-2 bg-blue-50 hover:bg-blue-100 text-blue-800 rounded-xl font-bold text-xs flex items-center gap-1.5 border border-blue-200 transition-colors cursor-pointer"
+                >
+                  <FileSignature className="w-4 h-4 text-blue-600" />
+                  <span>ثبت الحاقیه / تغییر مبلغ</span>
+                </button>
+
+                {c.status !== 'terminated' && c.status !== 'completed' && (
+                  <>
+                    <button
+                      type="button"
+                      onClick={() => setCompleteModal({
+                        contract: c,
+                        date: new Date(),
+                        depositRefundAmount: String(c.depositAmount || ''),
+                        depositRefundStatus: 'fully_refunded',
+                        vacated: true,
+                        utilitiesSettled: true,
+                        rentSettled: true,
+                        notes: ''
+                      })}
+                      className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 rounded-xl font-bold text-xs flex items-center gap-1.5 border border-emerald-200 transition-colors cursor-pointer"
+                    >
+                      <CheckCircle className="w-4 h-4 text-emerald-600" />
+                      <span>خاتمه و تحویل ملک</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => setTerminateModal({
+                        contract: c,
+                        date: new Date(),
+                        reason: 'mutual',
+                        penaltyAmount: '0',
+                        depositStatus: 'pending',
+                        cancelFutureInstallments: true,
+                        notes: ''
+                      })}
+                      className="px-3.5 py-2 bg-rose-50 hover:bg-rose-100 text-rose-800 rounded-xl font-bold text-xs flex items-center gap-1.5 border border-rose-200 transition-colors cursor-pointer"
+                    >
+                      <FileX2 className="w-4 h-4 text-rose-600" />
+                      <span>فسخ قرارداد</span>
+                    </button>
+                  </>
+                )}
+
                 <button
                   type="button"
                   onClick={() => handleEdit(c)}
-                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
+                  className="px-3.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
                   <Edit2 className="w-4 h-4" />
-                  <span>ویرایش قرارداد</span>
+                  <span>ویرایش</span>
                 </button>
+
                 <button
                   type="button"
                   onClick={() => setDeleteId(c.id)}
@@ -1054,6 +1456,18 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                 >
                   <Info className="w-4 h-4" />
                   <span>مشخصات و شرایط قرارداد</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDetailActiveTab('amendments')}
+                  className={`pb-4 text-sm font-extrabold flex items-center gap-2 border-b-2 transition-all cursor-pointer ${
+                    detailActiveTab === 'amendments'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <FileSignature className="w-4 h-4" />
+                  <span>الحاقیه‌ها و سوابق حقوقی ({toPersianDigits((c.amendments?.length || 0) + (c.terminationInfo ? 1 : 0) + (c.completionInfo ? 1 : 0))})</span>
                 </button>
               </div>
 
@@ -1286,6 +1700,118 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                   )}
                 </div>
               )}
+
+              {/* TAB 4: AMENDMENTS & LEGAL HISTORY */}
+              {detailActiveTab === 'amendments' && (
+                <div className="p-6 space-y-6">
+                  {/* Termination Banner if terminated */}
+                  {c.terminationInfo && (
+                    <div className="bg-rose-50 border border-rose-200 p-5 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-extrabold text-rose-950 text-base flex items-center gap-2">
+                          <FileX2 className="w-5 h-5 text-rose-600" />
+                          <span>صورتجلسه فسخ قرارداد</span>
+                        </h4>
+                        <span className="text-xs font-mono font-bold text-rose-800">
+                          تاریخ فسخ: {formatDateDisplay(c.terminationInfo.date, storeSettings?.calendarType)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-rose-900 bg-white/70 p-3 rounded-xl border border-rose-100">
+                        <div><strong>علت فسخ:</strong> {c.terminationInfo.reason === 'mutual' ? 'توافق دوطرفه' : c.terminationInfo.reason === 'non_payment' ? 'عدم پرداخت اجاره‌بها' : c.terminationInfo.reason === 'early_vacation' ? 'تخلیه زودهنگام' : c.terminationInfo.reason === 'breach_of_terms' ? 'تخلف از شروط قرارداد' : 'سایر موارد'}</div>
+                        <div><strong>خسارت/جریمه فسخ:</strong> {Number(c.terminationInfo.penaltyAmount || 0).toLocaleString()} {currencyUnit}</div>
+                        <div><strong>وضعیت ودیعه:</strong> {c.terminationInfo.depositStatus === 'refunded' ? 'مسترد گردید' : c.terminationInfo.depositStatus === 'settled_with_damages' ? 'تهاتر با مطالبات' : 'در انتظار تسویه'}</div>
+                      </div>
+                      {c.terminationInfo.notes && (
+                        <p className="text-xs text-rose-800 leading-relaxed bg-white/60 p-3 rounded-xl">
+                          <strong>توضیحات صورتجلسه:</strong> {c.terminationInfo.notes}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Completion Banner if completed */}
+                  {c.completionInfo && (
+                    <div className="bg-blue-50 border border-blue-200 p-5 rounded-2xl space-y-3">
+                      <div className="flex items-center justify-between">
+                        <h4 className="font-extrabold text-blue-950 text-base flex items-center gap-2">
+                          <CheckCircle className="w-5 h-5 text-blue-600" />
+                          <span>صورتجلسه خاتمه و تحویل ملک</span>
+                        </h4>
+                        <span className="text-xs font-mono font-bold text-blue-800">
+                          تاریخ خاتمه: {formatDateDisplay(c.completionInfo.date, storeSettings?.calendarType)}
+                        </span>
+                      </div>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 text-xs text-blue-900 bg-white/70 p-3 rounded-xl border border-blue-100">
+                        <div><strong>مبلغ ودیعه مسترد شده:</strong> {Number(c.completionInfo.depositRefundAmount || 0).toLocaleString()} {currencyUnit}</div>
+                        <div><strong>وضعیت تخلیه:</strong> {c.completionInfo.vacated ? '✓ ملک تخلیه و تحویل شد' : 'در انتظار تخلیه'}</div>
+                        <div><strong>تسویه قبوض و شارژ:</strong> {c.completionInfo.utilitiesSettled ? '✓ کامل تسویه شد' : 'در انتظار تسویه'}</div>
+                      </div>
+                      {c.completionInfo.notes && (
+                        <p className="text-xs text-blue-800 leading-relaxed bg-white/60 p-3 rounded-xl">
+                          <strong>شرح تحویل:</strong> {c.completionInfo.notes}
+                        </p>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Registered Amendments List */}
+                  <div className="space-y-4">
+                    <div className="flex justify-between items-center">
+                      <h4 className="font-extrabold text-slate-800 text-sm flex items-center gap-2">
+                        <FileSignature className="w-4 h-4 text-indigo-600" />
+                        <span>الحاقیه‌ها و الحاق‌های ثبت‌شده ({toPersianDigits(c.amendments?.length || 0)})</span>
+                      </h4>
+                      <button
+                        type="button"
+                        onClick={() => setAmendmentModal({
+                          contract: c,
+                          date: new Date(),
+                          type: 'rent_amount',
+                          newMonthlyAmount: String(c.monthlyAmount || ''),
+                          newEndDate: c.endDate ? new Date(convertToGregorian(c.endDate)) : null,
+                          applyToFutureOnly: true,
+                          description: ''
+                        })}
+                        className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-bold flex items-center gap-1 transition-colors cursor-pointer"
+                      >
+                        <Plus className="w-3.5 h-3.5" />
+                        <span>ثبت الحاقیه جدید</span>
+                      </button>
+                    </div>
+
+                    {c.amendments && c.amendments.length > 0 ? (
+                      <div className="space-y-3">
+                        {c.amendments.map((amd: RentContractAmendment, aIdx: number) => (
+                          <div key={amd.id || aIdx} className="bg-slate-50 border border-slate-200 p-4 rounded-xl space-y-2">
+                            <div className="flex justify-between items-center">
+                              <span className="font-bold text-slate-900 text-sm">{amd.title}</span>
+                              <span className="text-xs font-mono text-slate-500">تاریخ: {formatDateDisplay(amd.date, storeSettings?.calendarType)}</span>
+                            </div>
+                            <div className="flex flex-wrap gap-4 text-xs text-slate-600">
+                              {amd.type === 'rent_amount' && (
+                                <span>مبلغ قبلی: <strong className="line-through">{Number(amd.oldMonthlyAmount || 0).toLocaleString()}</strong> ➔ جدید: <strong className="text-indigo-700 font-mono font-bold">{Number(amd.newMonthlyAmount || 0).toLocaleString()} {currencyUnit}</strong></span>
+                              )}
+                              {amd.type === 'extend_term' && (
+                                <span>تمدید تا: <strong className="text-indigo-700 font-mono font-bold">{formatDateDisplay(amd.newEndDate, storeSettings?.calendarType)}</strong></span>
+                              )}
+                            </div>
+                            {amd.description && (
+                              <p className="text-xs text-slate-700 bg-white p-2.5 rounded-lg border border-slate-200 leading-relaxed">
+                                {amd.description}
+                              </p>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    ) : !c.terminationInfo && !c.completionInfo ? (
+                      <div className="text-center py-8 text-slate-400 border border-dashed border-slate-200 rounded-2xl">
+                        <FileSignature className="w-10 h-10 mx-auto text-slate-300 mb-2" />
+                        <p className="text-xs font-bold">هنوز هیچ الحاقیه‌ای برای این قرارداد ثبت نشده است.</p>
+                      </div>
+                    ) : null}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         );
@@ -1422,10 +1948,12 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                 onChange={(e) => setFilterStatus(e.target.value)}
                 className="px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl outline-none text-xs font-bold text-slate-700 cursor-pointer"
               >
-                <option value="all">همه وضعیت‌ها</option>
-                <option value="active">قراردادهای فعال</option>
-                <option value="draft">پیش‌نویس</option>
-                <option value="expired">منقضی شده</option>
+                <option value="all">همه وضعیت‌ها ({toPersianDigits(contracts.length)})</option>
+                <option value="active">فعال ({toPersianDigits(contracts.filter(c => c.status === 'active').length)})</option>
+                <option value="suspended">معلق / غیرفعال ({toPersianDigits(contracts.filter(c => c.status === 'suspended' || c.status === 'inactive').length)})</option>
+                <option value="draft">پیش‌نویس ({toPersianDigits(contracts.filter(c => c.status === 'draft').length)})</option>
+                <option value="completed">خاتمه‌یافته ({toPersianDigits(contracts.filter(c => c.status === 'completed' || c.status === 'expired').length)})</option>
+                <option value="terminated">فسخ‌شده ({toPersianDigits(contracts.filter(c => c.status === 'terminated').length)})</option>
               </select>
 
               <button
@@ -1518,13 +2046,14 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                           </div>
                         </td>
                         <td className="p-4 text-center">
-                          <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-bold border ${
-                            c.status === 'active' ? 'bg-emerald-50 text-emerald-700 border-emerald-200' :
-                            c.status === 'expired' ? 'bg-amber-50 text-amber-700 border-amber-200' :
-                            'bg-slate-100 text-slate-700 border-slate-200'
-                          }`}>
-                            {c.status === 'active' ? 'فعال' : c.status === 'expired' ? 'منقضی' : 'پیش‌نویس'}
-                          </span>
+                          {(() => {
+                            const badge = getStatusBadge(c.status);
+                            return (
+                              <span className={`inline-flex px-2.5 py-1 rounded-lg text-xs font-bold border ${badge.bg}`}>
+                                {badge.label}
+                              </span>
+                            );
+                          })()}
                         </td>
                         <td className="p-4 text-center" onClick={(e) => e.stopPropagation()}>
                           <div className="flex items-center justify-center gap-1.5">
@@ -1734,16 +2263,65 @@ export default function RentContractsManager({ personsData, storeSettings, showN
                   />
                 </div>
 
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">کاربری مورد اجاره</label>
+                  <select
+                    value={form.propertyUsage}
+                    onChange={(e: any) => setForm({ ...form, propertyUsage: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-indigo-500 text-sm font-bold bg-white cursor-pointer"
+                  >
+                    <option value="commercial">واحد تجاری / فروشگاه</option>
+                    <option value="office">واحد اداری / دفتر کار</option>
+                    <option value="warehouse">انبار تجاری / سوله</option>
+                    <option value="residential">واحد مسکونی</option>
+                  </select>
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">متراژ / مساحت (متر مربع)</label>
+                  <input
+                    type="text"
+                    value={form.propertyArea}
+                    onChange={(e) => setForm({ ...form, propertyArea: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-indigo-500 text-center font-bold font-mono"
+                    placeholder="مثال: ۱۲۰"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">شماره پلاک ثبتی / کد رهگیری</label>
+                  <input
+                    type="text"
+                    value={form.propertyRegistryCode}
+                    onChange={(e) => setForm({ ...form, propertyRegistryCode: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-indigo-500 font-mono text-sm"
+                    placeholder="مثال: ۱۲۳/۴۵۶"
+                  />
+                </div>
+
                 <div className="md:col-span-2">
-                  <label className="block text-sm font-bold text-slate-700 mb-1.5">وضعیت قرارداد</label>
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">نشانی دقیق مورد اجاره</label>
+                  <input
+                    type="text"
+                    value={form.propertyAddress}
+                    onChange={(e) => setForm({ ...form, propertyAddress: e.target.value })}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-indigo-500 text-sm"
+                    placeholder="خیابان، پلاک، طبقه، واحد..."
+                  />
+                </div>
+
+                <div className="md:col-span-2">
+                  <label className="block text-sm font-bold text-slate-700 mb-1.5">وضعیت اولیه قرارداد</label>
                   <select 
                     value={form.status}
                     onChange={e => setForm({...form, status: e.target.value as any})}
                     className="w-full border border-slate-200 rounded-xl p-2.5 outline-none focus:border-indigo-500 text-sm font-bold bg-white cursor-pointer"
                   >
                     <option value="active">فعال (محاسبه و هشدار خودکار اقساط)</option>
-                    <option value="draft">پیش‌نویس (غیرفعال)</option>
-                    <option value="expired">منقضی شده / خاتمه‌یافته</option>
+                    <option value="suspended">معلق / غیرفعال موقت (توقف هشدارها)</option>
+                    <option value="draft">پیش‌نویس</option>
+                    <option value="completed">خاتمه‌یافته</option>
+                    <option value="terminated">فسخ‌شده</option>
                   </select>
                 </div>
 
@@ -2319,72 +2897,648 @@ export default function RentContractsManager({ personsData, storeSettings, showN
         </div>
       )}
 
-      {/* 4. PRINT / SCHEDULE PREVIEW MODAL */}
-      {printContract && (
-        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
-            <div className="p-4 border-b border-slate-200 flex justify-between items-center bg-slate-50">
-              <h3 className="font-extrabold text-slate-800 text-base flex items-center gap-2">
-                <Printer className="w-5 h-5 text-indigo-600" />
-                پیش‌نمایش و چاپ جدول اقساط اجاره ({printContract.contractNumber || 'بدون شماره'})
-              </h3>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => window.print()}
-                  className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1.5 cursor-pointer"
-                >
-                  <Printer className="w-4 h-4" />
-                  <span>چاپ برگه</span>
-                </button>
-                <button 
-                  type="button"
-                  onClick={() => setPrintContract(null)} 
-                  className="p-2 text-slate-400 hover:text-slate-600 cursor-pointer"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              </div>
-            </div>
+      {/* 4. OFFICIAL LEGAL PRINT & FINANCIAL SHEET MODAL */}
+      {printContract && (() => {
+        const cToPrint = printContract.contract || printContract;
+        const currentTab = printContract.activeTab || 'agreement';
 
-            <div className="p-8 overflow-y-auto print:p-0 space-y-6">
-              <div className="text-center border-b border-slate-300 pb-4">
-                <h2 className="text-xl font-black text-slate-900">جدول زمان‌بندی و تعهدات پرداخت اجاره</h2>
-                <div className="text-xs text-slate-600 mt-2 flex justify-center gap-6">
-                  <span>شماره قرارداد: <strong className="font-mono">{printContract.contractNumber}</strong></span>
-                  <span>طرف حساب (موجر): <strong>{getPersonName(printContract.personId)}</strong></span>
-                  <span>تاریخ تنظیم: <strong>{new Date().toLocaleDateString('fa-IR')}</strong></span>
+        return (
+          <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl w-full max-w-4xl shadow-2xl overflow-hidden flex flex-col max-h-[92vh]">
+              {/* Header */}
+              <div className="p-4 border-b border-slate-200 flex flex-wrap justify-between items-center bg-slate-50 gap-3">
+                <div className="flex items-center gap-3">
+                  <Printer className="w-5 h-5 text-indigo-600" />
+                  <h3 className="font-extrabold text-slate-800 text-sm sm:text-base">
+                    پیش‌نمایش و چاپ قرارداد اجاره ({cToPrint.contractNumber || 'بدون شماره'})
+                  </h3>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => window.print()}
+                    className="px-4 py-2 bg-indigo-600 text-white rounded-xl text-xs font-bold hover:bg-indigo-700 transition-colors flex items-center gap-1.5 cursor-pointer shadow-2xs"
+                  >
+                    <Printer className="w-4 h-4" />
+                    <span>چاپ این برگه</span>
+                  </button>
+                  <button 
+                    type="button"
+                    onClick={() => setPrintContract(null)} 
+                    className="p-2 text-slate-400 hover:text-slate-600 cursor-pointer"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
                 </div>
               </div>
 
-              <table className="w-full text-right text-xs border-collapse">
-                <thead>
-                  <tr className="bg-slate-100 border border-slate-300 font-bold">
-                    <th className="p-2.5 border border-slate-300 text-center">ردیف</th>
-                    <th className="p-2.5 border border-slate-300">عنوان دوره / قسط</th>
-                    <th className="p-2.5 border border-slate-300 text-center">موعد سررسید</th>
-                    <th className="p-2.5 border border-slate-300 text-center">مبلغ ({currencyUnit})</th>
-                    <th className="p-2.5 border border-slate-300 text-center">وضعیت تعهد حسابداری</th>
-                    <th className="p-2.5 border border-slate-300 text-center">وضعیت تسویه مالی</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {(printContract.schedule || []).map((inst: RentInstallment, i: number) => (
-                    <tr key={i} className="border border-slate-300">
-                      <td className="p-2 border border-slate-300 text-center font-bold">{toPersianDigits(i + 1)}</td>
-                      <td className="p-2 border border-slate-300 font-bold">{inst.title}</td>
-                      <td className="p-2 border border-slate-300 text-center font-mono">{toPersianDigits(inst.dueDate)}</td>
-                      <td className="p-2 border border-slate-300 text-center font-mono font-bold">{Number(inst.amount).toLocaleString()}</td>
-                      <td className="p-2 border border-slate-300 text-center">
-                        {inst.commitmentStatus === 'committed' ? 'سند تعهد صادر شده' : 'صادر نشده'}
-                      </td>
-                      <td className="p-2 border border-slate-300 text-center">
-                        {inst.paymentStatus === 'paid' ? 'تسویه شده' : 'پرداخت نشده'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+              {/* View Switcher Bar */}
+              <div className="border-b border-slate-200 px-6 bg-white flex gap-6 text-xs font-bold print:hidden">
+                <button
+                  type="button"
+                  onClick={() => setPrintContract({ contract: cToPrint, activeTab: 'agreement' })}
+                  className={`py-3 flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                    currentTab === 'agreement'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <ScrollText className="w-4 h-4" />
+                  <span>متن رسمی و قانونی قرارداد اجاره</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setPrintContract({ contract: cToPrint, activeTab: 'schedule' })}
+                  className={`py-3 flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                    currentTab === 'schedule'
+                      ? 'border-indigo-600 text-indigo-600'
+                      : 'border-transparent text-slate-500 hover:text-slate-800'
+                  }`}
+                >
+                  <Calendar className="w-4 h-4" />
+                  <span>کاربرگ مالی و وضعیت اقساط</span>
+                </button>
+
+                {(cToPrint.amendments?.length > 0 || cToPrint.terminationInfo || cToPrint.completionInfo) && (
+                  <button
+                    type="button"
+                    onClick={() => setPrintContract({ contract: cToPrint, activeTab: 'amendments' })}
+                    className={`py-3 flex items-center gap-1.5 border-b-2 transition-all cursor-pointer ${
+                      currentTab === 'amendments'
+                        ? 'border-indigo-600 text-indigo-600'
+                        : 'border-transparent text-slate-500 hover:text-slate-800'
+                    }`}
+                  >
+                    <FileSignature className="w-4 h-4" />
+                    <span>برگه الحاقیه‌ها و صورتجلسات</span>
+                  </button>
+                )}
+              </div>
+
+              {/* Printable Modal Body */}
+              <div className="p-8 overflow-y-auto space-y-6 text-slate-900 text-xs sm:text-sm print:p-0">
+                {/* TAB 1: OFFICIAL TENANCY AGREEMENT */}
+                {currentTab === 'agreement' && (
+                  <div className="space-y-5 leading-relaxed font-sans">
+                    {/* Official Document Header */}
+                    <div className="text-center border-b-2 border-slate-800 pb-4 space-y-1">
+                      <div className="font-extrabold text-xs text-slate-600">بسمه تعالی</div>
+                      <h2 className="text-xl font-black text-slate-900 tracking-wide">
+                        قرارداد اجاره اماکن {getUsageLabel(cToPrint.propertyUsage)}
+                      </h2>
+                      <p className="text-[11px] text-slate-600">
+                        (تنظیم‌شده بر اساس ماده ۱۰ قانون مدنی و قانون روابط موجر و مستاجر مصوب ۱۳۷۶)
+                      </p>
+                      <div className="flex justify-between items-center pt-3 text-xs font-mono font-bold text-slate-700">
+                        <span>شماره قرارداد: {cToPrint.contractNumber || '---'}</span>
+                        <span>تاریخ انعقاد: {formatDateDisplay(cToPrint.startDate, storeSettings?.calendarType)}</span>
+                      </div>
+                    </div>
+
+                    {/* Article 1: Parties */}
+                    <div className="space-y-1.5">
+                      <h3 className="font-black text-slate-900 text-sm underline decoration-slate-300 underline-offset-4">
+                        ماده ۱ - طرفین قرارداد:
+                      </h3>
+                      <p className="text-justify text-slate-800">
+                        <strong>۱-۱- موجر:</strong> جناب آقای / سرکار خانم <strong>{getPersonName(cToPrint.personId)}</strong> به شماره ملی / شناسه <strong>{getPersonDetails(cToPrint.personId)?.personCode || '---'}</strong> و شماره تماس <strong>{getPersonDetails(cToPrint.personId)?.mobile || getPersonDetails(cToPrint.personId)?.phone || '---'}</strong>.
+                      </p>
+                      <p className="text-justify text-slate-800">
+                        <strong>۲-۱- مستاجر:</strong> مجموعه / فروشگاه <strong>{cToPrint.lesseeName || storeSettings?.name || storeSettings?.storeName || 'مجموعه تجاری'}</strong> به مدیریت / نمایندگی <strong>{storeSettings?.ownerName || 'مدیریت فروشگاه'}</strong> و شماره تماس <strong>{storeSettings?.mobile || storeSettings?.phone || '---'}</strong>.
+                      </p>
+                    </div>
+
+                    {/* Article 2: Subject */}
+                    <div className="space-y-1.5">
+                      <h3 className="font-black text-slate-900 text-sm underline decoration-slate-300 underline-offset-4">
+                        ماده ۲ - موضوع و مشخصات مورد اجاره:
+                      </h3>
+                      <p className="text-justify text-slate-800">
+                        منافع یک باب <strong>{getUsageLabel(cToPrint.propertyUsage)}</strong> به مساحت تقریبی <strong>{cToPrint.propertyArea || '---'} متر مربع</strong>، دارای پلاک ثبتی <strong>{cToPrint.propertyRegistryCode || '---'}</strong> واقع در نشانی: <strong>{cToPrint.propertyAddress || cToPrint.description || 'نشانی مندرج در پرونده'}</strong> به همراه انشعابات آب، برق، گاز و تلفن جهت انتفاع مستاجر.
+                      </p>
+                    </div>
+
+                    {/* Article 3: Duration */}
+                    <div className="space-y-1.5">
+                      <h3 className="font-black text-slate-900 text-sm underline decoration-slate-300 underline-offset-4">
+                        ماده ۳ - مدت اجاره:
+                      </h3>
+                      <p className="text-justify text-slate-800">
+                        مدت این قرارداد از تاریخ <strong>{formatDateDisplay(cToPrint.startDate, storeSettings?.calendarType)}</strong> لغایت <strong>{cToPrint.endDate ? formatDateDisplay(cToPrint.endDate, storeSettings?.calendarType) : 'نامحدود'}</strong> به مدت کامل شمسی می‌باشد.
+                      </p>
+                    </div>
+
+                    {/* Article 4: Financial Terms */}
+                    <div className="space-y-1.5">
+                      <h3 className="font-black text-slate-900 text-sm underline decoration-slate-300 underline-offset-4">
+                        ماده ۴ - مبلغ اجاره‌بها و ودیعه (قرض‌الحسنه):
+                      </h3>
+                      <p className="text-justify text-slate-800">
+                        <strong>۱-۴- قرض‌الحسنه (ودیعه):</strong> مبلغ <strong>{Number(cToPrint.depositAmount || 0).toLocaleString()} {currencyUnit}</strong> (معادل <strong>{numberToWords(cToPrint.depositAmount || 0)} {currencyUnit}</strong>) که از سوی مستاجر به عنوان ودیعه نزد موجر قرار گرفته و در پایان مدت اجاره و پس از تخلیه و تسویه حساب کامل، عیناً مسترد می‌گردد.
+                      </p>
+                      <p className="text-justify text-slate-800">
+                        <strong>۲-۴- اجاره‌بها:</strong> بابت هر دوره مبلغ <strong>{Number(cToPrint.monthlyAmount).toLocaleString()} {currencyUnit}</strong> (معادل <strong>{numberToWords(cToPrint.monthlyAmount)} {currencyUnit}</strong>) که مستاجر متعهد است در روز <strong>{toPersianDigits(cToPrint.paymentDay)}</strong> هر دوره پرداخت و رسید دریافت نماید.
+                      </p>
+                    </div>
+
+                    {/* Article 5: Terms & Obligations */}
+                    <div className="space-y-1.5">
+                      <h3 className="font-black text-slate-900 text-sm underline decoration-slate-300 underline-offset-4">
+                        ماده ۵ - شروط و تعهدات طرفین:
+                      </h3>
+                      <ul className="list-disc list-inside space-y-1 text-slate-800 text-justify">
+                        <li>مستاجر حق واگذاری مورد اجاره را کلاً یا جزئاً به غیر ندارد مگر با موافقت کتبی موجر.</li>
+                        <li>پرداخت کلیه هزینه‌های مصرفی انشعابات (آب، برق، گاز، تلفن) و شارژ ساختمان بر عهده مستاجر است.</li>
+                        <li>مستاجر مکلف به حفظ عین مستاجره بوده و هرگونه تغییر فیزیکی اساسی منوط به اجازه موجر می‌باشد.</li>
+                        <li>مستاجر مکلف است در انقضای مدت، مورد اجاره را صحیح و سالم تخلیه و تحویل موجر نماید.</li>
+                      </ul>
+                    </div>
+
+                    {/* Article 6: Termination Conditions */}
+                    <div className="space-y-1.5">
+                      <h3 className="font-black text-slate-900 text-sm underline decoration-slate-300 underline-offset-4">
+                        ماده ۶ - شرایط فسخ و نسخ قرارداد:
+                      </h3>
+                      <p className="text-justify text-slate-800">
+                        در صورت عدم پرداخت اجاره‌بها برای بیش از دو دوره متوالی یا تخلف از شروط این قرارداد، موجر حق فسخ خواهد داشت. این قرارداد در دو نسخه متحدالشکل تنظیم و به امضای طرفین رسید.
+                      </p>
+                    </div>
+
+                    {/* Signatures Block */}
+                    <div className="pt-8 grid grid-cols-2 gap-8 border-t border-slate-300 text-center">
+                      <div className="p-4 border border-slate-300 rounded-xl space-y-12">
+                        <span className="font-bold block">امضا و اثر انگشت موجر:</span>
+                        <div className="text-[11px] text-slate-500">{getPersonName(cToPrint.personId)}</div>
+                      </div>
+
+                      <div className="p-4 border border-slate-300 rounded-xl space-y-12">
+                        <span className="font-bold block">امضا و اثر انگشت مستاجر:</span>
+                        <div className="text-[11px] text-slate-500">{cToPrint.lesseeName || storeSettings?.name || 'مدیریت فروشگاه'}</div>
+                      </div>
+
+                      <div className="p-4 border border-slate-300 rounded-xl space-y-12">
+                        <span className="font-bold block">امضا و مشخصات شاهد اول:</span>
+                        <div className="text-[11px] text-slate-400">نام و کدملی: ..........................</div>
+                      </div>
+
+                      <div className="p-4 border border-slate-300 rounded-xl space-y-12">
+                        <span className="font-bold block">امضا و مشخصات شاهد دوم:</span>
+                        <div className="text-[11px] text-slate-400">نام و کدملی: ..........................</div>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* TAB 2: FINANCIAL SCHEDULE TABLE */}
+                {currentTab === 'schedule' && (
+                  <div className="space-y-6">
+                    <div className="text-center border-b border-slate-300 pb-4">
+                      <h2 className="text-lg font-black text-slate-900">جدول زمان‌بندی، اسناد تعهد و صورت وضعیت مالی اقساط اجاره</h2>
+                      <div className="text-xs text-slate-600 mt-2 flex justify-center gap-6">
+                        <span>شماره قرارداد: <strong className="font-mono">{cToPrint.contractNumber}</strong></span>
+                        <span>موجر: <strong>{getPersonName(cToPrint.personId)}</strong></span>
+                        <span>تاریخ گزارش: <strong>{new Date().toLocaleDateString('fa-IR')}</strong></span>
+                      </div>
+                    </div>
+
+                    <table className="w-full text-right text-xs border-collapse">
+                      <thead>
+                        <tr className="bg-slate-100 border border-slate-300 font-bold">
+                          <th className="p-2.5 border border-slate-300 text-center">ردیف</th>
+                          <th className="p-2.5 border border-slate-300">عنوان دوره / قسط</th>
+                          <th className="p-2.5 border border-slate-300 text-center">موعد سررسید</th>
+                          <th className="p-2.5 border border-slate-300 text-center">مبلغ ({currencyUnit})</th>
+                          <th className="p-2.5 border border-slate-300 text-center">وضعیت تعهد</th>
+                          <th className="p-2.5 border border-slate-300 text-center">مبلغ پرداختی</th>
+                          <th className="p-2.5 border border-slate-300 text-center">وضعیت تسویه</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(cToPrint.schedule || []).map((inst: RentInstallment, i: number) => (
+                          <tr key={i} className="border border-slate-300">
+                            <td className="p-2 border border-slate-300 text-center font-bold">{toPersianDigits(i + 1)}</td>
+                            <td className="p-2 border border-slate-300 font-bold">{inst.title}</td>
+                            <td className="p-2 border border-slate-300 text-center font-mono">{toPersianDigits(inst.dueDate)}</td>
+                            <td className="p-2 border border-slate-300 text-center font-mono font-bold">{Number(inst.amount).toLocaleString()}</td>
+                            <td className="p-2 border border-slate-300 text-center">
+                              {inst.commitmentStatus === 'committed' ? 'سند تعهد صادر شده' : inst.commitmentStatus === 'cancelled' ? 'لغو شده' : 'صادر نشده'}
+                            </td>
+                            <td className="p-2 border border-slate-300 text-center font-mono">{Number(inst.paidAmount || 0).toLocaleString()}</td>
+                            <td className="p-2 border border-slate-300 text-center font-bold">
+                              {inst.paymentStatus === 'paid' ? 'تسویه کامل' : (inst.paidAmount || 0) > 0 ? 'تسویه جزئی' : 'پرداخت نشده'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                {/* TAB 3: AMENDMENTS & MINUTES */}
+                {currentTab === 'amendments' && (
+                  <div className="space-y-6">
+                    <div className="text-center border-b border-slate-300 pb-4">
+                      <h2 className="text-lg font-black text-slate-900">سوابق حقوقی، صورتجلسات و الحاقیه‌های قرارداد اجاره</h2>
+                      <p className="text-xs text-slate-600 mt-1">شماره قرارداد: {cToPrint.contractNumber}</p>
+                    </div>
+
+                    {cToPrint.terminationInfo && (
+                      <div className="p-4 border border-rose-300 bg-rose-50 rounded-xl space-y-2">
+                        <h3 className="font-bold text-rose-950 text-sm">برگه صورتجلسه فسخ قرارداد</h3>
+                        <p className="text-xs">تاریخ فسخ: {formatDateDisplay(cToPrint.terminationInfo.date, storeSettings?.calendarType)} • علت: {cToPrint.terminationInfo.reason}</p>
+                        <p className="text-xs">{cToPrint.terminationInfo.notes}</p>
+                      </div>
+                    )}
+
+                    {cToPrint.amendments && cToPrint.amendments.length > 0 && (
+                      <div className="space-y-3">
+                        {cToPrint.amendments.map((amd: any, idx: number) => (
+                          <div key={idx} className="p-4 border border-slate-300 rounded-xl space-y-1">
+                            <h4 className="font-bold text-slate-900">{amd.title}</h4>
+                            <p className="text-xs text-slate-600">تاریخ: {formatDateDisplay(amd.date, storeSettings?.calendarType)}</p>
+                            <p className="text-xs text-slate-800">{amd.description}</p>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        );
+      })()}
+
+      {/* 5. TERMINATE CONTRACT MODAL */}
+      {terminateModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-5 bg-rose-600 text-white flex justify-between items-center">
+              <h3 className="font-extrabold text-lg flex items-center gap-2">
+                <FileX2 className="w-5 h-5" /> فسخ رسمی قرارداد اجاره
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setTerminateModal(null)} 
+                className="p-2 bg-rose-700/50 hover:bg-rose-700 rounded-xl transition-colors text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-sm">
+              <div className="bg-rose-50 border border-rose-200 p-3.5 rounded-xl text-rose-900 text-xs leading-relaxed">
+                ⚠️ با ثبت فسخ، وضعیت قرارداد به «فسخ‌شده» تغییر می‌یابد و هشدارهای مالی آن متوقف خواهد شد.
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">تاریخ فسخ / صورتجلسه</label>
+                <DatePicker
+                  value={terminateModal.date}
+                  onChange={(d: any) => setTerminateModal({ ...terminateModal, date: d })}
+                  calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                  locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
+                  calendarPosition="bottom-right"
+                  inputClass="w-full p-2.5 bg-white border border-slate-200 rounded-xl focus:border-rose-500 outline-none text-center font-bold text-slate-900 cursor-pointer"
+                  containerClassName="w-full"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">علت فسخ قرارداد</label>
+                <select
+                  value={terminateModal.reason}
+                  onChange={(e) => setTerminateModal({ ...terminateModal, reason: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none cursor-pointer"
+                >
+                  <option value="mutual">توافق دوطرفه موجر و مستاجر</option>
+                  <option value="non_payment">عدم پرداخت به موقع اجاره‌بها و معوقات</option>
+                  <option value="early_vacation">تخلیه زودهنگام توسط مستاجر</option>
+                  <option value="breach_of_terms">تخلف از شروط و تعهدات قرارداد</option>
+                  <option value="other">سایر موارد و دلایل اضطراری</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">مبلغ خسارت/جریمه توافقی فسخ ({currencyUnit})</label>
+                <CurrencyInput
+                  value={terminateModal.penaltyAmount}
+                  onChange={(e: any) => setTerminateModal({ ...terminateModal, penaltyAmount: e.target.value })}
+                  storeSettings={storeSettings}
+                  hideWords={true}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 font-mono text-left"
+                  placeholder="0"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">تعیین تکلیف استرداد ودیعه (رهن)</label>
+                <select
+                  value={terminateModal.depositStatus}
+                  onChange={(e) => setTerminateModal({ ...terminateModal, depositStatus: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none cursor-pointer"
+                >
+                  <option value="pending">در انتظار تسویه و عودت ودیعه</option>
+                  <option value="refunded">ودیعه کاملاً مسترد گردید</option>
+                  <option value="settled_with_damages">تهاتر با بدهی و خسارات</option>
+                </select>
+              </div>
+
+              <div className="flex items-center gap-2 pt-1">
+                <input
+                  type="checkbox"
+                  id="cancelFuture"
+                  checked={terminateModal.cancelFutureInstallments}
+                  onChange={(e) => setTerminateModal({ ...terminateModal, cancelFutureInstallments: e.target.checked })}
+                  className="w-4 h-4 text-rose-600 rounded cursor-pointer"
+                />
+                <label htmlFor="cancelFuture" className="text-xs font-bold text-slate-800 cursor-pointer">
+                  لغو خودکار تمام اقساط و تعهدات صادرنشده آینده پس از تاریخ فسخ
+                </label>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">شرح و صورتجلسه فسخ</label>
+                <textarea
+                  value={terminateModal.notes}
+                  onChange={(e) => setTerminateModal({ ...terminateModal, notes: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs outline-none h-20 resize-none"
+                  placeholder="توضیحات و توافقات صورتجلسه فسخ..."
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setTerminateModal(null)}
+                className="px-5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-bold text-xs cursor-pointer"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={handleTerminateSubmit}
+                disabled={loading}
+                className="px-6 py-2 bg-rose-600 hover:bg-rose-700 text-white rounded-xl font-bold text-xs shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {loading ? 'در حال ثبت...' : 'تایید و ثبت فسخ قرارداد'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 6. COMPLETE CONTRACT MODAL */}
+      {completeModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-5 bg-emerald-600 text-white flex justify-between items-center">
+              <h3 className="font-extrabold text-lg flex items-center gap-2">
+                <CheckCircle className="w-5 h-5" /> ثبت خاتمه قرارداد و تحویل ملک
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setCompleteModal(null)} 
+                className="p-2 bg-emerald-700/50 hover:bg-emerald-700 rounded-xl transition-colors text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-sm">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">تاریخ پایان و تحویل ملک</label>
+                <DatePicker
+                  value={completeModal.date}
+                  onChange={(d: any) => setCompleteModal({ ...completeModal, date: d })}
+                  calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                  locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
+                  calendarPosition="bottom-right"
+                  inputClass="w-full p-2.5 bg-white border border-slate-200 rounded-xl focus:border-emerald-500 outline-none text-center font-bold text-slate-900 cursor-pointer"
+                  containerClassName="w-full"
+                />
+              </div>
+
+              <div className="bg-slate-50 p-3.5 rounded-xl border border-slate-200 space-y-2">
+                <span className="font-bold text-xs text-slate-800 block">چک‌لیست تحویل و تخلیه:</span>
+                <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={completeModal.vacated}
+                    onChange={(e) => setCompleteModal({ ...completeModal, vacated: e.target.checked })}
+                    className="w-4 h-4 text-emerald-600 rounded"
+                  />
+                  <span>ملک کاملاً تخلیه و کلیدها تحویل شد.</span>
+                </label>
+                <label className="flex items-center gap-2 text-xs text-slate-700 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={completeModal.utilitiesSettled}
+                    onChange={(e) => setCompleteModal({ ...completeModal, utilitiesSettled: e.target.checked })}
+                    className="w-4 h-4 text-emerald-600 rounded"
+                  />
+                  <span>قبوض مصرفی (آب، برق، گاز، تلفن) و شارژ تسویه شد.</span>
+                </label>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">مبلغ ودیعه مسترد شده ({currencyUnit})</label>
+                <CurrencyInput
+                  value={completeModal.depositRefundAmount}
+                  onChange={(e: any) => setCompleteModal({ ...completeModal, depositRefundAmount: e.target.value })}
+                  storeSettings={storeSettings}
+                  hideWords={true}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 font-mono text-left"
+                  placeholder="0"
+                />
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">شرح تحویل و تسویه نهایی</label>
+                <textarea
+                  value={completeModal.notes}
+                  onChange={(e) => setCompleteModal({ ...completeModal, notes: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs outline-none h-20 resize-none"
+                  placeholder="توضیحات صورتجلسه تحویل..."
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setCompleteModal(null)}
+                className="px-5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-bold text-xs cursor-pointer"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={handleCompleteSubmit}
+                disabled={loading}
+                className="px-6 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl font-bold text-xs shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {loading ? 'در حال ثبت...' : 'ثبت خاتمه و تحویل قرارداد'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 7. AMENDMENT / RENT CHANGE MODAL */}
+      {amendmentModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-5 bg-indigo-600 text-white flex justify-between items-center">
+              <h3 className="font-extrabold text-lg flex items-center gap-2">
+                <FileSignature className="w-5 h-5" /> ثبت الحاقیه و تغییر شرایط قرارداد
+              </h3>
+              <button 
+                type="button"
+                onClick={() => setAmendmentModal(null)} 
+                className="p-2 bg-indigo-700/50 hover:bg-indigo-700 rounded-xl transition-colors text-white cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="p-6 space-y-4 text-sm">
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">نوع الحاقیه</label>
+                <select
+                  value={amendmentModal.type}
+                  onChange={(e: any) => setAmendmentModal({ ...amendmentModal, type: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs font-bold outline-none cursor-pointer"
+                >
+                  <option value="rent_amount">تغییر مبلغ اجاره‌بها (افزایش / کاهش)</option>
+                  <option value="extend_term">تمدید مدت زمان قرارداد</option>
+                  <option value="terms_change">تغییر شروط و توافقات قرارداد</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">تاریخ ثبت الحاقیه</label>
+                <DatePicker
+                  value={amendmentModal.date}
+                  onChange={(d: any) => setAmendmentModal({ ...amendmentModal, date: d })}
+                  calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                  locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
+                  calendarPosition="bottom-right"
+                  inputClass="w-full p-2.5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none text-center font-bold text-slate-900 cursor-pointer"
+                  containerClassName="w-full"
+                />
+              </div>
+
+              {amendmentModal.type === 'rent_amount' && (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">
+                    مبلغ جدید اجاره‌بها هر دوره ({currencyUnit})
+                  </label>
+                  <CurrencyInput
+                    value={amendmentModal.newMonthlyAmount}
+                    onChange={(e: any) => setAmendmentModal({ ...amendmentModal, newMonthlyAmount: e.target.value })}
+                    storeSettings={storeSettings}
+                    hideWords={true}
+                    className="w-full border border-slate-200 rounded-xl p-2.5 font-mono font-bold text-left"
+                    placeholder="0"
+                  />
+                  <span className="text-[11px] text-slate-500 mt-1 block">
+                    مبلغ فعلی: {Number(amendmentModal.contract.monthlyAmount || 0).toLocaleString()} {currencyUnit}
+                  </span>
+                </div>
+              )}
+
+              {amendmentModal.type === 'extend_term' && (
+                <div>
+                  <label className="block font-bold text-slate-700 mb-1">تاریخ پایان جدید قرارداد</label>
+                  <DatePicker
+                    value={amendmentModal.newEndDate}
+                    onChange={(d: any) => setAmendmentModal({ ...amendmentModal, newEndDate: d })}
+                    calendar={storeSettings?.calendarType === 'gregorian' ? gregorian : persian}
+                    locale={storeSettings?.calendarType === 'gregorian' ? gregorian_en : persian_fa}
+                    calendarPosition="bottom-right"
+                    inputClass="w-full p-2.5 bg-white border border-slate-200 rounded-xl focus:border-indigo-500 outline-none text-center font-bold text-slate-900 cursor-pointer"
+                    containerClassName="w-full"
+                  />
+                </div>
+              )}
+
+              <div>
+                <label className="block font-bold text-slate-700 mb-1">متن توافقات و توضیحات الحاقیه</label>
+                <textarea
+                  value={amendmentModal.description}
+                  onChange={(e) => setAmendmentModal({ ...amendmentModal, description: e.target.value })}
+                  className="w-full border border-slate-200 rounded-xl p-2.5 text-xs outline-none h-20 resize-none"
+                  placeholder="مثال: بنا به توافق طرفین اجاره‌بها از تاریخ ... به مبلغ ... تغییر یافت."
+                />
+              </div>
+            </div>
+
+            <div className="p-4 bg-slate-50 border-t border-slate-100 flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setAmendmentModal(null)}
+                className="px-5 py-2 bg-white border border-slate-200 text-slate-700 hover:bg-slate-50 rounded-xl font-bold text-xs cursor-pointer"
+              >
+                انصراف
+              </button>
+              <button
+                type="button"
+                onClick={handleAmendmentSubmit}
+                disabled={loading}
+                className="px-6 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl font-bold text-xs shadow-sm cursor-pointer disabled:opacity-50"
+              >
+                {loading ? 'در حال ثبت...' : 'ثبت الحاقیه و بروزرسانی اقساط'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* 8. QUICK STATUS CHANGE MODAL */}
+      {statusChangeModal && (
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-900/60 backdrop-blur-sm p-4">
+          <div className="bg-white rounded-2xl w-full max-w-sm shadow-2xl overflow-hidden flex flex-col">
+            <div className="p-4 bg-slate-800 text-white flex justify-between items-center">
+              <h3 className="font-bold text-sm flex items-center gap-2">
+                <SlidersHorizontal className="w-4 h-4" /> تغییر وضعیت قرارداد
+              </h3>
+              <button
+                type="button"
+                onClick={() => setStatusChangeModal(null)}
+                className="p-1 text-slate-300 hover:text-white cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-5 space-y-3 text-xs">
+              <label className="block font-bold text-slate-700">وضعیت جدید را انتخاب کنید:</label>
+              <div className="space-y-2">
+                {[
+                  { key: 'active', label: 'فعال (محاسبه و هشدار خودکار اقساط)' },
+                  { key: 'suspended', label: 'معلق / غیرفعال موقت (توقف هشدارها)' },
+                  { key: 'draft', label: 'پیش‌نویس' },
+                  { key: 'completed', label: 'خاتمه‌یافته' },
+                  { key: 'terminated', label: 'فسخ‌شده' }
+                ].map(st => (
+                  <button
+                    key={st.key}
+                    type="button"
+                    onClick={() => handleQuickStatusChange(statusChangeModal.contract, st.key)}
+                    className={`w-full p-2.5 rounded-xl border text-right font-bold transition-all cursor-pointer ${
+                      statusChangeModal.newStatus === st.key
+                        ? 'bg-indigo-50 border-indigo-300 text-indigo-900'
+                        : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                    }`}
+                  >
+                    {st.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
         </div>
