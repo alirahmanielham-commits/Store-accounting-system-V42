@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from
 import BackgroundSync from './components/common/BackgroundSync';
 import SyncStatusModal from './components/common/SyncStatusModal';
 import { useSyncQueueLength } from './services/syncQueueService';
-import { CloudOff, Keyboard } from 'lucide-react';
+import { CloudOff, Keyboard, Sun, Moon } from 'lucide-react';
 
 import changelogData from './data/changelog.json';
 import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from "react";
@@ -861,6 +861,17 @@ export default function App() {
     onExecute: handleQuickCodeExecute,
     enabled: true,
   });
+
+  useEffect(() => {
+    const isDark = storeSettings?.theme === "dark";
+    if (isDark) {
+      document.documentElement.classList.add("dark", "theme-dark");
+      document.body.classList.add("theme-dark");
+    } else {
+      document.documentElement.classList.remove("dark", "theme-dark");
+      document.body.classList.remove("theme-dark");
+    }
+  }, [storeSettings?.theme]);
 
   const appRoutes = (
     <Routes>
@@ -2043,7 +2054,7 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
              </AdminLTELayout>
           ) : (
             <div
-              className={`flex ${menuLayout === "horizontal" ? "flex-col h-screen" : "h-screen"} overflow-hidden ${isGmailTheme ? "theme-gmail bg-[#f6f8fc]" : `theme-${storeSettings?.theme || "classic"} bg-gray-50/50`} text-gray-800 font-sans print:h-auto print:block print:overflow-visible main-app-layout-wrapper`}
+              className={`flex ${menuLayout === "horizontal" ? "flex-col h-screen" : "h-screen"} overflow-hidden ${isGmailTheme ? "theme-gmail bg-[#f6f8fc]" : `theme-${storeSettings?.theme || "classic"} ${storeSettings?.theme === "dark" ? "dark bg-[#0b0f19] text-slate-100" : "bg-gray-50/50 text-gray-800"}`} font-sans print:h-auto print:block print:overflow-visible main-app-layout-wrapper`}
               dir="rtl"
             >
               {isGmailTheme && (
@@ -2754,6 +2765,40 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                         <span className="hidden xl:inline text-[11px] font-mono font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200" dir="ltr">
                           ##
                         </span>
+                      </button>
+
+                      {/* Quick Theme Toggle (Light / Ergonomic Slate Dark) */}
+                      <button
+                        onClick={async () => {
+                          const isDark = storeSettings?.theme === "dark";
+                          const nextTheme = isDark ? "classic" : "dark";
+                          const updated = { ...storeSettings, theme: nextTheme };
+                          setStoreSettings(updated);
+                          setSettingsForm(updated);
+                          try {
+                            await saveStoreSettings(updated);
+                          } catch (e) {
+                            console.error("Failed to save theme:", e);
+                          }
+                          showNotification(
+                            nextTheme === "dark"
+                              ? "تم تاریک اداری (Slate Dark) با موفقیت فعال شد"
+                              : "تم روشن با موفقیت فعال شد",
+                            "info"
+                          );
+                        }}
+                        className={`p-2 border rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95 flex items-center justify-center ${
+                          storeSettings?.theme === "dark"
+                            ? "bg-amber-400/10 border-amber-400/30 text-amber-300 hover:bg-amber-400/20 shadow-amber-500/10"
+                            : "bg-white border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50"
+                        }`}
+                        title={storeSettings?.theme === "dark" ? "تغییر به تم روشن" : "تغییر به تم تاریک اداری (Slate Dark)"}
+                      >
+                        {storeSettings?.theme === "dark" ? (
+                          <Sun className="w-5 h-5 text-amber-400" />
+                        ) : (
+                          <Moon className="w-5 h-5 text-slate-600" />
+                        )}
                       </button>
 
                       <div className="relative" ref={headerMenuRef}>

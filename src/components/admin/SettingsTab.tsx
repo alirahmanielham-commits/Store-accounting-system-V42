@@ -417,6 +417,7 @@ export default function SettingsTab(props: any) {
                                       }
                                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm font-bold"
                                     >
+                                      <option value="dark">🌙 تم تاریک اداری و ارگونومیک (Slate Dark)</option>
                                       <option value="persian_admin_lte">پوسته Persian AdminLTE (جدید)</option>
                                       <option value="classic">
                                         کلاسیک سرمه‌ای (Classic Indigo)
