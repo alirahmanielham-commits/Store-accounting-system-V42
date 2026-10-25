@@ -2358,6 +2358,26 @@ export default function SettingsTab(props: any) {
                                       />
                                     </div>
 
+                                    <div className="w-full text-right">
+                                      <label className="block text-sm font-bold text-gray-700 mb-2">
+                                        حداقل روزهای گذشته از سررسید (معوقه)
+                                      </label>
+                                      <input
+                                        type="number"
+                                        min="0"
+                                        value={settingsForm.debtorNotificationMinOverdueDays ?? 0}
+                                        onChange={(e) =>
+                                          setSettingsForm({
+                                            ...settingsForm,
+                                            debtorNotificationMinOverdueDays: Number(e.target.value) || 0,
+                                          })
+                                        }
+                                        placeholder="0 (تمام بدهکاران)"
+                                        className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm text-left font-bold"
+                                        dir="ltr"
+                                      />
+                                    </div>
+
                                     <div className="w-full text-right md:col-span-2 grid grid-cols-1 md:grid-cols-2 gap-6">
                                       <div>
                                         <label className="block text-sm font-bold text-gray-700 mb-2">
@@ -2495,23 +2515,81 @@ export default function SettingsTab(props: any) {
                                         <option value="random">تصادفی</option>
                                       </select>
                                     </div>
-                                    <div className="w-full text-right">
-                                      <label className="block text-sm font-bold text-gray-700 mb-2">
-                                        قالب بصری کارت بدهکار
-                                      </label>
-                                      <select
-                                        value={settingsForm.debtorNotificationTheme || "hacker"}
+                                    <div className="w-full text-right bg-white/70 dark:bg-slate-800/60 p-4 rounded-xl border border-gray-200 dark:border-slate-700">
+                                      <div className="flex items-center justify-between mb-2">
+                                        <span className="font-bold text-sm text-gray-700 dark:text-slate-200">
+                                          بسته شدن خودکار پاپ‌آپ
+                                        </span>
+                                        <input
+                                          type="checkbox"
+                                          checked={settingsForm.debtorNotificationAutoClose !== false}
+                                          onChange={(e) =>
+                                            setSettingsForm({
+                                              ...settingsForm,
+                                              debtorNotificationAutoClose: e.target.checked,
+                                            })
+                                          }
+                                          className="w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500"
+                                        />
+                                      </div>
+                                      <div className="flex items-center gap-2">
+                                        <input
+                                          type="number"
+                                          min="3"
+                                          max="60"
+                                          disabled={settingsForm.debtorNotificationAutoClose === false}
+                                          value={settingsForm.debtorNotificationAutoCloseDuration ?? 12}
+                                          onChange={(e) =>
+                                            setSettingsForm({
+                                              ...settingsForm,
+                                              debtorNotificationAutoCloseDuration: Number(e.target.value) || 12,
+                                            })
+                                          }
+                                          className="w-20 px-3 py-1.5 rounded-xl border border-gray-300 dark:border-slate-600 bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 text-center font-bold text-sm disabled:opacity-50"
+                                          dir="ltr"
+                                        />
+                                        <span className="text-xs font-bold text-gray-600 dark:text-slate-400">
+                                          ثانیه (با هاور ماوس متوقف می‌شود)
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="w-full text-right bg-white/70 dark:bg-slate-800/60 p-4 rounded-xl border border-gray-200 dark:border-slate-700 flex items-center justify-between">
+                                      <div>
+                                        <span className="font-bold text-sm text-gray-700 dark:text-slate-200 block">
+                                          صدای هشدار صوتی
+                                        </span>
+                                        <span className="text-[11px] text-gray-500 dark:text-slate-400">
+                                          پخش آلارم هنگام باز شدن پاپ‌آپ
+                                        </span>
+                                      </div>
+                                      <input
+                                        type="checkbox"
+                                        checked={settingsForm.debtorNotificationSound !== false}
                                         onChange={(e) =>
                                           setSettingsForm({
                                             ...settingsForm,
-                                            debtorNotificationTheme: e.target.value as 'standard' | 'hacker',
+                                            debtorNotificationSound: e.target.checked,
                                           })
                                         }
-                                        className="w-full rounded-xl border border-gray-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-200 shadow-sm px-4 py-3 bg-gray-50/50"
+                                        className="w-5 h-5 rounded text-indigo-600 focus:ring-indigo-500"
+                                      />
+                                    </div>
+
+                                    <div className="w-full text-right md:col-span-2">
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          localStorage.removeItem("lastDebtorNotificationTime");
+                                          localStorage.removeItem("lastDebtorNotificationClickTime");
+                                          if (props.showNotification) {
+                                            props.showNotification("تایمر هشدار بازنشانی شد؛ پاپ‌آپ در صفحه نمایش داده خواهد شد.", "info");
+                                          }
+                                        }}
+                                        className="w-full px-4 py-3 rounded-xl bg-indigo-50 hover:bg-indigo-100 dark:bg-indigo-950/60 dark:hover:bg-indigo-900/80 text-indigo-700 dark:text-indigo-300 border border-indigo-200 dark:border-indigo-800 text-xs font-black transition flex items-center justify-center gap-2 cursor-pointer shadow-3xs"
                                       >
-                                        <option value="hacker">🟢 تم هکری پیشرفته (Cyber Hacker Terminal)</option>
-                                        <option value="standard">کلاسیک ساده</option>
-                                      </select>
+                                        <span>تست فوری و نمایش پاپ‌آپ بدهکاران</span>
+                                      </button>
                                     </div>
                                   </div>
                                 )}

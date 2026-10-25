@@ -485,6 +485,10 @@ export type CompanySettings = {
   debtorNotificationOrder?: 'random' | 'largest' | 'smallest';
   debtorNotificationTheme?: 'standard' | 'hacker';
   debtorNotificationMaxCount?: number;
+  debtorNotificationAutoClose?: boolean;
+  debtorNotificationAutoCloseDuration?: number;
+  debtorNotificationMinOverdueDays?: number;
+  debtorNotificationSound?: boolean;
   inventoryControlEnabled?: boolean;
   lowStockThresholdsByCategory?: Record<string, number>;
   autoReplenishPrompt?: boolean;
