@@ -2,10 +2,10 @@ import { BrowserRouter, Routes, Route, useNavigate, useLocation, Navigate } from
 import BackgroundSync from './components/common/BackgroundSync';
 import SyncStatusModal from './components/common/SyncStatusModal';
 import { useSyncQueueLength } from './services/syncQueueService';
-import { CloudOff } from 'lucide-react';
+import { CloudOff, Keyboard } from 'lucide-react';
 
 import changelogData from './data/changelog.json';
-import React, { useState, useEffect, useMemo, useRef, Suspense } from "react";
+import React, { useState, useEffect, useMemo, useRef, useCallback, Suspense } from "react";
 const SystemUpdatePage = React.lazy(() => import('./components/admin/SystemUpdatePage'));
 const PersonalNotesManager = React.lazy(() => import('./components/notes/PersonalNotesManager'));
 import SidebarNavigation from "./components/SidebarNavigation";
@@ -374,6 +374,9 @@ const OnlinePipePricing = React.lazy(() => import('./components/products/OnlineP
 const NewpipePricing = React.lazy(() => import('./components/products/NewpipePricing'));
 const RentContractsManager = React.lazy(() => import('./components/payroll/RentContractsManager'));
 import { allSidebarGroups } from './utils/sidebarData';
+import QuickCodeHUD from './components/navigation/QuickCodeHUD';
+import { useQuickCodeNavigator } from './hooks/useQuickCodeNavigator';
+import { QuickCodeItem } from './services/quickCodeService';
 
 
 
@@ -801,6 +804,63 @@ export default function App() {
         handleApproveWarehouseReceipt,
         renderTabContent,
       } = appState;
+
+  const handleQuickCodeExecute = useCallback((item: QuickCodeItem) => {
+    if (item.type === 'tab') {
+      if (item.target === 'settings_quick_codes') {
+        setSettingsTab('quick_codes');
+        setActiveTab('settings');
+      } else {
+        setActiveTab(item.target);
+      }
+    } else if (item.type === 'action') {
+      switch (item.target) {
+        case 'action_calculator':
+          setIsCalculatorOpen(true);
+          break;
+        case 'action_scanner':
+          setIsScannerOpen(true);
+          break;
+        case 'action_new_product':
+          setEditingProductId(null);
+          setIsProductModalOpen(true);
+          break;
+        case 'action_new_person':
+          setEditingPersonId(null);
+          setIsPersonModalOpen(true);
+          break;
+        case 'action_send_sms':
+          setIsComposeOpen(true);
+          break;
+        case 'action_sync':
+          setIsSyncModalOpen(true);
+          break;
+        default:
+          break;
+      }
+    }
+  }, [
+    setActiveTab,
+    setSettingsTab,
+    setIsCalculatorOpen,
+    setIsScannerOpen,
+    setEditingProductId,
+    setIsProductModalOpen,
+    setEditingPersonId,
+    setIsPersonModalOpen,
+    setIsComposeOpen,
+    setIsSyncModalOpen,
+  ]);
+
+  const {
+    items: quickCodeItems,
+    isModalOpen: isQuickCodeModalOpen,
+    setIsModalOpen: setIsQuickCodeModalOpen,
+    hudState: quickCodeHudState,
+  } = useQuickCodeNavigator({
+    onExecute: handleQuickCodeExecute,
+    enabled: true,
+  });
 
   const appRoutes = (
     <Routes>
@@ -2685,6 +2745,17 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                         <Calculator className="w-5 h-5" />
                       </button>
 
+                      <button
+                        onClick={() => setIsQuickCodeModalOpen(true)}
+                        className="p-2 border rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 bg-white border-slate-200 flex items-center gap-1.5"
+                        title="دسترسی سریع کیبورد و شماره‌گیر ۲ رقمی (Alt + K)"
+                      >
+                        <Keyboard className="w-5 h-5" />
+                        <span className="hidden xl:inline text-[11px] font-mono font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200" dir="ltr">
+                          ##
+                        </span>
+                      </button>
+
                       <div className="relative" ref={headerMenuRef}>
                         <button
                           onClick={() => setIsHeaderMenuOpen(!isHeaderMenuOpen)}
@@ -3205,6 +3276,18 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
           <ExtraModals {...appState} />
           <ConfirmModal confirmState={appState.confirmState} setConfirmState={appState.setConfirmState} />
           <GlobalProcessingOverlay />
+
+          <QuickCodeHUD
+            hudState={quickCodeHudState}
+            isModalOpen={isQuickCodeModalOpen}
+            setIsModalOpen={setIsQuickCodeModalOpen}
+            items={quickCodeItems}
+            onExecute={handleQuickCodeExecute}
+            onOpenSettings={() => {
+              setSettingsTab('quick_codes');
+              setActiveTab('settings');
+            }}
+          />
         </>
       );
       }
