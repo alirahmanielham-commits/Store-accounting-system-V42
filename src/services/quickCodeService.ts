@@ -20,7 +20,7 @@ export type QuickCodeCategory =
 
 export interface QuickCodeItem {
   id: string;
-  code: string; // 2-digit string ("10" - "99")
+  code: string; // 2-digit string ("00" - "99")
   defaultCode: string;
   title: string;
   description: string;
@@ -29,6 +29,7 @@ export interface QuickCodeItem {
   target: string;
   iconName: string;
   enabled: boolean;
+  isCustom?: boolean;
 }
 
 export const CATEGORY_LABELS: Record<QuickCodeCategory, string> = {
@@ -264,6 +265,18 @@ export const DEFAULT_QUICK_CODES: QuickCodeItem[] = [
     type: 'tab',
     target: 'accounts',
     iconName: 'Landmark',
+    enabled: true,
+  },
+  {
+    id: 'keyboard_receipt',
+    code: '39',
+    defaultCode: '39',
+    title: 'ثبت سریع رسید با کیبورد',
+    description: 'ثبت بدون ماوس دریافت، پرداخت و حواله بین‌اشخاص با کلیدهای میانبر کیبورد',
+    category: 'treasury',
+    type: 'tab',
+    target: 'keyboard_receipt',
+    iconName: 'Zap',
     enabled: true,
   },
 
@@ -552,8 +565,111 @@ export function isValidQuickCode(code: string): boolean {
   return /^\d{2}$/.test(code);
 }
 
+export interface TargetOption {
+  target: string;
+  title: string;
+  category: QuickCodeCategory;
+  type: QuickCodeType;
+  description: string;
+  iconName?: string;
+}
+
+export const SYSTEM_TARGET_OPTIONS: TargetOption[] = [
+  // Core
+  { target: 'welcome_page', title: 'پیشخوان و داشبورد اصلی', category: 'core', type: 'tab', description: 'انتقال به صفحه اصلی و پیشخوان سیستم', iconName: 'LayoutDashboard' },
+  { target: 'personal_notes', title: 'یادداشت‌ها و پیگیری‌ها', category: 'core', type: 'tab', description: 'مدیریت چک‌لیست و یادداشت‌های شخصی کاربر', iconName: 'FileText' },
+  { target: 'checklist', title: 'چک‌لیست کارهای روزانه', category: 'core', type: 'tab', description: 'چک‌لیست وظایف و تسک‌های روزانه حسابداری', iconName: 'CheckCircle' },
+
+  // Commercial / Invoices
+  { target: 'create_sale', title: 'صدور فاکتور فروش جدید', category: 'invoices', type: 'tab', description: 'باز کردن فرم صدور فاکتور فروش کالا و خدمات', iconName: 'FilePlus' },
+  { target: 'list_sale', title: 'لیست فاکتورهای فروش', category: 'invoices', type: 'tab', description: 'مشاهده لیست تمام فاکتورهای فروش ثبت‌شده', iconName: 'ShoppingCart' },
+  { target: 'create_purchase', title: 'صدور فاکتور خرید جدید', category: 'invoices', type: 'tab', description: 'باز کردن فرم صدور فاکتور خرید کالا', iconName: 'PackagePlus' },
+  { target: 'list_purchase', title: 'لیست فاکتورهای خرید', category: 'invoices', type: 'tab', description: 'مشاهده لیست تمام فاکتورهای خرید ثبت‌شده', iconName: 'ShoppingBag' },
+  { target: 'create_sale_return', title: 'ثبت برگشت از فروش', category: 'invoices', type: 'tab', description: 'فرم صدور فاکتور برگشت از فروش کالا', iconName: 'RotateCcw' },
+  { target: 'list_sale_return', title: 'لیست برگشت از فروش', category: 'invoices', type: 'tab', description: 'مشاهده لیست فاکتورهای مرجوعی فروش', iconName: 'FileText' },
+  { target: 'create_purchase_return', title: 'ثبت برگشت از خرید', category: 'invoices', type: 'tab', description: 'فرم صدور فاکتور برگشت از خرید کالا', iconName: 'RotateCw' },
+  { target: 'list_purchase_return', title: 'لیست برگشت از خرید', category: 'invoices', type: 'tab', description: 'مشاهده لیست فاکتورهای مرجوعی خرید', iconName: 'FileCheck' },
+  { target: 'order_list', title: 'سفارشات خرید (نیازسنجی کالا)', category: 'invoices', type: 'tab', description: 'نیازسنجی و اقلام به نقطه سفارش رسیده', iconName: 'ShoppingBag' },
+  { target: 'product_last_prices', title: 'تاریخچه آخرین قیمت‌ها', category: 'invoices', type: 'tab', description: 'آخرین قیمت‌های خرید و فروش کالاها', iconName: 'DollarSign' },
+
+  // Treasury & Receipts
+  { target: 'keyboard_receipt', title: 'ثبت سریع رسید با کیبورد', category: 'treasury', type: 'tab', description: 'ثبت بدون ماوس دریافت، پرداخت و حواله بین‌اشخاص با کلیدهای میانبر کیبورد', iconName: 'Zap' },
+  { target: 'list_receive_receipt', title: 'لیست رسیدهای دریافت', category: 'treasury', type: 'tab', description: 'مشاهده سوابق و لیست دریافتی‌های وجه', iconName: 'ArrowDownLeft' },
+  { target: 'create_receive_receipt', title: 'ثبت رسید دریافت وجه جدید', category: 'treasury', type: 'tab', description: 'فرم ثبت دریافت وجه، واریز بانکی یا پوز', iconName: 'PlusCircle' },
+  { target: 'list_pay_receipt', title: 'لیست رسیدهای پرداخت', category: 'treasury', type: 'tab', description: 'مشاهده سوابق و اسناد پرداختی سیستم', iconName: 'ArrowUpRight' },
+  { target: 'create_pay_receipt', title: 'ثبت رسید پرداخت وجه جدید', category: 'treasury', type: 'tab', description: 'فرم ثبت پرداخت وجه و خروج نقدینگی', iconName: 'MinusCircle' },
+  { target: 'received_checks_page', title: 'مدیریت چک‌های دریافتی', category: 'treasury', type: 'tab', description: 'مشاهده و عملیات روی چک‌های دریافتی مشتریان', iconName: 'CheckSquare' },
+  { target: 'issued_checks_page', title: 'مدیریت چک‌های پرداختی', category: 'treasury', type: 'tab', description: 'مشاهده و پاس کردن چک‌های صادره به تامین‌کنندگان', iconName: 'CreditCard' },
+  { target: 'receive_check_form', title: 'ثبت چک دریافتی جدید', category: 'treasury', type: 'tab', description: 'فرم ورود اطلاعات صیادی چک دریافتی', iconName: 'Plus' },
+  { target: 'issue_check_form', title: 'ثبت چک پرداختی جدید', category: 'treasury', type: 'tab', description: 'فرم صدور چک پرداختی صیادی', iconName: 'PenTool' },
+  { target: 'accounts', title: 'حساب‌های بانکی و پوزها', category: 'treasury', type: 'tab', description: 'مدیریت حساب‌ها، کارتخوان‌ها و موجودی بانک', iconName: 'Landmark' },
+  { target: 'cashboxes', title: 'مدیریت صندوق‌ها', category: 'treasury', type: 'tab', description: 'مدیریت صندوق‌های نقدی و موجودی صندوقدار', iconName: 'Wallet' },
+  { target: 'check_panel', title: 'میز کار چک و صیاد', category: 'treasury', type: 'tab', description: 'داشبورد هشدارهای سررسید چک‌های دریافتی و پرداختی', iconName: 'CreditCard' },
+
+  // Inventory
+  { target: 'products', title: 'لیست کالاها و خدمات', category: 'inventory', type: 'tab', description: 'مشاهده کاتالوگ و مدیریت موجودی و قیمت کالاها', iconName: 'Box' },
+  { target: 'product_categories', title: 'دسته‌بندی و گروه‌بندی کالاها', category: 'inventory', type: 'tab', description: 'تعریف و ساماندهی دسته‌های کالا', iconName: 'Tag' },
+  { target: 'warehouses', title: 'انبارها و موقعیت‌ها', category: 'inventory', type: 'tab', description: 'مدیریت انبارهای فیزیکی و شعب', iconName: 'Warehouse' },
+  { target: 'create_warehouse_doc', title: 'صدور رسید و حواله انبار', category: 'inventory', type: 'tab', description: 'ورود، خروج و انتقال بین انبارها', iconName: 'FileText' },
+  { target: 'list_warehouse_docs', title: 'لیست اسناد انبار', category: 'inventory', type: 'tab', description: 'بایگانی تمام رسیدها و حواله‌های انبارداری', iconName: 'ClipboardList' },
+  { target: 'stocktaking', title: 'انبارگردانی و مغایرت‌گیری', category: 'inventory', type: 'tab', description: 'شمارش موجودی واقعی و ثبت مغایرت انبار', iconName: 'Barcode' },
+  { target: 'kardex', title: 'کاردکس کالا (تاریخچه گردش)', category: 'inventory', type: 'tab', description: 'گردش مقداری و ریالی اقلام انبار', iconName: 'Layers' },
+  { target: 'quick_price_inquiry', title: 'استعلام سریع قیمت کالا', category: 'inventory', type: 'tab', description: 'جستجو و استعلام آنی قیمت فروش و خرید کالا', iconName: 'Tag' },
+  { target: 'bulk_barcode_generator', title: 'تولید و چاپ گروهی بارکد', category: 'inventory', type: 'tab', description: 'طراحی لیبل و چاپ انبوه بارکد محصولات', iconName: 'Barcode' },
+  { target: 'online_pipe_pricing', title: 'استعلام آنلاین لوله و اتصالات', category: 'inventory', type: 'tab', description: 'نرخ لحظه‌ای آهن، مس، سپاهان و کچو', iconName: 'TrendingUp' },
+
+  // Persons & CRM
+  { target: 'persons', title: 'بانک طرف‌حساب‌ها و اشخاص', category: 'persons', type: 'tab', description: 'مدیریت مشتریان، تامین‌کنندگان و همکاران', iconName: 'Users' },
+  { target: 'specialists_directory', title: 'ویترین متخصصین و استادکاران', category: 'persons', type: 'tab', description: 'لیست استادکاران، برق‌کاران و نصابان ماهر', iconName: 'Users' },
+  { target: 'person_ledger', title: 'دفتر معین و صورت‌حساب اشخاص', category: 'persons', type: 'tab', description: 'مشاهده ریز بدهی و بستانکاری طرف‌حساب‌ها', iconName: 'BookOpen' },
+  { target: 'debts_credits', title: 'گزارش بدهکاران و بستانکاران', category: 'persons', type: 'tab', description: 'صورت کامل طلب‌ها و بدهی‌های تجاری مجموعه', iconName: 'Users' },
+  { target: 'debtors_showcase', title: 'ویترین مطالبات و پیگیری معوقات', category: 'persons', type: 'tab', description: 'مدیریت اخطارها و تسویه بدهی‌های سررسید گذشته', iconName: 'AlertCircle' },
+  { target: 'rent_contracts', title: 'قراردادهای اجاره و تعهدات', category: 'persons', type: 'tab', description: 'مدیریت قراردادهای اجاره و املاک', iconName: 'FileContract' },
+  { target: 'person_opening_balances', title: 'مانده اول دوره طرف‌حساب‌ها', category: 'persons', type: 'tab', description: 'تراز بدهکاری/بستانکاری اولیه اشخاص در شروع سال', iconName: 'Calculator' },
+
+  // Accounting
+  { target: 'accounting_docs_list', title: 'دفاتر و اسناد دوبل حسابداری', category: 'accounting', type: 'tab', description: 'دفتر روزنامه، کل، معین و تراز آزمایشی', iconName: 'FileSpreadsheet' },
+  { target: 'financial_years', title: 'دوره‌های مالی و بستن سال', category: 'accounting', type: 'tab', description: 'تعریف سال‌های مالی و صدور سند افتتاحیه/اختتامیه', iconName: 'Calendar' },
+
+  // Messaging
+  { target: 'sms_messages', title: 'مرکز پیامک و پیام‌ها', category: 'messaging', type: 'tab', description: 'مشاهده پیامک‌های ارسالی، صف ارسال و الگوها', iconName: 'MessageSquare' },
+
+  // Reports
+  { target: 'financial_report', title: 'داشبورد گزارشات مالی', category: 'reports', type: 'tab', description: 'گزارش سود و زیان، ترازنامه و نقدینگی', iconName: 'TrendingUp' },
+  { target: 'sales_report', title: 'گزارش تحلیلی فروش', category: 'reports', type: 'tab', description: 'آمار فروش دوره‌ای و مقایسه‌ای', iconName: 'BarChart2' },
+  { target: 'analytical_dashboard', title: 'داشبورد تحلیلی فروش و سود', category: 'reports', type: 'tab', description: 'نمودارهای مدیریتی و هوش کسب‌وکار', iconName: 'BarChart2' },
+
+  // Settings
+  { target: 'settings', title: 'تنظیمات کلی سیستم', category: 'settings', type: 'tab', description: 'مشاهده و پیکربندی پارامترهای جامع نرم‌افزار', iconName: 'Settings' },
+  { target: 'settings_quick_codes', title: 'مدیریت کدهای دسترسی سریع', category: 'settings', type: 'tab', description: 'پیکربندی و ویرایش کدهای ۲ رقمی کیبورد', iconName: 'Keyboard' },
+
+  // Actions
+  { target: 'action_calculator', title: 'ماشین حساب سریع شناور', category: 'tools', type: 'action', description: 'باز کردن پنجره ماشین حساب محاسبات ارزی و مالی', iconName: 'Calculator' },
+  { target: 'action_scanner', title: 'اسکنر بارکد شناور', category: 'tools', type: 'action', description: 'پنجره اسکن سریع با بارکدخوان یا دوربین', iconName: 'ScanLine' },
+  { target: 'action_new_product', title: 'تعریف کالای جدید (پاپ‌آپ)', category: 'inventory', type: 'action', description: 'باز کردن پنجره سریع ثبت کالا و بارکد', iconName: 'PackagePlus' },
+  { target: 'action_new_person', title: 'ثبت طرف‌حساب جدید (پاپ‌آپ)', category: 'persons', type: 'action', description: 'باز کردن پنجره سریع افزودن شخص/مشتری', iconName: 'UserPlus' },
+  { target: 'action_send_sms', title: 'نگارش و ارسال پیامک (پاپ‌آپ)', category: 'messaging', type: 'action', description: 'پنجره ارسال پیامک آنی به مشتری یا گروه', iconName: 'Send' },
+  { target: 'action_sync', title: 'پشتیبان‌گیری و همگام‌سازی ابری', category: 'tools', type: 'action', description: 'مشاهده صف ارسال و وضعیت اتصال دیتابیس', iconName: 'RefreshCw' },
+];
+
+/**
+ * Suggests the next available unused 2-digit code (e.g. "11", "12", ...).
+ */
+export function getNextAvailableCode(items: QuickCodeItem[] = getQuickCodes()): string {
+  const usedCodes = new Set(items.map((i) => i.code));
+  for (let num = 10; num <= 99; num++) {
+    const codeStr = String(num);
+    if (!usedCodes.has(codeStr)) {
+      return codeStr;
+    }
+  }
+  return '99';
+}
+
 /**
  * Loads current quick codes from localStorage or falls back to defaults.
+ * Preserves user modifications, custom additions, and deletions.
+ * Injects keyboard_receipt if not already present in an existing stored array.
  */
 export function getQuickCodes(): QuickCodeItem[] {
   try {
@@ -562,23 +678,22 @@ export function getQuickCodes(): QuickCodeItem[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed) || parsed.length === 0) return DEFAULT_QUICK_CODES;
 
-    // Merge with defaults to ensure newly added features are present
-    const map = new Map<string, QuickCodeItem>();
-    parsed.forEach((item: QuickCodeItem) => {
-      if (item && item.id) map.set(item.id, item);
-    });
-
-    return DEFAULT_QUICK_CODES.map((defaultItem) => {
-      const existing = map.get(defaultItem.id);
-      if (existing) {
-        return {
-          ...defaultItem,
-          code: existing.code || defaultItem.code,
-          enabled: existing.enabled !== undefined ? existing.enabled : defaultItem.enabled,
-        };
+    // Check if keyboard_receipt is present; if not, inject it
+    const hasKeyboardReceipt = parsed.some((item: QuickCodeItem) => item && item.id === 'keyboard_receipt');
+    if (!hasKeyboardReceipt) {
+      const defaultKb = DEFAULT_QUICK_CODES.find((i) => i.id === 'keyboard_receipt');
+      if (defaultKb) {
+        const existingCodes = new Set(parsed.map((p: QuickCodeItem) => p.code));
+        let codeToUse = defaultKb.code;
+        if (existingCodes.has(codeToUse)) {
+          codeToUse = getNextAvailableCode(parsed);
+        }
+        parsed.push({ ...defaultKb, code: codeToUse });
+        saveQuickCodes(parsed);
       }
-      return defaultItem;
-    });
+    }
+
+    return parsed;
   } catch {
     return DEFAULT_QUICK_CODES;
   }
@@ -607,6 +722,54 @@ export function resetQuickCodes(): QuickCodeItem[] {
     console.error('Failed to reset quick codes:', e);
   }
   return DEFAULT_QUICK_CODES;
+}
+
+/**
+ * Adds a new quick code shortcut and persists.
+ */
+export function addQuickCodeItem(item: Omit<QuickCodeItem, 'id' | 'defaultCode'> & { id?: string; defaultCode?: string }): QuickCodeItem[] {
+  const current = getQuickCodes();
+  const newItem: QuickCodeItem = {
+    id: item.id || `custom_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+    code: item.code,
+    defaultCode: item.defaultCode || item.code,
+    title: item.title,
+    description: item.description || '',
+    category: item.category,
+    type: item.type,
+    target: item.target,
+    iconName: item.iconName || (item.type === 'action' ? 'Zap' : 'FileText'),
+    enabled: item.enabled ?? true,
+    isCustom: true,
+  };
+  const updated = [newItem, ...current];
+  saveQuickCodes(updated);
+  return updated;
+}
+
+/**
+ * Deletes a quick code shortcut by ID and persists.
+ */
+export function deleteQuickCodeItem(id: string): QuickCodeItem[] {
+  const current = getQuickCodes();
+  const updated = current.filter((item) => item.id !== id);
+  saveQuickCodes(updated);
+  return updated;
+}
+
+/**
+ * Updates a quick code item and persists.
+ */
+export function updateQuickCodeItem(id: string, updates: Partial<QuickCodeItem>): QuickCodeItem[] {
+  const current = getQuickCodes();
+  const updated = current.map((item) => {
+    if (item.id === id) {
+      return { ...item, ...updates };
+    }
+    return item;
+  });
+  saveQuickCodes(updated);
+  return updated;
 }
 
 /**

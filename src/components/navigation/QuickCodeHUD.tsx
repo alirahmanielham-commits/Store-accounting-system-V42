@@ -33,7 +33,8 @@ import {
   BookOpen,
   Send,
   FileSpreadsheet,
-  LayoutDashboard
+  LayoutDashboard,
+  Zap
 } from 'lucide-react';
 import { 
   QuickCodeItem, 
@@ -82,6 +83,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   RefreshCw,
   Settings,
   Keyboard,
+  Zap,
 };
 
 function EditIconFallback(props: any) {
