@@ -43,9 +43,9 @@ export default function SalePaymentModal({
   playAudioFeedback
 }: SalePaymentModalProps) {
   const playSound = playAudioFeedback || playAudioUtil;
-  // Payment methods: 'pos' (کارتخوان), 'cash' (نقد), 'credit' (نسیه), 'partial' (علی‌الحساب)
-  const [method, setMethod] = useState<'pos' | 'cash' | 'credit' | 'partial'>('pos');
-  const [paidAmount, setPaidAmount] = useState('');
+  // Payment methods: 'pos' (کارتخوان), 'cash' (نقد), 'credit' (نسیه), 'partial' (علی‌الحساب) - Default to 'credit'
+  const [method, setMethod] = useState<'pos' | 'cash' | 'credit' | 'partial'>('credit');
+  const [paidAmount, setPaidAmount] = useState('0');
   const [paymentAccountId, setPaymentAccountId] = useState('');
   const [submitting, setSubmitting] = useState(false);
   const [unallocatedBalance, setUnallocatedBalance] = useState(0);
@@ -79,25 +79,17 @@ export default function SalePaymentModal({
     return (cashboxes || []).filter((c: any) => c.isActive !== false);
   }, [cashboxes]);
 
-  // Initialization & Auto-defaulting
+  // Initialization & Auto-defaulting: Default mode is credit (نسیه / اعتباری)
   useEffect(() => {
     if (isOpen && payload?.customerId) {
-      setPaidAmount(totalAmount.toString());
+      setPaidAmount('0');
       setUseUnallocated(false);
       setUnallocatedAmountToUse('');
       setAutoOpenPrint(false);
 
-      // Determine default payment method & default account
-      if (activeBanks.length > 0) {
-        setMethod('pos');
-        setPaymentAccountId(activeBanks[0].id);
-      } else if (activeCashboxes.length > 0) {
-        setMethod('cash');
-        setPaymentAccountId(activeCashboxes[0].id);
-      } else {
-        setMethod('credit');
-        setPaymentAccountId('');
-      }
+      // Pre-select credit / on-account by default
+      setMethod('credit');
+      setPaymentAccountId('');
 
       // Calculate unallocated balance for customer
       const personTx = (transactions || []).filter((tx: any) => 

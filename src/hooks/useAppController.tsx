@@ -5063,9 +5063,16 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
     }
     
     // Check if receipt already exists
-    const existing = invoices.find(i => i.type === "warehouse_receipt" && i.sourceInvoiceId?.toString() === inv.id?.toString() && i.status !== "voided" && !i.isDeleted);
+    const existing = invoices.find(
+      (i: any) =>
+        i.type === "warehouse_receipt" &&
+        (i.sourceInvoiceId?.toString() === inv.id?.toString() ||
+          (i.sourceInvoiceNumber && i.sourceInvoiceNumber?.toString() === inv.invoiceNumber?.toString())) &&
+        i.status !== "voided" &&
+        !i.isDeleted
+    );
     if (existing) {
-       customAlert("رسید انبار برای این فاکتور قبلا ثبت شده است.");
+       customAlert(`رسید انبار برای این فاکتور قبلاً با شماره سند #${toPersianDigits(existing.invoiceNumber || existing.id)} ثبت شده است.`);
        if (setViewingInvoice) {
          setViewingInvoice(existing);
        }
@@ -5080,6 +5087,7 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
             warehouseId: warehouseId,
             operationType: "purchase_invoice",
             sourceInvoiceId: inv.id,
+            sourceInvoiceNumber: inv.invoiceNumber || inv.id,
             customerId: inv.customerId,
             date: new Date().toISOString(),
             items: (inv.items || []).map((item: any) => {
@@ -5115,7 +5123,7 @@ const handleFastWarehouseReceipt = async (inv: any, warehouseId: string) => {
         await fetchInvoices();
         await fetchProducts();
         setSuccessMsg("رسید انبار با موفقیت ثبت شد و مقادیر در کاردکس انبار اعمال گردید.");
-        setTimeout(() => setSuccessMsg(""), 3000);
+        setTimeout(() => setSuccessMsg(""), 3500);
 
         const createdReceipt = added || payload;
         if (setViewingInvoice && createdReceipt) {
@@ -5150,11 +5158,12 @@ const handleFastWarehouseRemittance = async (inv: any, warehouseId?: string) => 
     return null;
   }
 
-  // Find all distinct warehouses in items
+  // Find all distinct warehouses in items or fallback to warehouseId or active default warehouse
+  const fallbackDefaultWh = (warehouses || []).find((w: any) => w.isActive !== false)?.id || warehouses?.[0]?.id;
   const distinctWhIds: string[] = Array.from(
     new Set(
       physicalItems
-        .map((it: any) => (it.warehouseId || inv.warehouseId || "").toString())
+        .map((it: any) => (it.warehouseId || inv.warehouseId || warehouseId || fallbackDefaultWh || "").toString())
         .filter(Boolean)
     )
   );
@@ -5166,13 +5175,15 @@ const handleFastWarehouseRemittance = async (inv: any, warehouseId?: string) => 
   }
 
   startAppProcessing("در حال صدور حواله(های) تفکیکی خروج از انبار...");
-  const createdRemittances: any[] = [];
+  const newCreatedRemittances: any[] = [];
+  const existingRemittances: any[] = [];
 
   try {
     for (const targetWh of targetWhList) {
-      const itemsForWh = physicalItems.filter(
-        (it: any) => (it.warehouseId || inv.warehouseId || "").toString() === targetWh
-      );
+      const itemsForWh = physicalItems.filter((it: any) => {
+        const itWh = (it.warehouseId || inv.warehouseId || "").toString();
+        return !itWh || itWh === targetWh;
+      });
       if (itemsForWh.length === 0) continue;
 
       const whObj = warehouses.find((w: any) => w.id?.toString() === targetWh);
@@ -5182,13 +5193,14 @@ const handleFastWarehouseRemittance = async (inv: any, warehouseId?: string) => 
       const existing = invoices.find(
         (i: any) =>
           i.type === "warehouse_remittance" &&
-          i.sourceInvoiceId?.toString() === inv.id?.toString() &&
+          (i.sourceInvoiceId?.toString() === inv.id?.toString() ||
+            (i.sourceInvoiceNumber && i.sourceInvoiceNumber?.toString() === inv.invoiceNumber?.toString())) &&
           i.warehouseId?.toString() === targetWh &&
           i.status !== "voided" &&
           !i.isDeleted
       );
       if (existing) {
-        createdRemittances.push(existing);
+        existingRemittances.push(existing);
         continue;
       }
 
@@ -5221,6 +5233,7 @@ const handleFastWarehouseRemittance = async (inv: any, warehouseId?: string) => 
         warehouseId: targetWh,
         operationType: "sales_invoice",
         sourceInvoiceId: inv.id,
+        sourceInvoiceNumber: inv.invoiceNumber || inv.id,
         customerId: inv.customerId,
         date: new Date().toISOString(),
         items: mappedItems,
@@ -5232,27 +5245,37 @@ const handleFastWarehouseRemittance = async (inv: any, warehouseId?: string) => 
       };
 
       const added = await addInvoice(payload as any, false);
-      if (added) createdRemittances.push(added);
+      if (added) {
+        newCreatedRemittances.push(added);
+      }
     }
 
     await recalculateAllWarehouseStocks();
     await fetchInvoices();
     await fetchProducts();
 
-    if (createdRemittances.length > 0) {
+    if (newCreatedRemittances.length > 0) {
       setSuccessMsg(
-        createdRemittances.length > 1
-          ? `تعداد ${toPersianDigits(createdRemittances.length)} حواله خروج تفکیکی برای انبارهای مربوطه با موفقیت صادر گردید.`
+        newCreatedRemittances.length > 1
+          ? `تعداد ${toPersianDigits(newCreatedRemittances.length)} حواله خروج تفکیکی برای انبارهای مربوطه با موفقیت صادر گردید.`
           : `حواله خروج انبار با موفقیت صادر و در کاردکس ثبت شد.`
       );
       setTimeout(() => setSuccessMsg(""), 3500);
 
-      if (setViewingInvoice && createdRemittances[0]) {
-        setViewingInvoice(createdRemittances[0]);
+      if (setViewingInvoice && newCreatedRemittances[0]) {
+        setViewingInvoice(newCreatedRemittances[0]);
       }
+      return newCreatedRemittances;
+    } else if (existingRemittances.length > 0) {
+      customAlert(`حواله خروج انبار برای این فاکتور قبلاً با شماره سند #${toPersianDigits(existingRemittances[0].invoiceNumber || existingRemittances[0].id)} صادر شده است.`);
+      if (setViewingInvoice && existingRemittances[0]) {
+        setViewingInvoice(existingRemittances[0]);
+      }
+      return existingRemittances;
+    } else {
+      customAlert("هیچ قلم کالای فیزیکی مرتبط با انبار انتخاب‌شده برای صدور حواله یافت نشد.");
+      return null;
     }
-
-    return createdRemittances;
   } catch (e) {
     console.error("Fast remittance error:", e);
     customAlert("خطا در صدور حواله خروج انبار");
@@ -6216,11 +6239,11 @@ const getInvoiceNumber = (typeOverride?: string) => {
       !isNegativeStockAllowedForRemittance &&
       payload.type === "warehouse_remittance"
     ) {
-      const requiredQty: Record<string, number> = {};
+      const requiredQtyList: { productId: string; whId: string; q: number }[] = [];
 
       for (const item of payload.items) {
         if (!item.productId) continue;
-        const productObj = products.find((p) => p.id === item.productId);
+        const productObj = products.find((p) => String(p.id) === String(item.productId));
         if (productObj?.type === "service") continue;
         const prodDir = productObj?.unitRatioDirection || getUnitRatioDirection(productObj);
         const q = convertQuantityToBaseUnit(
@@ -6229,22 +6252,29 @@ const getInvoiceNumber = (typeOverride?: string) => {
           Number(item.unitRatio || productObj?.unitRatio),
           prodDir
         );
-        const key = item.productId + "_" + (item.warehouseId || "global");
-        requiredQty[key] = (requiredQty[key] || 0) + q;
+        const pId = String(item.productId);
+        const wId = String(item.warehouseId || payload.warehouseId || "");
+        const existingReq = requiredQtyList.find((r) => r.productId === pId && r.whId === wId);
+        if (existingReq) {
+          existingReq.q += q;
+        } else {
+          requiredQtyList.push({ productId: pId, whId: wId, q });
+        }
       }
 
-      for (const key of Object.keys(requiredQty)) {
-        const [productId, whId] = key.split("_");
-        const q = requiredQty[key];
-        const stockInfo = getProductStockInfo(productId);
+      for (const req of requiredQtyList) {
+        const stockInfo = getProductStockInfo(req.productId);
+        const avail = req.whId && stockInfo.warehouses?.[req.whId]
+          ? (stockInfo.warehouses[req.whId].physical || 0)
+          : (stockInfo.totalPhysical || 0);
 
-        const avail = stockInfo.warehouses[whId]?.physical || 0;
-        if (avail < q) {
+        if (avail < req.q) {
+          const prodObj = products.find((p) => String(p.id) === req.productId);
           customAlert(
-            `موجودی فیزیکی در انبار انتخاب شده کافی نیست. (موجودی: ${avail})`,
+            `موجودی فیزیکی کالای «${prodObj?.name || "کالا"}» در انبار کافی نیست. (موجودی: ${avail}، مقدار درخواستی حواله: ${req.q})`,
           );
           setSubmitting(false);
-      stopAppProcessing();
+          stopAppProcessing();
           return false;
         }
       }
@@ -6532,8 +6562,9 @@ const getInvoiceNumber = (typeOverride?: string) => {
       }
 
       if (!isDraft && payload.type !== "proforma") {
-        recalculateAllWarehouseStocks()
+        await recalculateAllWarehouseStocks()
           .then(async () => {
+            await fetchInvoices();
             await fetchWarehouses();
             await fetchInventoryTransactions();
             try {
@@ -6544,6 +6575,8 @@ const getInvoiceNumber = (typeOverride?: string) => {
             }
           })
           .catch(console.error);
+      } else {
+        await fetchInvoices();
       }
 
       const successTypeName =
@@ -7018,8 +7051,9 @@ const submitInvoice = async (e: React.FormEvent) => {
   };
 
 const handleInvoicePreviewTrigger = () => {
+    const isWarehouseDoc = activeTab === "create_warehouse_doc" || invoiceType === "warehouse_receipt" || invoiceType === "warehouse_remittance";
     if (
-      !customerId ||
+      (!isWarehouseDoc && !customerId) ||
       (items || []).length === 0 ||
       items.some((i) => !i.productId && !i.productName)
     ) {
@@ -7139,6 +7173,8 @@ const handleInvoicePreviewTrigger = () => {
         : invoiceNumber;
     const selectedCustomer = persons.find((p) => p.id === customerId);
 
+    const srcInvObj = sourceInvoiceId ? invoices.find((inv: any) => String(inv.id) === String(sourceInvoiceId) || String(inv.invoiceNumber) === String(sourceInvoiceId)) : null;
+
     const tempPayload = {
       invoiceNumber: finalInvoiceNumber,
       sellerInvoiceNumber: sellerInvoiceNumber || "",
@@ -7165,6 +7201,7 @@ const handleInvoicePreviewTrigger = () => {
       shippingAddress,
       
       sourceInvoiceId, // Pass it correctly
+      sourceInvoiceNumber: srcInvObj?.invoiceNumber || (typeof sourceInvoiceId === 'string' && !sourceInvoiceId.includes('-') ? sourceInvoiceId : ""),
       items: (items || []).map((item) => {
         const prod = products.find(
           (p) => p.id.toString() === String(item.productId),

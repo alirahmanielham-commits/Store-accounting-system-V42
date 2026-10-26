@@ -76,6 +76,7 @@ export default function InvoicesList(props: any) {
     handleEditInvoiceAction,
     handleVoidInvoice,
     handleFastWarehouseReceipt,
+    handleFastWarehouseRemittance,
     handleApprovePurchaseInvoice,
     handleApproveWarehouseReceipt,
     fetchInvoices,
@@ -114,6 +115,10 @@ export default function InvoicesList(props: any) {
   // Fast warehouse receipt modal
   const [fastReceiptInvoice, setFastReceiptInvoice] = useState<any>(null);
   const [fastReceiptWarehouseId, setFastReceiptWarehouseId] = useState<string>('');
+
+  // Fast warehouse remittance modal
+  const [fastRemittanceInvoice, setFastRemittanceInvoice] = useState<any>(null);
+  const [fastRemittanceWarehouseId, setFastRemittanceWarehouseId] = useState<string>('');
 
   // Queue SMS modal
   const [queueSmsInvoice, setQueueSmsInvoice] = useState<any>(null);
@@ -314,6 +319,69 @@ export default function InvoicesList(props: any) {
     } catch {
       return false;
     }
+  };
+
+  // Source invoice reference badge resolver (replaces raw GUID with human-readable document info)
+  const renderSourceInvoiceReference = (inv: any) => {
+    if (!inv.sourceInvoiceId && !inv.sourceInvoiceNumber) return null;
+
+    // Find source invoice in loaded invoices list
+    const srcInv = (invoices || []).find((other: any) =>
+      (inv.sourceInvoiceId && String(other.id) === String(inv.sourceInvoiceId)) ||
+      (inv.sourceInvoiceNumber && (String(other.invoiceNumber) === String(inv.sourceInvoiceNumber) || String(other.id) === String(inv.sourceInvoiceNumber))) ||
+      (inv.sourceInvoiceId && String(other.invoiceNumber) === String(inv.sourceInvoiceId))
+    );
+
+    let label = '';
+    let titleText = '';
+
+    if (srcInv) {
+      const typeLabel =
+        srcInv.type === 'sale' ? 'فاکتور فروش' :
+        srcInv.type === 'purchase' ? 'فاکتور خرید' :
+        srcInv.type === 'proforma' ? 'پیش‌فاکتور' :
+        srcInv.type === 'sale_return' ? 'برگشت فروش' :
+        srcInv.type === 'purchase_return' ? 'برگشت خرید' :
+        srcInv.type === 'warehouse_receipt' ? 'رسید انبار' :
+        srcInv.type === 'warehouse_remittance' ? 'حواله انبار' : 'سند';
+
+      const displayNum = srcInv.invoiceNumber || srcInv.id;
+      label = `مرجع: ${typeLabel} #${toPersianDigits(displayNum)}`;
+      titleText = `مشاهده سند مرجع: ${typeLabel} شماره ${displayNum}`;
+    } else {
+      // If not in invoices array, check sourceInvoiceNumber
+      if (inv.sourceInvoiceNumber) {
+        label = `مرجع: #${toPersianDigits(inv.sourceInvoiceNumber)}`;
+        titleText = `سند مرجع شماره ${inv.sourceInvoiceNumber}`;
+      } else {
+        const rawId = String(inv.sourceInvoiceId || '');
+        // If it looks like a long UUID, truncate nicely so no ugly raw GUID is shown
+        const displayId = rawId.length > 18 ? `${rawId.substring(0, 8)}...` : rawId;
+        label = `مرجع: #${toPersianDigits(displayId)}`;
+        titleText = `سند مرجع ${rawId}`;
+      }
+    }
+
+    return (
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (srcInv && setViewingInvoice) {
+            setViewingInvoice(srcInv);
+          }
+        }}
+        className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded border transition-all ${
+          srcInv
+            ? 'bg-indigo-50/90 text-indigo-700 border-indigo-200/80 hover:bg-indigo-100 hover:text-indigo-900 cursor-pointer shadow-2xs'
+            : 'bg-slate-100 text-slate-600 border-slate-200 cursor-default'
+        } truncate max-w-[170px]`}
+        title={titleText}
+      >
+        <FileText className="w-2.5 h-2.5 shrink-0 text-indigo-500" />
+        <span className="truncate">{label}</span>
+      </button>
+    );
   };
 
   // Dynamic Page Configuration based on activeTab
@@ -1359,12 +1427,8 @@ export default function InvoicesList(props: any) {
                                       ش.فروشنده: {toPersianDigits(inv.sellerInvoiceNumber)}
                                     </span>
                                   )}
-                                  {inv.sourceInvoiceId && (
-                                    <span className="text-[10px] text-indigo-700 font-mono truncate" title="فاکتور مرجع">
-                                      مرجع: #{toPersianDigits(inv.sourceInvoiceId)}
-                                    </span>
-                                  )}
-                                  {inv.note && !inv.sellerInvoiceNumber && !inv.sourceInvoiceId && (
+                                  {renderSourceInvoiceReference(inv)}
+                                  {inv.note && !inv.sellerInvoiceNumber && !inv.sourceInvoiceId && !inv.sourceInvoiceNumber && (
                                     <span className="text-[10px] text-slate-400 truncate" title={inv.note}>
                                       {inv.note}
                                     </span>
@@ -1748,9 +1812,12 @@ export default function InvoicesList(props: any) {
                                 </span>
                               )}
                             </div>
-                            <div className="text-[11px] text-slate-400 font-bold mt-1 flex items-center gap-1.5">
-                              <CalendarIcon className="w-3 h-3 text-slate-400" />
-                              <span>{formatInvoiceDate(inv.date || inv.jalaliDate || inv.createdAt, storeSettings?.calendarType, { showTime: false })}</span>
+                            <div className="text-[11px] text-slate-400 font-bold mt-1 flex items-center gap-1.5 flex-wrap">
+                              <div className="flex items-center gap-1">
+                                <CalendarIcon className="w-3 h-3 text-slate-400" />
+                                <span>{formatInvoiceDate(inv.date || inv.jalaliDate || inv.createdAt, storeSettings?.calendarType, { showTime: false })}</span>
+                              </div>
+                              {renderSourceInvoiceReference(inv)}
                             </div>
                           </div>
 
@@ -1794,6 +1861,15 @@ export default function InvoicesList(props: any) {
                                       setFastReceiptInvoice(inv);
                                       const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses?.[0]?.id || "");
                                       setFastReceiptWarehouseId(defaultWh ? String(defaultWh) : "");
+                                    }
+                                  : undefined
+                              }
+                              onFastRemittance={
+                                !isVoided && whStatus !== "completed" && (inv.type === "sale" || inv.type === "purchase_return" || activeTab === "list_sale") && !(inv.type === "sale" && (inv.status === "pending_approval" || inv.isDraft))
+                                  ? () => {
+                                      setFastRemittanceInvoice(inv);
+                                      const defaultWh = inv.warehouseId || inv.items?.find((it: any) => it?.warehouseId)?.warehouseId || (warehouses?.[0]?.id || "");
+                                      setFastRemittanceWarehouseId(defaultWh ? String(defaultWh) : "");
                                     }
                                   : undefined
                               }
@@ -2052,6 +2128,77 @@ export default function InvoicesList(props: any) {
                     className="flex-1 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 disabled:bg-emerald-200 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs transition-colors shadow-sm cursor-pointer"
                   >
                     ثبت رسید انبار
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Fast Warehouse Remittance Modal */}
+      <AnimatePresence>
+        {fastRemittanceInvoice && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[99999] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm"
+            dir="rtl"
+          >
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative"
+            >
+              <div className="p-6">
+                <h3 className="text-lg font-black text-slate-800 mb-2 flex items-center gap-2">
+                  <Truck className="w-5 h-5 text-amber-500" />
+                  حواله خروج سریع انبار
+                </h3>
+                <p className="text-slate-500 text-xs mb-5">
+                  لطفاً انبار مبدا خروج کالا برای فاکتور فروش شماره {toPersianDigits(fastRemittanceInvoice.invoiceNumber || fastRemittanceInvoice.id)} را انتخاب کنید:
+                </p>
+                <div className="space-y-4">
+                  <select
+                    value={fastRemittanceWarehouseId}
+                    onChange={(e) => setFastRemittanceWarehouseId(e.target.value)}
+                    className="w-full p-2.5 border border-amber-200 rounded-xl focus:ring-2 focus:ring-amber-500 bg-amber-50/30 text-xs font-bold text-amber-950 outline-none cursor-pointer"
+                  >
+                    <option value="">-- انتخاب انبار مبدا --</option>
+                    {(warehouses || []).map((wh: any) => (
+                      <option key={wh.id} value={wh.id}>{wh.name || wh.title || `انبار ${wh.id}`}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className="mt-6 flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setFastRemittanceInvoice(null);
+                      setFastRemittanceWarehouseId("");
+                    }}
+                    className="flex-1 px-4 py-2.5 text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl font-bold text-xs transition-colors cursor-pointer"
+                  >
+                    انصراف
+                  </button>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (handleFastWarehouseRemittance) {
+                        const remittance = await handleFastWarehouseRemittance(fastRemittanceInvoice, fastRemittanceWarehouseId);
+                        setFastRemittanceInvoice(null);
+                        setFastRemittanceWarehouseId("");
+                        if (remittance && setViewingInvoice) {
+                          setViewingInvoice(remittance);
+                        }
+                      }
+                    }}
+                    disabled={!fastRemittanceWarehouseId}
+                    className="flex-1 px-5 py-2.5 bg-amber-600 hover:bg-amber-700 disabled:bg-amber-200 disabled:cursor-not-allowed text-white rounded-xl font-bold text-xs transition-colors shadow-sm cursor-pointer"
+                  >
+                    ثبت حواله خروج
                   </button>
                 </div>
               </div>
