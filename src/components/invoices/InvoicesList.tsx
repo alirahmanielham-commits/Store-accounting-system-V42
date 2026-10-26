@@ -84,6 +84,7 @@ export default function InvoicesList(props: any) {
   } = props;
 
   const currency = storeSettings?.currency || 'تومان';
+  const isWarehouseTab = activeTab === 'list_warehouse_docs';
 
   // Sub-filter tabs state
   const [invoiceTabFilter, setInvoiceTabFilter] = useState<string>('all');
@@ -384,6 +385,13 @@ export default function InvoicesList(props: any) {
     );
   };
 
+  const getTargetWarehouseName = (inv: any): string => {
+    const targetId = inv?.targetWarehouseId || inv?.toWarehouseId;
+    if (!targetId) return '';
+    const wh = (warehouses || []).find((w: any) => String(w.id) === String(targetId));
+    return wh?.name || wh?.title || `انبار ${targetId}`;
+  };
+
   // Dynamic Page Configuration based on activeTab
   const pageConfig = useMemo(() => {
     switch (activeTab) {
@@ -584,6 +592,9 @@ export default function InvoicesList(props: any) {
     let unpaidCount = 0;
     let completedWarehouseCount = 0;
     let totalItems = 0;
+    let remittanceCount = 0;
+    let receiptCount = 0;
+    let pendingApprovalReceipts = 0;
 
     filteredInvoicesList.forEach((inv: any) => {
       const tot = Number(inv.totalAmount || 0);
@@ -593,6 +604,13 @@ export default function InvoicesList(props: any) {
       totalGross += tot;
       totalPaid += paid;
       totalRemaining += rem;
+
+      if (inv.type === 'warehouse_remittance') {
+        remittanceCount++;
+      } else if (inv.type === 'warehouse_receipt') {
+        receiptCount++;
+        if (inv.status === 'pending_approval') pendingApprovalReceipts++;
+      }
 
       if (inv.paymentStatus === 'paid') paidCount++;
       else unpaidCount++;
@@ -623,6 +641,9 @@ export default function InvoicesList(props: any) {
       avgInvoiceAmount,
       settlementPercent,
       fulfillmentPercent,
+      remittanceCount,
+      receiptCount,
+      pendingApprovalReceipts,
     };
   }, [filteredInvoicesList]);
 
@@ -630,7 +651,7 @@ export default function InvoicesList(props: any) {
   const hasActiveFilters = useMemo(() => {
     return (
       Boolean(invoiceSearchQuery) ||
-      invoiceTabFilter !== 'all' ||
+      (isWarehouseTab ? (listFilter && listFilter !== 'all') : (invoiceTabFilter !== 'all')) ||
       selectedPersonFilter !== 'all' ||
       selectedPaymentStatus !== 'all' ||
       selectedWarehouseFilter !== 'all' ||
@@ -638,11 +659,12 @@ export default function InvoicesList(props: any) {
       Boolean(startDate) ||
       Boolean(endDate)
     );
-  }, [invoiceSearchQuery, invoiceTabFilter, selectedPersonFilter, selectedPaymentStatus, selectedWarehouseFilter, datePreset, startDate, endDate]);
+  }, [invoiceSearchQuery, isWarehouseTab, listFilter, invoiceTabFilter, selectedPersonFilter, selectedPaymentStatus, selectedWarehouseFilter, datePreset, startDate, endDate]);
 
   const clearAllFilters = () => {
     if (setInvoiceSearchQuery) setInvoiceSearchQuery('');
     setInvoiceTabFilter('all');
+    if (setListFilter) setListFilter('all');
     setSelectedPersonFilter('all');
     setSelectedPaymentStatus('all');
     setSelectedWarehouseFilter('all');
@@ -1008,73 +1030,149 @@ export default function InvoicesList(props: any) {
 
       {/* KPI Compact Metrics Row (Zero Slop, Clean ERP Cards) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 print:hidden">
-        {/* Metric 1: Total Amount */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-black text-slate-600">{pageConfig.totalLabel}</span>
-            <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
-              <DollarSign className="w-3.5 h-3.5" />
+        {isWarehouseTab ? (
+          <>
+            {/* Warehouse Metric 1: Total Warehouse Documents */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">کل اسناد انبارداری</span>
+                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <Warehouse className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-slate-900 font-mono tracking-tight">
+                {toPersianDigits(summaryMetrics.count)}
+                <span className="text-[11px] font-bold text-slate-500 mr-1.5">سند ثبت‌شده</span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-bold mt-1 truncate">
+                ارزش کل: {toPersianDigits(formatCurrency(summaryMetrics.totalGross))} {currency}
+              </div>
             </div>
-          </div>
-          <div className="text-base sm:text-xl font-black text-slate-900 font-mono tracking-tight">
-            {toPersianDigits(formatCurrency(summaryMetrics.totalGross))}
-            <span className="text-[10px] font-bold text-slate-500 mr-1">{currency}</span>
-          </div>
-          <div className="text-[10px] text-slate-400 font-bold mt-1">
-            {toPersianDigits(summaryMetrics.count)} سند • {toPersianDigits(summaryMetrics.totalItems)} قلم کالا
-          </div>
-        </div>
 
-        {/* Metric 2: Settled / Paid Amount */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-black text-slate-600">{pageConfig.paidLabel}</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <CheckCircle2 className="w-3.5 h-3.5" />
+            {/* Warehouse Metric 2: Warehouse Remittances */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">حواله‌های خروج کالا</span>
+                <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <Truck className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-amber-900 font-mono tracking-tight">
+                {toPersianDigits(summaryMetrics.remittanceCount)}
+                <span className="text-[11px] font-bold text-amber-700 mr-1.5">حواله صادره</span>
+              </div>
+              <div className="text-[10px] text-amber-700 font-bold mt-1">
+                خروج کالا بابت فروش، مصرف و مرجوعی
+              </div>
             </div>
-          </div>
-          <div className="text-base sm:text-xl font-black text-emerald-700 font-mono tracking-tight">
-            {toPersianDigits(formatCurrency(summaryMetrics.totalPaid))}
-            <span className="text-[10px] font-bold text-slate-500 mr-1">{currency}</span>
-          </div>
-          <div className="text-[10px] text-emerald-600 font-bold mt-1">
-            {toPersianDigits(summaryMetrics.paidCount)} تسویه کامل ({toPersianDigits(summaryMetrics.settlementPercent.toFixed(0))}٪)
-          </div>
-        </div>
 
-        {/* Metric 3: Remaining / Unpaid Balance */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-black text-slate-600">{pageConfig.unpaidLabel}</span>
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${summaryMetrics.totalRemaining > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-400'}`}>
-              <AlertCircle className="w-3.5 h-3.5" />
+            {/* Warehouse Metric 3: Warehouse Receipts */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">رسیدهای ورود به انبار</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <Package className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-emerald-900 font-mono tracking-tight">
+                {toPersianDigits(summaryMetrics.receiptCount)}
+                <span className="text-[11px] font-bold text-emerald-700 mr-1.5">رسید ثبت‌شده</span>
+              </div>
+              <div className="text-[10px] text-emerald-700 font-bold mt-1">
+                {summaryMetrics.pendingApprovalReceipts > 0
+                  ? `${toPersianDigits(summaryMetrics.pendingApprovalReceipts)} رسید در انتظار تایید نهایی`
+                  : 'تمام رسیدها قطعی و تایید شده'}
+              </div>
             </div>
-          </div>
-          <div className={`text-base sm:text-xl font-black font-mono tracking-tight ${summaryMetrics.totalRemaining > 0 ? 'text-rose-700' : 'text-slate-800'}`}>
-            {toPersianDigits(formatCurrency(summaryMetrics.totalRemaining))}
-            <span className="text-[10px] font-bold text-slate-500 mr-1">{currency}</span>
-          </div>
-          <div className="text-[10px] text-rose-600 font-bold mt-1">
-            {toPersianDigits(summaryMetrics.unpaidCount)} فاکتور مانده‌دار
-          </div>
-        </div>
 
-        {/* Metric 4: Warehouse Fulfillment / Average */}
-        <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
-          <div className="flex items-center justify-between text-slate-500 mb-1">
-            <span className="text-[11px] font-black text-slate-600">تحویل انبار و میانگین</span>
-            <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
-              <Warehouse className="w-3.5 h-3.5" />
+            {/* Warehouse Metric 4: Total Units in Circulation */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">گردش اقلام کالا</span>
+                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Layers className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-purple-900 font-mono tracking-tight">
+                {toPersianDigits(summaryMetrics.totalItems)}
+                <span className="text-[11px] font-bold text-purple-700 mr-1.5">واحد کالا</span>
+              </div>
+              <div className="text-[10px] text-slate-500 font-bold mt-1 truncate">
+                میانگین: {toPersianDigits(summaryMetrics.count > 0 ? (summaryMetrics.totalItems / summaryMetrics.count).toFixed(1) : 0)} واحد در هر سند
+              </div>
             </div>
-          </div>
-          <div className="text-base sm:text-xl font-black text-slate-900 font-mono tracking-tight">
-            {toPersianDigits(summaryMetrics.fulfillmentPercent.toFixed(0))}٪
-            <span className="text-[10px] font-bold text-slate-400 mr-1">تکمیل انبار</span>
-          </div>
-          <div className="text-[10px] text-slate-500 font-bold mt-1 truncate">
-            میانگین: {toPersianDigits(formatCurrency(summaryMetrics.avgInvoiceAmount))} {currency}
-          </div>
-        </div>
+          </>
+        ) : (
+          <>
+            {/* Metric 1: Total Amount */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">{pageConfig.totalLabel}</span>
+                <div className="w-7 h-7 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center">
+                  <DollarSign className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-slate-900 font-mono tracking-tight">
+                {toPersianDigits(formatCurrency(summaryMetrics.totalGross))}
+                <span className="text-[10px] font-bold text-slate-500 mr-1">{currency}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-bold mt-1">
+                {toPersianDigits(summaryMetrics.count)} سند • {toPersianDigits(summaryMetrics.totalItems)} قلم کالا
+              </div>
+            </div>
+
+            {/* Metric 2: Settled / Paid Amount */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">{pageConfig.paidLabel}</span>
+                <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                  <CheckCircle2 className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-emerald-700 font-mono tracking-tight">
+                {toPersianDigits(formatCurrency(summaryMetrics.totalPaid))}
+                <span className="text-[10px] font-bold text-slate-500 mr-1">{currency}</span>
+              </div>
+              <div className="text-[10px] text-emerald-600 font-bold mt-1">
+                {toPersianDigits(summaryMetrics.paidCount)} تسویه کامل ({toPersianDigits(summaryMetrics.settlementPercent.toFixed(0))}٪)
+              </div>
+            </div>
+
+            {/* Metric 3: Remaining / Unpaid Balance */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">{pageConfig.unpaidLabel}</span>
+                <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${summaryMetrics.totalRemaining > 0 ? 'bg-rose-50 text-rose-600' : 'bg-slate-50 text-slate-400'}`}>
+                  <AlertCircle className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className={`text-base sm:text-xl font-black font-mono tracking-tight ${summaryMetrics.totalRemaining > 0 ? 'text-rose-700' : 'text-slate-800'}`}>
+                {toPersianDigits(formatCurrency(summaryMetrics.totalRemaining))}
+                <span className="text-[10px] font-bold text-slate-500 mr-1">{currency}</span>
+              </div>
+              <div className="text-[10px] text-rose-600 font-bold mt-1">
+                {toPersianDigits(summaryMetrics.unpaidCount)} فاکتور مانده‌دار
+              </div>
+            </div>
+
+            {/* Metric 4: Warehouse Fulfillment / Average */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">تحویل انبار و میانگین</span>
+                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Warehouse className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-slate-900 font-mono tracking-tight">
+                {toPersianDigits(summaryMetrics.fulfillmentPercent.toFixed(0))}٪
+                <span className="text-[10px] font-bold text-slate-400 mr-1">تکمیل انبار</span>
+              </div>
+              <div className="text-[10px] text-slate-500 font-bold mt-1 truncate">
+                میانگین: {toPersianDigits(formatCurrency(summaryMetrics.avgInvoiceAmount))} {currency}
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Streamlined Search and Filter Bar (Clean & Non-Cluttered) */}
@@ -1090,7 +1188,11 @@ export default function InvoicesList(props: any) {
                 if (setInvoiceSearchQuery) setInvoiceSearchQuery(e.target.value);
                 if (setInvoiceCurrentPage) setInvoiceCurrentPage(1);
               }}
-              placeholder="جستجوی سریع شماره فاکتور، شخص، انبار، کالا..."
+              placeholder={
+                isWarehouseTab
+                  ? "جستجوی شماره سند انبار، حواله، رسید، کالا، طرف‌حساب..."
+                  : "جستجوی سریع شماره فاکتور، شخص، انبار، کالا..."
+              }
               className="w-full pr-9 pl-8 py-2 bg-slate-50 border border-slate-200/90 rounded-xl text-xs font-bold text-slate-800 placeholder-slate-400 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
             />
             {invoiceSearchQuery && (
@@ -1225,22 +1327,40 @@ export default function InvoicesList(props: any) {
                 </select>
               </div>
 
-              {/* Payment Status Filter */}
+              {/* Payment or Warehouse Status Filter */}
               <div>
-                <label className="block text-[10px] font-black text-slate-500 mb-1">وضعیت تسویه مالی:</label>
-                <select
-                  value={selectedPaymentStatus}
-                  onChange={e => {
-                    setSelectedPaymentStatus(e.target.value);
-                    if (setInvoiceCurrentPage) setInvoiceCurrentPage(1);
-                  }}
-                  className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer"
-                >
-                  <option value="all">همه وضعیت‌های تسویه</option>
-                  <option value="paid">تسویه کامل (پرداخت‌شده)</option>
-                  <option value="partial">علی‌الحساب (بخشی پرداخت‌شده)</option>
-                  <option value="unpaid">تسویه نشده (پرداخت‌نشده)</option>
-                </select>
+                <label className="block text-[10px] font-black text-slate-500 mb-1">
+                  {isWarehouseTab ? "نوع و وضعیت سند انبار:" : "وضعیت تسویه مالی:"}
+                </label>
+                {isWarehouseTab ? (
+                  <select
+                    value={listFilter || 'all'}
+                    onChange={e => {
+                      if (setListFilter) setListFilter(e.target.value);
+                      if (setInvoiceCurrentPage) setInvoiceCurrentPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="all">همه اسناد انبار</option>
+                    <option value="remittance">فقط حواله‌های خروج انبار</option>
+                    <option value="receipt">فقط رسیدهای تایید شده</option>
+                    <option value="pending_approval">رسیدهای در انتظار تایید ورود</option>
+                  </select>
+                ) : (
+                  <select
+                    value={selectedPaymentStatus}
+                    onChange={e => {
+                      setSelectedPaymentStatus(e.target.value);
+                      if (setInvoiceCurrentPage) setInvoiceCurrentPage(1);
+                    }}
+                    className="w-full px-2.5 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:bg-white focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="all">همه وضعیت‌های تسویه</option>
+                    <option value="paid">تسویه کامل (پرداخت‌شده)</option>
+                    <option value="partial">علی‌الحساب (بخشی پرداخت‌شده)</option>
+                    <option value="unpaid">تسویه نشده (پرداخت‌نشده)</option>
+                  </select>
+                )}
               </div>
 
               {/* Warehouse Filter */}
@@ -1298,22 +1418,35 @@ export default function InvoicesList(props: any) {
           <div className="w-full">
             <table className="w-full text-right table-fixed">
               <thead className="bg-slate-50/95 text-slate-700 border-b border-slate-200 uppercase font-black text-xs sticky top-0 z-10 backdrop-blur-xs">
-                <tr>
-                  <th className="py-3 px-2 text-center w-12 text-slate-500">ردیف</th>
-                  <th className="py-3 px-3 w-[22%]">مشخصات و اقلام فاکتور</th>
-                  <th className="py-3 px-3 w-[22%]">طرف‌حساب و انبار</th>
-                  <th className="py-3 px-3 w-[15%]">تاریخ و سررسید</th>
-                  <th className="py-3 px-3 text-left w-[20%]">مبالغ و تسویه</th>
-                  <th className="py-3 px-3 text-center w-[13%]">وضعیت‌ها</th>
-                  <th className="py-3 px-2 text-center print:hidden w-[8%]">عملیات</th>
-                </tr>
+                {isWarehouseTab ? (
+                  <tr>
+                    <th className="py-3 px-2 text-center w-12 text-slate-500">ردیف</th>
+                    <th className="py-3 px-3 w-[24%]">مشخصات و نوع سند انبار</th>
+                    <th className="py-3 px-3 w-[16%]">سند مرجع (فاکتور مرتبط)</th>
+                    <th className="py-3 px-3 w-[17%]">انبار عملیات / موقعیت</th>
+                    <th className="py-3 px-3 w-[16%]">تحویل‌گیرنده / طرف‌حساب</th>
+                    <th className="py-3 px-3 w-[11%]">تاریخ و زمان</th>
+                    <th className="py-3 px-3 text-center w-[14%]">وضعیت سند</th>
+                    <th className="py-3 px-2 text-center print:hidden w-[8%]">عملیات</th>
+                  </tr>
+                ) : (
+                  <tr>
+                    <th className="py-3 px-2 text-center w-12 text-slate-500">ردیف</th>
+                    <th className="py-3 px-3 w-[22%]">مشخصات و اقلام فاکتور</th>
+                    <th className="py-3 px-3 w-[22%]">طرف‌حساب و انبار</th>
+                    <th className="py-3 px-3 w-[15%]">تاریخ و سررسید</th>
+                    <th className="py-3 px-3 text-left w-[20%]">مبالغ و تسویه</th>
+                    <th className="py-3 px-3 text-center w-[13%]">وضعیت‌ها</th>
+                    <th className="py-3 px-2 text-center print:hidden w-[8%]">عملیات</th>
+                  </tr>
+                )}
               </thead>
               <tbody className="divide-y divide-slate-100">
                 {groupedInvoices.map((group) => (
                   <React.Fragment key={group.groupName}>
                     {invoiceGroupMode !== "none" && group.invoices.length > 0 && (
                       <tr className="bg-slate-100/70 border-y border-slate-200">
-                        <td colSpan={7} className="py-2.5 px-4">
+                        <td colSpan={isWarehouseTab ? 8 : 7} className="py-2.5 px-4">
                           <div className="flex justify-between items-center">
                             <div className="flex items-center gap-2">
                               <CalendarIcon className="w-4 h-4 text-indigo-600" />
@@ -1347,6 +1480,8 @@ export default function InvoicesList(props: any) {
                       const phone = personObj?.mobile || personObj?.phone || inv.customerPhone;
                       const whName = getDocWarehouseName(inv);
                       const itemsCount = inv.items?.length || 0;
+                      const totalDocUnits = Array.isArray(inv.items) ? inv.items.reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0) : 0;
+                      const targetWhName = getTargetWarehouseName(inv);
 
                       return (
                         <React.Fragment key={inv.id ? `inv-${inv.id}` : `inv-row-${invIdx}`}>
@@ -1374,184 +1509,345 @@ export default function InvoicesList(props: any) {
                               </div>
                             </td>
 
-                            {/* Column 2: Invoice Number, Badges & Items Summary */}
-                            <td className="py-2.5 px-3">
-                              <div className="flex flex-col gap-1">
-                                <div className="flex items-center gap-1.5 flex-wrap">
-                                  <span
-                                    onClick={() => setViewingInvoice && setViewingInvoice(inv)}
-                                    className="font-black text-slate-900 text-xs sm:text-sm hover:text-indigo-600 hover:underline transition-colors decoration-dashed underline-offset-4 cursor-pointer"
-                                    title="مشاهده پیش‌نمایش فاکتور"
-                                  >
-                                    #{toPersianDigits(inv.invoiceNumber || inv.id)}
-                                  </span>
-                                  {isProforma && (
-                                    <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-1.5 py-0.2 rounded border border-slate-200">
-                                      پیش‌فاکتور
-                                    </span>
-                                  )}
-                                  {isDraft && (
-                                    <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-200">
-                                      پیش‌نویس
-                                    </span>
-                                  )}
-                                  {inv.status === "pending_approval" && (
-                                    <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-300">
-                                      در انتظار تایید
-                                    </span>
-                                  )}
-                                  {isVoided && (
-                                    <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-rose-200">
-                                      ابطال
-                                    </span>
-                                  )}
-                                  {inv.type === "sale_return" && (
-                                    <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-200">
-                                      برگشت فروش
-                                    </span>
-                                  )}
-                                  {inv.type === "purchase_return" && (
-                                    <span className="bg-rose-50 text-rose-700 text-[10px] font-black px-1.5 py-0.2 rounded border border-rose-200">
-                                      برگشت خرید
-                                    </span>
-                                  )}
-                                </div>
-
-                                <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold truncate">
-                                  <span className="inline-flex items-center gap-1 text-slate-600 bg-slate-100/90 px-1.5 py-0.2 rounded">
-                                    <Package className="w-2.5 h-2.5 text-slate-400" />
-                                    <span>{toPersianDigits(itemsCount)} قلم</span>
-                                  </span>
-                                  {inv.sellerInvoiceNumber && (
-                                    <span className="text-[10px] text-emerald-800 font-mono truncate" title="شماره فاکتور فروشنده">
-                                      ش.فروشنده: {toPersianDigits(inv.sellerInvoiceNumber)}
-                                    </span>
-                                  )}
-                                  {renderSourceInvoiceReference(inv)}
-                                  {inv.note && !inv.sellerInvoiceNumber && !inv.sourceInvoiceId && !inv.sourceInvoiceNumber && (
-                                    <span className="text-[10px] text-slate-400 truncate" title={inv.note}>
-                                      {inv.note}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Column 3: Counterparty Person & Warehouse */}
-                            <td className="py-2.5 px-3">
-                              <div className="flex flex-col gap-0.5">
-                                <div className="font-black text-slate-900 text-xs hover:text-indigo-600 transition-colors truncate">
-                                  {renderPersonLink(inv.customerId || inv.personId, personDisplayName)}
-                                </div>
-                                <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold">
-                                  <span className="inline-flex items-center gap-1 text-purple-700 bg-purple-50/80 px-1.5 py-0.2 rounded text-[10px] border border-purple-100/80 truncate max-w-[130px]">
-                                    <Warehouse className="w-2.5 h-2.5 text-purple-500 shrink-0" />
-                                    <span className="truncate">{whName}</span>
-                                  </span>
-                                  {phone && (
-                                    <span className="hidden md:inline-flex items-center gap-0.5 text-[10px] text-slate-400 font-mono" title="شماره تماس">
-                                      <Phone className="w-2.5 h-2.5" />
-                                      <span>{toPersianDigits(phone)}</span>
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
-
-                            {/* Column 4: Date & Due Date */}
-                            <td className="py-2.5 px-3">
-                              <div className="flex flex-col gap-0.5">
-                                <div className="flex items-center gap-1 text-xs font-bold text-slate-800">
-                                  <CalendarIcon className="w-3 h-3 text-indigo-500 shrink-0" />
-                                  <span>
-                                    {formatInvoiceDate(inv.date || inv.jalaliDate || inv.createdAt, storeSettings?.calendarType, { showTime: false })}
-                                  </span>
-                                </div>
-                                {(inv.dueDate || inv.jalaliDueDate) && (() => {
-                                  const isOverdue = remainingBalance > 0 && isInvoiceOverdue(inv.dueDate);
-                                  const dueFormatted = formatInvoiceDate(inv.dueDate || inv.jalaliDueDate, storeSettings?.calendarType, { showTime: false });
-                                  return (
-                                    <div className="text-[10px]">
-                                      {isOverdue ? (
-                                        <span className="inline-flex items-center gap-1 font-black text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
-                                          <Clock className="w-2.5 h-2.5 text-rose-600" />
-                                          <span>سررسید گذشته: {dueFormatted}</span>
+                            {isWarehouseTab ? (
+                              <>
+                                {/* Warehouse Col 2: Document Number, Doc Type & Items */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span
+                                        onClick={() => setViewingInvoice && setViewingInvoice(inv)}
+                                        className="font-black text-slate-900 text-xs sm:text-sm hover:text-indigo-600 hover:underline transition-colors decoration-dashed underline-offset-4 cursor-pointer"
+                                        title="مشاهده پیش‌نمایش سند انبار"
+                                      >
+                                        #{toPersianDigits(inv.invoiceNumber || inv.id)}
+                                      </span>
+                                      {inv.type === "warehouse_remittance" ? (
+                                        <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-lg border border-amber-300 inline-flex items-center gap-1 shadow-2xs">
+                                          <Truck className="w-3 h-3 text-amber-700" />
+                                          <span>حواله خروج انبار</span>
                                         </span>
                                       ) : (
-                                        <span className="text-slate-400 font-medium">
-                                          سررسید: {dueFormatted}
+                                        <span className="bg-emerald-100 text-emerald-900 text-[10px] font-black px-2 py-0.5 rounded-lg border border-emerald-300 inline-flex items-center gap-1 shadow-2xs">
+                                          <Package className="w-3 h-3 text-emerald-700" />
+                                          <span>رسید ورود به انبار</span>
+                                        </span>
+                                      )}
+                                      {isDraft && (
+                                        <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-200">
+                                          پیش‌نویس
+                                        </span>
+                                      )}
+                                      {inv.status === "pending_approval" && (
+                                        <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-300">
+                                          در انتظار تایید
+                                        </span>
+                                      )}
+                                      {isVoided && (
+                                        <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-rose-200">
+                                          ابطال
                                         </span>
                                       )}
                                     </div>
-                                  );
-                                })()}
-                              </div>
-                            </td>
 
-                            {/* Column 5: Financial Summary (Total & Remaining/Paid combined!) */}
-                            <td className="py-2.5 px-3 text-left">
-                              <div className="flex flex-col items-end gap-0.5">
-                                <div className="font-sans font-black text-xs sm:text-sm text-slate-900 tracking-tight">
-                                  {toPersianDigits(formatCurrency(inv.totalAmount || 0))}{" "}
-                                  <span className="text-[10px] text-slate-500 font-bold">{currency}</span>
-                                </div>
-                                <div>
-                                  {remainingBalance <= 0 ? (
-                                    <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 inline-flex items-center gap-0.5">
-                                      <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
-                                      <span>تسویه کامل</span>
-                                    </span>
-                                  ) : (
-                                    <span className="text-[10px] font-black text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 inline-block font-sans">
-                                      مانده: {toPersianDigits(formatCurrency(remainingBalance))} {currency}
-                                    </span>
-                                  )}
-                                </div>
-                              </div>
-                            </td>
+                                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold truncate">
+                                      <span className="inline-flex items-center gap-1 text-slate-700 bg-slate-100 px-1.5 py-0.5 rounded">
+                                        <Package className="w-2.5 h-2.5 text-slate-400" />
+                                        <span>{toPersianDigits(itemsCount)} قلم کالا ({toPersianDigits(totalDocUnits)} واحد)</span>
+                                      </span>
+                                      {inv.title && inv.title !== "سند انبارداری" && (
+                                        <span className="text-[10px] text-slate-400 truncate max-w-[150px]" title={inv.title}>
+                                          {inv.title}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
 
-                            {/* Column 6: Combined Status (Payment + Warehouse stacked!) */}
-                            <td className="py-2.5 px-3 text-center">
-                              <div className="flex flex-col items-center justify-center gap-1">
-                                {/* Financial Status */}
-                                {inv.paymentStatus === "paid" || remainingBalance <= 0 ? (
-                                  <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-emerald-200 whitespace-nowrap">
-                                    تسویه کامل
-                                  </span>
-                                ) : inv.paymentStatus === "partial" ? (
-                                  <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-amber-200 whitespace-nowrap">
-                                    علی‌الحساب
-                                  </span>
-                                ) : (
-                                  <span className="bg-rose-100 text-rose-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-rose-200 whitespace-nowrap">
-                                    {activeTab === 'list_sale' ? 'تسویه نشده' : activeTab === 'list_purchase' ? 'پرداخت نشده' : 'در انتظار تسویه'}
-                                  </span>
-                                )}
+                                {/* Warehouse Col 3: Source Document Reference */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-1">
+                                    <div>
+                                      {renderSourceInvoiceReference(inv) || (
+                                        <span className="inline-flex items-center gap-1 text-[10px] font-bold text-slate-500 bg-slate-100/90 px-1.5 py-0.5 rounded border border-slate-200">
+                                          <span>ثبت مستقیم / آزاد</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                    {inv.note && (
+                                      <span className="text-[10px] text-slate-400 truncate max-w-[150px]" title={inv.note}>
+                                        {inv.note}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
 
-                                {/* Warehouse Status */}
-                                {inv.type === "purchase" && (inv.status === "pending_approval" || inv.isDraft) ? (
-                                  <span className="text-amber-800 bg-amber-50 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap">
-                                    نیازمند تایید فاکتور
-                                  </span>
-                                ) : inv.type === "warehouse_receipt" && inv.status === "pending_approval" ? (
-                                  <span className="text-amber-800 bg-amber-50 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap">
-                                    در انتظار تایید ورود
-                                  </span>
-                                ) : whStatus === "completed" ? (
-                                  <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-[10px] font-black px-2 py-0.5 rounded-lg whitespace-nowrap">
-                                    {inv.type === "purchase" ? "رسید شده" : inv.type === "sale_return" ? "تحویل انبار" : inv.type === "purchase_return" ? "خارج شده" : "حواله شده"}
-                                  </span>
-                                ) : whStatus === "partial" ? (
-                                  <span className="text-blue-700 bg-blue-50 border border-blue-200 text-[10px] font-black px-2 py-0.5 rounded-lg whitespace-nowrap">
-                                    تعدادی
-                                  </span>
-                                ) : (
-                                  <span className="text-amber-700 bg-amber-50 border border-amber-200 text-[10px] font-black px-2 py-0.5 rounded-lg whitespace-nowrap">
-                                    {inv.type === "purchase" ? "در انتظار رسید" : "در انتظار حواله"}
-                                  </span>
-                                )}
-                              </div>
-                            </td>
+                                {/* Warehouse Col 4: Warehouse & Movement */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1.5 text-xs font-black text-purple-900 bg-purple-50/90 px-2 py-0.5 rounded-lg border border-purple-200/80 w-fit truncate max-w-[150px]">
+                                      <Warehouse className="w-3 h-3 text-purple-600 shrink-0" />
+                                      <span className="truncate">{whName}</span>
+                                    </div>
+                                    {targetWhName && (
+                                      <div className="text-[10px] text-indigo-700 font-bold flex items-center gap-1 mt-0.5 truncate">
+                                        <ArrowRight className="w-2.5 h-2.5 text-indigo-500 rotate-180 shrink-0" />
+                                        <span className="truncate">مقصد: {targetWhName}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Warehouse Col 5: Counterparty / Receiver */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="font-black text-slate-900 text-xs hover:text-indigo-600 transition-colors truncate">
+                                      {renderPersonLink(inv.customerId || inv.personId, personDisplayName)}
+                                    </div>
+                                    {(inv.receiverName || inv.driverName) && (
+                                      <div className="text-[10px] text-slate-500 font-bold flex items-center gap-1 truncate" title="تحویل‌گیرنده / حامل">
+                                        <User className="w-2.5 h-2.5 text-slate-400 shrink-0" />
+                                        <span className="truncate">تحویل: {inv.receiverName || inv.driverName}</span>
+                                      </div>
+                                    )}
+                                    {phone && (
+                                      <div className="text-[10px] text-slate-400 font-mono flex items-center gap-1">
+                                        <Phone className="w-2.5 h-2.5 text-slate-400" />
+                                        <span>{toPersianDigits(phone)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Warehouse Col 6: Registration Date & Time */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1 text-xs font-bold text-slate-800">
+                                      <CalendarIcon className="w-3 h-3 text-indigo-500 shrink-0" />
+                                      <span>
+                                        {formatInvoiceDate(inv.date || inv.jalaliDate || inv.createdAt, storeSettings?.calendarType, { showTime: false })}
+                                      </span>
+                                    </div>
+                                    {inv.createdAt && (
+                                      <div className="text-[10px] text-slate-400 font-mono flex items-center gap-0.5">
+                                        <Clock className="w-2.5 h-2.5 text-slate-400" />
+                                        <span>{new Date(inv.createdAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' })}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Warehouse Col 7: Document Status & Value */}
+                                <td className="py-2.5 px-3 text-center">
+                                  <div className="flex flex-col items-center justify-center gap-1">
+                                    {isVoided ? (
+                                      <span className="bg-rose-100 text-rose-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-rose-200 whitespace-nowrap">
+                                        ابطال شده
+                                      </span>
+                                    ) : inv.status === "pending_approval" ? (
+                                      <span className="bg-amber-100 text-amber-900 text-[10px] px-2 py-0.5 font-black rounded-lg border border-amber-300 whitespace-nowrap">
+                                        در انتظار تایید ورود
+                                      </span>
+                                    ) : isDraft ? (
+                                      <span className="bg-amber-50 text-amber-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-amber-200 whitespace-nowrap">
+                                        پیش‌نویس
+                                      </span>
+                                    ) : (
+                                      <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-emerald-200 inline-flex items-center gap-1 whitespace-nowrap">
+                                        <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                        <span>ثبت قطعی در کاردکس</span>
+                                      </span>
+                                    )}
+                                    {inv.totalAmount ? (
+                                      <div className="text-[10px] font-mono font-bold text-slate-500 mt-0.5">
+                                        ارزش: {toPersianDigits(formatCurrency(inv.totalAmount))} {currency}
+                                      </div>
+                                    ) : null}
+                                  </div>
+                                </td>
+                              </>
+                            ) : (
+                              <>
+                                {/* Column 2: Invoice Number, Badges & Items Summary */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span
+                                        onClick={() => setViewingInvoice && setViewingInvoice(inv)}
+                                        className="font-black text-slate-900 text-xs sm:text-sm hover:text-indigo-600 hover:underline transition-colors decoration-dashed underline-offset-4 cursor-pointer"
+                                        title="مشاهده پیش‌نمایش فاکتور"
+                                      >
+                                        #{toPersianDigits(inv.invoiceNumber || inv.id)}
+                                      </span>
+                                      {isProforma && (
+                                        <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-1.5 py-0.2 rounded border border-slate-200">
+                                          پیش‌فاکتور
+                                        </span>
+                                      )}
+                                      {isDraft && (
+                                        <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-200">
+                                          پیش‌نویس
+                                        </span>
+                                      )}
+                                      {inv.status === "pending_approval" && (
+                                        <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-300">
+                                          در انتظار تایید
+                                        </span>
+                                      )}
+                                      {isVoided && (
+                                        <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-rose-200">
+                                          ابطال
+                                        </span>
+                                      )}
+                                      {inv.type === "sale_return" && (
+                                        <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-1.5 py-0.2 rounded border border-amber-200">
+                                          برگشت فروش
+                                        </span>
+                                      )}
+                                      {inv.type === "purchase_return" && (
+                                        <span className="bg-rose-50 text-rose-700 text-[10px] font-black px-1.5 py-0.2 rounded border border-rose-200">
+                                          برگشت خرید
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold truncate">
+                                      <span className="inline-flex items-center gap-1 text-slate-600 bg-slate-100/90 px-1.5 py-0.2 rounded">
+                                        <Package className="w-2.5 h-2.5 text-slate-400" />
+                                        <span>{toPersianDigits(itemsCount)} قلم</span>
+                                      </span>
+                                      {inv.sellerInvoiceNumber && (
+                                        <span className="text-[10px] text-emerald-800 font-mono truncate" title="شماره فاکتور فروشنده">
+                                          ش.فروشنده: {toPersianDigits(inv.sellerInvoiceNumber)}
+                                        </span>
+                                      )}
+                                      {renderSourceInvoiceReference(inv)}
+                                      {inv.note && !inv.sellerInvoiceNumber && !inv.sourceInvoiceId && !inv.sourceInvoiceNumber && (
+                                        <span className="text-[10px] text-slate-400 truncate" title={inv.note}>
+                                          {inv.note}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Column 3: Counterparty Person & Warehouse */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="font-black text-slate-900 text-xs hover:text-indigo-600 transition-colors truncate">
+                                      {renderPersonLink(inv.customerId || inv.personId, personDisplayName)}
+                                    </div>
+                                    <div className="flex items-center gap-2 text-[11px] text-slate-500 font-bold">
+                                      <span className="inline-flex items-center gap-1 text-purple-700 bg-purple-50/80 px-1.5 py-0.2 rounded text-[10px] border border-purple-100/80 truncate max-w-[130px]">
+                                        <Warehouse className="w-2.5 h-2.5 text-purple-500 shrink-0" />
+                                        <span className="truncate">{whName}</span>
+                                      </span>
+                                      {phone && (
+                                        <span className="hidden md:inline-flex items-center gap-0.5 text-[10px] text-slate-400 font-mono" title="شماره تماس">
+                                          <Phone className="w-2.5 h-2.5" />
+                                          <span>{toPersianDigits(phone)}</span>
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Column 4: Date & Due Date */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="flex items-center gap-1 text-xs font-bold text-slate-800">
+                                      <CalendarIcon className="w-3 h-3 text-indigo-500 shrink-0" />
+                                      <span>
+                                        {formatInvoiceDate(inv.date || inv.jalaliDate || inv.createdAt, storeSettings?.calendarType, { showTime: false })}
+                                      </span>
+                                    </div>
+                                    {(inv.dueDate || inv.jalaliDueDate) && (() => {
+                                      const isOverdue = remainingBalance > 0 && isInvoiceOverdue(inv.dueDate);
+                                      const dueFormatted = formatInvoiceDate(inv.dueDate || inv.jalaliDueDate, storeSettings?.calendarType, { showTime: false });
+                                      return (
+                                        <div className="text-[10px]">
+                                          {isOverdue ? (
+                                            <span className="inline-flex items-center gap-1 font-black text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200">
+                                              <Clock className="w-2.5 h-2.5 text-rose-600" />
+                                              <span>سررسید گذشته: {dueFormatted}</span>
+                                            </span>
+                                          ) : (
+                                            <span className="text-slate-400 font-medium">
+                                              سررسید: {dueFormatted}
+                                            </span>
+                                          )}
+                                        </div>
+                                      );
+                                    })()}
+                                  </div>
+                                </td>
+
+                                {/* Column 5: Financial Summary (Total & Remaining/Paid combined!) */}
+                                <td className="py-2.5 px-3 text-left">
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <div className="font-sans font-black text-xs sm:text-sm text-slate-900 tracking-tight">
+                                      {toPersianDigits(formatCurrency(inv.totalAmount || 0))}{" "}
+                                      <span className="text-[10px] text-slate-500 font-bold">{currency}</span>
+                                    </div>
+                                    <div>
+                                      {remainingBalance <= 0 ? (
+                                        <span className="text-[10px] font-bold text-emerald-700 bg-emerald-50 px-1.5 py-0.2 rounded border border-emerald-200 inline-flex items-center gap-0.5">
+                                          <CheckCircle2 className="w-2.5 h-2.5 text-emerald-600" />
+                                          <span>تسویه کامل</span>
+                                        </span>
+                                      ) : (
+                                        <span className="text-[10px] font-black text-rose-700 bg-rose-50 px-1.5 py-0.2 rounded border border-rose-200 inline-block font-sans">
+                                          مانده: {toPersianDigits(formatCurrency(remainingBalance))} {currency}
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Column 6: Combined Status (Payment + Warehouse stacked!) */}
+                                <td className="py-2.5 px-3 text-center">
+                                  <div className="flex flex-col items-center justify-center gap-1">
+                                    {/* Financial Status */}
+                                    {inv.paymentStatus === "paid" || remainingBalance <= 0 ? (
+                                      <span className="bg-emerald-100 text-emerald-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-emerald-200 whitespace-nowrap">
+                                        تسویه کامل
+                                      </span>
+                                    ) : inv.paymentStatus === "partial" ? (
+                                      <span className="bg-amber-100 text-amber-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-amber-200 whitespace-nowrap">
+                                        علی‌الحساب
+                                      </span>
+                                    ) : (
+                                      <span className="bg-rose-100 text-rose-800 text-[10px] px-2 py-0.5 font-black rounded-lg border border-rose-200 whitespace-nowrap">
+                                        {activeTab === 'list_sale' ? 'تسویه نشده' : activeTab === 'list_purchase' ? 'پرداخت نشده' : 'در انتظار تسویه'}
+                                      </span>
+                                    )}
+
+                                    {/* Warehouse Status */}
+                                    {inv.type === "purchase" && (inv.status === "pending_approval" || inv.isDraft) ? (
+                                      <span className="text-amber-800 bg-amber-50 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                        نیازمند تایید فاکتور
+                                      </span>
+                                    ) : inv.type === "warehouse_receipt" && inv.status === "pending_approval" ? (
+                                      <span className="text-amber-800 bg-amber-50 border border-amber-200 text-[10px] font-bold px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                        در انتظار تایید ورود
+                                      </span>
+                                    ) : whStatus === "completed" ? (
+                                      <span className="text-emerald-700 bg-emerald-50 border border-emerald-200 text-[10px] font-black px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                        {inv.type === "purchase" ? "رسید شده" : inv.type === "sale_return" ? "تحویل انبار" : inv.type === "purchase_return" ? "خارج شده" : "حواله شده"}
+                                      </span>
+                                    ) : whStatus === "partial" ? (
+                                      <span className="text-blue-700 bg-blue-50 border border-blue-200 text-[10px] font-black px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                        تعدادی
+                                      </span>
+                                    ) : (
+                                      <span className="text-amber-700 bg-amber-50 border border-amber-200 text-[10px] font-black px-2 py-0.5 rounded-lg whitespace-nowrap">
+                                        {inv.type === "purchase" ? "در انتظار رسید" : "در انتظار حواله"}
+                                      </span>
+                                    )}
+                                  </div>
+                                </td>
+                              </>
+                            )}
 
                             {/* Column 7: Actions */}
                             <td className="py-2.5 px-2 print:hidden text-center">
@@ -1640,7 +1936,7 @@ export default function InvoicesList(props: any) {
                           {/* Accordion Detail Breakdown (Expandable on-demand!) */}
                           {isExpanded && (
                             <tr className="bg-slate-50/90 border-b border-indigo-100">
-                              <td colSpan={7} className="p-4">
+                              <td colSpan={isWarehouseTab ? 8 : 7} className="p-4">
                                 <motion.div
                                   initial={{ opacity: 0, y: -4 }}
                                   animate={{ opacity: 1, y: 0 }}
@@ -1650,7 +1946,7 @@ export default function InvoicesList(props: any) {
                                     <div className="flex items-center gap-2">
                                       <Package className="w-4 h-4 text-indigo-600" />
                                       <span className="font-black text-xs text-slate-800">
-                                        اقلام فاکتور شماره #{toPersianDigits(inv.invoiceNumber || inv.id)} ({toPersianDigits(itemsCount)} قلم)
+                                        اقلام {isWarehouseTab ? 'سند انبار' : 'فاکتور'} شماره #{toPersianDigits(inv.invoiceNumber || inv.id)} ({toPersianDigits(itemsCount)} قلم)
                                       </span>
                                     </div>
                                     <div className="flex items-center gap-2">
@@ -1660,7 +1956,7 @@ export default function InvoicesList(props: any) {
                                         className="text-[11px] font-bold text-indigo-600 hover:text-indigo-800 flex items-center gap-1 cursor-pointer"
                                       >
                                         <ExternalLink className="w-3 h-3" />
-                                        <span>مشاهده فاکتور کامل</span>
+                                        <span>مشاهده {isWarehouseTab ? 'سند کامل' : 'فاکتور کامل'}</span>
                                       </button>
                                     </div>
                                   </div>
@@ -1713,7 +2009,7 @@ export default function InvoicesList(props: any) {
                                   {inv.note && (
                                     <div className="pt-2 border-t border-slate-100 flex items-center gap-2 text-xs text-slate-600 bg-slate-50 p-2.5 rounded-xl">
                                       <FileText className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-                                      <span className="font-bold">یادداشت فاکتور:</span>
+                                      <span className="font-bold">{isWarehouseTab ? 'یادداشت سند انبار:' : 'یادداشت فاکتور:'}</span>
                                       <span>{inv.note}</span>
                                     </div>
                                   )}
@@ -1727,7 +2023,7 @@ export default function InvoicesList(props: any) {
 
                     {filteredInvoicesList.length === 0 && (
                       <tr>
-                        <td colSpan={7} className="p-12 text-center text-slate-400">
+                        <td colSpan={isWarehouseTab ? 8 : 7} className="p-12 text-center text-slate-400">
                           <div className="flex flex-col items-center justify-center gap-2">
                             <FileText className="w-8 h-8 text-slate-300" />
                             <span className="text-sm font-bold text-slate-500">هیچ سندی با فیلترهای جاری یافت نشد.</span>
@@ -1772,6 +2068,10 @@ export default function InvoicesList(props: any) {
                   const phone = personObj?.mobile || personObj?.phone || inv.customerPhone;
                   const whName = getDocWarehouseName(inv);
                   const itemsCount = inv.items?.length || 0;
+                  const isRemittance = inv.type === "warehouse_remittance";
+                  const isReceipt = inv.type === "warehouse_receipt";
+                  const totalDocUnits = Array.isArray(inv.items) ? inv.items.reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0) : 0;
+                  const targetWhName = getTargetWarehouseName(inv);
 
                   return (
                     <div
@@ -1794,6 +2094,18 @@ export default function InvoicesList(props: any) {
                               {isProforma && (
                                 <span className="bg-slate-100 text-slate-700 text-[10px] font-black px-1.5 py-0.2 rounded border border-slate-200">
                                   پیش‌فاکتور
+                                </span>
+                              )}
+                              {isRemittance && (
+                                <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-300 flex items-center gap-1">
+                                  <Truck className="w-3 h-3 text-amber-700" />
+                                  <span>حواله خروج انبار</span>
+                                </span>
+                              )}
+                              {isReceipt && (
+                                <span className="bg-emerald-100 text-emerald-900 text-[10px] font-black px-1.5 py-0.5 rounded border border-emerald-300 flex items-center gap-1">
+                                  <Package className="w-3 h-3 text-emerald-700" />
+                                  <span>رسید ورود انبار</span>
                                 </span>
                               )}
                               {isDraft && (
@@ -1904,71 +2216,140 @@ export default function InvoicesList(props: any) {
                         </div>
 
                         {/* Person & Warehouse Info */}
-                        <div className="py-2.5 space-y-1.5">
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-slate-400 font-bold">{pageConfig.personRoleLabel}:</span>
-                            <span className="font-black text-slate-800">
-                              {renderPersonLink(inv.customerId || inv.personId, personDisplayName)}
-                            </span>
+                        {isWarehouseTab ? (
+                          <div className="py-2.5 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold">انبار مبدأ/عملیات:</span>
+                              <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md font-bold text-[11px] border border-purple-100">
+                                {whName}
+                              </span>
+                            </div>
+                            {targetWhName && (
+                              <div className="flex items-center justify-between text-xs">
+                                <span className="text-slate-400 font-bold">انبار مقصد:</span>
+                                <span className="text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded-md font-bold text-[11px] border border-indigo-100">
+                                  {targetWhName}
+                                </span>
+                              </div>
+                            )}
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold">تحویل‌گیرنده / طرف‌حساب:</span>
+                              <span className="font-black text-slate-800">
+                                {inv.customerId || inv.personId ? (
+                                  renderPersonLink(inv.customerId || inv.personId, personDisplayName)
+                                ) : (
+                                  <span className="text-slate-500 font-normal">{inv.receiverName || inv.driverName || 'بدون طرف‌حساب'}</span>
+                                )}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold">تعداد و حجم اقلام:</span>
+                              <span className="text-slate-700 font-bold text-[11px] flex items-center gap-1">
+                                <span>{toPersianDigits(itemsCount)} قلم کالا</span>
+                                <span className="text-slate-400 font-medium">({toPersianDigits(totalDocUnits)} واحد)</span>
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-slate-400 font-bold">انبار:</span>
-                            <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md font-bold text-[11px] border border-purple-100">
-                              {whName}
-                            </span>
+                        ) : (
+                          <div className="py-2.5 space-y-1.5">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold">{pageConfig.personRoleLabel}:</span>
+                              <span className="font-black text-slate-800">
+                                {renderPersonLink(inv.customerId || inv.personId, personDisplayName)}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold">انبار:</span>
+                              <span className="text-purple-700 bg-purple-50 px-2 py-0.5 rounded-md font-bold text-[11px] border border-purple-100">
+                                {whName}
+                              </span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-400 font-bold">اقلام:</span>
+                              <span className="text-slate-600 font-bold text-[11px]">
+                                {toPersianDigits(itemsCount)} قلم کالا
+                              </span>
+                            </div>
                           </div>
-                          <div className="flex items-center justify-between text-xs">
-                            <span className="text-slate-400 font-bold">اقلام:</span>
-                            <span className="text-slate-600 font-bold text-[11px]">
-                              {toPersianDigits(itemsCount)} قلم کالا
-                            </span>
-                          </div>
-                        </div>
+                        )}
                       </div>
 
-                      {/* Card Footer: Financial & Status Badges */}
-                      <div className="pt-3 border-t border-slate-100 space-y-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-slate-500">مبلغ کل فاکتور:</span>
-                          <span className="font-mono font-black text-sm text-slate-900">
-                            {toPersianDigits(formatCurrency(inv.totalAmount || 0))} <span className="text-[10px] text-slate-500 font-normal">{currency}</span>
-                          </span>
-                        </div>
+                      {/* Card Footer: Financial or Warehouse Valuation & Status Badges */}
+                      {isWarehouseTab ? (
+                        <div className="pt-3 border-t border-slate-100 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-500">ارزش کل اجناس:</span>
+                            <span className="font-mono font-black text-sm text-slate-900">
+                              {toPersianDigits(formatCurrency(inv.totalAmount || 0))} <span className="text-[10px] text-slate-500 font-normal">{currency}</span>
+                            </span>
+                          </div>
 
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-400 font-bold">وضعیت مالی:</span>
-                          {remainingBalance <= 0 ? (
-                            <span className="text-emerald-700 bg-emerald-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-emerald-200">
-                              تسویه کامل
-                            </span>
-                          ) : (
-                            <span className="text-rose-700 bg-rose-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-rose-200">
-                              مانده: {toPersianDigits(formatCurrency(remainingBalance))} {currency}
-                            </span>
-                          )}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400 font-bold">وضعیت سند در انبار:</span>
+                            {isVoided ? (
+                              <span className="bg-rose-100 text-rose-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-rose-200">
+                                ابطال شده
+                              </span>
+                            ) : inv.status === "pending_approval" ? (
+                              <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-300">
+                                در انتظار تایید ورود
+                              </span>
+                            ) : isDraft ? (
+                              <span className="bg-amber-50 text-amber-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-200">
+                                پیش‌نویس انبار
+                              </span>
+                            ) : (
+                              <span className="bg-emerald-100 text-emerald-800 text-[10px] font-black px-2 py-0.5 rounded-md border border-emerald-200 inline-flex items-center gap-1">
+                                <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                <span>ثبت قطعی در کاردکس</span>
+                              </span>
+                            )}
+                          </div>
                         </div>
+                      ) : (
+                        <div className="pt-3 border-t border-slate-100 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-500">مبلغ کل فاکتور:</span>
+                            <span className="font-mono font-black text-sm text-slate-900">
+                              {toPersianDigits(formatCurrency(inv.totalAmount || 0))} <span className="text-[10px] text-slate-500 font-normal">{currency}</span>
+                            </span>
+                          </div>
 
-                        <div className="flex items-center justify-between text-xs">
-                          <span className="text-slate-400 font-bold">وضعیت انبار:</span>
-                          {inv.type === "purchase" && (inv.status === "pending_approval" || inv.isDraft) ? (
-                            <span className="text-amber-800 bg-amber-50 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200">
-                              نیازمند تایید فاکتور
-                            </span>
-                          ) : inv.type === "warehouse_receipt" && inv.status === "pending_approval" ? (
-                            <span className="text-amber-800 bg-amber-50 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200">
-                              در انتظار تایید ورود
-                            </span>
-                          ) : whStatus === "completed" ? (
-                            <span className="text-emerald-700 bg-emerald-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-emerald-200">
-                              {inv.type === "purchase" ? "رسید شده" : "حواله شده"}
-                            </span>
-                          ) : (
-                            <span className="text-amber-700 bg-amber-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-200">
-                              {inv.type === "purchase" ? "در انتظار رسید" : "در انتظار حواله"}
-                            </span>
-                          )}
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400 font-bold">وضعیت مالی:</span>
+                            {remainingBalance <= 0 ? (
+                              <span className="text-emerald-700 bg-emerald-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-emerald-200">
+                                تسویه کامل
+                              </span>
+                            ) : (
+                              <span className="text-rose-700 bg-rose-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-rose-200">
+                                مانده: {toPersianDigits(formatCurrency(remainingBalance))} {currency}
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex items-center justify-between text-xs">
+                            <span className="text-slate-400 font-bold">وضعیت انبار:</span>
+                            {inv.type === "purchase" && (inv.status === "pending_approval" || inv.isDraft) ? (
+                              <span className="text-amber-800 bg-amber-50 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200">
+                                نیازمند تایید فاکتور
+                              </span>
+                            ) : inv.type === "warehouse_receipt" && inv.status === "pending_approval" ? (
+                              <span className="text-amber-800 bg-amber-50 text-[10px] font-bold px-2 py-0.5 rounded-md border border-amber-200">
+                                در انتظار تایید ورود
+                              </span>
+                            ) : whStatus === "completed" ? (
+                              <span className="text-emerald-700 bg-emerald-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-emerald-200">
+                                {inv.type === "purchase" ? "رسید شده" : "حواله شده"}
+                              </span>
+                            ) : (
+                              <span className="text-amber-700 bg-amber-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-200">
+                                {inv.type === "purchase" ? "در انتظار رسید" : "در انتظار حواله"}
+                              </span>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
                   );
                 })}
