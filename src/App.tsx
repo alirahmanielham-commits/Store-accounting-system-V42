@@ -445,15 +445,20 @@ export default function App() {
 
         const [invoicePrintFormat, setInvoicePrintFormat] = useState<'a4' | 'a5' | 'pos80'>('a4');
   const [isHeaderMenuOpen, setIsHeaderMenuOpen] = useState(false);
+  const [isQuickToolsOpen, setIsQuickToolsOpen] = useState(false);
   const [isModuleMenuOpen, setIsModuleMenuOpen] = useState(false);
   const [moduleSearchQuery, setModuleSearchQuery] = useState("");
   const headerMenuRef = useRef<HTMLDivElement>(null);
+  const quickToolsRef = useRef<HTMLDivElement>(null);
   const moduleMenuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
       if (headerMenuRef.current && !headerMenuRef.current.contains(event.target as Node)) {
         setIsHeaderMenuOpen(false);
+      }
+      if (quickToolsRef.current && !quickToolsRef.current.contains(event.target as Node)) {
+        setIsQuickToolsOpen(false);
       }
       if (moduleMenuRef.current && !moduleMenuRef.current.contains(event.target as Node)) {
         setIsModuleMenuOpen(false);
@@ -2779,40 +2784,151 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                       </div>
 
                       
-                      <button
-                        onClick={() => { setRawActiveTab("sync_manager"); }}
-                        className="relative p-2 border rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 bg-white border-slate-200"
-                        title="وضعیت همگام‌سازی"
-                      >
-                        <CloudOff className="w-5 h-5" />
-                        {syncQueueLength > 0 && (
-                          <span className="absolute -top-1.5 -right-1.5 bg-rose-500 text-white text-[10px] font-bold w-4 h-4 flex items-center justify-center rounded-full animate-pulse shadow-sm shadow-rose-500/40">
-                            {syncQueueLength}
-                          </span>
-                        )}
-                      </button>
-                      <NotificationBell setActiveTab={setActiveTab} user={user} />
-                      <button
-                        onClick={() => setIsCalculatorOpen(true)}
-                        className="p-2 border rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 bg-white border-slate-200"
-                        title="ماشین حساب"
-                      >
-                        <Calculator className="w-5 h-5" />
-                      </button>
+                      {/* Quick Tools & Shortcuts Dropdown */}
+                      <div className="relative" ref={quickToolsRef}>
+                        <button
+                          type="button"
+                          onClick={() => setIsQuickToolsOpen(!isQuickToolsOpen)}
+                          className={`h-10 px-3 border rounded-xl transition-all cursor-pointer flex items-center gap-2 text-xs font-black shadow-3xs active:scale-95 ${
+                            isQuickToolsOpen
+                              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                              : "bg-white border-slate-200 text-slate-700 hover:text-indigo-600 hover:bg-slate-50"
+                          }`}
+                          title="ابزارهای سریع و دستیار سیستم"
+                        >
+                          <div className="relative flex items-center">
+                            <Sparkles className="w-4 h-4 text-indigo-600" />
+                            {syncQueueLength > 0 && (
+                              <span className="absolute -top-1.5 -right-2 bg-rose-500 text-white text-[9px] font-black w-3.5 h-3.5 flex items-center justify-center rounded-full animate-pulse shadow-sm shadow-rose-500/40">
+                                {syncQueueLength}
+                              </span>
+                            )}
+                          </div>
+                          <span className="hidden sm:inline">ابزارها</span>
+                          <ChevronDown className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${isQuickToolsOpen ? "rotate-180 text-indigo-600" : ""}`} />
+                        </button>
 
-                      <button
-                        onClick={() => setIsQuickCodeModalOpen(true)}
-                        className="p-2 border rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50 bg-white border-slate-200 flex items-center gap-1.5"
-                        title="دسترسی سریع کیبورد و شماره‌گیر ۲ رقمی (Alt + K)"
-                      >
-                        <Keyboard className="w-5 h-5" />
-                        <span className="hidden xl:inline text-[11px] font-mono font-black px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 border border-slate-200" dir="ltr">
-                          ##
-                        </span>
-                      </button>
+                        <AnimatePresence>
+                          {isQuickToolsOpen && (
+                            <motion.div
+                              initial={{ opacity: 0, y: 8, scale: 0.96 }}
+                              animate={{ opacity: 1, y: 0, scale: 1 }}
+                              exit={{ opacity: 0, y: 8, scale: 0.96 }}
+                              transition={{ duration: 0.15 }}
+                              className="absolute left-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[100] p-2 flex flex-col gap-1"
+                            >
+                              <div className="px-3 py-2 border-b border-slate-100 flex items-center justify-between">
+                                <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                                  <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
+                                  ابزارهای سریع و میانبرها
+                                </span>
+                                <span className="text-[10px] text-slate-400 font-bold">دستیار هوشمند</span>
+                              </div>
+
+                              {/* 1. Calculator */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsQuickToolsOpen(false);
+                                  setIsCalculatorOpen(true);
+                                }}
+                                className="w-full text-right p-2.5 rounded-xl transition-all cursor-pointer hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 flex items-center justify-between group"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-indigo-50 text-indigo-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors flex items-center justify-center shrink-0">
+                                    <Calculator className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700">ماشین‌حساب پیشرفته</div>
+                                    <div className="text-[10px] text-slate-400">محاسبات سریع و درصدگیری مالی</div>
+                                  </div>
+                                </div>
+                              </button>
+
+                              {/* 2. Quick Code Alt + K */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsQuickToolsOpen(false);
+                                  setIsQuickCodeModalOpen(true);
+                                }}
+                                className="w-full text-right p-2.5 rounded-xl transition-all cursor-pointer hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 flex items-center justify-between group"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-slate-100 text-slate-600 group-hover:bg-indigo-600 group-hover:text-white transition-colors flex items-center justify-center shrink-0">
+                                    <Keyboard className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700">شماره‌گیر سریع کیبورد</div>
+                                    <div className="text-[10px] text-slate-400">دسترسی فوق‌سریع با کدهای ۲ رقمی</div>
+                                  </div>
+                                </div>
+                                <span className="text-[10px] font-mono font-black px-1.5 py-0.5 rounded bg-slate-100 text-slate-600 border border-slate-200" dir="ltr">
+                                  Alt + K
+                                </span>
+                              </button>
+
+                              {/* 3. Sync Manager */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsQuickToolsOpen(false);
+                                  setRawActiveTab("sync_manager");
+                                }}
+                                className="w-full text-right p-2.5 rounded-xl transition-all cursor-pointer hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 flex items-center justify-between group"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className={`w-8 h-8 rounded-lg transition-colors flex items-center justify-center shrink-0 ${
+                                    syncQueueLength > 0 ? "bg-rose-50 text-rose-600 group-hover:bg-rose-600 group-hover:text-white" : "bg-emerald-50 text-emerald-600 group-hover:bg-emerald-600 group-hover:text-white"
+                                  }`}>
+                                    {syncQueueLength > 0 ? <CloudOff className="w-4 h-4" /> : <RefreshCw className="w-4 h-4" />}
+                                  </div>
+                                  <div>
+                                    <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700">مرکز همگام‌سازی و آفلاین</div>
+                                    <div className="text-[10px] text-slate-400">
+                                      {syncQueueLength > 0 ? `${syncQueueLength} تغییر در صف ارسال` : "اطلاعات کاملاً همگام و برخط"}
+                                    </div>
+                                  </div>
+                                </div>
+                                {syncQueueLength > 0 ? (
+                                  <span className="bg-rose-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full">
+                                    {syncQueueLength}
+                                  </span>
+                                ) : (
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500"></span>
+                                )}
+                              </button>
+
+                              {/* 4. Changelog */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setIsQuickToolsOpen(false);
+                                  setIsChangelogModalOpen(true);
+                                }}
+                                className="w-full text-right p-2.5 rounded-xl transition-all cursor-pointer hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 flex items-center justify-between group"
+                              >
+                                <div className="flex items-center gap-2.5">
+                                  <div className="w-8 h-8 rounded-lg bg-amber-50 text-amber-600 group-hover:bg-amber-600 group-hover:text-white transition-colors flex items-center justify-center shrink-0">
+                                    <History className="w-4 h-4" />
+                                  </div>
+                                  <div>
+                                    <div className="text-xs font-bold text-slate-800 group-hover:text-indigo-700">تاریخچه نسخه‌ها و تغییرات</div>
+                                    <div className="text-[10px] text-slate-400">مشاهده امکانات و بروزرسانی‌ها</div>
+                                  </div>
+                                </div>
+                              </button>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+
+                      {/* Live Notifications */}
+                      <NotificationBell setActiveTab={setActiveTab} user={user} />
 
                       {/* Quick Theme Toggle (Light / Ergonomic Slate Dark) */}
                       <button
+                        type="button"
                         onClick={async () => {
                           const isDark = storeSettings?.theme === "dark";
                           const nextTheme = isDark ? "classic" : "dark";
@@ -2831,7 +2947,7 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                             "info"
                           );
                         }}
-                        className={`p-2 border rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95 flex items-center justify-center ${
+                        className={`w-10 h-10 border rounded-xl transition-all cursor-pointer shadow-3xs active:scale-95 flex items-center justify-center ${
                           storeSettings?.theme === "dark"
                             ? "bg-amber-400/10 border-amber-400/30 text-amber-300 hover:bg-amber-400/20 shadow-amber-500/10"
                             : "bg-white border-slate-200 text-slate-600 hover:text-indigo-600 hover:bg-indigo-50"
@@ -2845,13 +2961,19 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                         )}
                       </button>
 
+                      {/* User Profile & Settings Menu */}
                       <div className="relative" ref={headerMenuRef}>
                         <button
+                          type="button"
                           onClick={() => setIsHeaderMenuOpen(!isHeaderMenuOpen)}
-                          className={`w-10 h-10 border rounded-xl transition-all cursor-pointer flex items-center justify-center shadow-3xs active:scale-95 ${isHeaderMenuOpen ? "bg-indigo-50 border-indigo-200 text-indigo-700" : "bg-white border-slate-200 text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"}`}
-                          title="تنظیمات و مدیریت"
+                          className={`w-10 h-10 border rounded-xl transition-all cursor-pointer flex items-center justify-center shadow-3xs active:scale-95 ${
+                            isHeaderMenuOpen
+                              ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                              : "bg-white border-slate-200 text-slate-600 hover:text-indigo-700 hover:bg-indigo-50"
+                          }`}
+                          title="حساب کاربری و تنظیمات سیستم"
                         >
-                          <Settings className={`w-5 h-5 transition-transform duration-500 ${isHeaderMenuOpen ? "rotate-90" : ""}`} />
+                          <Settings className={`w-5 h-5 transition-transform duration-500 ${isHeaderMenuOpen ? "rotate-90 text-indigo-600" : ""}`} />
                         </button>
                         
                         <AnimatePresence>
@@ -2863,43 +2985,60 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                               transition={{ duration: 0.15 }}
                               className="absolute left-0 top-full mt-2 w-64 bg-white rounded-2xl shadow-xl border border-slate-100 overflow-hidden z-[100] flex flex-col"
                             >
-                              <div className="p-3 border-b border-slate-100 bg-slate-50/50">
-                                <div className="text-xs font-black text-slate-500 mb-2">عملیات مدیریت</div>
+                              {user && (
+                                <div className="p-3.5 border-b border-slate-100 bg-slate-50/70">
+                                  <div className="flex items-center gap-3">
+                                    <div className="w-10 h-10 bg-indigo-600 text-white rounded-xl flex items-center justify-center font-black shadow-sm shrink-0">
+                                      {(() => {
+                                        const p = user.personId ? persons?.find(x => String(x.id) === String(user.personId)) : null;
+                                        const dName = p ? p.name : user.name;
+                                        return dName?.charAt(0) || <User className="w-5 h-5" />;
+                                      })()}
+                                    </div>
+                                    <div className="flex flex-col min-w-0 flex-1">
+                                      <div className="text-xs font-black text-slate-800 truncate">
+                                        {(() => {
+                                           const p = user.personId ? persons?.find(x => String(x.id) === String(user.personId)) : null;
+                                           return p ? p.name : user.name;
+                                        })()}
+                                      </div>
+                                      <div className="text-[10px] font-bold text-indigo-600 mt-0.5">
+                                        {user.role === "admin" ? "مدیر ارشد سیستم" : user.role === "accountant" ? "حسابدار مالی" : user.role === "cashier" ? "صندوق‌دار" : "کاربر مجاز"}
+                                      </div>
+                                    </div>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="p-2 border-b border-slate-100 flex flex-col gap-0.5">
+                                <div className="px-2.5 py-1 text-[10px] font-black text-slate-400">مدیریت و تنظیمات</div>
+
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     setIsHeaderMenuOpen(false);
-                                    appState.confirmAction('آیا از خروج از کسب و کار فعلی و رفتن به صفحه مدیریت کسب و کارها اطمینان دارید؟', () => { appState.setIsStoreSelectionOpen(true); })
+                                    setIsProfileModalOpen(true);
                                   }}
-                                  className="w-full text-right px-3 py-2.5 rounded-xl transition-all cursor-pointer font-black gap-2 flex items-center text-xs hover:bg-indigo-50 text-slate-700 hover:text-indigo-700 mb-1"
+                                  className="w-full text-right px-2.5 py-2 rounded-xl transition-all cursor-pointer font-bold gap-2.5 flex items-center text-xs hover:bg-slate-100 text-slate-700"
                                 >
-                                  <Database className="w-4 h-4" />
-                                  تغییر فروشگاه
+                                  <User className="w-4 h-4 text-slate-500" />
+                                  <span>پروفایل و مشخصات کاربری</span>
                                 </button>
+
                                 <button
+                                  type="button"
                                   onClick={() => {
                                     setIsHeaderMenuOpen(false);
-                                    setSystemModule("selector");
+                                    setActiveTab("settings");
                                   }}
-                                  className="w-full text-right px-3 py-2.5 rounded-xl transition-all cursor-pointer font-black gap-2 flex items-center text-xs hover:bg-emerald-50 text-slate-700 hover:text-emerald-700"
+                                  className="w-full text-right px-2.5 py-2 rounded-xl transition-all cursor-pointer font-bold gap-2.5 flex items-center text-xs hover:bg-indigo-50 text-slate-700 hover:text-indigo-700"
                                 >
-                                  <LayoutDashboard className="w-4 h-4" />
-                                  تغییر بخش کاری
+                                  <Settings className="w-4 h-4 text-indigo-600" />
+                                  <span>تنظیمات عمومی سامانه</span>
                                 </button>
+
                                 <button
-                                  onClick={() => {
-                                    setIsHeaderMenuOpen(false);
-                                    setActiveTab("sync_manager");
-                                  }}
-                                  className="w-full text-right px-3 py-2.5 rounded-xl transition-all cursor-pointer font-black gap-2 flex items-center text-xs hover:bg-orange-50 text-slate-700 hover:text-orange-700 mt-1"
-                                >
-                                  <RefreshCw className="w-4 h-4" />
-                                  مدیریت همگام‌سازی
-                                </button>
-                              </div>
-                              
-                              <div className="p-3 border-b border-slate-100">
-                                <div className="text-xs font-black text-slate-500 mb-2">تنظیمات نما</div>
-                                <button
+                                  type="button"
                                   onClick={async () => {
                                     setIsHeaderMenuOpen(false);
                                     const newVal = menuLayout === "vertical" ? "horizontal" : "vertical";
@@ -2909,12 +3048,14 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                                     setSettingsForm(updated);
                                     try { await saveStoreSettings(updated); } catch(e){}
                                   }}
-                                  className="w-full text-right px-3 py-2.5 rounded-xl transition-all cursor-pointer font-black gap-2 flex items-center text-xs hover:bg-slate-50 text-slate-700 mb-1"
+                                  className="w-full text-right px-2.5 py-2 rounded-xl transition-all cursor-pointer font-bold gap-2.5 flex items-center text-xs hover:bg-slate-100 text-slate-700"
                                 >
-                                  {menuLayout === "vertical" ? <LayoutList className="w-4 h-4" /> : <GripHorizontal className="w-4 h-4" />}
-                                  {menuLayout === "vertical" ? "نمایش منوی افقی" : "نمایش منوی عمودی"}
+                                  {menuLayout === "vertical" ? <LayoutList className="w-4 h-4 text-slate-500" /> : <GripHorizontal className="w-4 h-4 text-slate-500" />}
+                                  <span>{menuLayout === "vertical" ? "تغییر چیدمان به منوی افقی" : "تغییر چیدمان به منوی عمودی"}</span>
                                 </button>
+
                                 <button
+                                  type="button"
                                   onClick={async () => {
                                     setIsHeaderMenuOpen(false);
                                     const newVal = !isFullWidth;
@@ -2924,49 +3065,23 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                                     setSettingsForm(updated);
                                     try { await saveStoreSettings(updated); } catch(e){}
                                   }}
-                                  className={`w-full text-right px-3 py-2.5 rounded-xl transition-all cursor-pointer font-black gap-2 flex items-center text-xs ${isFullWidth ? "text-indigo-700 bg-indigo-50" : "hover:bg-slate-50 text-slate-700"}`}
+                                  className={`w-full text-right px-2.5 py-2 rounded-xl transition-all cursor-pointer font-bold gap-2.5 flex items-center text-xs ${isFullWidth ? "text-indigo-700 bg-indigo-50 font-black" : "hover:bg-slate-100 text-slate-700"}`}
                                 >
-                                  {isFullWidth ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
-                                  {isFullWidth ? "بازگشت به نمایش کلاسیک" : "حالت تمام صفحه گسترده"}
+                                  {isFullWidth ? <Minimize className="w-4 h-4 text-indigo-600" /> : <Maximize className="w-4 h-4 text-slate-500" />}
+                                  <span>{isFullWidth ? "نمایش در عرض استاندارد" : "حالت تمام‌صفحه گسترده"}</span>
                                 </button>
                               </div>
-                              
+
                               {user && (
-                                <div className="p-3 bg-slate-50">
-                                  <div className="flex items-center gap-3 mb-3 px-2">
-                                    <div className="w-10 h-10 bg-indigo-100 text-indigo-700 rounded-xl flex items-center justify-center font-black shadow-sm shrink-0">
-                                      {(() => {
-                                        const p = user.personId ? persons?.find(x => String(x.id) === String(user.personId)) : null;
-                                        const dName = p ? p.name : user.name;
-                                        return dName?.charAt(0) || <User className="w-5 h-5" />;
-                                      })()}
-                                    </div>
-                                    <div className="flex flex-col overflow-hidden">
-                                      <div className="text-sm font-black text-slate-800 truncate">
-                                        {(() => {
-                                           const p = user.personId ? persons?.find(x => String(x.id) === String(user.personId)) : null;
-                                           return p ? p.name : user.name;
-                                        })()}
-                                      </div>
-                                      <div className="text-[10px] font-bold text-slate-500 uppercase truncate">
-                                        {user.role === "admin" ? "مدیر سیستم" : user.role === "accountant" ? "حسابدار" : user.role === "cashier" ? "صندوق‌دار" : "کاربر عادی"}
-                                      </div>
-                                    </div>
-                                  </div>
-                                  <div className="flex gap-2">
-                                    <button
-                                      onClick={() => { setIsHeaderMenuOpen(false); setIsProfileModalOpen(true); }}
-                                      className="flex-1 py-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-700 hover:bg-slate-50 hover:text-indigo-600 transition-colors flex items-center justify-center gap-1.5"
-                                    >
-                                      <User className="w-3.5 h-3.5" /> پروفایل
-                                    </button>
-                                    <button
-                                      onClick={() => { setIsHeaderMenuOpen(false); signOut(); }}
-                                      className="flex-1 py-2 bg-white border border-rose-200 rounded-lg text-xs font-bold text-rose-600 hover:bg-rose-50 transition-colors flex items-center justify-center gap-1.5"
-                                    >
-                                      <LogOut className="w-3.5 h-3.5" /> خروج
-                                    </button>
-                                  </div>
+                                <div className="p-2 bg-slate-50/50">
+                                  <button
+                                    type="button"
+                                    onClick={() => { setIsHeaderMenuOpen(false); signOut(); }}
+                                    className="w-full py-2 px-2.5 rounded-xl text-xs font-bold text-rose-600 hover:bg-rose-50 hover:text-rose-700 transition-colors flex items-center gap-2 cursor-pointer"
+                                  >
+                                    <LogOut className="w-4 h-4 text-rose-500" />
+                                    <span>خروج از حساب کاربری</span>
+                                  </button>
                                 </div>
                               )}
                             </motion.div>
@@ -3052,59 +3167,61 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                   </div>
                 </main>
 
-                {/* Clean Bottom Business Status Footer Bar */}
+                {/* Streamlined System Status Bar (Footer) */}
                 {(() => {
                   const activeStoreIdVal = (typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || 'default';
                   const activeStoreObj = appState.availableStores.find(s => s.id === activeStoreIdVal);
                   const activeStoreName = activeStoreObj?.name || storeSettings.storeName || "کسب‌وکار اصلی";
-                  const dbTypeLabel = activeStoreObj?.db_type === 'postgres' ? 'PostgreSQL' : 'محلی (JSON/SQLite)';
+                  const dbTypeLabel = activeStoreObj?.db_type === 'postgres' ? 'PostgreSQL' : 'محلی (SQLite/JSON)';
 
                   return (
-                    <footer className="border-t border-slate-200/80 bg-white/95 backdrop-blur-md px-4 sm:px-6 py-2.5 flex flex-wrap items-center justify-between gap-3 text-xs text-slate-600 no-print z-40 select-none shadow-3xs" dir="rtl">
-                      <div className="flex items-center gap-3">
-                        <div className="flex items-center gap-2">
-                          <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-pulse"></span>
-                          <span className="text-slate-500 font-bold">کسب‌وکار فعال:</span>
-                          <span className="font-black text-slate-900 bg-indigo-50 text-indigo-900 px-3 py-1 rounded-xl border border-indigo-200/80 flex items-center gap-1.5 shadow-3xs">
-                            <Store className="w-3.5 h-3.5 text-indigo-600" />
-                            <span>{activeStoreName}</span>
-                          </span>
+                    <footer className="border-t border-slate-200/80 bg-white/95 backdrop-blur-md px-4 sm:px-6 py-1.5 flex flex-wrap items-center justify-between gap-3 text-[11px] text-slate-600 no-print z-40 select-none shadow-3xs" dir="rtl">
+                      {/* Right: Live Connection, Database & Financial Year */}
+                      <div className="flex items-center gap-2.5 sm:gap-3">
+                        <div className="flex items-center gap-1.5">
+                          <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                          <span className="font-bold text-slate-700">سامانه آنلاین و پایدار</span>
                         </div>
-                        <span className="text-slate-300 hidden sm:inline">|</span>
-                        <div className="hidden sm:flex items-center gap-1.5 text-slate-500">
-                          <span>نوع پایگاه داده:</span>
-                          <span className="font-bold text-slate-800 bg-slate-100 px-2 py-0.5 rounded-lg border border-slate-200/60">{dbTypeLabel}</span>
+                        <span className="text-slate-300">|</span>
+                        <div className="flex items-center gap-1.5 text-slate-500">
+                          <Database className="w-3.5 h-3.5 text-indigo-500" />
+                          <span className="hidden sm:inline">پایگاه داده:</span>
+                          <span className="font-bold text-slate-800">{dbTypeLabel}</span>
                         </div>
                         <span className="text-slate-300 hidden md:inline">|</span>
                         <div className="hidden md:flex items-center gap-1.5 text-slate-500">
-                          <span>واحد پول:</span>
-                          <span className="font-bold text-slate-800">{storeSettings.currency || "تومان"}</span>
-                          <span className="text-slate-400">({storeSettings.calendarType === "gregorian" ? "میلادی" : "شمسی"})</span>
+                          <Calendar className="w-3.5 h-3.5 text-indigo-500" />
+                          <span>سال مالی:</span>
+                          <span className="font-bold text-slate-800">{activeFinancialYear?.name || "سال مالی جاری"}</span>
                         </div>
                       </div>
 
-                      <div className="flex items-center gap-3">
-                        <div className="hidden lg:flex items-center gap-1.5 text-slate-500 text-[11px]">
-                          <Database className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>شناسه کسب‌وکار:</span>
-                          <span className="font-mono font-bold text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-200/50" dir="ltr">
-                            {activeStoreIdVal}
+                      {/* Center: Current Business Name Info (Minimal) */}
+                      <div className="hidden xl:flex items-center gap-1.5 text-slate-500 text-xs">
+                        <Store className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>کسب‌وکار فعال:</span>
+                        <span className="font-black text-slate-900 bg-indigo-50/80 text-indigo-900 px-2.5 py-0.5 rounded-lg border border-indigo-100">
+                          {activeStoreName}
+                        </span>
+                      </div>
+
+                      {/* Left: Currency, Shortcut Tip, Version */}
+                      <div className="flex items-center gap-2.5 sm:gap-3">
+                        <div className="hidden sm:flex items-center gap-1 text-slate-500">
+                          <span className="font-bold text-slate-700">{storeSettings.currency || "تومان"}</span>
+                          <span className="text-slate-400">({storeSettings.calendarType === "gregorian" ? "میلادی" : "خورشیدی"})</span>
+                        </div>
+                        <span className="text-slate-300 hidden sm:inline">|</span>
+                        <div className="hidden lg:flex items-center gap-1 text-slate-400" title="کلید دسترسی سریع کیبورد">
+                          <span>راهنما:</span>
+                          <span className="font-mono font-bold text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200 text-[10px]" dir="ltr">
+                            Alt + K
                           </span>
                         </div>
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            appState.confirmAction(
-                              'آیا از تعویض کسب‌وکار فعلی اطمینان دارید؟',
-                              () => { appState.setIsStoreSelectionOpen(true); }
-                            );
-                          }}
-                          className="px-3.5 py-1.5 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 hover:text-indigo-900 rounded-xl text-xs font-black border border-indigo-200/80 transition-all flex items-center gap-1.5 cursor-pointer shadow-3xs active:scale-95"
-                        >
-                          <RefreshCw className="w-3.5 h-3.5 text-indigo-600" />
-                          <span>تغییر و مدیریت کسب‌وکارها</span>
-                        </button>
+                        <span className="text-slate-300 hidden lg:inline">|</span>
+                        <div className="font-mono font-bold text-slate-500 text-[10px]" dir="ltr">
+                          v{appVersion?.version || "2.5"}
+                        </div>
                       </div>
                     </footer>
                   );
