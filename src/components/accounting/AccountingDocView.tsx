@@ -1,21 +1,29 @@
 import { formatDateDisplay, toPersianDigits } from '../../utils/format';
-import React, { useRef, useState, useEffect } from 'react';
+import React, { useRef, useState, useEffect, useMemo } from 'react';
 import { motion } from 'motion/react';
 import { useReactToPrint } from 'react-to-print';
-import { Printer, ArrowRight, CheckCircle, FileText } from 'lucide-react';
+import { Printer, ArrowRight, CheckCircle, FileText, RotateCcw, AlertTriangle } from 'lucide-react';
 import { AccountingDocument, LedgerAccount } from '../../types';
 import { getLedgerAccounts, getPersons } from '../../services/dataService';
+import ReverseAccountingDocModal from './ReverseAccountingDocModal';
 
 interface Props {
   doc: AccountingDocument;
   storeSettings?: any;
   onBack: () => void;
+  showNotification?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
 }
 
-export default function AccountingDocView({ doc, storeSettings, onBack }: Props) {
+export default function AccountingDocView({ doc, storeSettings, onBack, showNotification }: Props) {
   const printRef = useRef<HTMLDivElement>(null);
+  const [currentDoc, setCurrentDoc] = useState<any>(doc);
   const [accounts, setAccounts] = useState<LedgerAccount[]>([]);
   const [persons, setPersons] = useState<any[]>([]);
+  const [isReversalOpen, setIsReversalOpen] = useState(false);
+
+  useEffect(() => {
+    setCurrentDoc(doc);
+  }, [doc]);
   
   useEffect(() => {
     const loadData = async () => {
@@ -26,9 +34,21 @@ export default function AccountingDocView({ doc, storeSettings, onBack }: Props)
     loadData();
   }, []);
 
+  const accountMap = useMemo(() => {
+    const map = new Map<string, LedgerAccount>();
+    accounts.forEach(a => map.set(String(a.id), a));
+    return map;
+  }, [accounts]);
+
+  const personMap = useMemo(() => {
+    const map = new Map<string, any>();
+    persons.forEach(p => map.set(String(p.id), p));
+    return map;
+  }, [persons]);
+
   const handlePrint = useReactToPrint({
     contentRef: printRef,
-    documentTitle: `Accounting_Doc_${doc.documentNumber}`,
+    documentTitle: `Accounting_Doc_${currentDoc.documentNumber}`,
   });
 
   const getAccountTitle = (id: string | number) => {
@@ -42,9 +62,9 @@ export default function AccountingDocView({ doc, storeSettings, onBack }: Props)
     return person ? person.name : id;
   };
 
-  const totalDebit = doc.items.reduce((sum, item) => sum + Number(item.debit || 0), 0);
-  const totalCredit = doc.items.reduce((sum, item) => sum + Number(item.credit || 0), 0);
-  const isBalanced = totalDebit === totalCredit;
+  const totalDebit = (currentDoc.items || []).reduce((sum: number, item: any) => sum + Number(item.debit || 0), 0);
+  const totalCredit = (currentDoc.items || []).reduce((sum: number, item: any) => sum + Number(item.credit || 0), 0);
+  const isBalanced = Math.abs(totalDebit - totalCredit) < 0.001;
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden flex flex-col h-[calc(100vh-12rem)] min-h-[600px]">
@@ -57,17 +77,44 @@ export default function AccountingDocView({ doc, storeSettings, onBack }: Props)
             <ArrowRight className="w-5 h-5 text-slate-600" />
           </button>
           <div>
-            <h2 className="text-lg font-black text-slate-800">مشاهده سند حسابداری</h2>
-            <p className="text-xs font-bold text-slate-500 mt-1">شماره: {doc.documentNumber}</p>
+            <div className="flex items-center gap-2">
+              <h2 className="text-lg font-black text-slate-800">مشاهده سند حسابداری</h2>
+              {(currentDoc as any).isReversed && (
+                <span className="text-[10px] px-2 py-0.5 rounded-full bg-purple-100 text-purple-700 border border-purple-200 font-bold">
+                  معکوس شده بابت سند شماره {(currentDoc as any).reversalDocNumber || ''}
+                </span>
+              )}
+            </div>
+            <p className="text-xs font-bold text-slate-500 mt-0.5">شماره: {currentDoc.documentNumber}</p>
           </div>
         </div>
-        <button
-          onClick={handlePrint}
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-2 transition-all font-bold text-sm shadow-sm cursor-pointer border-none"
-        >
-          <Printer className="w-4 h-4" />
-          چاپ سند
-        </button>
+
+        <div className="flex items-center gap-2">
+          {!(currentDoc as any).isReversed ? (
+            <button
+              type="button"
+              onClick={() => setIsReversalOpen(true)}
+              className="px-3.5 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-xl flex items-center gap-1.5 transition-all font-bold text-xs shadow-2xs cursor-pointer"
+              title="صدور سند معکوس / اصلاحی جهت ابطال استاندارد اثرات این سند"
+            >
+              <RotateCcw className="w-4 h-4 text-emerald-600" />
+              <span>صدور سند معکوس / اصلاحی</span>
+            </button>
+          ) : (
+            <span className="px-3 py-1.5 bg-purple-50 text-purple-700 border border-purple-200 rounded-xl text-xs font-bold flex items-center gap-1.5">
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>معکوس شده</span>
+            </span>
+          )}
+
+          <button
+            onClick={handlePrint}
+            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-2 transition-all font-bold text-xs sm:text-sm shadow-sm cursor-pointer border-none"
+          >
+            <Printer className="w-4 h-4" />
+            <span>چاپ سند</span>
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto p-8" ref={printRef} dir="rtl">
@@ -78,11 +125,24 @@ export default function AccountingDocView({ doc, storeSettings, onBack }: Props)
             <h2 className="text-xl font-bold text-slate-700 mt-2">سند حسابداری</h2>
           </div>
 
+          {(currentDoc as any).isReversed && (
+            <div className="bg-purple-50 border border-purple-200 text-purple-900 rounded-xl p-3.5 mb-6 flex items-start gap-2.5 text-xs font-bold">
+              <RotateCcw className="w-5 h-5 text-purple-600 shrink-0 mt-0.5" />
+              <div className="leading-relaxed">
+                <div className="font-black text-sm text-purple-950">توجه: این سند حسابداری معکوس (ابطال) شده است</div>
+                <p className="mt-0.5 text-purple-800 font-medium">
+                  اثرات مالی و گردش‌های این سند توسط سند معکوس شماره {toPersianDigits((currentDoc as any).reversalDocNumber || '')} خنثی و بی‌اثر گردیده است.
+                  {(currentDoc as any).reversalReason && ` (علت معکوس‌سازی: ${(currentDoc as any).reversalReason})`}
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-between items-start mb-8 text-sm font-bold text-slate-800 border bg-slate-50 p-4 rounded-xl">
             <div className="space-y-4">
               <div className="flex items-center gap-2">
                 <span className="text-slate-500">شماره سند:</span>
-                <span className="font-mono text-lg">{doc.documentNumber}</span>
+                <span className="font-mono text-lg">{currentDoc.documentNumber}</span>
               </div>
               <div className="flex items-center gap-2">
                 <span className="text-slate-500">وضعیت سند:</span>
@@ -185,6 +245,25 @@ export default function AccountingDocView({ doc, storeSettings, onBack }: Props)
           </div>
         </div>
       </div>
+
+      {/* Reverse Accounting Document Modal */}
+      <ReverseAccountingDocModal
+        isOpen={isReversalOpen}
+        onClose={() => setIsReversalOpen(false)}
+        doc={currentDoc}
+        accountMap={accountMap}
+        personMap={personMap}
+        currency={currentDoc.currency || storeSettings?.currency || 'تومان'}
+        showNotification={showNotification}
+        onSuccess={(newDoc) => {
+          setCurrentDoc((prev: any) => ({
+            ...prev,
+            isReversed: true,
+            reversalDocId: newDoc.id,
+            reversalDocNumber: newDoc.documentNumber
+          }));
+        }}
+      />
     </div>
   );
 }

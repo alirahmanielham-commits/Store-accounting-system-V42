@@ -25,6 +25,7 @@ import {
 import { AccountingDocument, LedgerAccount } from '../../types';
 import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import { safePrint } from '../../utils/printHelper';
+import ReverseAccountingDocModal from './ReverseAccountingDocModal';
 
 interface Props {
   onNavigateToCreate?: () => void;
@@ -80,6 +81,10 @@ export default function AccountingDocsList({
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState<number>(25);
+  
+  // Reversal Document Modal state
+  const [selectedDocForReversal, setSelectedDocForReversal] = useState<any | null>(null);
+  const [isReversalModalOpen, setIsReversalModalOpen] = useState(false);
 
   const currency = storeSettings?.currency || 'تومان';
 
@@ -549,23 +554,15 @@ export default function AccountingDocsList({
   };
 
   // Reversal document handler (صدور سند معکوس / اصلاحی)
-  const handleReverseDocument = async (doc: any) => {
-    if (doc.isReversed) {
-      if (showNotification) showNotification(`برای این سند قبلاً سند معکوس شماره ${doc.reversalDocNumber || doc.reversalDocId || ''} صادر شده است.`, 'warning');
+  const handleReverseDocument = (doc: any) => {
+    if ((doc as any).isReversed) {
+      if (showNotification) {
+        showNotification(`برای این سند قبلاً سند معکوس شماره ${(doc as any).reversalDocNumber || (doc as any).reversalDocId || ''} صادر شده است.`, 'warning');
+      }
       return;
     }
-    const confirmed = window.confirm(`آیا از صدور «سند معکوس / اصلاحی» برای سند شماره ${doc.documentNumber || doc.id} اطمینان دارید؟ تمامی آرتیکل‌های بدهکار و بستانکار معکوس خواهند شد.`);
-    if (!confirmed) return;
-
-    try {
-      const rev = await createReversalAccountingDocument(doc.id, 'اصلاح / ابطال حساب');
-      if (showNotification) {
-        showNotification(`سند معکوس شماره ${rev.documentNumber} با موفقیت صادر گردید.`, 'success');
-      }
-      loadData();
-    } catch (err: any) {
-      if (showNotification) showNotification(err.message || 'خطا در صدور سند معکوس.', 'error');
-    }
+    setSelectedDocForReversal(doc);
+    setIsReversalModalOpen(true);
   };
 
   // Comprehensive Excel export (Documents + Articles)
@@ -1271,13 +1268,13 @@ export default function AccountingDocsList({
                             )}
 
                             {(doc as any).isReversed && (
-                              <span className="text-[9px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-bold">
-                                معکوس شده
+                              <span className="text-[9px] text-purple-700 bg-purple-50 px-1.5 py-0.5 rounded border border-purple-200 font-bold" title={`سند معکوس شماره ${(doc as any).reversalDocNumber || (doc as any).reversalDocId || ''}`}>
+                                معکوس شده {(doc as any).reversalDocNumber ? `(سند ${toPersianDigits((doc as any).reversalDocNumber)})` : ''}
                               </span>
                             )}
                             {doc.sourceType === 'reversal' && (
-                              <span className="text-[9px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 font-bold">
-                                سند معکوس
+                              <span className="text-[9px] text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-200 font-bold" title={(doc as any).reversalReason || 'سند معکوس'}>
+                                سند معکوس {(doc as any).reversalReason ? `(${ (doc as any).reversalReason })` : ''}
                               </span>
                             )}
                           </div>
@@ -1568,6 +1565,23 @@ export default function AccountingDocsList({
           )}
         </div>
       </div>
+
+      {/* Reverse Accounting Document Modal */}
+      <ReverseAccountingDocModal
+        isOpen={isReversalModalOpen}
+        onClose={() => {
+          setIsReversalModalOpen(false);
+          setSelectedDocForReversal(null);
+        }}
+        doc={selectedDocForReversal}
+        accountMap={accountMap}
+        personMap={personMap}
+        currency={currency}
+        showNotification={showNotification}
+        onSuccess={() => {
+          loadData();
+        }}
+      />
     </div>
   );
 }
