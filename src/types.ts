@@ -253,6 +253,9 @@ export type InvoiceItem = {
   baseQuantity?: number; // Quantity converted to base unit
   warehouseId?: string | number;
   maxQuantity?: number;
+  settledQuantity?: number;
+  returnedQuantity?: number;
+  remainingQuantity?: number;
 };
 
 export type Invoice = {
@@ -263,7 +266,7 @@ export type Invoice = {
   description?: string;
   note?: string;
   warehouseId?: string | number;
-  type: 'sale' | 'purchase' | 'proforma' | 'sale_return' | 'purchase_return' | 'warehouse_receipt' | 'warehouse_remittance' | 'waste';
+  type: 'sale' | 'purchase' | 'proforma' | 'sale_return' | 'purchase_return' | 'warehouse_receipt' | 'warehouse_remittance' | 'waste' | 'consignment_out' | 'consignment_in';
   currency?: string;
   allowNegativeStock?: boolean;
   date: string;
@@ -286,6 +289,17 @@ export type Invoice = {
   totalAmount: number;
   paymentStatus?: 'paid' | 'partial' | 'unpaid';
   paidAmount?: number;
+  consignmentStatus?: 'active' | 'partially_settled' | 'settled' | 'returned' | 'voided';
+  consignmentDueDate?: string | null;
+  consignmentTerms?: string;
+  consignmentSettledInvoices?: {
+    invoiceId: string | number;
+    invoiceNumber: string;
+    type: string;
+    date: string;
+    itemsCount: number;
+    amount: number;
+  }[];
   isDraft?: boolean;
   status?: InvoiceStatus;
   isDeleted?: boolean;

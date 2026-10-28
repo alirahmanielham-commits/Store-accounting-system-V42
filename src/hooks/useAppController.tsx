@@ -47,6 +47,7 @@ import CalculatorModal from "../components/modals/CalculatorModal";
 import SaleReturnInvoiceCreate from '../components/invoices/SaleReturnInvoiceCreate';
 import PurchaseInvoiceCreate from '../components/invoices/PurchaseInvoiceCreate';
 import PurchaseReturnInvoiceCreate from '../components/invoices/PurchaseReturnInvoiceCreate';
+import ConsignmentInvoiceCreate from '../components/invoices/ConsignmentInvoiceCreate';
 import SalesReport from '../components/reports/SalesReport';
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit, convertPriceToBaseUnit } from "../utils/unitConversion";
 import Barcode from "react-barcode";
@@ -5443,7 +5444,9 @@ const handleEditInvoiceAction = async (inv: any) => {
               ? "create_sale"
               : inv.type === "purchase"
                 ? "create_purchase"
-                : "create_warehouse_doc",
+                : (inv.type === "consignment_out" || inv.type === "consignment_in")
+                  ? "create_consignment"
+                  : "create_warehouse_doc",
         true,
       );
     };
@@ -7638,6 +7641,32 @@ const renderTabContent = () => {
           <SaleInvoiceCreate driverPersonId={driverPersonId} setDriverPersonId={setDriverPersonId} driverName={driverName} setDriverName={setDriverName} driverPhone={driverPhone} setDriverPhone={setDriverPhone} receiverPersonId={receiverPersonId} setReceiverPersonId={setReceiverPersonId} receiverName={receiverName} setReceiverName={setReceiverName} receiverPhone={receiverPhone} setReceiverPhone={setReceiverPhone} vehiclePlateNumber={vehiclePlateNumber} setVehiclePlateNumber={setVehiclePlateNumber} shippingAddress={shippingAddress} setShippingAddress={setShippingAddress} invoiceDueDate={invoiceDueDate} setInvoiceDueDate={setInvoiceDueDate} setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Plus={Plus} Trash2={Trash2} CheckCircle={CheckCircle} History={History} Save={Save} ShoppingCart={ShoppingCart} RefreshCw={RefreshCw} FileText={FileText} Info={Info} Tag={Tag} invoiceType={invoiceType} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} calculateProductCurrentStock={calculateProductCurrentStock} formatProductStockDetails={formatProductStockDetails} activeTab={activeTab} calculateSubtotal={calculateSubtotal} getProductStockInfo={getProductStockInfo} invoices={invoices} customAlert={customAlert} />
         );
 
+      case "create_consignment": {
+        const editingConsignment = editingInvoiceId
+          ? invoices.find((i: any) => String(i.id) === String(editingInvoiceId))
+          : null;
+        return (
+          <ConsignmentInvoiceCreate
+            products={products}
+            warehouses={warehouses}
+            persons={persons}
+            editingInvoice={editingConsignment}
+            initialPersonId={customerId}
+            productCategories={productCategories}
+            onSuccess={(saved) => {
+              showNotification(`فاکتور امانی #${toPersianDigits(saved.invoiceNumber || saved.id)} با موفقیت ثبت شد.`, 'success');
+              setEditingInvoiceId(null);
+              fetchInvoices();
+              setActiveTab('list_consignment');
+            }}
+            onCancel={() => {
+              setEditingInvoiceId(null);
+              setActiveTab('list_consignment');
+            }}
+          />
+        );
+      }
+
       case "sales_report":
         return (
           <SalesReport
@@ -7654,6 +7683,7 @@ const renderTabContent = () => {
       case "list_sale_return":
       case "list_purchase":
       case "list_purchase_return":
+      case "list_consignment":
       case "list_warehouse_docs": {
         return (
           <InvoicesList

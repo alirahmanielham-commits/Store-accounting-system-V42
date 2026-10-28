@@ -60,7 +60,8 @@ const FINANCIAL_KEYS = new Set([
   'sales_invoice_payments',
   'purchase_invoice_payments',
   'debtors_trackings',
-  'InventoryTransactions'
+  'InventoryTransactions',
+  'consignment_invoices'
 ]);
 
 export const mapTransactionTypeToTable = (type: string) => {
@@ -78,6 +79,9 @@ export const mapInvoiceTypeToTable = (type: string) => {
     case 'sale_return': return 'sale_returns';
     case 'purchase_return': return 'purchase_returns';
     case 'waste': return 'wastes';
+    case 'consignment_out':
+    case 'consignment_in':
+      return 'consignment_invoices';
     default: return 'invoices';
   }
 };
@@ -389,6 +393,8 @@ export const DEFAULT_DOC_PREFIXES: Record<string, string> = {
   warehouse_remittance: "REM-",
   sale_return: "RTN-S-",
   purchase_return: "RTN-P-",
+  consignment_out: "AM-P-",
+  consignment_in: "AM-D-",
 };
 
 export const incrementInvoiceNumber = (currentNumber: string, docTypeKey: string): string => {
@@ -431,14 +437,14 @@ const internalGenerateDocNumber = async (docTypeKey: string): Promise<string> =>
     const counters = await getLocalData<Record<string, number>>('doc_counters', {}, { _nocache: Date.now() });
     
     let items: any[] = [];
-    if (docTypeKey === 'sale' || docTypeKey === 'purchase' || docTypeKey.includes('return') || docTypeKey === 'proforma') {
+    if (docTypeKey === 'sale' || docTypeKey === 'purchase' || docTypeKey.includes('return') || docTypeKey === 'proforma' || docTypeKey.startsWith('consignment')) {
       const targetTable = mapInvoiceTypeToTable(docTypeKey);
       const [targetData, generalInvs] = await Promise.all([
         getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
         getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
       ]);
       const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
-      items = combined.filter(i => i && !i.isDeleted && (docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? (i.type === 'sale' || !i.type) : i.type === docTypeKey)));
+      items = combined.filter(i => i && !i.isDeleted && (docTypeKey.startsWith('consignment') || docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? (i.type === 'sale' || !i.type) : i.type === docTypeKey)));
     } else if (docTypeKey === 'warehouse_receipt' || docTypeKey === 'warehouse_remittance') {
       items = await getInvoices();
       items = items.filter(i => i.type === docTypeKey);

@@ -16,7 +16,9 @@ import {
   RotateCcw,
   FilePlus,
   Truck,
-  MessageSquare
+  MessageSquare,
+  ArrowRightLeft,
+  ShieldCheck
 } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -42,6 +44,9 @@ interface InvoiceRowActionsDropdownProps {
   onApprovePurchase?: () => void;
   onApproveWarehouseReceipt?: () => void;
   onQueueSms?: () => void;
+  onConvertConsignmentToFinal?: () => void;
+  onReturnConsignmentGoods?: () => void;
+  onPrintConsignmentReceipt?: () => void;
 }
 
 export default function InvoiceRowActionsDropdown({
@@ -65,7 +70,10 @@ export default function InvoiceRowActionsDropdown({
   onDelete,
   onApprovePurchase,
   onApproveWarehouseReceipt,
-  onQueueSms
+  onQueueSms,
+  onConvertConsignmentToFinal,
+  onReturnConsignmentGoods,
+  onPrintConsignmentReceipt
 }: InvoiceRowActionsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; openUp: boolean }>({
@@ -413,6 +421,70 @@ export default function InvoiceRowActionsDropdown({
                         </span>
                       </div>
                       <span className="text-[10px] text-emerald-600">تسویه</span>
+                    </button>
+                  )}
+                </div>
+              )}
+
+              {/* Group: Consignment Lifecycle Actions */}
+              {(invoice.type === 'consignment_out' || invoice.type === 'consignment_in') && (
+                <div className="py-1 space-y-0.5 border-t border-slate-100">
+                  {onConvertConsignmentToFinal && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onConvertConsignmentToFinal();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-black text-emerald-800 bg-emerald-50/80 hover:bg-emerald-100 rounded-xl transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <ArrowRightLeft className="w-4 h-4 text-emerald-600 group-hover:scale-110 transition-transform" />
+                        <span>
+                          {invoice.type === 'consignment_out' ? 'تبدیل به فاکتور فروش قطعی' : 'تبدیل به فاکتور خرید قطعی'}
+                        </span>
+                      </div>
+                      <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded-md">
+                        قطعی‌سازی
+                      </span>
+                    </button>
+                  )}
+
+                  {onReturnConsignmentGoods && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onReturnConsignmentGoods();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-indigo-800 bg-indigo-50/70 hover:bg-indigo-100/80 rounded-xl transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <RotateCcw className="w-4 h-4 text-indigo-600 group-hover:-rotate-45 transition-transform" />
+                        <span>ثبت عودت کالای امانی</span>
+                      </div>
+                      <span className="text-[9px] bg-indigo-600 text-white font-bold px-1.5 py-0.5 rounded-md">
+                        عودت
+                      </span>
+                    </button>
+                  )}
+
+                  {onPrintConsignmentReceipt && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsOpen(false);
+                        onPrintConsignmentReceipt();
+                      }}
+                      className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-amber-800 bg-amber-50/70 hover:bg-amber-100/80 rounded-xl transition-colors cursor-pointer group"
+                    >
+                      <div className="flex items-center gap-2">
+                        <Printer className="w-4 h-4 text-amber-600" />
+                        <span>رسید و تعهدنامه امانت</span>
+                      </div>
+                      <span className="text-[9px] bg-amber-600 text-white font-bold px-1.5 py-0.5 rounded-md">
+                        تعهدنامه
+                      </span>
                     </button>
                   )}
                 </div>

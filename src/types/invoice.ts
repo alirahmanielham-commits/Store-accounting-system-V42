@@ -8,7 +8,12 @@ export type InvoiceType =
   | 'purchase'
   | 'proforma'
   | 'sale_return'
-  | 'purchase_return';
+  | 'purchase_return'
+  | 'consignment_out'
+  | 'consignment_in'
+  | 'warehouse_receipt'
+  | 'warehouse_remittance'
+  | 'waste';
 
 export type PaymentStatus = 'unpaid' | 'partial' | 'paid';
 
@@ -31,6 +36,9 @@ export interface InvoiceItem {
   totalPrice?: number;
   lineTotal: number;
   description?: string;
+  settledQuantity?: number;
+  returnedQuantity?: number;
+  remainingQuantity?: number;
 }
 
 export interface Invoice {
@@ -53,6 +61,17 @@ export interface Invoice {
   items: InvoiceItem[];
   accountingDocumentId?: string;
   description?: string;
+  consignmentStatus?: 'active' | 'partially_settled' | 'settled' | 'returned' | 'voided';
+  consignmentDueDate?: string;
+  consignmentTerms?: string;
+  consignmentSettledInvoices?: {
+    invoiceId: string | number;
+    invoiceNumber: string;
+    type: string;
+    date: string;
+    itemsCount: number;
+    amount: number;
+  }[];
   isDraft?: boolean;
   isDeleted?: boolean;
   createdAt: number | string;

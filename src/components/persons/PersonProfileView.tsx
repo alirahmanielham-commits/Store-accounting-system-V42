@@ -46,6 +46,7 @@ interface PersonProfileViewProps {
   onCreatePurchase: (personId: string | number) => void;
   onCreateReceive: (personId: string | number) => void;
   onCreatePay: (personId: string | number) => void;
+  onCreateConsignment?: (personId: string | number) => void;
   getPersonDisplayName: (p: any) => string;
   getRoleName: (roleId?: string) => string;
   getRoleBadgeClasses: (roleId?: string) => string;
@@ -75,6 +76,7 @@ export default function PersonProfileView({
   onCreatePurchase,
   onCreateReceive,
   onCreatePay,
+  onCreateConsignment,
   getPersonDisplayName,
   getRoleName,
   getRoleBadgeClasses,
@@ -1237,6 +1239,17 @@ export default function PersonProfileView({
               <Truck className="w-4 h-4" />
               فاکتور خرید
             </button>
+            {onCreateConsignment && (
+              <button
+                type="button"
+                onClick={() => onCreateConsignment(personId)}
+                className="flex items-center gap-1 px-3 py-2 bg-amber-50 hover:bg-amber-100 text-amber-800 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-amber-200"
+                title="ثبت کالای امانی پرداختی به این شخص یا امانت دریافتی"
+              >
+                <ShieldCheck className="w-4 h-4 text-amber-600" />
+                فاکتور امانی
+              </button>
+            )}
             <button
               onClick={() => onCreateReceive(personId)}
               className="flex items-center gap-1 px-3 py-2 bg-emerald-50 hover:bg-emerald-100 text-emerald-700 rounded-xl text-xs font-bold transition-colors cursor-pointer border border-emerald-200"

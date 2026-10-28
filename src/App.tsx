@@ -1096,6 +1096,10 @@ export default function App() {
                           setReceiptPersonId(id);
                           setActiveTab("payment_create");
                         }}
+                        onCreateConsignment={(id) => {
+                          setCustomerId(id);
+                          setActiveTab("create_consignment");
+                        }}
                         getPersonDisplayName={getPersonDisplayName}
                         getRoleName={getRoleName}
                         getRoleBadgeClasses={getRoleBadgeClasses}
@@ -1462,7 +1466,8 @@ export default function App() {
 <Route path="/list_pay_receipt" element={<AnimatePresence mode="wait"><motion.div key="list_pay_receipt" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
 <Route path="/list_warehouse_docs" element={<AnimatePresence mode="wait"><motion.div key="list_warehouse_docs" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
 <Route path="/list_sale_return" element={<AnimatePresence mode="wait"><motion.div key="list_sale_return" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
-<Route path="/list_purchase_return" element={<AnimatePresence mode="wait"><motion.div key="list_purchase_return" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/list_consignment" element={<AnimatePresence mode="wait"><motion.div key="list_consignment" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
+<Route path="/create_consignment" element={<AnimatePresence mode="wait"><motion.div key="create_consignment" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
 <Route path="/product_categories" element={<AnimatePresence mode="wait"><motion.div key="product_categories" initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
 <Route path="/" element={<Navigate to="/welcome_page" replace />} />
   <Route path="*" element={<AnimatePresence mode="wait"><motion.div key={location.pathname} initial={{ opacity: 0, y: 5 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -5 }} transition={{ duration: 0.2 }} className="h-full flex flex-col">{renderTabContent()}</motion.div></AnimatePresence>} />
@@ -2023,6 +2028,33 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                       <p className="text-xs text-slate-500 mt-1 leading-relaxed">
                         جابجایی مبالغ نقدینگی بین حساب‌های بانکی و صندوق‌های مختلف
                         کسب و کار با ثبت سند معین.
+                      </p>
+                    </div>
+                  </button>
+
+                  {/* Shortcut Item 6: Consignment Invoice */}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setActiveTab("create_consignment");
+                      setIsComposeOpen(false);
+                    }}
+                    className="p-4 border border-slate-200 hover:border-amber-500/50 hover:bg-amber-50/20 rounded-2xl text-right flex gap-4 transition-all hover:shadow-md hover:-translate-y-0.5 cursor-pointer md:col-span-2"
+                  >
+                    <div className="w-11 h-11 bg-amber-50 text-amber-600 rounded-xl flex-shrink-0 flex items-center justify-center font-bold text-lg">
+                      🛡️
+                    </div>
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <h4 className="font-extrabold text-sm text-slate-800">
+                          ثبت فاکتور امانی کالا (پرداختی / دریافتی)
+                        </h4>
+                        <span className="text-[10px] font-black bg-amber-100 text-amber-800 px-2 py-0.5 rounded-full">
+                          کد سریع ۲۴
+                        </span>
+                      </div>
+                      <p className="text-xs text-slate-500 mt-1 leading-relaxed">
+                        ثبت امانت پرداختی به همکاران یا امانت دریافتی از تامین‌کنندگان بدون اثر بر بدهکاری/بستانکاری تا زمان قطعی‌سازی.
                       </p>
                     </div>
                   </button>

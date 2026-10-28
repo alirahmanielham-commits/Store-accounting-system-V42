@@ -7,13 +7,13 @@ import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import {
   Search, Plus, FileText, Download, CheckCircle, Edit2, Trash2, Printer, Check, X,
-  ArrowUpRight, ArrowDownRight, ArrowRight, CornerDownLeft, Package, User, Clock,
+  ArrowUpRight, ArrowDownRight, ArrowDownLeft, ArrowRight, CornerDownLeft, Package, User, Clock,
   CheckCircle2, ChevronLeft, ChevronRight, Share2, Eye, Truck, MoreVertical,
   DollarSign, RefreshCw, XCircle, Warehouse, TrendingUp, TrendingDown,
   RotateCcw, AlertCircle, Calendar as CalendarIcon, Tag, Wallet, Ban, Percent,
   ArrowUpDown, Filter, ChevronDown, ChevronUp, CheckCircle as CheckCircleIcon, Building2,
   ShoppingCart, Phone, LayoutGrid, LayoutList, SlidersHorizontal, Barcode,
-  Layers, Info, CalendarDays, ExternalLink
+  Layers, Info, CalendarDays, ExternalLink, ShieldCheck, ArrowRightLeft
 } from 'lucide-react';
 import CustomDatePicker from '../ui/CustomDatePicker';
 import { convertToGregorian, formatDateDisplay, formatInvoiceDate, toPersianDigits, addCommas, formatNumber, getActiveStoreSettings } from "../../utils/format";
@@ -22,6 +22,7 @@ import { getUnitRatioDirection, convertQuantityToBaseUnit, convertPriceToBaseUni
 import { safePrint } from "../../utils/printHelper";
 import InvoiceRowActionsDropdown from "./InvoiceRowActionsDropdown";
 import QueueSmsModal from "../messaging/QueueSmsModal";
+import ConsignmentConversionModal from "./ConsignmentConversionModal";
 
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_year' | 'all' | 'custom';
 
@@ -123,6 +124,19 @@ export default function InvoicesList(props: any) {
 
   // Queue SMS modal
   const [queueSmsInvoice, setQueueSmsInvoice] = useState<any>(null);
+
+  // Consignment modal state
+  const [consignmentModalState, setConsignmentModalState] = useState<{
+    isOpen: boolean;
+    invoice: any;
+    mode: 'convert' | 'return' | 'receipt';
+  }>({
+    isOpen: false,
+    invoice: null,
+    mode: 'convert'
+  });
+
+  const isConsignmentTab = activeTab === 'list_consignment';
 
   // Reset tab filter on activeTab change
   useEffect(() => {
@@ -451,6 +465,20 @@ export default function InvoicesList(props: any) {
           paidLabel: 'وجه بازپس‌گرفته',
           unpaidLabel: 'مانده طلب از تامین‌کننده',
         };
+      case 'list_consignment':
+        return {
+          title: 'فاکتورهای امانت کالا (امانی)',
+          subtitle: 'مدیریت امانت‌های پرداختی به همکاران/مشتریان، امانت‌های دریافتی، ردیابی مانده امانت و تبدیل به فاکتور قطعی',
+          themeGradient: 'from-amber-600 to-yellow-500',
+          accentColor: 'amber',
+          mainIcon: <ShieldCheck className="w-5 h-5 text-white" />,
+          createBtnLabel: 'ثبت فاکتور امانی جدید',
+          createTab: 'create_consignment',
+          personRoleLabel: 'طرف‌حساب امانت',
+          totalLabel: 'کل ارزش تقویمی امانت',
+          paidLabel: 'تسویه شده / عودت',
+          unpaidLabel: 'مانده نزد طرف‌حساب',
+        };
       case 'list_warehouse_docs':
       default:
         return {
@@ -482,6 +510,8 @@ export default function InvoicesList(props: any) {
         return type === "sale_return" || type === "sales_return";
       } else if (activeTab === "list_purchase_return") {
         return type === "purchase_return" || type === "purchases_return";
+      } else if (activeTab === "list_consignment") {
+        return type === "consignment_out" || type === "consignment_in";
       } else if (activeTab === "list_warehouse_docs") {
         return type === "warehouse_receipt" || type === "warehouse_remittance";
       }
@@ -524,6 +554,11 @@ export default function InvoicesList(props: any) {
         if (listFilter === "pending_approval" && (inv.type !== "warehouse_receipt" || inv.status !== "pending_approval")) return false;
         if (listFilter === "receipt" && (inv.type !== "warehouse_receipt" || inv.status === "pending_approval")) return false;
         if (listFilter === "remittance" && inv.type !== "warehouse_remittance") return false;
+      } else if (activeTab === "list_consignment") {
+        if (invoiceTabFilter === "consignment_out" && inv.type !== "consignment_out") return false;
+        if (invoiceTabFilter === "consignment_in" && inv.type !== "consignment_in") return false;
+        if (invoiceTabFilter === "active" && (inv.consignmentStatus === "settled" || inv.consignmentStatus === "returned")) return false;
+        if (invoiceTabFilter === "settled" && inv.consignmentStatus !== "settled" && inv.consignmentStatus !== "returned") return false;
       }
 
       // 2. Person filter
@@ -595,6 +630,11 @@ export default function InvoicesList(props: any) {
     let remittanceCount = 0;
     let receiptCount = 0;
     let pendingApprovalReceipts = 0;
+    let consignmentOutCount = 0;
+    let consignmentInCount = 0;
+    let consignmentActiveCount = 0;
+    let consignmentSettledCount = 0;
+    let consignmentRemainingQty = 0;
 
     filteredInvoicesList.forEach((inv: any) => {
       const tot = Number(inv.totalAmount || 0);
@@ -610,6 +650,26 @@ export default function InvoicesList(props: any) {
       } else if (inv.type === 'warehouse_receipt') {
         receiptCount++;
         if (inv.status === 'pending_approval') pendingApprovalReceipts++;
+      } else if (inv.type === 'consignment_out') {
+        consignmentOutCount++;
+      } else if (inv.type === 'consignment_in') {
+        consignmentInCount++;
+      }
+
+      if (inv.type === 'consignment_out' || inv.type === 'consignment_in') {
+        const itemRemQty = (inv.items || []).reduce((sum: number, it: any) => {
+          const r = it.remainingQuantity !== undefined
+            ? Number(it.remainingQuantity)
+            : Math.max(0, (Number(it.quantity) || 0) - (Number(it.settledQuantity) || 0) - (Number(it.returnedQuantity) || 0));
+          return sum + r;
+        }, 0);
+        consignmentRemainingQty += itemRemQty;
+
+        if (inv.consignmentStatus === 'settled' || inv.consignmentStatus === 'returned' || (itemRemQty <= 0 && inv.items?.length > 0)) {
+          consignmentSettledCount++;
+        } else {
+          consignmentActiveCount++;
+        }
       }
 
       if (inv.paymentStatus === 'paid') paidCount++;
@@ -644,6 +704,11 @@ export default function InvoicesList(props: any) {
       remittanceCount,
       receiptCount,
       pendingApprovalReceipts,
+      consignmentOutCount,
+      consignmentInCount,
+      consignmentActiveCount,
+      consignmentSettledCount,
+      consignmentRemainingQty,
     };
   }, [filteredInvoicesList]);
 
@@ -866,6 +931,14 @@ export default function InvoicesList(props: any) {
         { id: 'pending_approval', label: 'رسیدهای در انتظار تایید', count: baseInvoices.filter((i: any) => i.type === 'warehouse_receipt' && i.status === 'pending_approval').length },
         { id: 'receipt', label: 'رسیدهای تایید شده', count: baseInvoices.filter((i: any) => i.type === 'warehouse_receipt' && i.status !== 'pending_approval').length },
         { id: 'remittance', label: 'حواله‌های خروج کالا', count: baseInvoices.filter((i: any) => i.type === 'warehouse_remittance').length },
+      ];
+    } else if (activeTab === "list_consignment") {
+      tabs = [
+        { id: 'all', label: 'همه اسناد امانی', count: baseInvoices.length },
+        { id: 'consignment_out', label: 'امانت پرداختی (نزد دیگران)', count: baseInvoices.filter((i: any) => i.type === 'consignment_out').length },
+        { id: 'consignment_in', label: 'امانت دریافتی (نزد ما)', count: baseInvoices.filter((i: any) => i.type === 'consignment_in').length },
+        { id: 'active', label: 'امانات جاری (دارای مانده)', count: baseInvoices.filter((i: any) => i.consignmentStatus !== 'settled' && i.consignmentStatus !== 'returned').length },
+        { id: 'settled', label: 'تسویه کامل یا عودت شده', count: baseInvoices.filter((i: any) => i.consignmentStatus === 'settled' || i.consignmentStatus === 'returned').length },
       ];
     }
 
@@ -1099,6 +1172,76 @@ export default function InvoicesList(props: any) {
               </div>
               <div className="text-[10px] text-slate-500 font-bold mt-1 truncate">
                 میانگین: {toPersianDigits(summaryMetrics.count > 0 ? (summaryMetrics.totalItems / summaryMetrics.count).toFixed(1) : 0)} واحد در هر سند
+              </div>
+            </div>
+          </>
+        ) : isConsignmentTab ? (
+          <>
+            {/* Consignment Metric 1: Total Valuation */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">ارزش تقویمی کل امانات</span>
+                <div className="w-7 h-7 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center">
+                  <ShieldCheck className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-slate-900 font-mono tracking-tight">
+                {toPersianDigits(formatCurrency(summaryMetrics.totalGross))}
+                <span className="text-[10px] font-bold text-slate-500 mr-1">{currency}</span>
+              </div>
+              <div className="text-[10px] text-slate-400 font-bold mt-1">
+                {toPersianDigits(summaryMetrics.count)} سند امانی • {toPersianDigits(summaryMetrics.totalItems)} قلم کالا
+              </div>
+            </div>
+
+            {/* Consignment Metric 2: Consignment Out (نزد دیگران) */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">امانت پرداختی (نزد مشتریان/همکاران)</span>
+                <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-indigo-900 font-mono tracking-tight">
+                {toPersianDigits(summaryMetrics.consignmentOutCount)}
+                <span className="text-[11px] font-bold text-indigo-700 mr-1.5">فاکتور خروجی</span>
+              </div>
+              <div className="text-[10px] text-indigo-600 font-bold mt-1 truncate">
+                کالای نزد طرف‌حساب بدون انتقال قطعی مالکیت
+              </div>
+            </div>
+
+            {/* Consignment Metric 3: Consignment In (نزد ما) */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">امانت دریافتی (نزد ما از تامین‌کننده)</span>
+                <div className="w-7 h-7 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center">
+                  <ArrowDownLeft className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-teal-900 font-mono tracking-tight">
+                {toPersianDigits(summaryMetrics.consignmentInCount)}
+                <span className="text-[11px] font-bold text-teal-700 mr-1.5">فاکتور ورودی</span>
+              </div>
+              <div className="text-[10px] text-teal-600 font-bold mt-1 truncate">
+                کالای امانی نزد فروشگاه جهت بازاریابی و فروش
+              </div>
+            </div>
+
+            {/* Consignment Metric 4: Remaining Units & Status */}
+            <div className="bg-white p-3.5 rounded-2xl border border-slate-200/80 shadow-2xs relative">
+              <div className="flex items-center justify-between text-slate-500 mb-1">
+                <span className="text-[11px] font-black text-slate-600">اقلام امانی تسویه‌نشده</span>
+                <div className="w-7 h-7 rounded-lg bg-purple-50 text-purple-600 flex items-center justify-center">
+                  <Package className="w-3.5 h-3.5" />
+                </div>
+              </div>
+              <div className="text-base sm:text-xl font-black text-purple-900 font-mono tracking-tight">
+                {toPersianDigits(summaryMetrics.consignmentRemainingQty)}
+                <span className="text-[11px] font-bold text-purple-700 mr-1.5">واحد کالا</span>
+              </div>
+              <div className="text-[10px] text-purple-700 font-bold mt-1 truncate">
+                در {toPersianDigits(summaryMetrics.consignmentActiveCount)} سند جاری با مانده باز
               </div>
             </div>
           </>
@@ -1429,6 +1572,16 @@ export default function InvoicesList(props: any) {
                     <th className="py-3 px-3 text-center w-[14%]">وضعیت سند</th>
                     <th className="py-3 px-2 text-center print:hidden w-[8%]">عملیات</th>
                   </tr>
+                ) : isConsignmentTab ? (
+                  <tr>
+                    <th className="py-3 px-2 text-center w-12 text-slate-500">ردیف</th>
+                    <th className="py-3 px-3 w-[22%]">مشخصات و نوع سند امانی</th>
+                    <th className="py-3 px-3 w-[20%]">طرف‌حساب و انبار</th>
+                    <th className="py-3 px-3 w-[16%]">تاریخ صدور و مهلت امانت</th>
+                    <th className="py-3 px-3 text-left w-[18%]">ارزش تقویمی و مانده</th>
+                    <th className="py-3 px-3 text-center w-[14%]">وضعیت امانت</th>
+                    <th className="py-3 px-2 text-center print:hidden w-[10%]">عملیات</th>
+                  </tr>
                 ) : (
                   <tr>
                     <th className="py-3 px-2 text-center w-12 text-slate-500">ردیف</th>
@@ -1663,6 +1816,166 @@ export default function InvoicesList(props: any) {
                                         ارزش: {toPersianDigits(formatCurrency(inv.totalAmount))} {currency}
                                       </div>
                                     ) : null}
+                                  </div>
+                                </td>
+                              </>
+                            ) : isConsignmentTab ? (
+                              <>
+                                {/* Consignment Col 2: Document Number, Direction & Items */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-1.5 flex-wrap">
+                                      <span
+                                        onClick={() => setViewingInvoice && setViewingInvoice(inv)}
+                                        className="font-black text-slate-900 text-xs sm:text-sm hover:text-amber-600 hover:underline transition-colors cursor-pointer"
+                                        title="مشاهده پیش‌نمایش سند امانی"
+                                      >
+                                        #{toPersianDigits(inv.invoiceNumber || inv.id)}
+                                      </span>
+                                      {inv.type === 'consignment_out' ? (
+                                        <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-lg border border-amber-300 inline-flex items-center gap-1 shadow-2xs">
+                                          <ArrowUpRight className="w-3 h-3 text-amber-700" />
+                                          <span>امانت پرداختی (خروج)</span>
+                                        </span>
+                                      ) : (
+                                        <span className="bg-blue-100 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-lg border border-blue-300 inline-flex items-center gap-1 shadow-2xs">
+                                          <ArrowDownRight className="w-3 h-3 text-blue-700" />
+                                          <span>امانت دریافتی (ورود)</span>
+                                        </span>
+                                      )}
+                                      {isDraft && (
+                                        <span className="bg-slate-100 text-slate-700 text-[10px] font-bold px-1.5 py-0.2 rounded border border-slate-200">
+                                          پیش‌نویس
+                                        </span>
+                                      )}
+                                    </div>
+                                    <div className="text-[11px] text-slate-500 font-bold flex items-center gap-2">
+                                      <span>{toPersianDigits(itemsCount)} ردیف کالا</span>
+                                      <span className="text-slate-300">|</span>
+                                      <span>تعداد کل: {toPersianDigits((inv.items || []).reduce((s: number, i: any) => s + (Number(i.quantity) || 0), 0))}</span>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Consignment Col 3: Counterparty & Warehouse */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-0.5">
+                                    <div className="font-extrabold text-xs text-slate-800 flex items-center gap-1">
+                                      <User className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span className="truncate max-w-[160px]">{personDisplayName}</span>
+                                    </div>
+                                    <div className="text-[10px] text-slate-500 flex items-center gap-1">
+                                      <Warehouse className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span>{getDocWarehouseName(inv)}</span>
+                                    </div>
+                                  </div>
+                                </td>
+
+                                {/* Consignment Col 4: Issue Date & Due Date */}
+                                <td className="py-2.5 px-3">
+                                  <div className="flex flex-col gap-1">
+                                    <div className="flex items-center gap-1 text-xs font-bold text-slate-800">
+                                      <CalendarIcon className="w-3 h-3 text-slate-400 shrink-0" />
+                                      <span>{formatInvoiceDate(inv.date || inv.createdAt, storeSettings?.calendarType, { showTime: false })}</span>
+                                    </div>
+                                    {(inv.consignmentDueDate || inv.dueDate) && (
+                                      <div className="flex items-center gap-1 text-[10px] font-bold">
+                                        <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                                        <span className="text-slate-500">مهلت:</span>
+                                        <span className="font-mono text-amber-700">{toPersianDigits(inv.consignmentDueDate || inv.dueDate)}</span>
+                                      </div>
+                                    )}
+                                  </div>
+                                </td>
+
+                                {/* Consignment Col 5: Valuation & Remaining Quantity */}
+                                <td className="py-2.5 px-3 text-left">
+                                  <div className="flex flex-col items-end gap-0.5">
+                                    <div className="text-xs font-black font-mono text-slate-900">
+                                      {toPersianDigits(formatCurrency(inv.totalAmount || inv.grandTotal || 0))} {currency}
+                                    </div>
+                                    {(() => {
+                                      const remainingQty = (inv.items || []).reduce((sum: number, it: any) => {
+                                        const rem = it.remainingQuantity !== undefined 
+                                          ? it.remainingQuantity 
+                                          : Math.max(0, (it.quantity || 0) - (it.settledQuantity || 0) - (it.returnedQuantity || 0));
+                                        return sum + rem;
+                                      }, 0);
+                                      return (
+                                        <div className="text-[10px] font-bold text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200">
+                                          مانده امانی: <span className="font-mono">{toPersianDigits(remainingQty)}</span> عدد
+                                        </div>
+                                      );
+                                    })()}
+                                    <span className="text-[9px] text-slate-400 font-bold">ارزش تقویمی (بدون اثر مالی)</span>
+                                  </div>
+                                </td>
+
+                                {/* Consignment Col 6: Consignment Status */}
+                                <td className="py-2.5 px-3 text-center">
+                                  {(() => {
+                                    const remainingQty = (inv.items || []).reduce((sum: number, it: any) => {
+                                      const rem = it.remainingQuantity !== undefined 
+                                        ? it.remainingQuantity 
+                                        : Math.max(0, (it.quantity || 0) - (it.settledQuantity || 0) - (it.returnedQuantity || 0));
+                                      return sum + rem;
+                                    }, 0);
+
+                                    const isSettled = inv.consignmentStatus === 'settled' || (remainingQty <= 0 && inv.items?.length > 0);
+                                    const isPartiallySettled = inv.consignmentStatus === 'partially_settled' || (inv.items?.some((i: any) => (i.settledQuantity || 0) > 0 || (i.returnedQuantity || 0) > 0) && remainingQty > 0);
+
+                                    if (isSettled) {
+                                      return (
+                                        <span className="bg-emerald-100 text-emerald-900 text-[10px] font-black px-2 py-0.5 rounded-lg border border-emerald-300 inline-flex items-center gap-1 shadow-2xs">
+                                          <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                          <span>تسویه / عودت کامل</span>
+                                        </span>
+                                      );
+                                    }
+                                    if (isPartiallySettled) {
+                                      return (
+                                        <span className="bg-blue-100 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-lg border border-blue-300 inline-flex items-center gap-1 shadow-2xs">
+                                          <ArrowRightLeft className="w-3 h-3 text-blue-600" />
+                                          <span>تسویه جزیی</span>
+                                        </span>
+                                      );
+                                    }
+                                    return (
+                                      <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-lg border border-amber-300 inline-flex items-center gap-1 shadow-2xs">
+                                        <ShieldCheck className="w-3 h-3 text-amber-600" />
+                                        <span>امانت فعال</span>
+                                      </span>
+                                    );
+                                  })()}
+                                </td>
+
+                                {/* Consignment Col 7: Actions */}
+                                <td className="py-2.5 px-2 text-center print:hidden">
+                                  <div className="flex items-center justify-center gap-1">
+                                    <button
+                                      type="button"
+                                      onClick={() => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'convert' })}
+                                      className="p-1.5 text-emerald-600 hover:text-emerald-700 bg-emerald-50 hover:bg-emerald-100 rounded-lg transition-colors cursor-pointer"
+                                      title="تبدیل به فاکتور قطعی"
+                                    >
+                                      <ArrowRightLeft className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'return' })}
+                                      className="p-1.5 text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer"
+                                      title="ثبت عودت کالای امانی"
+                                    >
+                                      <RotateCcw className="w-4 h-4" />
+                                    </button>
+                                    <button
+                                      type="button"
+                                      onClick={() => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'receipt' })}
+                                      className="p-1.5 text-amber-600 hover:text-amber-700 bg-amber-50 hover:bg-amber-100 rounded-lg transition-colors cursor-pointer"
+                                      title="چاپ رسید رسمی امانت‌داری"
+                                    >
+                                      <Printer className="w-4 h-4" />
+                                    </button>
                                   </div>
                                 </td>
                               </>
@@ -1928,6 +2241,21 @@ export default function InvoicesList(props: any) {
                                   onVoid={!isVoided && handleVoidInvoice ? () => handleVoidInvoice(inv.id) : undefined}
                                   onDelete={!isVoided && handleDeleteInvoice ? () => handleDeleteInvoice(inv.id) : undefined}
                                   onQueueSms={() => setQueueSmsInvoice(inv)}
+                                  onConvertConsignmentToFinal={
+                                    (inv.type === "consignment_out" || inv.type === "consignment_in") && inv.consignmentStatus !== "settled"
+                                      ? () => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'convert' })
+                                      : undefined
+                                  }
+                                  onReturnConsignmentGoods={
+                                    (inv.type === "consignment_out" || inv.type === "consignment_in") && inv.consignmentStatus !== "settled"
+                                      ? () => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'return' })
+                                      : undefined
+                                  }
+                                  onPrintConsignmentReceipt={
+                                    (inv.type === "consignment_out" || inv.type === "consignment_in")
+                                      ? () => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'receipt' })
+                                      : undefined
+                                  }
                                 />
                               </div>
                             </td>
@@ -2096,6 +2424,18 @@ export default function InvoicesList(props: any) {
                                   پیش‌فاکتور
                                 </span>
                               )}
+                              {inv.type === 'consignment_out' && (
+                                <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-300 flex items-center gap-1">
+                                  <ShieldCheck className="w-3 h-3 text-amber-700" />
+                                  <span>امانت پرداختی</span>
+                                </span>
+                              )}
+                              {inv.type === 'consignment_in' && (
+                                <span className="bg-teal-100 text-teal-900 text-[10px] font-black px-1.5 py-0.5 rounded border border-teal-300 flex items-center gap-1">
+                                  <ShieldCheck className="w-3 h-3 text-teal-700" />
+                                  <span>امانت دریافتی</span>
+                                </span>
+                              )}
                               {isRemittance && (
                                 <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-1.5 py-0.5 rounded border border-amber-300 flex items-center gap-1">
                                   <Truck className="w-3 h-3 text-amber-700" />
@@ -2211,6 +2551,21 @@ export default function InvoicesList(props: any) {
                               onVoid={!isVoided && handleVoidInvoice ? () => handleVoidInvoice(inv.id) : undefined}
                               onDelete={!isVoided && handleDeleteInvoice ? () => handleDeleteInvoice(inv.id) : undefined}
                               onQueueSms={() => setQueueSmsInvoice(inv)}
+                              onConvertConsignmentToFinal={
+                                (inv.type === "consignment_out" || inv.type === "consignment_in") && inv.consignmentStatus !== "settled"
+                                  ? () => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'convert' })
+                                  : undefined
+                              }
+                              onReturnConsignmentGoods={
+                                (inv.type === "consignment_out" || inv.type === "consignment_in") && inv.consignmentStatus !== "settled"
+                                  ? () => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'return' })
+                                  : undefined
+                              }
+                              onPrintConsignmentReceipt={
+                                (inv.type === "consignment_out" || inv.type === "consignment_in")
+                                  ? () => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'receipt' })
+                                  : undefined
+                              }
                             />
                           </div>
                         </div>
@@ -2305,6 +2660,64 @@ export default function InvoicesList(props: any) {
                               </span>
                             )}
                           </div>
+                        </div>
+                      ) : isConsignmentTab ? (
+                        <div className="pt-3 border-t border-slate-100 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <span className="text-xs font-bold text-slate-500">ارزش تقویمی کل:</span>
+                            <span className="font-mono font-black text-sm text-slate-900">
+                              {toPersianDigits(formatCurrency(inv.totalAmount || inv.grandTotal || 0))} <span className="text-[10px] text-slate-500 font-normal">{currency}</span>
+                            </span>
+                          </div>
+
+                          {(() => {
+                            const remainingQty = (inv.items || []).reduce((sum: number, it: any) => {
+                              const rem = it.remainingQuantity !== undefined 
+                                ? it.remainingQuantity 
+                                : Math.max(0, (it.quantity || 0) - (it.settledQuantity || 0) - (it.returnedQuantity || 0));
+                              return sum + rem;
+                            }, 0);
+
+                            const isSettled = inv.consignmentStatus === 'settled' || (remainingQty <= 0 && inv.items?.length > 0);
+                            const isPartiallySettled = inv.consignmentStatus === 'partially_settled' || (inv.items?.some((i: any) => (i.settledQuantity || 0) > 0 || (i.returnedQuantity || 0) > 0) && remainingQty > 0);
+
+                            return (
+                              <>
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-400 font-bold">وضعیت تسویه امانت:</span>
+                                  {isSettled ? (
+                                    <span className="bg-emerald-100 text-emerald-900 text-[10px] font-black px-2 py-0.5 rounded-md border border-emerald-300 inline-flex items-center gap-1">
+                                      <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                                      <span>تسویه / عودت کامل</span>
+                                    </span>
+                                  ) : isPartiallySettled ? (
+                                    <span className="bg-blue-100 text-blue-900 text-[10px] font-black px-2 py-0.5 rounded-md border border-blue-300 inline-flex items-center gap-1">
+                                      <ArrowRightLeft className="w-3 h-3 text-blue-600" />
+                                      <span>تسویه جزئی</span>
+                                    </span>
+                                  ) : (
+                                    <span className="bg-amber-100 text-amber-900 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-300 inline-flex items-center gap-1">
+                                      <ShieldCheck className="w-3 h-3 text-amber-600" />
+                                      <span>امانت فعال</span>
+                                    </span>
+                                  )}
+                                </div>
+
+                                <div className="flex items-center justify-between text-xs">
+                                  <span className="text-slate-400 font-bold">مانده اقلام فیزیکی:</span>
+                                  {remainingQty > 0 ? (
+                                    <span className="text-amber-800 bg-amber-50 text-[10px] font-black px-2 py-0.5 rounded-md border border-amber-200">
+                                      {toPersianDigits(remainingQty)} واحد باقی‌مانده
+                                    </span>
+                                  ) : (
+                                    <span className="text-slate-500 bg-slate-50 text-[10px] font-bold px-2 py-0.5 rounded-md border border-slate-200">
+                                      فاقد مانده
+                                    </span>
+                                  )}
+                                </div>
+                              </>
+                            );
+                          })()}
                         </div>
                       ) : (
                         <div className="pt-3 border-t border-slate-100 space-y-2">
@@ -2603,6 +3016,23 @@ export default function InvoicesList(props: any) {
             }
           }}
           onNavigateToSmsManager={setActiveTab ? () => setActiveTab('messaging') : undefined}
+        />
+      )}
+
+      {/* Consignment Conversion / Return / Receipt Modal */}
+      {consignmentModalState.isOpen && consignmentModalState.invoice && (
+        <ConsignmentConversionModal
+          isOpen={consignmentModalState.isOpen}
+          onClose={() => setConsignmentModalState({ isOpen: false, invoice: null, mode: 'convert' })}
+          consignmentInvoice={consignmentModalState.invoice}
+          mode={consignmentModalState.mode}
+          onSuccess={() => {
+            if (typeof fetchInvoices === 'function') {
+              fetchInvoices();
+            }
+          }}
+          warehouses={warehouses}
+          products={products}
         />
       )}
     </div>

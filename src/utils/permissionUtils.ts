@@ -38,6 +38,8 @@ export const PERMISSION_MODULES: PermissionModule[] = [
       { id: 'list_sale', label: 'فهرست فاکتورهای فروش', defaultRoles: ['admin', 'manager', 'cashier', 'accountant', 'viewer'] },
       { id: 'create_sale_return', label: 'ثبت برگشت از فروش', defaultRoles: ['admin', 'manager', 'cashier', 'accountant'] },
       { id: 'list_sale_return', label: 'فهرست برگشتی‌های فروش', defaultRoles: ['admin', 'manager', 'cashier', 'accountant'] },
+      { id: 'create_consignment', label: 'ثبت فاکتور امانی کالا (پرداختی/دریافتی)', defaultRoles: ['admin', 'manager', 'cashier', 'accountant'] },
+      { id: 'list_consignment', label: 'فهرست فاکتورهای امانی کالا', defaultRoles: ['admin', 'manager', 'cashier', 'accountant', 'viewer'] },
       { id: 'sales_report', label: 'گزارش سود و زیان و فروش', defaultRoles: ['admin', 'manager', 'accountant'] },
       { id: 'analytical_dashboard', label: 'داشبورد تحلیلی فروش', defaultRoles: ['admin', 'manager', 'accountant'] },
     ]
