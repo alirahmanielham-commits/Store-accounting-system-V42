@@ -245,6 +245,8 @@ export type InvoiceItem = {
   unitPrice: number; // this will be price per selected unit
   discountPercent: number;
   totalPrice: number;
+  lineTotal?: number;
+  description?: string;
   selectedUnit?: string;
   unitRatio?: number;
   unitRatioDirection?: 'main_to_secondary' | 'secondary_to_main';
@@ -287,6 +289,10 @@ export type Invoice = {
   items: InvoiceItem[];
   overallDiscountPercent?: number;
   totalAmount: number;
+  subtotal?: number;
+  totalDiscount?: number;
+  totalTax?: number;
+  grandTotal?: number;
   paymentStatus?: 'paid' | 'partial' | 'unpaid';
   paidAmount?: number;
   consignmentStatus?: 'active' | 'partially_settled' | 'settled' | 'returned' | 'voided';

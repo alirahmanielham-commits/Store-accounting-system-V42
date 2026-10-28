@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo } from "react";
+import React, { useState, useEffect, useMemo, useRef } from "react";
 import { motion, AnimatePresence } from "motion/react";
 import {
   User, Search, Filter, Plus, GripHorizontal, List, Users, Edit2, FileText,
@@ -171,7 +171,22 @@ export default function PersonsManager(props: any) {
   });
   const [isBulkLoading, setIsBulkLoading] = useState(false);
   const [localSearchTerm, setLocalSearchTerm] = useState(personSearchTerm || "");
-  useEffect(() => { setLocalSearchTerm(personSearchTerm || ""); }, [personSearchTerm]);
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Keyboard shortcut to focus search with '/' or 'F2'
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if ((e.key === '/' || e.key === 'F2') && 
+          document.activeElement?.tagName !== 'INPUT' && 
+          document.activeElement?.tagName !== 'TEXTAREA') {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
+
   useEffect(() => {
     const timer = setTimeout(() => {
       if (localSearchTerm !== personSearchTerm) {
@@ -182,6 +197,56 @@ export default function PersonsManager(props: any) {
     return () => clearTimeout(timer);
   }, [localSearchTerm, personSearchTerm, setPersonSearchTerm, setPersonCurrentPage]);
   const [rowLoadingId, setRowLoadingId] = useState<string | null>(null);
+
+  const handleOpenNewPersonModal = (defaultRole: string = "customer") => {
+    setEditingPersonId(null);
+    setNewPersonType("real");
+    setNewPersonTitle("");
+    setNewPersonAlias("");
+    setNewPersonFirstName("");
+    setNewPersonLastName("");
+    setNewPersonCompanyName("");
+    setNewPersonFatherName("");
+    setNewPersonNationalId("");
+    setNewPersonAccountingCode("");
+    setNewPersonAddress("");
+    setNewPersonImage("");
+    setNewPersonPhone("");
+    setNewPersonContacts([]);
+    setNewPersonRole(defaultRole);
+    setNewPersonInitialBalance("");
+    setNewPersonInitialBalanceType("settled");
+    setNewPersonCreditLimit("");
+    setIsPersonModalOpen(true);
+  };
+
+  const handleKpiFilterClick = (type: 'all' | 'customer' | 'supplier' | 'active' | 'debtor' | 'creditor') => {
+    setPersonCurrentPage(1);
+    if (type === 'all') {
+      clearAllFilters();
+      return;
+    }
+    if (type === 'customer') {
+      setSelectedPersonRole((prev: string) => prev === 'customer' ? 'all' : 'customer');
+      return;
+    }
+    if (type === 'supplier') {
+      setSelectedPersonRole((prev: string) => prev === 'supplier' ? 'all' : 'supplier');
+      return;
+    }
+    if (type === 'active') {
+      setFilterActiveStatus((prev: string) => prev === 'active' ? 'all' : 'active');
+      return;
+    }
+    if (type === 'debtor') {
+      setFilterBalanceStatus((prev: string) => prev === 'debtor' ? 'all' : 'debtor');
+      return;
+    }
+    if (type === 'creditor') {
+      setFilterBalanceStatus((prev: string) => prev === 'creditor' ? 'all' : 'creditor');
+      return;
+    }
+  };
 
   useEffect(() => {
     const handleResize = () => setIsMobile(window.innerWidth < 768);
@@ -331,26 +396,47 @@ export default function PersonsManager(props: any) {
     let customers = 0;
     let suppliers = 0;
     let active = 0;
+    let inactive = 0;
     let totalDebtors = 0;
     let totalCreditors = 0;
+    let debtorsCount = 0;
+    let creditorsCount = 0;
     
-    processedPersons.forEach((p: any) => {
+    (filteredPersons || []).forEach((p: any) => {
+      const balResult = calculatePersonBalance(p.id);
+      let b = balResult.amount;
+      if (balResult.status === "بستانکار") b = -Math.abs(b);
+      else if (balResult.status === "بدهکار") b = Math.abs(b);
+      else b = 0;
+
       if (p.role === 'customer') customers++;
       if (p.role === 'supplier') suppliers++;
-      if (p.isActive !== false) active++;
-      if (p.calculatedBalance > 0) totalDebtors += p.calculatedBalance;
-      if (p.calculatedBalance < 0) totalCreditors += Math.abs(p.calculatedBalance);
+      if (p.isActive === false) inactive++;
+      else active++;
+
+      if (b > 0) {
+        totalDebtors += b;
+        debtorsCount++;
+      } else if (b < 0) {
+        totalCreditors += Math.abs(b);
+        creditorsCount++;
+      }
     });
 
     return {
-      total: processedPersons.length,
+      total: (filteredPersons || []).length,
       customers,
       suppliers,
       active,
+      inactive,
+      debtorsCount,
+      creditorsCount,
       totalDebtors,
-      totalCreditors
+      totalCreditors,
+      netBalance: totalDebtors - totalCreditors
     };
-  }, [processedPersons]);
+  }, [filteredPersons, calculatePersonBalance]);
+
 
   const effectiveViewMode = isMobile ? "list" : personsViewMode;
 
@@ -581,115 +667,247 @@ export default function PersonsManager(props: any) {
         )}
       </AnimatePresence>
 
-      {/* Header */}
-      <div className="hidden md:block bg-white px-4 sm:px-6 md:px-8 py-4 sm:py-5 border-b border-slate-200 sticky top-0 z-30 shadow-sm">
-        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+      {/* Executive Header (Non-sticky, scrolls smoothly with document) */}
+      <div className="bg-white px-4 sm:px-6 md:px-8 py-5 border-b border-slate-200 relative">
+        <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-4">
           <div>
-            <h1 className="text-xl font-black text-slate-800 flex items-center gap-2">
-              <Users className="w-6 h-6 text-indigo-600" />
-              اشخاص و طرف‌حساب‌ها
-            </h1>
-            <p className="text-xs text-slate-500 font-semibold mt-1">
-              مدیریت جامع مشتریان، تامین‌کنندگان، پرسنل و سایر طرف‌حساب‌های سازمان
-            </p>
+            <div className="flex items-center gap-2.5">
+              <div className="w-10 h-10 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600 shadow-2xs">
+                <Users className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-lg sm:text-xl font-black text-slate-800">
+                    اشخاص و طرف‌حساب‌ها
+                  </h1>
+                  <span className="text-xs font-black px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-700 border border-indigo-100/80 font-sans">
+                    {toPersianDigits(kpis.total)} طرف‌حساب
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 font-semibold mt-0.5">
+                  مدیریت جامع مشتریان، تامین‌کنندگان، متخصصین فنی، ترازهای مالی و اطلاعات تماس
+                </p>
+              </div>
+            </div>
           </div>
-          <div className="flex flex-wrap items-center gap-2">
+
+          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto justify-end">
             <button
-              onClick={handleGenerateMissingAccountingCodes}
-              disabled={isGeneratingCodes}
-              className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 bg-white rounded-lg flex items-center gap-1.5 transition-all text-xs font-bold disabled:opacity-50"
-              title="تخصیص کد حسابداری"
+              onClick={() => handleOpenNewPersonModal("customer")}
+              className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-1.5 transition-all text-xs font-black shadow-sm cursor-pointer hover:shadow-indigo-500/20"
             >
-              <Key className={`w-4 h-4 ${isGeneratingCodes ? 'text-indigo-500 animate-spin' : 'text-slate-500'}`} />
-              کدگذاری
+              <Plus className="w-4 h-4" strokeWidth={2.5} />
+              <span>شخص جدید</span>
             </button>
-            <button
-              onClick={handleExportPersonsExcel}
-              className="px-3 py-2 border border-emerald-300 hover:bg-emerald-50 text-emerald-700 bg-white rounded-lg flex items-center gap-1.5 transition-all text-xs font-bold cursor-pointer shadow-2xs"
-              title="خروجی مستقیم اکسل از جدول فعلی اشخاص با رعایت فرمت اعشار"
-            >
-              <Download className="w-4 h-4 text-emerald-600" />
-              خروجی اکسل (.xlsx)
-            </button>
+
             <button
               onClick={() => setActiveTab?.("specialists_directory")}
-              className="px-3.5 py-2 border border-amber-300 hover:bg-amber-100/70 text-amber-900 bg-amber-50/80 rounded-lg flex items-center gap-1.5 transition-all text-xs font-black shadow-2xs cursor-pointer"
+              className="px-3.5 py-2.5 border border-amber-300 hover:bg-amber-100/80 text-amber-900 bg-amber-50/90 rounded-xl flex items-center gap-1.5 transition-all text-xs font-black shadow-2xs cursor-pointer"
               title="مشاهده ویترین متخصصین و استادکاران فنی"
             >
               <Hammer className="w-4 h-4 text-amber-600" />
-              <span>ویترین متخصصین و استادکاران</span>
+              <span>ویترین متخصصین</span>
             </button>
+
+            <button
+              onClick={handleExportPersonsExcel}
+              className="px-3 py-2.5 border border-emerald-300 hover:bg-emerald-50 text-emerald-700 bg-white rounded-xl flex items-center gap-1.5 transition-all text-xs font-bold cursor-pointer shadow-2xs"
+              title="خروجی مستقیم فایل اکسل از جدول فعلی اشخاص با فرمت استاندارد"
+            >
+              <Download className="w-4 h-4 text-emerald-600" />
+              <span>خروجی اکسل</span>
+            </button>
+
+            <button
+              onClick={handleGenerateMissingAccountingCodes}
+              disabled={isGeneratingCodes}
+              className="px-3 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 bg-white rounded-xl flex items-center gap-1.5 transition-all text-xs font-bold disabled:opacity-50 cursor-pointer shadow-2xs"
+              title="تخصیص خودکار کد حسابداری به اشخاص فاقد کد"
+            >
+              <Key className={`w-4 h-4 ${isGeneratingCodes ? 'text-indigo-500 animate-spin' : 'text-slate-500'}`} />
+              <span>کدگذاری</span>
+            </button>
+
             <button
               onClick={() => { setPersonIOAction("export"); setIsPersonIOModalOpen(true); }}
-              className="px-3 py-2 border border-slate-200 hover:bg-slate-50 text-slate-600 bg-white rounded-lg flex items-center gap-1.5 transition-all text-xs font-bold"
+              className="px-3 py-2.5 border border-slate-200 hover:bg-slate-50 text-slate-600 bg-white rounded-xl flex items-center gap-1.5 transition-all text-xs font-bold cursor-pointer shadow-2xs"
+              title="درون‌ریزی و برون‌ریزی گروهی فایل"
             >
-              <FileSpreadsheet className="w-4 h-4 text-emerald-600" />
-              درون‌ریزی / برون‌ریزی
-            </button>
-            <button
-              onClick={() => {
-                setEditingPersonId(null);
-                setNewPersonType("real");
-                setNewPersonTitle("");
-                setNewPersonAlias("");
-                setNewPersonFirstName("");
-                setNewPersonLastName("");
-                setNewPersonCompanyName("");
-                setNewPersonFatherName("");
-                setNewPersonNationalId("");
-                setNewPersonAccountingCode("");
-                setNewPersonAddress("");
-                setNewPersonImage("");
-                setNewPersonPhone("");
-                setNewPersonContacts([]);
-                setNewPersonRole("customer");
-                setNewPersonInitialBalance("");
-                setNewPersonInitialBalanceType("settled");
-                setNewPersonCreditLimit("");
-                setIsPersonModalOpen(true);
-              }}
-              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1.5 transition-all text-xs font-black shadow-sm"
-            >
-              <Plus className="w-4 h-4" strokeWidth={2.5} />
-              شخص جدید
+              <FileSpreadsheet className="w-4 h-4 text-slate-500" />
+              <span>درون‌ریزی / برون‌ریزی</span>
             </button>
           </div>
         </div>
 
-        {/* KPIs */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 mt-6">
-          <div className="bg-slate-50 border border-slate-100 rounded-xl p-3 flex flex-col justify-center">
-            <span className="text-[10px] font-black text-slate-500 mb-1 flex items-center gap-1"><Users className="w-3 h-3"/> کل اشخاص</span>
-            <span className="text-lg font-black text-slate-800 font-sans">{toPersianDigits(kpis.total)}</span>
+        {/* Interactive KPI Metrics Grid (1-click interactive filters) */}
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2.5 sm:gap-3 mt-5">
+          {/* Total Counterparties */}
+          <div 
+            onClick={() => handleKpiFilterClick('all')}
+            className={`border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all ${
+              selectedPersonRole === 'all' && filterBalanceStatus === 'all' && filterActiveStatus === 'all' && !filterSpecialistsOnly
+                ? 'bg-slate-900 text-white border-slate-900 shadow-sm'
+                : 'bg-white border-slate-200 hover:border-slate-300 hover:bg-slate-50/70'
+            }`}
+            title="کلیک برای نمایش همه طرف‌حساب‌ها"
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black flex items-center gap-1 ${
+                selectedPersonRole === 'all' && filterBalanceStatus === 'all' && filterActiveStatus === 'all' && !filterSpecialistsOnly ? 'text-slate-300' : 'text-slate-500'
+              }`}>
+                <Users className="w-3.5 h-3.5" /> کل اشخاص
+              </span>
+              <span className={`text-[9px] px-1.5 py-0.2 rounded font-black ${
+                selectedPersonRole === 'all' && filterBalanceStatus === 'all' && filterActiveStatus === 'all' && !filterSpecialistsOnly ? 'bg-slate-800 text-slate-200' : 'bg-slate-100 text-slate-500'
+              }`}>همه</span>
+            </div>
+            <div className="mt-2">
+              <div className="text-lg font-black font-sans leading-none">{toPersianDigits(kpis.total)}</div>
+              <div className={`text-[9px] font-bold mt-1 ${
+                selectedPersonRole === 'all' && filterBalanceStatus === 'all' && filterActiveStatus === 'all' && !filterSpecialistsOnly ? 'text-slate-400' : 'text-slate-400'
+              }`}>
+                {toPersianDigits(kpis.active)} فعال
+              </div>
+            </div>
           </div>
-          <div className="bg-blue-50/50 border border-blue-100 rounded-xl p-3 flex flex-col justify-center">
-            <span className="text-[10px] font-black text-blue-600 mb-1 flex items-center gap-1"><ShoppingCart className="w-3 h-3"/> مشتریان</span>
-            <span className="text-lg font-black text-blue-800 font-sans">{toPersianDigits(kpis.customers)}</span>
+
+          {/* Customers */}
+          <div 
+            onClick={() => handleKpiFilterClick('customer')}
+            className={`border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all ${
+              selectedPersonRole === 'customer'
+                ? 'bg-blue-600 text-white border-blue-600 shadow-sm ring-2 ring-blue-500/20'
+                : 'bg-blue-50/40 border-blue-100 hover:border-blue-200 hover:bg-blue-50/70 text-blue-900'
+            }`}
+            title="کلیک برای فیلتر مشتریان"
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black flex items-center gap-1 ${selectedPersonRole === 'customer' ? 'text-blue-100' : 'text-blue-600'}`}>
+                <ShoppingCart className="w-3.5 h-3.5" /> مشتریان
+              </span>
+              {selectedPersonRole === 'customer' && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-blue-700 text-white">فعال</span>
+              )}
+            </div>
+            <div className="mt-2">
+              <div className="text-lg font-black font-sans leading-none">{toPersianDigits(kpis.customers)}</div>
+              <div className={`text-[9px] font-bold mt-1 ${selectedPersonRole === 'customer' ? 'text-blue-100' : 'text-blue-500'}`}>
+                طرف‌حساب فروش
+              </div>
+            </div>
           </div>
-          <div className="bg-amber-50/50 border border-amber-100 rounded-xl p-3 flex flex-col justify-center">
-            <span className="text-[10px] font-black text-amber-600 mb-1 flex items-center gap-1"><Building className="w-3 h-3"/> تامین‌کنندگان</span>
-            <span className="text-lg font-black text-amber-800 font-sans">{toPersianDigits(kpis.suppliers)}</span>
+
+          {/* Suppliers */}
+          <div 
+            onClick={() => handleKpiFilterClick('supplier')}
+            className={`border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all ${
+              selectedPersonRole === 'supplier'
+                ? 'bg-amber-600 text-white border-amber-600 shadow-sm ring-2 ring-amber-500/20'
+                : 'bg-amber-50/40 border-amber-100 hover:border-amber-200 hover:bg-amber-50/70 text-amber-900'
+            }`}
+            title="کلیک برای فیلتر تامین‌کنندگان"
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black flex items-center gap-1 ${selectedPersonRole === 'supplier' ? 'text-amber-100' : 'text-amber-600'}`}>
+                <Building className="w-3.5 h-3.5" /> تامین‌کنندگان
+              </span>
+              {selectedPersonRole === 'supplier' && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-amber-700 text-white">فعال</span>
+              )}
+            </div>
+            <div className="mt-2">
+              <div className="text-lg font-black font-sans leading-none">{toPersianDigits(kpis.suppliers)}</div>
+              <div className={`text-[9px] font-bold mt-1 ${selectedPersonRole === 'supplier' ? 'text-amber-100' : 'text-amber-500'}`}>
+                طرف‌حساب خرید
+              </div>
+            </div>
           </div>
-          <div className="bg-emerald-50/50 border border-emerald-100 rounded-xl p-3 flex flex-col justify-center">
-            <span className="text-[10px] font-black text-emerald-600 mb-1 flex items-center gap-1"><CheckCircle className="w-3 h-3"/> فعال</span>
-            <span className="text-lg font-black text-emerald-800 font-sans">{toPersianDigits(kpis.active)}</span>
+
+          {/* Active Status */}
+          <div 
+            onClick={() => handleKpiFilterClick('active')}
+            className={`border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all ${
+              filterActiveStatus === 'active'
+                ? 'bg-emerald-600 text-white border-emerald-600 shadow-sm ring-2 ring-emerald-500/20'
+                : 'bg-emerald-50/40 border-emerald-100 hover:border-emerald-200 hover:bg-emerald-50/70 text-emerald-900'
+            }`}
+            title="کلیک برای فیلتر اشخاص فعال"
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black flex items-center gap-1 ${filterActiveStatus === 'active' ? 'text-emerald-100' : 'text-emerald-600'}`}>
+                <CheckCircle className="w-3.5 h-3.5" /> فعال
+              </span>
+              {filterActiveStatus === 'active' && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-emerald-700 text-white">فعال</span>
+              )}
+            </div>
+            <div className="mt-2">
+              <div className="text-lg font-black font-sans leading-none">{toPersianDigits(kpis.active)}</div>
+              <div className={`text-[9px] font-bold mt-1 ${filterActiveStatus === 'active' ? 'text-emerald-100' : 'text-emerald-500'}`}>
+                {toPersianDigits(kpis.inactive)} غیرفعال
+              </div>
+            </div>
           </div>
-          <div className="bg-rose-50 border border-rose-100 rounded-xl p-3 flex flex-col justify-center">
-            <span className="text-[10px] font-black text-rose-600 mb-1 flex items-center gap-1"><ArrowDownToLine className="w-3 h-3"/> مطالبات (بدهکاران)</span>
-            <span className="text-sm font-black text-rose-800 font-sans truncate" title={formatNumber(kpis.totalDebtors)}>
-              {kpis.totalDebtors === 0 ? "۰" : toPersianDigits(formatNumber(kpis.totalDebtors))}
-              <span className="text-[8px] mr-1">{storeSettings.currency}</span>
-            </span>
+
+          {/* Debtors (Claims) */}
+          <div 
+            onClick={() => handleKpiFilterClick('debtor')}
+            className={`border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all ${
+              filterBalanceStatus === 'debtor'
+                ? 'bg-rose-600 text-white border-rose-600 shadow-sm ring-2 ring-rose-500/20'
+                : 'bg-rose-50/40 border-rose-100 hover:border-rose-200 hover:bg-rose-50/70 text-rose-900'
+            }`}
+            title="کلیک برای فیلتر بدهکاران (مطالبات ما)"
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black flex items-center gap-1 ${filterBalanceStatus === 'debtor' ? 'text-rose-100' : 'text-rose-600'}`}>
+                <ArrowDownToLine className="w-3.5 h-3.5" /> مطالبات (بدهکار)
+              </span>
+              {filterBalanceStatus === 'debtor' && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-rose-700 text-white">فعال</span>
+              )}
+            </div>
+            <div className="mt-2">
+              <div className="text-sm font-black font-sans leading-none truncate" title={formatNumber(kpis.totalDebtors)}>
+                {kpis.totalDebtors === 0 ? "۰" : toPersianDigits(formatNumber(kpis.totalDebtors))}
+                <span className="text-[8px] mr-1 opacity-80">{storeSettings.currency}</span>
+              </div>
+              <div className={`text-[9px] font-bold mt-1 ${filterBalanceStatus === 'debtor' ? 'text-rose-100' : 'text-rose-500'}`}>
+                {toPersianDigits(kpis.debtorsCount)} طرف‌حساب
+              </div>
+            </div>
           </div>
-          <div className="bg-emerald-50 border border-emerald-100 rounded-xl p-3 flex flex-col justify-center">
-            <span className="text-[10px] font-black text-emerald-600 mb-1 flex items-center gap-1"><ArrowUpFromLine className="w-3 h-3"/> بدهی‌ها (بستانکاران)</span>
-            <span className="text-sm font-black text-emerald-800 font-sans truncate" title={formatNumber(kpis.totalCreditors)}>
-              {kpis.totalCreditors === 0 ? "۰" : toPersianDigits(formatNumber(kpis.totalCreditors))}
-              <span className="text-[8px] mr-1">{storeSettings.currency}</span>
-            </span>
+
+          {/* Creditors (Liabilities) */}
+          <div 
+            onClick={() => handleKpiFilterClick('creditor')}
+            className={`border rounded-xl p-3 flex flex-col justify-between cursor-pointer transition-all ${
+              filterBalanceStatus === 'creditor'
+                ? 'bg-teal-700 text-white border-teal-700 shadow-sm ring-2 ring-teal-500/20'
+                : 'bg-teal-50/40 border-teal-100 hover:border-teal-200 hover:bg-teal-50/70 text-teal-900'
+            }`}
+            title="کلیک برای فیلتر بستانکاران (بدهی‌های ما)"
+          >
+            <div className="flex items-center justify-between">
+              <span className={`text-[10px] font-black flex items-center gap-1 ${filterBalanceStatus === 'creditor' ? 'text-teal-100' : 'text-teal-700'}`}>
+                <ArrowUpFromLine className="w-3.5 h-3.5" /> بدهی‌ها (بستانکار)
+              </span>
+              {filterBalanceStatus === 'creditor' && (
+                <span className="text-[9px] font-black px-1.5 py-0.2 rounded bg-teal-800 text-white">فعال</span>
+              )}
+            </div>
+            <div className="mt-2">
+              <div className="text-sm font-black font-sans leading-none truncate" title={formatNumber(kpis.totalCreditors)}>
+                {kpis.totalCreditors === 0 ? "۰" : toPersianDigits(formatNumber(kpis.totalCreditors))}
+                <span className="text-[8px] mr-1 opacity-80">{storeSettings.currency}</span>
+              </div>
+              <div className={`text-[9px] font-bold mt-1 ${filterBalanceStatus === 'creditor' ? 'text-teal-100' : 'text-teal-600'}`}>
+                {toPersianDigits(kpis.creditorsCount)} طرف‌حساب
+              </div>
+            </div>
           </div>
         </div>
-        
+
         {successMsg && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} className="mt-4">
             <div className="bg-emerald-50 text-emerald-700 px-4 py-3 rounded-xl flex items-center gap-2 border border-emerald-100 shadow-sm text-xs font-bold">
@@ -700,86 +918,122 @@ export default function PersonsManager(props: any) {
         )}
       </div>
 
-      {/* Toolbar & Filters */}
-      <div className="px-4 sm:px-6 md:px-8 py-3 sm:py-4 bg-white/50 border-b border-slate-200">
+      {/* Unified SaaS Command Bar & Filter Toolbar (Non-sticky, smooth scrolling) */}
+      <div className="px-4 sm:px-6 md:px-8 py-3 bg-white/70 border-b border-slate-200/80">
         <div className="flex flex-col xl:flex-row gap-3 xl:items-center justify-between">
+          
+          {/* Quick Search with shortcut hint */}
           <div className="relative w-full xl:max-w-md">
-            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none">
-              <Search className="w-4 h-4 text-slate-400" />
+            <div className="absolute inset-y-0 right-0 flex items-center pr-3 pointer-events-none text-slate-400">
+              <Search className="w-4 h-4" />
             </div>
             <input
+              ref={searchInputRef}
               type="text"
-              className="w-full pl-3 pr-9 py-2 rounded-lg border border-slate-200 bg-white hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all text-sm font-bold outline-none"
-              placeholder="جستجو: نام، موبایل، کدملی، شناسه..."
+              className="w-full pl-16 pr-9 py-2.5 rounded-xl border border-slate-200 bg-white hover:border-indigo-300 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 transition-all text-xs sm:text-sm font-bold outline-none placeholder:text-slate-400"
+              placeholder="جستجو نام، موبایل، کدملی، کد حسابداری..."
               value={localSearchTerm}
               onChange={(e) => setLocalSearchTerm(e.target.value)}
             />
+            {localSearchTerm ? (
+              <button
+                onClick={() => setLocalSearchTerm('')}
+                className="absolute inset-y-0 left-0 pl-3 flex items-center text-slate-400 hover:text-slate-600 cursor-pointer"
+                title="پاک کردن جستجو"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            ) : (
+              <div className="absolute inset-y-0 left-0 pl-2.5 flex items-center pointer-events-none">
+                <kbd className="hidden sm:inline-block text-[10px] font-mono font-semibold bg-slate-100 text-slate-400 border border-slate-200 px-1.5 py-0.5 rounded">
+                  /
+                </kbd>
+              </div>
+            )}
           </div>
-          
+
+          {/* Quick Segmented Tabs & Filters */}
           <div className="flex flex-wrap items-center gap-2">
+            
+            {/* Quick Role Segmented Bar */}
+            <div className="inline-flex items-center bg-slate-100/90 p-1 rounded-xl border border-slate-200 text-xs font-bold">
+              <button
+                onClick={() => { setSelectedPersonRole('all'); setFilterSpecialistsOnly(false); setPersonCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  selectedPersonRole === 'all' && !filterSpecialistsOnly
+                    ? 'bg-white text-indigo-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                همه
+              </button>
+              <button
+                onClick={() => { setSelectedPersonRole('customer'); setFilterSpecialistsOnly(false); setPersonCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  selectedPersonRole === 'customer'
+                    ? 'bg-white text-blue-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                مشتریان
+              </button>
+              <button
+                onClick={() => { setSelectedPersonRole('supplier'); setFilterSpecialistsOnly(false); setPersonCurrentPage(1); }}
+                className={`px-3 py-1.5 rounded-lg transition-all cursor-pointer ${
+                  selectedPersonRole === 'supplier'
+                    ? 'bg-white text-amber-700 shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-slate-900'
+                }`}
+              >
+                تامین‌کنندگان
+              </button>
+              <button
+                onClick={() => {
+                  setFilterSpecialistsOnly(!filterSpecialistsOnly);
+                  if (!filterSpecialistsOnly) setSelectedPersonRole('all');
+                  setPersonCurrentPage(1);
+                }}
+                className={`px-3 py-1.5 rounded-lg transition-all flex items-center gap-1 cursor-pointer ${
+                  filterSpecialistsOnly
+                    ? 'bg-amber-500 text-white shadow-2xs font-black'
+                    : 'text-slate-600 hover:text-amber-800'
+                }`}
+              >
+                <Hammer className="w-3 h-3" />
+                <span>متخصصین</span>
+              </button>
+            </div>
+
+            {/* Advanced Filters Button */}
             <button
               onClick={() => setIsFilterOpen(!isFilterOpen)}
-              className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-colors ${isFilterOpen ? 'bg-indigo-50 border-indigo-200 text-indigo-700' : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'}`}
-            >
-              <Filter className="w-4 h-4" />
-              فیلترهای پیشرفته
-            </button>
-            <button
-              type="button"
-              onClick={() => {
-                setFilterSpecialistsOnly(!filterSpecialistsOnly);
-                setPersonCurrentPage(1);
-              }}
-              className={`px-3 py-2 rounded-lg border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
-                filterSpecialistsOnly
-                  ? 'bg-amber-500 text-white border-amber-600 shadow-xs'
-                  : 'bg-white border-slate-200 text-slate-700 hover:bg-amber-50 hover:text-amber-800'
+              className={`px-3.5 py-2 rounded-xl border text-xs font-bold flex items-center gap-1.5 transition-all cursor-pointer ${
+                isFilterOpen || activeFilters.length > 0
+                  ? 'bg-indigo-50 border-indigo-200 text-indigo-700 font-black shadow-2xs'
+                  : 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
               }`}
-              title="نمایش فقط اشخاص دارای تخصص و مهارت فنی"
             >
-              <Hammer className={`w-3.5 h-3.5 ${filterSpecialistsOnly ? 'text-white' : 'text-amber-500'}`} />
-              <span>فقط متخصصین فنی</span>
+              <Filter className="w-3.5 h-3.5" />
+              <span>فیلتر پیشرفته</span>
+              {activeFilters.length > 0 && (
+                <span className="w-5 h-5 rounded-full bg-indigo-600 text-white text-[10px] flex items-center justify-center font-sans">
+                  {toPersianDigits(activeFilters.length)}
+                </span>
+              )}
             </button>
-            <button
-              type="button"
-              onClick={() => {
-                setEditingPersonId(null);
-                setNewPersonType("real");
-                setNewPersonTitle("");
-                setNewPersonAlias("");
-                setNewPersonFirstName("");
-                setNewPersonLastName("");
-                setNewPersonCompanyName("");
-                setNewPersonFatherName("");
-                setNewPersonNationalId("");
-                setNewPersonAccountingCode("");
-                setNewPersonAddress("");
-                setNewPersonImage("");
-                setNewPersonPhone("");
-                setNewPersonContacts([]);
-                setNewPersonRole("customer");
-                setNewPersonInitialBalance("");
-                setNewPersonInitialBalanceType("settled");
-                setNewPersonCreditLimit("");
-                setIsPersonModalOpen(true);
-              }}
-              className="md:hidden px-3 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-lg flex items-center gap-1.5 text-xs font-black shadow-xs mr-auto"
-            >
-              <Plus className="w-4 h-4" strokeWidth={2.5} />
-              شخص جدید
-            </button>
-            <div className="h-6 w-px bg-slate-200 hidden md:block"></div>
-            <div className="hidden md:flex bg-slate-100 p-1 rounded-lg border border-slate-200">
+
+            {/* View Mode Switcher */}
+            <div className="hidden md:flex bg-slate-100 p-1 rounded-xl border border-slate-200">
               <button
                 onClick={() => setPersonsViewMode("table")}
-                className={`p-1.5 rounded transition-all ${effectiveViewMode === "table" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${effectiveViewMode === "table" ? "bg-white text-indigo-700 shadow-2xs" : "text-slate-500 hover:text-slate-700"}`}
                 title="نمایش جدولی"
               >
                 <TableIcon className="w-4 h-4" />
               </button>
               <button
                 onClick={() => setPersonsViewMode("list")}
-                className={`p-1.5 rounded transition-all ${effectiveViewMode === "list" ? "bg-white text-indigo-700 shadow-sm" : "text-slate-500 hover:text-slate-700"}`}
+                className={`p-1.5 rounded-lg transition-all cursor-pointer ${effectiveViewMode === "list" ? "bg-white text-indigo-700 shadow-2xs" : "text-slate-500 hover:text-slate-700"}`}
                 title="نمایش کارتی"
               >
                 <LayoutGrid className="w-4 h-4" />
@@ -831,15 +1085,15 @@ export default function PersonsManager(props: any) {
 
         {/* Active Filter Chips */}
         {activeFilters.length > 0 && (
-          <div className="flex flex-wrap items-center gap-2 mt-4 pt-3 border-t border-slate-100">
+          <div className="flex flex-wrap items-center gap-2 mt-3 pt-2.5 border-t border-slate-100">
             <span className="text-[10px] font-black text-slate-400 flex items-center gap-1"><Filter className="w-3 h-3" /> فیلترهای فعال:</span>
             {activeFilters.map(f => (
-              <span key={f.id} className="bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-1 rounded-md text-[10px] font-bold flex items-center gap-1.5">
+              <span key={f.id} className="bg-indigo-50 text-indigo-700 border border-indigo-100 px-2.5 py-1 rounded-lg text-[10px] font-bold flex items-center gap-1.5 shadow-2xs">
                 {f.label}
-                <button onClick={f.onRemove} className="hover:bg-indigo-200 p-0.5 rounded-full transition-colors"><X className="w-3 h-3" /></button>
+                <button onClick={f.onRemove} className="hover:bg-indigo-200 p-0.5 rounded-full transition-colors cursor-pointer"><X className="w-3 h-3" /></button>
               </span>
             ))}
-            <button onClick={clearAllFilters} className="text-[10px] font-bold text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-md transition-colors mr-auto">
+            <button onClick={clearAllFilters} className="text-[10px] font-bold text-rose-500 hover:bg-rose-50 px-2 py-1 rounded-md transition-colors mr-auto cursor-pointer">
               حذف همه فیلترها
             </button>
           </div>
@@ -854,14 +1108,14 @@ export default function PersonsManager(props: any) {
               exit={{ height: 0, opacity: 0 }}
               className="overflow-hidden mt-3"
             >
-              <div className="bg-slate-50 border border-slate-200 p-4 rounded-xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+              <div className="bg-slate-50/90 border border-slate-200 p-4 rounded-2xl grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3.5">
                 
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1">نقش شخص</label>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1">نقش طرف‌حساب</label>
                   <select 
                     value={selectedPersonRole} 
                     onChange={e => { setSelectedPersonRole(e.target.value); setPersonCurrentPage(1); }}
-                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500"
+                    className="w-full text-xs font-bold border border-slate-200 rounded-xl py-2 px-2.5 outline-none focus:border-indigo-500 bg-white shadow-2xs"
                   >
                     <option value="all">همه نقش‌ها</option>
                     {(personRoles || []).map((r: any) => <option key={r.id} value={r.id}>{r.name}</option>)}
@@ -873,7 +1127,7 @@ export default function PersonsManager(props: any) {
                   <select 
                     value={selectedPersonGroup} 
                     onChange={e => { setSelectedPersonGroup(e.target.value); setPersonCurrentPage(1); }}
-                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500"
+                    className="w-full text-xs font-bold border border-slate-200 rounded-xl py-2 px-2.5 outline-none focus:border-indigo-500 bg-white shadow-2xs"
                   >
                     <option value="all">همه گروه‌ها</option>
                     <option value="none">بدون گروه</option>
@@ -882,17 +1136,17 @@ export default function PersonsManager(props: any) {
                 </div>
 
                 <div>
-                  <label className="block text-[10px] font-black text-slate-500 mb-1">وضعیت حساب</label>
+                  <label className="block text-[10px] font-black text-slate-500 mb-1">وضعیت مانده حساب</label>
                   <select 
                     value={filterBalanceStatus} 
                     onChange={e => { setFilterBalanceStatus(e.target.value); setPersonCurrentPage(1); }}
-                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500"
+                    className="w-full text-xs font-bold border border-slate-200 rounded-xl py-2 px-2.5 outline-none focus:border-indigo-500 bg-white shadow-2xs"
                   >
                     <option value="all">همه موارد</option>
                     <option value="has_balance">دارای مانده (بدهکار/بستانکار)</option>
-                    <option value="debtor">بدهکاران</option>
-                    <option value="creditor">بستانکاران</option>
-                    <option value="settled">بی‌حساب (تسویه)</option>
+                    <option value="debtor">بدهکاران (طلب ما)</option>
+                    <option value="creditor">بستانکاران (بدهی ما)</option>
+                    <option value="settled">بی‌حساب (تسویه شده)</option>
                   </select>
                 </div>
 
@@ -901,10 +1155,10 @@ export default function PersonsManager(props: any) {
                   <select 
                     value={filterActiveStatus} 
                     onChange={e => { setFilterActiveStatus(e.target.value); setPersonCurrentPage(1); }}
-                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500"
+                    className="w-full text-xs font-bold border border-slate-200 rounded-xl py-2 px-2.5 outline-none focus:border-indigo-500 bg-white shadow-2xs"
                   >
                     <option value="all">همه موارد</option>
-                    <option value="active">فعال</option>
+                    <option value="active">فقط اشخاص فعال</option>
                     <option value="inactive">مسدود / غیرفعال</option>
                   </select>
                 </div>
@@ -914,11 +1168,11 @@ export default function PersonsManager(props: any) {
                   <select 
                     value={filterPersonType} 
                     onChange={e => { setFilterPersonType(e.target.value); setPersonCurrentPage(1); }}
-                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500"
+                    className="w-full text-xs font-bold border border-slate-200 rounded-xl py-2 px-2.5 outline-none focus:border-indigo-500 bg-white shadow-2xs"
                   >
                     <option value="all">همه موارد</option>
-                    <option value="real">حقیقی</option>
-                    <option value="legal">حقوقی (شرکت)</option>
+                    <option value="real">شخص حقیقی</option>
+                    <option value="legal">شخص حقوقی (شرکت)</option>
                   </select>
                 </div>
 
@@ -927,7 +1181,7 @@ export default function PersonsManager(props: any) {
                   <select 
                     value={filterProvince} 
                     onChange={e => { setFilterProvince(e.target.value); setFilterCity('all'); setPersonCurrentPage(1); }}
-                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500"
+                    className="w-full text-xs font-bold border border-slate-200 rounded-xl py-2 px-2.5 outline-none focus:border-indigo-500 bg-white shadow-2xs"
                   >
                     <option value="all">همه استان‌ها</option>
                     {availableProvinces.map(prov => <option key={prov} value={prov}>{prov}</option>)}
@@ -939,7 +1193,7 @@ export default function PersonsManager(props: any) {
                   <select 
                     value={filterCity} 
                     onChange={e => { setFilterCity(e.target.value); setPersonCurrentPage(1); }}
-                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500"
+                    className="w-full text-xs font-bold border border-slate-200 rounded-xl py-2 px-2.5 outline-none focus:border-indigo-500 bg-white shadow-2xs"
                     disabled={availableCities.length === 0}
                   >
                     <option value="all">همه شهرها</option>
@@ -955,7 +1209,7 @@ export default function PersonsManager(props: any) {
                   <select 
                     value={filterTag} 
                     onChange={e => { setFilterTag(e.target.value); setPersonCurrentPage(1); }}
-                    className="w-full text-xs font-bold border border-slate-200 rounded-lg py-1.5 px-2 outline-none focus:border-indigo-500 bg-white"
+                    className="w-full text-xs font-bold border border-slate-200 rounded-xl py-2 px-2.5 outline-none focus:border-indigo-500 bg-white shadow-2xs"
                   >
                     <option value="all">همه برچسب‌ها</option>
                     {availableTags.map(tag => (
@@ -970,29 +1224,60 @@ export default function PersonsManager(props: any) {
         </AnimatePresence>
       </div>
 
-      {/* Main Content */}
+      {/* Main Content Area */}
       <div className="px-4 sm:px-6 md:px-8 py-4 sm:py-6 flex-1 overflow-x-hidden">
         
-        {/* Bulk Actions Bar */}
+        {/* Floating Bulk Action Dock (Non-intrusive, appears at screen bottom) */}
         <AnimatePresence>
           {selectedIds.length > 0 && (
-            <motion.div initial={{ y: -20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: -20, opacity: 0 }} className="bg-indigo-900 text-white p-3 rounded-xl mb-4 flex items-center justify-between shadow-lg sticky top-0 z-20">
-              <span className="text-sm font-black flex items-center gap-2">
-                <CheckSquare className="w-5 h-5 text-indigo-300" />
-                {toPersianDigits(selectedIds.length)} رکورد انتخاب شده
-              </span>
+            <motion.div
+              initial={{ y: 50, opacity: 0 }}
+              animate={{ y: 0, opacity: 1 }}
+              exit={{ y: 50, opacity: 0 }}
+              className="fixed bottom-6 inset-x-4 sm:inset-x-auto sm:left-1/2 sm:-translate-x-1/2 max-w-2xl bg-slate-900/95 text-white backdrop-blur-md px-4 py-3 rounded-2xl shadow-2xl z-40 border border-slate-700/60 flex flex-wrap items-center justify-between gap-3"
+            >
               <div className="flex items-center gap-2">
-                <button onClick={handleBulkExport} className="text-xs font-bold px-3 py-2 bg-indigo-800 hover:bg-indigo-700 rounded-lg transition-colors flex items-center gap-1.5">
-                  <Download className="w-4 h-4" /> خروجی اکسل
+                <span className="w-2 h-2 rounded-full bg-indigo-400 animate-pulse"></span>
+                <span className="text-xs font-black flex items-center gap-1.5">
+                  <CheckSquare className="w-4 h-4 text-indigo-400" />
+                  {toPersianDigits(selectedIds.length)} رکورد انتخاب شده
+                </span>
+                <button
+                  onClick={() => setSelectedIds([])}
+                  className="text-[10px] text-slate-400 hover:text-white underline mr-2 cursor-pointer"
+                >
+                  لغو انتخاب
                 </button>
-                <button onClick={() => handleBulkStatusChange(true)} className="text-xs font-bold px-3 py-2 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-600/50 rounded-lg transition-colors flex items-center gap-1.5">
-                  <Power className="w-4 h-4" /> فعال‌سازی
+              </div>
+
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <button
+                  onClick={handleBulkExport}
+                  className="text-xs font-bold px-2.5 py-1.5 bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <Download className="w-3.5 h-3.5 text-emerald-400" />
+                  <span>اکسل</span>
                 </button>
-                <button onClick={() => handleBulkStatusChange(false)} className="text-xs font-bold px-3 py-2 bg-rose-600/20 text-rose-300 hover:bg-rose-600/30 border border-rose-600/50 rounded-lg transition-colors flex items-center gap-1.5">
-                  <PowerOff className="w-4 h-4" /> غیرفعال‌سازی
+                <button
+                  onClick={() => handleBulkStatusChange(true)}
+                  className="text-xs font-bold px-2.5 py-1.5 bg-emerald-600/20 text-emerald-300 hover:bg-emerald-600/30 border border-emerald-600/40 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <Power className="w-3.5 h-3.5" />
+                  <span>فعال‌سازی</span>
                 </button>
-                <button onClick={handleBulkDelete} className="text-xs font-bold px-3 py-2 bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm">
-                  <Trash2 className="w-4 h-4" /> حذف گروهی
+                <button
+                  onClick={() => handleBulkStatusChange(false)}
+                  className="text-xs font-bold px-2.5 py-1.5 bg-amber-600/20 text-amber-300 hover:bg-amber-600/30 border border-amber-600/40 rounded-lg transition-colors flex items-center gap-1 cursor-pointer"
+                >
+                  <PowerOff className="w-3.5 h-3.5" />
+                  <span>غیرفعال‌سازی</span>
+                </button>
+                <button
+                  onClick={handleBulkDelete}
+                  className="text-xs font-bold px-2.5 py-1.5 bg-rose-600 hover:bg-rose-700 text-white rounded-lg transition-colors flex items-center gap-1 shadow-xs cursor-pointer"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                  <span>حذف</span>
                 </button>
               </div>
             </motion.div>
@@ -1233,7 +1518,7 @@ export default function PersonsManager(props: any) {
           <div className="bg-white rounded-xl border border-slate-200 shadow-sm overflow-hidden">
             <div className="overflow-x-auto">
               <table className="w-full text-sm text-right whitespace-nowrap">
-                <thead className="bg-slate-50 border-b border-slate-200 text-slate-600 text-[11px] font-black">
+                <thead className="bg-slate-50/95 backdrop-blur-xs border-b border-slate-200 text-slate-600 text-[11px] font-black sticky top-0 z-10 shadow-2xs">
                   <tr>
                     <th className="px-4 py-4 w-10 text-center">
                       <input type="checkbox" className="rounded border-slate-300 text-indigo-600 focus:ring-indigo-500 w-4 h-4 cursor-pointer" checked={selectedIds.length === paginatedPersons.length && paginatedPersons.length > 0} onChange={selectAll} />
