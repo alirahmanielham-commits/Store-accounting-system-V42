@@ -590,6 +590,7 @@ export default function App() {
         setStoreSettings,
         isGmailTheme,
         loading,
+        setLoading,
         authLoading,
         requiresInitSetup,
         sendNotification,
@@ -809,6 +810,20 @@ export default function App() {
         handleApproveWarehouseReceipt,
         renderTabContent,
       } = appState;
+
+  const [loadingTimeoutExceeded, setLoadingTimeoutExceeded] = useState(false);
+
+  useEffect(() => {
+    let t: any;
+    if (loading || authLoading) {
+      t = setTimeout(() => {
+        setLoadingTimeoutExceeded(true);
+      }, 4000);
+    } else {
+      setLoadingTimeoutExceeded(false);
+    }
+    return () => clearTimeout(t);
+  }, [loading, authLoading]);
 
   const handleQuickCodeExecute = useCallback((item: QuickCodeItem) => {
     if (item.type === 'tab') {
@@ -1481,17 +1496,29 @@ export default function App() {
 
 
 
-if (appState.isStoreSelectionOpen) {
+  const isBusinessChosen = typeof window !== 'undefined' && Boolean(
+    window.sessionStorage?.getItem("activeBusinessChosen") === "true" && appState.activeStoreId
+  );
+
+  if (user && (!isBusinessChosen || appState.isStoreSelectionOpen)) {
     return (
       <BusinessManager 
         showNotification={showNotification}
         availableStores={appState.availableStores} 
         setAvailableStores={appState.setAvailableStores} 
         onSelectStore={async (id: string) => {
+          sessionStorage.setItem("activeBusinessChosen", "true");
+          localStorage.setItem("activeBusinessChosen", "true");
           appState.setIsStoreSelectionOpen(false);
           await appState.switchBusiness(id);
+          appState.setSystemModule("selector");
+          if (activeTab === "welcome_page") {
+            setActiveTab("financial_report");
+          }
         }}
-        onClose={localStorage.getItem("activeStoreId") ? () => appState.setIsStoreSelectionOpen(false) : undefined}
+        onClose={isBusinessChosen ? () => appState.setIsStoreSelectionOpen(false) : undefined}
+        user={user}
+        onSignOut={appState.signOut}
       />
     );
   }
@@ -1539,6 +1566,45 @@ if (loading || authLoading) {
               />
               <span className="text-sm font-bold text-slate-500">{textStr}</span>
             </div>
+
+            {loadingTimeoutExceeded && (
+              <motion.div 
+                initial={{ opacity: 0, y: 10 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mt-6 flex flex-col items-center gap-3 bg-white/95 backdrop-blur-md p-5 rounded-3xl border border-amber-200/90 shadow-xl max-w-sm text-center"
+              >
+                <div className="w-10 h-10 rounded-full bg-amber-50 text-amber-600 flex items-center justify-center font-bold text-base">
+                  ⚠️
+                </div>
+                <div>
+                  <p className="text-xs font-black text-slate-800">آماده‌سازی دیتابیس کمی طول کشیده است</p>
+                  <p className="text-[11px] text-slate-500 mt-1 font-medium leading-relaxed">می‌توانید فوراً وارد میزکار شوید یا کسب‌وکار دیگری را انتخاب فرمایید:</p>
+                </div>
+                <div className="flex items-center gap-2 w-full pt-1">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (setLoading) setLoading(false);
+                      appState.setSystemModule("selector");
+                      setActiveTab("financial_report");
+                    }}
+                    className="flex-1 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black shadow-sm cursor-pointer transition-all active:scale-95"
+                  >
+                    ورود مستقیم به سیستم
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (setLoading) setLoading(false);
+                      appState.setIsStoreSelectionOpen(true);
+                    }}
+                    className="px-3 py-2.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-all cursor-pointer active:scale-95"
+                  >
+                    تغییر کسب‌وکار
+                  </button>
+                </div>
+              </motion.div>
+            )}
           </div>
         </div>
 
@@ -1711,11 +1777,21 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
   }
 
   if (activeTab === "welcome_page") {
+    if (user && isBusinessChosen) {
+      if (isMobileScreen) {
+        setActiveTab("create_sale");
+      } else {
+        setActiveTab("financial_report");
+      }
+      return null;
+    }
+
     const handleWelcomeEnter = (storeId?: string) => {
       const targetStore = storeId || localStorage.getItem("activeStoreId") || "default";
       appState.setActiveStoreId(targetStore);
       localStorage.setItem("activeStoreId", targetStore);
       sessionStorage.setItem("activeStoreId", targetStore);
+      sessionStorage.setItem("activeBusinessChosen", "true");
       try {
         document.cookie = `activeStoreId=${encodeURIComponent(targetStore)}; path=/; max-age=31536000; SameSite=Lax`;
       } catch (_) {}

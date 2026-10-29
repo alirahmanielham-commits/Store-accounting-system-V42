@@ -152,9 +152,20 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       localStorage.setItem('access_token', token);
       setAccessToken(token);
     }
+    // Upon entry / login, reset any business choice so the business list is shown
+    sessionStorage.removeItem('activeBusinessChosen');
+    localStorage.removeItem('activeBusinessChosen');
+    sessionStorage.removeItem('activeStoreId');
+    localStorage.removeItem('activeStoreId');
+    sessionStorage.removeItem('systemModule');
+    localStorage.removeItem('systemModule');
+    try {
+      document.cookie = 'activeStoreId=; path=/; max-age=0; SameSite=Lax';
+    } catch (_) {}
   };
 
   const handleSignOut = async () => {
+    // 1. Reset user state
     setUser(null);
     setAccessToken(null);
     sessionStorage.removeItem('taraz_session_active');
@@ -164,6 +175,44 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('auth_user');
     localStorage.removeItem('access_token');
     localStorage.removeItem('taraz_session_active');
+
+    // 2. Reset selected business (کسب و کار انتخابی)
+    sessionStorage.removeItem('activeStoreId');
+    localStorage.removeItem('activeStoreId');
+    sessionStorage.removeItem('activeBusinessChosen');
+    localStorage.removeItem('activeBusinessChosen');
+    sessionStorage.removeItem('hesabpak_active_store_id');
+    localStorage.removeItem('hesabpak_active_store_id');
+    sessionStorage.removeItem('company_profile');
+    localStorage.removeItem('company_profile');
+    sessionStorage.removeItem('store_settings');
+    localStorage.removeItem('store_settings');
+    try {
+      document.cookie = 'activeStoreId=; path=/; max-age=0; SameSite=Lax';
+    } catch (_) {}
+
+    // 3. Reset selected working section (بخش کاری انتخابی)
+    sessionStorage.removeItem('systemModule');
+    localStorage.removeItem('systemModule');
+    sessionStorage.removeItem('activeTab');
+    localStorage.removeItem('activeTab');
+
+    // Clear any cached systemModule in user_settings_ keys
+    try {
+      for (let i = 0; i < localStorage.length; i++) {
+        const key = localStorage.key(i);
+        if (key && key.startsWith('user_settings_')) {
+          try {
+            const parsed = JSON.parse(localStorage.getItem(key) || '{}');
+            delete parsed.systemModule;
+            localStorage.setItem(key, JSON.stringify(parsed));
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
+
+    setShowLogin(true);
+
     try {
       await fetch('/api/auth/logout', { method: 'POST' });
     } catch(e) {}

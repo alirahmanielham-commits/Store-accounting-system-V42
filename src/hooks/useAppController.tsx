@@ -4285,7 +4285,7 @@ const fetchSmsMessages = async () => {
 const fetchData = async () => {
     setLoading(true);
     try {
-      await Promise.all([
+      const allFetches = Promise.allSettled([
         fetchPersonRoles(),
         fetchPersonGroups(),
         fetchPersons(),
@@ -4304,7 +4304,12 @@ const fetchData = async () => {
         fetchInvoices(),
       ]);
 
-      await autoGenerateRentCommitments();
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 6000));
+      await Promise.race([allFetches, timeoutPromise]);
+
+      try {
+        await autoGenerateRentCommitments();
+      } catch (_) {}
 
       // Silently sync freshly fetched data to the isolated IndexedDB of the active business
       try {
@@ -4317,7 +4322,7 @@ const fetchData = async () => {
           accounts,
           cashboxes,
           warehouses
-        });
+        }).catch(() => {});
       } catch (_) {}
     } catch (error) {
       console.error("Error fetching data:", error);
@@ -4335,18 +4340,28 @@ const fetchData = async () => {
    */
   const switchBusiness = async (newStoreId: string) => {
     if (!newStoreId) return;
-    const currentId = activeStoreId || (typeof window !== 'undefined' ? localStorage.getItem('activeStoreId') : null) || 'default';
-    if (newStoreId === currentId) {
-      return;
-    }
+
+    // 1. Immediately update storage, session & cookies so all downstream requests have the correct x-store-id
+    localStorage.setItem("activeStoreId", newStoreId);
+    sessionStorage.setItem("activeStoreId", newStoreId);
+    localStorage.setItem("activeBusinessChosen", "true");
+    sessionStorage.setItem("activeBusinessChosen", "true");
+    localStorage.setItem("initial_setup_complete", "true");
+    try {
+      document.cookie = `activeStoreId=${encodeURIComponent(newStoreId)}; path=/; max-age=31536000; SameSite=Lax`;
+    } catch (_) {}
+
+    // 2. Update Zustand store
+    setActiveStoreId(newStoreId);
+    setIsStoreSelectionOpen(false);
 
     setLoading(true);
 
     try {
-      // 1. Invalidate HTTP in-memory caches
+      // 3. Invalidate HTTP in-memory caches
       invalidateCache();
 
-      // 2. Clear client in-memory state immediately so previous store data is not visible
+      // 4. Clear client in-memory state immediately so previous store data is not visible
       setProducts([]);
       setPersons([]);
       setInvoices([]);
@@ -4362,26 +4377,14 @@ const fetchData = async () => {
       setSmsMessages([]);
       setActiveFinancialYearState(null);
 
-      // 3. Clear stored keys for old store settings in session/local storage
+      // 5. Clear stored keys for old store settings in session/local storage
       localStorage.removeItem("company_profile");
       localStorage.removeItem("store_settings");
       sessionStorage.removeItem("company_profile");
       sessionStorage.removeItem("store_settings");
 
-      // 4. Update storage & cookies to new storeId
-      localStorage.setItem("activeStoreId", newStoreId);
-      sessionStorage.setItem("activeStoreId", newStoreId);
-      localStorage.setItem("initial_setup_complete", "true");
-      try {
-        document.cookie = `activeStoreId=${encodeURIComponent(newStoreId)}; path=/; max-age=31536000; SameSite=Lax`;
-      } catch (_) {}
-
-      // 5. Update Zustand store
-      setActiveStoreId(newStoreId);
-      setIsStoreSelectionOpen(false);
-
-      // 6. Fetch fresh data for the newly active store
-      await Promise.all([
+      // 6. Fetch fresh data with Promise.allSettled and safety timeout so it never hangs
+      const fetchAllData = Promise.allSettled([
         fetchPersonRoles(),
         fetchPersonGroups(),
         fetchPersons(),
@@ -4400,34 +4403,88 @@ const fetchData = async () => {
         fetchInvoices(),
       ]);
 
-      await autoGenerateRentCommitments();
+      const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 6000));
+      await Promise.race([fetchAllData, timeoutPromise]);
 
-      // 7. Sync new store data to its dedicated IndexedDB
+      try {
+        await autoGenerateRentCommitments();
+      } catch (_) {}
+
+      // 7. Sync new store data to its dedicated IndexedDB in background
       try {
         const targetBiz = availableStores.find((s: any) => s.id === newStoreId);
-        await syncBusinessDataToIndexedDb(newStoreId, {
+        syncBusinessDataToIndexedDb(newStoreId, {
           meta: { businessName: targetBiz?.name || newStoreId, switchedAt: Date.now() }
-        });
-      } catch (idbErr) {
-        console.warn("IndexedDB sync warning:", idbErr);
-      }
+        }).catch(() => {});
+      } catch (_) {}
 
       const storeName = availableStores.find((s: any) => s.id === newStoreId)?.name || 'کسب‌وکار انتخابی';
       showNotification(`محیط کاری به «${storeName}» با موفقیت تغییر یافت.`, 'success');
     } catch (err: any) {
       console.error("Error switching business:", err);
-      showNotification(`خطا در تغییر کسب‌وکار: ${err.message || 'مشکل در بارگذاری اطلاعات'}`, 'error');
+      showNotification(`کسب‌وکار فعال شد. اطلاعات تکمیلی در حال بارگذاری است.`, 'info');
     } finally {
       setLoading(false);
     }
   };
 
-useEffect(() => {
-    // Only fetch data
-    if (user) {
+  const handleAppSignOut = async () => {
+    try {
+      // 1. Reset business selection state
+      setActiveStoreId(null);
+      setIsStoreSelectionOpen(true);
+      sessionStorage.removeItem("activeBusinessChosen");
+      localStorage.removeItem("activeBusinessChosen");
+      sessionStorage.removeItem("activeStoreId");
+      localStorage.removeItem("activeStoreId");
+      sessionStorage.removeItem("company_profile");
+      localStorage.removeItem("company_profile");
+      sessionStorage.removeItem("store_settings");
+      localStorage.removeItem("store_settings");
+      try {
+        document.cookie = 'activeStoreId=; path=/; max-age=0; SameSite=Lax';
+      } catch (_) {}
+
+      // 2. Reset working section state (بخش کاری انتخابی)
+      setSystemModule("selector");
+      sessionStorage.removeItem("systemModule");
+      localStorage.removeItem("systemModule");
+      sessionStorage.removeItem("activeTab");
+      localStorage.removeItem("activeTab");
+      if (user?.id) {
+        try {
+          const localSettingsStr = localStorage.getItem('user_settings_' + user.id);
+          if (localSettingsStr) {
+            const parsed = JSON.parse(localSettingsStr);
+            delete parsed.systemModule;
+            localStorage.setItem('user_settings_' + user.id, JSON.stringify(parsed));
+          }
+        } catch (_) {}
+      }
+
+      // 3. Clear data in memory
+      invalidateCache();
+      setProducts([]);
+      setPersons([]);
+      setInvoices([]);
+      setTransactions([]);
+      setAccounts([]);
+      setCashboxes([]);
+      setActiveTab("welcome_page");
+    } catch (e) {
+      console.error("Error during app signout reset:", e);
+    } finally {
+      await signOut();
+    }
+  };
+
+  useEffect(() => {
+    // Only fetch data when user is authenticated AND a business has been actively selected
+    const isChosen = typeof window !== 'undefined' && window.sessionStorage?.getItem("activeBusinessChosen") === "true";
+    if (user && activeStoreId && isChosen) {
       fetchData();
     }
-  }, [user]);
+  }, [user?.id, activeStoreId]);
 
 useEffect(() => {
     if (activeTab && (activeTab.startsWith("list_") || activeTab.includes("invoice")) && invoices.length === 0) {
@@ -7752,7 +7809,7 @@ const renderTabContent = () => {
     setConfirmState,
     confirmAction,
     user,
-    signOut,
+    signOut: handleAppSignOut,
     activeTab,
     setRawActiveTab,
     setActiveTab,
@@ -7844,6 +7901,7 @@ const renderTabContent = () => {
     setStoreSettings,
     isGmailTheme,
     loading,
+    setLoading,
     sendNotification,
     receiptNumber,
     setReceiptPersonId,
