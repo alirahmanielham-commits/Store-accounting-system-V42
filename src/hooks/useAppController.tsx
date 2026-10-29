@@ -6120,9 +6120,10 @@ const getInvoiceNumber = (typeOverride?: string) => {
       ? customPayload.items.map(mapItemWithBase)
       : baseItems;
 
+    const isWarehouseDocType = invoiceType === "warehouse_receipt" || customPayload?.type === "warehouse_receipt" || invoiceType === "warehouse_remittance" || customPayload?.type === "warehouse_remittance";
     const determinedStatus = isDraft
       ? "draft"
-      : (customPayload?.status || (invoiceType === "purchase" || customPayload?.type === "purchase" ? "approved" : "final"));
+      : (customPayload?.status || (invoiceType === "purchase" || customPayload?.type === "purchase" || isWarehouseDocType ? "approved" : "final"));
 
     const payload = customPayload
       ? {
@@ -6627,6 +6628,11 @@ const getInvoiceNumber = (typeOverride?: string) => {
             await fetchInvoices();
             await fetchWarehouses();
             await fetchInventoryTransactions();
+            const freshProducts = await fetchProducts();
+            if (viewingProduct && Array.isArray(freshProducts)) {
+              const updatedView = freshProducts.find((p: any) => String(p.id) === String(viewingProduct.id));
+              if (updatedView) setViewingProduct(updatedView);
+            }
             try {
               const st = await getWarehouseStocks();
               setWarehouseStocks(st as any);
@@ -6637,6 +6643,11 @@ const getInvoiceNumber = (typeOverride?: string) => {
           .catch(console.error);
       } else {
         await fetchInvoices();
+        const freshProducts = await fetchProducts();
+        if (viewingProduct && Array.isArray(freshProducts)) {
+          const updatedView = freshProducts.find((p: any) => String(p.id) === String(viewingProduct.id));
+          if (updatedView) setViewingProduct(updatedView);
+        }
       }
 
       const successTypeName =
@@ -7078,17 +7089,20 @@ const handleExecuteTransferAndSubmit = async () => {
     }
   };
 
-const submitInvoice = async (e: React.FormEvent) => {
-    e.preventDefault();
+const submitInvoice = async (e?: React.FormEvent) => {
+    if (e && typeof e.preventDefault === "function") {
+      e.preventDefault();
+    }
+    const isWarehouseDoc = activeTab === "create_warehouse_doc" || invoiceType === "warehouse_receipt" || invoiceType === "warehouse_remittance";
     if (
-      !customerId ||
+      (!customerId && !isWarehouseDoc) ||
       (items || []).length === 0 ||
       items.some((i) => !i.productId && !i.productName)
     ) {
       customAlert("لطفاً همه فیلدهای ضروری را پر کنید.");
       return;
     }
-    if (activeTab === "create_warehouse_doc" && !invoiceWarehouseId) {
+    if (isWarehouseDoc && !invoiceWarehouseId) {
       customAlert("لطفاً انبار را مشخص کنید.");
       return;
     }

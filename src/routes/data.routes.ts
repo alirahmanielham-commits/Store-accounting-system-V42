@@ -90,7 +90,7 @@ const triggerServerStockSync = async () => {
         const products = (await getDbData('products')) || [];
         const warehouses = (await getDbData('warehouses')) || [];
         const allDocs = await fetchAllSystemDocsForServer();
-        const { stocksList, historyList } = calculateAllWarehouseStocks({
+        const { stocksList, historyList, productSummaryMap } = calculateAllWarehouseStocks({
           products,
           warehouses,
           allDocs,
@@ -99,6 +99,41 @@ const triggerServerStockSync = async () => {
         await setDbData('InventoryTransactions', historyList);
         await setDbData('kardex', historyList);
         await setDbData('inventory_transactions', historyList);
+
+        // Update product table with real-time calculated stock balances
+        if (Array.isArray(products) && productSummaryMap) {
+          let hasProductChanges = false;
+          const updatedProducts = products.map((p: any) => {
+            if (!p || p.type === 'service') return p;
+            const pid = String(p.id);
+            const summary = productSummaryMap[pid];
+            if (summary) {
+              const newPhys = Number(summary.totalPhysical) || 0;
+              const newAvail = Number(summary.totalAvailable) || 0;
+              const newRes = Number(summary.totalReserved) || 0;
+              if (
+                p.stock !== newPhys ||
+                p.physicalStock !== newPhys ||
+                p.availableStock !== newAvail ||
+                p.reservedStock !== newRes
+              ) {
+                hasProductChanges = true;
+                return {
+                  ...p,
+                  stock: newPhys,
+                  physicalStock: newPhys,
+                  availableStock: newAvail,
+                  reservedStock: newRes,
+                };
+              }
+            }
+            return p;
+          });
+
+          if (hasProductChanges) {
+            await setDbData('products', updatedProducts);
+          }
+        }
       } catch (e) {
         console.error('Error during server stock sync:', e);
       } finally {
@@ -1111,11 +1146,12 @@ router.post('/api/data/:key/append', async (req, res) => {
         }
       }
 
-      // Concurrency Stock Availability Check for Sales Invoices and Outbound Documents
+      // Concurrency Stock Availability Check for Sales Invoices and Outbound Documents (including Warehouse Remittances)
       // Prevents race conditions where available stock is oversold (Available = Physical - Reserved)
       const docType = newItem.type || TABLE_DOC_TYPES[key] || 'sale';
-      if (docType === 'sale' && !newItem.isDraft && newItem.status !== 'draft' && newItem.status !== 'voided' && !newItem.isDeleted) {
-        const isNegativeAllowed = await isNegativeStockAllowedOnServer(newItem);
+      if ((docType === 'sale' || docType === 'warehouse_remittance') && !newItem.isDraft && newItem.status !== 'draft' && newItem.status !== 'voided' && !newItem.isDeleted) {
+        // Warehouse remittances strictly forbid negative stock as specified by the business rules
+        const isNegativeAllowed = docType === 'warehouse_remittance' ? false : await isNegativeStockAllowedOnServer(newItem);
         if (!isNegativeAllowed) {
           const products = (await getDbData('products')) || [];
           const warehouses = (await getDbData('warehouses')) || [];
@@ -1784,5 +1820,16 @@ router.delete('/api/data/:key/:id', async (req, res) => {
       res.status(500).json({ error: err.message });
     }
   });
+
+router.post('/api/db/recalculate-stocks', async (req, res) => {
+  try {
+    await triggerServerStockSync();
+    const stocks = (await getDbData('warehouse_stocks')) || [];
+    res.json({ success: true, data: stocks });
+  } catch (err: any) {
+    console.error('Error in /api/db/recalculate-stocks:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
 
 export default router;

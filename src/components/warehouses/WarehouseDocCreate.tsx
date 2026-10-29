@@ -106,6 +106,7 @@ import {
   convertPriceToBaseUnit,
   getUnitRatioDirection,
 } from "../../utils/unitConversion";
+import { convertToGregorian } from "../../utils/format";
 import WarehouseInvoiceSelector from "./WarehouseInvoiceSelector";
 
 export default function WarehouseDocCreate(props: any) {
@@ -1366,38 +1367,84 @@ export default function WarehouseDocCreate(props: any) {
                 مرحله قبل
               </button>
 
-              {isReceipt && saveInvoiceData && (
+              {saveInvoiceData && (
                 <button
                   type="button"
-                  onClick={() => {
+                  onClick={async () => {
+                    if (!invoiceWarehouseId) {
+                      if (customAlert) customAlert("لطفاً ابتدا انبار مورد نظر را انتخاب نمایید.");
+                      return;
+                    }
                     if ((items || []).length === 0) {
                       if (customAlert) customAlert("هیچ کالایی به این سند اضافه نشده است.");
                       return;
                     }
-                    const hasZeroQty = (items || []).some((it: any) => (Number(it.quantity) || 0) <= 0);
-                    if (hasZeroQty) {
-                      if (customAlert) customAlert("لطفاً مقادیر تعداد تمامی سطرهای کالا را بزرگتر از صفر وارد نمایید.");
-                      return;
-                    }
-                    if (
-                      confirm(
-                        "آیا از ثبت اولیه رسید انبار (در انتظار تایید سرپرست انبار) اطمینان دارید؟\nدر این وضعیت مقادیر در کاردکس و موجودی فیزیکی انبار اعمال نمی‌شود تا پس از تایید نهایی صورت پذیرد.",
-                      )
-                    ) {
-                      saveInvoiceData({ status: "pending_approval", isDraft: false }, false);
-                    }
+
+                    const targetDocType = isReceipt ? "warehouse_receipt" : "warehouse_remittance";
+                    const targetTitle = isReceipt
+                      ? (invoiceTitle || "پیش‌نویس رسید انبار")
+                      : (invoiceTitle || "پیش‌نویس حواله انبار");
+
+                    const docItems = (items || []).map((it: any) => {
+                      const prod = products.find((p: any) => String(p.id) === String(it.productId));
+                      const isSec = Boolean(it.isSecondaryUnit);
+                      const ratio = Number(it.unitRatio || prod?.unitRatio || 1);
+                      const dir = it.unitRatioDirection || prod?.unitRatioDirection || (prod ? getUnitRatioDirection(prod) : "secondary_to_main");
+                      const qty = Number(it.quantity) || 0;
+                      const baseQty = convertQuantityToBaseUnit(qty, isSec, ratio, dir);
+                      const rawPrice = Number(it.unitPrice || it.price || prod?.purchasePrice || 0);
+                      const basePrice = convertPriceToBaseUnit(rawPrice, isSec, ratio, dir);
+
+                      return {
+                        ...it,
+                        productId: it.productId,
+                        productName: prod?.name || it.productName || "کالا",
+                        warehouseId: it.warehouseId || invoiceWarehouseId,
+                        quantity: qty,
+                        baseQuantity: baseQty,
+                        unitPrice: rawPrice,
+                        price: rawPrice,
+                        baseUnitPrice: basePrice,
+                        totalPrice: 0,
+                        isSecondaryUnit: isSec,
+                        unitRatio: ratio,
+                        unitRatioDirection: dir,
+                      };
+                    });
+
+                    const draftPayload = {
+                      type: targetDocType,
+                      title: targetTitle,
+                      warehouseId: invoiceWarehouseId,
+                      customerId: customerId || "",
+                      date: date ? convertToGregorian(date) : new Date().toISOString().split("T")[0],
+                      sourceInvoiceId: sourceInvoiceId || "",
+                      description: invoiceDescription || (isReceipt ? "پیش‌نویس رسید انبار" : "پیش‌نویس حواله انبار"),
+                      note: invoiceNote || "",
+                      status: "draft",
+                      isDraft: true,
+                      items: docItems,
+                      totalAmount: 0,
+                    };
+
+                    await saveInvoiceData(draftPayload, true);
                   }}
                   disabled={submitting || (items || []).length === 0}
-                  className="flex-1 sm:flex-none px-6 py-3.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-950 rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer"
+                  className="flex-1 sm:flex-none px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
                 >
-                  <Clock className="w-4 h-4 text-slate-900" />
-                  <span>ثبت اولیه رسید (در انتظار تایید)</span>
+                  <Save className="w-4 h-4 text-slate-500" />
+                  <span>ذخیره پیش‌نویس</span>
                 </button>
               )}
 
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
+                  if (!invoiceWarehouseId) {
+                    if (customAlert) customAlert("لطفاً ابتدا انبار مورد نظر را انتخاب نمایید.");
+                    return;
+                  }
+
                   if ((items || []).length === 0) {
                     if (customAlert) customAlert("هیچ کالایی به این سند اضافه نشده است.");
                     return;
@@ -1409,13 +1456,13 @@ export default function WarehouseDocCreate(props: any) {
                     return;
                   }
 
-                  // Shortage check for remittance
+                  // Strict shortage check for remittance: strictly block issuance with detailed breakdown
                   if (!isReceipt && getProductStockInfo) {
                     const targetWh = invoiceWarehouseId ? invoiceWarehouseId.toString() : "";
                     const shortages: string[] = [];
                     (items || []).forEach((it: any) => {
                       if (it.productId) {
-                        const p = products.find((prod: any) => prod.id === it.productId);
+                        const p = products.find((prod: any) => String(prod.id) === String(it.productId));
                         if (p && p.type !== "service") {
                           const sInfo = getProductStockInfo(it.productId);
                           const cur =
@@ -1427,7 +1474,7 @@ export default function WarehouseDocCreate(props: any) {
                           const q = Number(it.quantity) || 0;
                           if (q > cur) {
                             shortages.push(
-                              `• ${it.productName}: موجودی فعلی ${cur}، مقدار حواله ${q} (کسری: ${q - cur})`
+                              `• ${it.productName || p.name}: موجودی فعلی ${cur}، مقدار حواله ${q} (کسری: ${Number((q - cur).toFixed(2))})`
                             );
                           }
                         }
@@ -1435,17 +1482,67 @@ export default function WarehouseDocCreate(props: any) {
                     });
 
                     if (shortages.length > 0) {
-                      const msg = `توجه: اقلام زیر در کاردکس انبار ${currentWarehouseName} با کسری موجودی مواجه هستند:\n\n${shortages.join(
-                        "\n"
-                      )}\n\nآیا مایلید با وجود کسری موجودی، سند حواله صادر گردد؟`;
-                      // Non-blocking confirmation
-                      if (window.confirm && !window.confirm(msg)) {
-                        return;
+                      if (customAlert) {
+                        customAlert(
+                          `خطای عدم موجودی کافی!\nامکان صدور حواله خروج از انبار وجود ندارد زیرا اقلام زیر در کاردکس انبار «${currentWarehouseName}» با کسری مواجه هستند:\n\n${shortages.join(
+                            "\n"
+                          )}\n\nطبق دستورالعمل انبارداری، صدور حواله منفی مسدود گردیده است. لطفاً ابتدا رسید ورود به انبار صادر فرمایید یا مقادیر حواله را تصحیح نمایید.`
+                        );
                       }
+                      return; // Strictly block submission
                     }
                   }
 
-                  handleInvoicePreviewTrigger();
+                  const targetDocType = isReceipt ? "warehouse_receipt" : "warehouse_remittance";
+                  const targetTitle = isReceipt
+                    ? (invoiceTitle || "رسید انبار (ورود کالا)")
+                    : (invoiceTitle || "حواله انبار (خروج کالا)");
+
+                  const docItems = (items || []).map((it: any) => {
+                    const prod = products.find((p: any) => String(p.id) === String(it.productId));
+                    const isSec = Boolean(it.isSecondaryUnit);
+                    const ratio = Number(it.unitRatio || prod?.unitRatio || 1);
+                    const dir = it.unitRatioDirection || prod?.unitRatioDirection || (prod ? getUnitRatioDirection(prod) : "secondary_to_main");
+                    const qty = Number(it.quantity) || 0;
+                    const baseQty = convertQuantityToBaseUnit(qty, isSec, ratio, dir);
+                    const rawPrice = Number(it.unitPrice || it.price || prod?.purchasePrice || 0);
+                    const basePrice = convertPriceToBaseUnit(rawPrice, isSec, ratio, dir);
+
+                    return {
+                      ...it,
+                      productId: it.productId,
+                      productName: prod?.name || it.productName || "کالا",
+                      warehouseId: it.warehouseId || invoiceWarehouseId,
+                      quantity: qty,
+                      baseQuantity: baseQty,
+                      unitPrice: rawPrice,
+                      price: rawPrice,
+                      baseUnitPrice: basePrice,
+                      totalPrice: 0,
+                      isSecondaryUnit: isSec,
+                      unitRatio: ratio,
+                      unitRatioDirection: dir,
+                    };
+                  });
+
+                  const fullPayload = {
+                    type: targetDocType,
+                    title: targetTitle,
+                    warehouseId: invoiceWarehouseId,
+                    customerId: customerId || "",
+                    date: date ? convertToGregorian(date) : new Date().toISOString().split("T")[0],
+                    sourceInvoiceId: sourceInvoiceId || "",
+                    description: invoiceDescription || (isReceipt ? "رسید ورود به انبار" : "حواله خروج از انبار"),
+                    note: invoiceNote || "",
+                    status: "approved",
+                    isDraft: false,
+                    items: docItems,
+                    totalAmount: 0,
+                  };
+
+                  if (saveInvoiceData) {
+                    await saveInvoiceData(fullPayload, false);
+                  }
                 }}
                 disabled={submitting || (items || []).length === 0}
                 className={`flex-1 sm:flex-none px-8 py-3.5 rounded-xl font-black text-sm flex items-center justify-center gap-2.5 transition-all shadow-md cursor-pointer ${

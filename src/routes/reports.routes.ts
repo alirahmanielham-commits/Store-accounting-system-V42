@@ -259,6 +259,44 @@ router.get('/api/reports/kardex', async (req, res) => {
   }
 });
 
+router.get('/api/kardex/:productId', async (req, res) => {
+  try {
+    const { productId } = req.params;
+    const { warehouseId = 'all' } = req.query;
+
+    const products = (await getDbData('products')) || [];
+    const warehouses = (await getDbData('warehouses')) || [];
+    const allDocs = await fetchAllSystemDocs();
+
+    const product = products.find((p: any) => String(p.id) === String(productId));
+    if (!product) {
+      return res.status(404).json({ success: false, error: 'کالای مورد نظر یافت نشد.', data: [] });
+    }
+
+    const { historyList } = calculateAllWarehouseStocks({
+      products: [product],
+      warehouses,
+      allDocs
+    });
+
+    let prodTransactions = (historyList || []).filter((tx: any) => {
+      if (String(tx.productId) !== String(productId)) return false;
+      if (warehouseId !== 'all' && String(tx.warehouseId) !== String(warehouseId)) return false;
+      return true;
+    });
+
+    prodTransactions.sort((a: any, b: any) => {
+      const timeA = a.timestamp || (a.date ? new Date(convertToGregorian(a.date)).getTime() : 0);
+      const timeB = b.timestamp || (b.date ? new Date(convertToGregorian(b.date)).getTime() : 0);
+      return timeA - timeB;
+    });
+
+    res.json({ success: true, data: prodTransactions });
+  } catch (e: any) {
+    res.status(500).json({ success: false, error: e.message, data: [] });
+  }
+});
+
 // -------------------------------------------------------------
 // 3. Sales & Profitability Report (COGS & Multi-dimensional)
 // -------------------------------------------------------------
