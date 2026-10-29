@@ -7302,12 +7302,17 @@ const handleInvoicePreviewTrigger = () => {
   };
 
   const productStockMap = useMemo(() => {
-    const { productSummaryMap } = calculateAllWarehouseStocks({
-      products: products || [],
-      warehouses: warehouses || [],
-      allDocs: invoices || [],
-    });
-    return productSummaryMap;
+    try {
+      const { productSummaryMap } = calculateAllWarehouseStocks({
+        products: products || [],
+        warehouses: warehouses || [],
+        allDocs: invoices || [],
+      });
+      return productSummaryMap || {};
+    } catch (err) {
+      console.error("calculateAllWarehouseStocks failed in useAppController:", err);
+      return {};
+    }
   }, [products, warehouses, invoices]);
 
   const getProductStockInfo = (productId: string | number) => {

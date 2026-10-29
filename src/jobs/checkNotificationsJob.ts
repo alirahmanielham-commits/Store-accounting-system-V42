@@ -37,15 +37,18 @@ const processCheckNotifications = async () => {
 
     for (const check of dueIssuedChecks) {
       if (check.dueDate) {
-         const checkDue = new Date(check.dueDate).toISOString().split('T')[0];
-         if (checkDue === targetDateString || checkDue < targetDateString) {
-            // Check if we already notified for this recently to avoid duplicates?
-            // For simplicity, we just notify if it matches the criteria. In a real app we'd add a flag 'isNotified'.
-            await createNotification(
-              `یادآوری سررسید چک پرداختی`,
-              `چک پرداختی شماره ${check.checkNumber} به مبلغ ${Number(check.amount).toLocaleString()} تومان، در تاریخ ${new Date(check.dueDate).toLocaleDateString('fa-IR')} سررسید می‌شود.`
-            );
-         }
+         try {
+           const d = new Date(check.dueDate);
+           if (!isNaN(d.getTime())) {
+             const checkDue = d.toISOString().split('T')[0];
+             if (checkDue === targetDateString || checkDue < targetDateString) {
+                await createNotification(
+                  `یادآوری سررسید چک پرداختی`,
+                  `چک پرداختی شماره ${check.checkNumber} به مبلغ ${Number(check.amount).toLocaleString()} تومان، در تاریخ ${d.toLocaleDateString('fa-IR')} سررسید می‌شود.`
+                );
+             }
+           }
+         } catch (_) {}
       }
     }
 
@@ -58,13 +61,18 @@ const processCheckNotifications = async () => {
 
     for (const check of dueReceivedChecks) {
       if ((check.status === 'received' || check.status === 'deposited') && check.dueDate) {
-         const checkDue = new Date(check.dueDate).toISOString().split('T')[0];
-         if (checkDue === targetDateString || checkDue < targetDateString) {
-            await createNotification(
-              `یادآوری سررسید چک دریافتی`,
-              `چک دریافتی شماره ${check.checkNumber} به مبلغ ${Number(check.amount).toLocaleString()} تومان، در تاریخ ${new Date(check.dueDate).toLocaleDateString('fa-IR')} سررسید می‌شود.`
-            );
-         }
+         try {
+           const d = new Date(check.dueDate);
+           if (!isNaN(d.getTime())) {
+             const checkDue = d.toISOString().split('T')[0];
+             if (checkDue === targetDateString || checkDue < targetDateString) {
+                await createNotification(
+                  `یادآوری سررسید چک دریافتی`,
+                  `چک دریافتی شماره ${check.checkNumber} به مبلغ ${Number(check.amount).toLocaleString()} تومان، در تاریخ ${d.toLocaleDateString('fa-IR')} سررسید می‌شود.`
+                );
+             }
+           }
+         } catch (_) {}
       }
     }
 

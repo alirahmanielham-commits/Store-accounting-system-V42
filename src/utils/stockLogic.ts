@@ -1,6 +1,55 @@
 import { convertQuantityToBaseUnit, getUnitRatioDirection } from './unitConversion';
 import { compareKardexTransactions, parseDocDateToTimestamp } from './kardexSort';
 
+export const safeIsoDate = (val?: any): string => {
+  if (!val) {
+    try {
+      return new Date().toISOString().split('T')[0];
+    } catch (_) {
+      return '1970-01-01';
+    }
+  }
+  if (typeof val === 'string') {
+    const trimmed = val.trim();
+    if (/^\d{4}[/-]\d{1,2}[/-]\d{1,2}/.test(trimmed)) {
+      return trimmed.split('T')[0];
+    }
+  }
+  try {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d.toISOString().split('T')[0];
+    }
+  } catch (_) {}
+  try {
+    return new Date().toISOString().split('T')[0];
+  } catch (_) {
+    return '1970-01-01';
+  }
+};
+
+export const safeTimestamp = (val?: any, fallback = 1): number => {
+  if (!val) return fallback;
+  if (typeof val === 'number' && !isNaN(val)) return val;
+  try {
+    const d = new Date(val);
+    const ts = d.getTime();
+    if (!isNaN(ts)) return ts;
+  } catch (_) {}
+  return fallback;
+};
+
+export const safeTimeStr = (val?: any): string => {
+  if (!val) return '';
+  try {
+    const d = new Date(val);
+    if (!isNaN(d.getTime())) {
+      return d.toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' });
+    }
+  } catch (_) {}
+  return '';
+};
+
 export interface WarehouseStockItem {
   id: string; // `${productId}_${warehouseId}`
   productId: string;
@@ -45,11 +94,12 @@ export interface CalculateStockOptions {
  * 8. All calculations are independent per product and per warehouse.
  */
 export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: CalculateStockOptions) {
-  const stocksMap: Record<string, WarehouseStockItem> = {};
-  const historyList: any[] = [];
-  const generateId = () => Math.random().toString(36).substring(2, 15);
+  try {
+    const stocksMap: Record<string, WarehouseStockItem> = {};
+    const historyList: any[] = [];
+    const generateId = () => Math.random().toString(36).substring(2, 15);
 
-  const productMap = new Map<string, any>();
+    const productMap = new Map<string, any>();
   products.forEach((p: any) => {
     if (p && p.id) {
       productMap.set(String(p.id), p);
@@ -99,7 +149,7 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
       const after = stocksMap[targetKey].physicalStock;
 
       const docNum = p.initialStockDocNumber || (p.code ? `OPN-${p.code}` : 'موجودی اولیه');
-      const docDate = p.initialStockDate || (p.createdAt ? new Date(p.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]);
+      const docDate = p.initialStockDate || safeIsoDate(p.createdAt);
       const docDesc = p.initialStockDescription || 'سند موجودی اول دوره و افتتاحیه انبار';
 
       historyList.push({
@@ -108,7 +158,7 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
         warehouseId: targetWhId,
         date: docDate,
         time: '۰۰:۰۰',
-        timestamp: p.initialStockTimestamp || (p.createdAt ? new Date(p.createdAt).getTime() : 1),
+        timestamp: p.initialStockTimestamp || safeTimestamp(p.createdAt, 1),
         createdAt: p.createdAt || '1970-01-01T00:00:00.000Z',
         type: 'in',
         quantity: baseStock,
@@ -239,7 +289,7 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
       if (q === 0) return;
 
       const rawPrice = Number(item.unitPrice || item.price || product.purchasePrice || 0);
-      const docTime = doc.time || (doc.createdAt ? new Date(doc.createdAt).toLocaleTimeString('fa-IR', { hour: '2-digit', minute: '2-digit' }) : '');
+      const docTime = doc.time || safeTimeStr(doc.createdAt);
       const docTs = parseDocDateToTimestamp(doc.date, docTime, doc.createdAt);
 
       if (docType === 'warehouse_receipt' || docType === 'sales_return') {
@@ -255,7 +305,7 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
           timestamp: docTs,
           time: docTime,
           createdAt: doc.createdAt,
-          date: doc.date || (doc.createdAt ? new Date(doc.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+          date: doc.date || safeIsoDate(doc.createdAt),
           type: 'in',
           quantity: q,
           unitPrice: rawPrice,
@@ -282,7 +332,7 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
           timestamp: docTs,
           time: docTime,
           createdAt: doc.createdAt,
-          date: doc.date || (doc.createdAt ? new Date(doc.createdAt).toISOString().split('T')[0] : new Date().toISOString().split('T')[0]),
+          date: doc.date || safeIsoDate(doc.createdAt),
           type: 'out',
           quantity: q,
           unitPrice: rawPrice,
@@ -420,6 +470,15 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
     productSummaryMap,
     historyList,
   };
+} catch (err) {
+  console.error("calculateAllWarehouseStocks encountered an error, returning safe empty fallbacks:", err);
+  return {
+    stocksMap: {},
+    stocksList: [],
+    productSummaryMap: {},
+    historyList: [],
+  };
+}
 }
 
 export interface StockValidationResult {
