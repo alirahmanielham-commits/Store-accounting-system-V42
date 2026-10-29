@@ -134,6 +134,7 @@ export default function SaleInvoiceCreate(props: any) {
   const [buyerPostalCode, setBuyerPostalCode] = useState('');
   const [paymentTerms, setPaymentTerms] = useState<'cash' | 'credit' | 'cheque'>('cash');
   const [warehouseChangePrompt, setWarehouseChangePrompt] = useState<{ newWhId: string; whName: string } | null>(null);
+  const [isExtraInfoOpen, setIsExtraInfoOpen] = useState(false);
 
   // Dirty Form Detection
   const isDirty = useMemo(() => {
@@ -547,192 +548,175 @@ export default function SaleInvoiceCreate(props: any) {
               </div>
             )}
 
-            {/* Header Info */}
-            <div className="bg-white rounded-3xl p-6 shadow-sm border-2 border-indigo-50">
-              <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 border-b border-indigo-100 pb-5">
-                <h2 className="text-2xl font-black text-slate-800 flex items-center gap-3">
-                  <span className="bg-indigo-100/50 p-2.5 rounded-xl text-indigo-600">
-                    <ShoppingCart className="w-6 h-6" />
-                  </span>
-                  {invoiceTitle}
-                </h2>
-
-                <div className="flex flex-wrap items-center gap-3">
-                  {/* Segmented Mode Control */}
-                  <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200">
-                    <button
-                      type="button"
-                      onClick={() => setInvoiceLayoutMode('pos')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                        invoiceLayoutMode === 'pos'
-                          ? 'bg-white text-indigo-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <ScanLine className="w-3.5 h-3.5" />
-                      <span>فروش سریع بارکدی (فروشگاهی)</span>
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setInvoiceLayoutMode('official')}
-                      className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                        invoiceLayoutMode === 'official'
-                          ? 'bg-white text-indigo-700 shadow-xs'
-                          : 'text-slate-600 hover:text-slate-900'
-                      }`}
-                    >
-                      <Building2 className="w-3.5 h-3.5" />
-                      <span>فاکتور رسمی شرکتی (تجاری)</span>
-                    </button>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-bold text-gray-500">
-                      نوع:
-                    </span>
-                    <select
-                      value={invoiceType}
-                      onChange={(e) => {
-                        setInvoiceType(e.target.value as any);
-                        if (e.target.value === "proforma") {
-                          setInvoiceTitle("پیش‌فاکتور (بدون کسر موجودی)");
-                        } else {
-                          setInvoiceTitle("فاکتور فروش کالا");
-                        }
-                      }}
-                      className="p-2 border border-gray-200 rounded-lg text-xs font-bold bg-white text-indigo-700 outline-none cursor-pointer focus:ring-2 focus:ring-indigo-500"
-                    >
-                      <option value="sale">فروش استاندارد</option>
-                      <option value="proforma">پیش‌فاکتور</option>
-                    </select>
-                  </div>
-                </div>
-              </div>
-
-              {/* Ultra-Fast POS / Shortcut Quick Actions Banner */}
-              <div className="mb-6 p-3 bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white rounded-2xl shadow-sm flex flex-wrap items-center justify-between gap-2.5 text-xs">
-                <div className="flex items-center gap-2">
-                  <span className="p-1.5 rounded-lg bg-amber-400/20 text-amber-300">
-                    <Zap className="w-4 h-4" />
-                  </span>
-                  <div>
-                    <span className="font-black text-amber-300 block">فروش سریع با کلیدهای میانبر:</span>
-                    <span className="text-[10px] text-slate-300">برای کارایی و سرعت حداکثری بدون نیاز به ماوس</span>
-                  </div>
-                </div>
-
-                <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-                  <button
-                    type="button"
-                    onClick={handleTriggerSaveWithValidation}
-                    className="inline-flex items-center gap-1 bg-indigo-600/60 hover:bg-indigo-600 text-white px-2.5 py-1 rounded-xl border border-indigo-400/30 transition-all cursor-pointer font-bold shadow-xs"
-                    title="ثبت و تسویه فاکتور (F2 یا Ctrl+S)"
-                  >
-                    <kbd className="font-mono bg-amber-400 text-slate-950 px-1.5 py-0.5 rounded text-[10px] font-black">F2</kbd>
-                    <span>ثبت و تسویه</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const searchInput = document.querySelector<HTMLInputElement>(
-                        'input[placeholder*="بارکد"], input[placeholder*="جستجو"], input[placeholder*="کالا"]'
-                      );
-                      searchInput?.focus();
-                      searchInput?.select();
-                    }}
-                    className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-100 px-2 py-1 rounded-xl border border-white/10 transition-all cursor-pointer font-bold"
-                    title="جستجوی کالا / اسکن بارکد (F1)"
-                  >
-                    <kbd className="font-mono bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-black">F1</kbd>
-                    <span>جستجوی کالا</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={handleAddBlankRow}
-                    className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-100 px-2 py-1 rounded-xl border border-white/10 transition-all cursor-pointer font-bold"
-                    title="افزودن سطر خالی جدید (F3)"
-                  >
-                    <kbd className="font-mono bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-black">F3</kbd>
-                    <span>سطر جدید</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsBulkModalOpen(true)}
-                    className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-100 px-2 py-1 rounded-xl border border-white/10 transition-all cursor-pointer font-bold"
-                    title="انتخاب کاتالوگی و افزودن دسته‌ای (F4)"
-                  >
-                    <kbd className="font-mono bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-black">F4</kbd>
-                    <span>کاتالوگ گروهی</span>
-                  </button>
-
-                  <button
-                    type="button"
-                    onClick={() => setIsPersonModalOpen?.(true)}
-                    className="inline-flex items-center gap-1 bg-white/10 hover:bg-white/20 text-slate-100 px-2 py-1 rounded-xl border border-white/10 transition-all cursor-pointer font-bold"
-                    title="انتخاب یا ایجاد مشتری جدید (F8)"
-                  >
-                    <kbd className="font-mono bg-white/20 text-white px-1.5 py-0.5 rounded text-[10px] font-black">F8</kbd>
-                    <span>طرف حساب</span>
-                  </button>
-
-                  <span className="inline-flex items-center gap-1 bg-emerald-500/20 text-emerald-300 px-2 py-1 rounded-xl border border-emerald-400/20 font-bold text-[10px]">
-                    <kbd className="font-mono bg-emerald-500/40 text-emerald-100 px-1.5 py-0.5 rounded font-black">Ctrl+Enter</kbd>
-                    <span>ثبت فوری</span>
-                  </span>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-2">
-                    شماره فاکتور فروش
-                  </label>
-                  <div className="flex gap-2">
-                    <select
-                      value={invoiceMode}
-                      onChange={(e) =>
-                        setInvoiceMode(e.target.value as "auto" | "manual")
-                      }
-                      className="p-3 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30 text-sm font-bold text-indigo-900 outline-none"
-                    >
-                      <option value="auto">تولید خودکار</option>
-                      <option value="manual">ورود دستی</option>
-                    </select>
-                    {invoiceMode === "manual" ? (
-                      <input
-                        type="text"
-                        value={invoiceNumber}
-                        onChange={(e) => setInvoiceNumber(e.target.value)}
-                        className="flex-1 p-3 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono text-left font-bold text-slate-800 outline-none bg-indigo-50/20"
-                        dir="ltr"
-                        placeholder="شماره دلخواه......"
-                      />
-                    ) : (
-                      <div className="flex-1 p-3 border border-indigo-100 rounded-xl bg-indigo-50/20 font-mono text-left font-bold text-slate-800 opacity-70 flex items-center justify-end">
-                        {invoiceNumber || "در حال رزرو..."}
+            {/* Modern 2-Column Responsive Workspace */}
+            <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+              {/* Main Column (8 cols): Header, Fast Entry Bar, Items Table, Collapsible Logistics */}
+              <div className="lg:col-span-8 space-y-5">
+                {/* Compact Invoice Header Card */}
+                <div className="bg-white rounded-2xl p-5 shadow-xs border border-slate-200/80">
+                  <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 pb-4 mb-4 border-b border-slate-100">
+                    <div className="flex items-center gap-2.5">
+                      <div className="w-9 h-9 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center font-black shrink-0">
+                        <ShoppingCart className="w-5 h-5" />
                       </div>
+                      <div>
+                        <h2 className="text-base font-black text-slate-900 leading-tight">
+                          {invoiceTitle}
+                        </h2>
+                        <span className="text-[11px] text-slate-400 font-bold">
+                          {invoiceLayoutMode === 'pos' ? 'فروش سریع بارکدی و تسویه آنی' : 'فاکتور رسمی شرکتی و تجاری'}
+                        </span>
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-auto justify-end">
+                      {/* Segmented Mode Control */}
+                      <div className="inline-flex p-1 bg-slate-100 rounded-xl border border-slate-200 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceLayoutMode('pos')}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                            invoiceLayoutMode === 'pos'
+                              ? 'bg-white text-indigo-700 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <ScanLine className="w-3.5 h-3.5" />
+                          <span>فروشگاهی (POS)</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setInvoiceLayoutMode('official')}
+                          className={`flex items-center gap-1.5 px-3 py-1 rounded-lg font-bold transition-all cursor-pointer ${
+                            invoiceLayoutMode === 'official'
+                              ? 'bg-white text-indigo-700 shadow-xs'
+                              : 'text-slate-600 hover:text-slate-900'
+                          }`}
+                        >
+                          <Building2 className="w-3.5 h-3.5" />
+                          <span>فاکتور رسمی</span>
+                        </button>
+                      </div>
+
+                      {/* Invoice Type */}
+                      <select
+                        value={invoiceType}
+                        onChange={(e) => {
+                          setInvoiceType(e.target.value as any);
+                          if (e.target.value === "proforma") {
+                            setInvoiceTitle("پیش‌فاکتور (بدون کسر موجودی)");
+                          } else {
+                            setInvoiceTitle("فاکتور فروش کالا");
+                          }
+                        }}
+                        className="h-8 px-2.5 border border-slate-200 rounded-lg text-xs font-bold bg-white text-indigo-700 outline-none cursor-pointer focus:ring-1 focus:ring-indigo-500"
+                      >
+                        <option value="sale">فروش استاندارد</option>
+                        <option value="proforma">پیش‌فاکتور</option>
+                      </select>
+                    </div>
+                  </div>
+
+              {/* Compact Core Details (4-field high speed row) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3.5">
+                {/* 1. Customer (5 cols) */}
+                <div className="sm:col-span-2 lg:col-span-5">
+                  <label className="block text-xs font-black text-slate-700 mb-1.5 flex items-center justify-between">
+                    <span className="flex items-center gap-1.5">
+                      <User className="w-3.5 h-3.5 text-indigo-600" />
+                      <span>مشتری / طرف حساب</span>
+                      <span className="text-rose-500 font-extrabold">*</span>
+                    </span>
+                    {customerId && (
+                      <span className="text-[11px] font-bold text-indigo-600">
+                        انتخاب شده
+                      </span>
                     )}
+                  </label>
+                  <div className="flex gap-1.5">
+                    <div className="flex-1 border border-indigo-100 rounded-xl bg-indigo-50/20 focus-within:ring-2 focus-within:ring-indigo-500 focus-within:bg-white transition-all">
+                      <SearchableSelect
+                        options={(activePersonsOnly || []).map((p) => ({
+                          value: p.id,
+                          label: p.alias || p.name,
+                          subLabel: p.phone || undefined,
+                          badge: getRoleName(p.role),
+                          imageUrl: p.imageUrl,
+                          searchStr: `${p.alias || ""} ${p.name || ""} ${p.title || ""} ${p.firstName || ""} ${p.lastName || ""} ${p.phone || ""} ${p.nationalId || ""} ${p.personCode || ""} ${p.companyName || ""} ${p.fatherName || ""}`,
+                        }))}
+                        value={customerId}
+                        onChange={(val) => setCustomerId(val)}
+                        placeholder="-- جستجوی مشتری (نام، تلفن، کد) --"
+                        searchPlaceholder="جستجوی سریع شخص یا شرکت..."
+                      />
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => setIsPersonModalOpen && setIsPersonModalOpen(true)}
+                      className="bg-indigo-50 hover:bg-indigo-100 text-indigo-700 border border-indigo-200 rounded-xl px-3 flex items-center justify-center transition-colors cursor-pointer shrink-0"
+                      title="تعریف مشتری جدید"
+                    >
+                      <UserPlus className="w-4 h-4" />
+                    </button>
                   </div>
                 </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-indigo-500" /> عنوان
-                    فاکتور
+
+                {/* 2. Warehouse (3 cols) */}
+                <div className="sm:col-span-1 lg:col-span-3">
+                  <label className="block text-xs font-black text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Box className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>انبار خروج کالا</span>
+                    <span className="text-rose-500 font-extrabold">*</span>
                   </label>
-                  <input
-                    type="text"
-                    value={invoiceTitle}
-                    onChange={(e) => setInvoiceTitle(e.target.value)}
-                    className="w-full p-3 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none bg-indigo-50/20"
-                    placeholder="عنوانی برای فاکتور وارد کنید..."
-                  />
+                  <select
+                    value={invoiceWarehouseId}
+                    onChange={(e) => handleWarehouseHeaderChange(e.target.value)}
+                    className="w-full h-[42px] px-3 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-indigo-50/20 text-xs font-bold text-slate-800 outline-none transition-colors"
+                  >
+                    <option value="">-- انتخاب انبار --</option>
+                    {warehouses
+                      .filter((w) => w.isActive !== false)
+                      .map((v, index) => (
+                        <option key={`${v.id}-${index}`} value={v.id}>
+                          {v.name} {v.isDefault || v.isDefaultSales ? "★" : ""}
+                        </option>
+                      ))}
+                  </select>
                 </div>
-                <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                    <Calendar className="w-4 h-4 text-indigo-500" /> تاریخ صدور فاکتور
+
+                {/* 3. Invoice Number (2 cols) */}
+                <div className="sm:col-span-1 lg:col-span-2">
+                  <label className="block text-xs font-black text-slate-700 mb-1.5 flex items-center justify-between">
+                    <span>شماره فاکتور</span>
+                    <button
+                      type="button"
+                      onClick={() => setInvoiceMode(invoiceMode === "auto" ? "manual" : "auto")}
+                      className="text-[10px] text-indigo-600 font-bold hover:underline cursor-pointer"
+                    >
+                      {invoiceMode === "auto" ? "دستی؟" : "خودکار؟"}
+                    </button>
+                  </label>
+                  {invoiceMode === "manual" ? (
+                    <input
+                      type="text"
+                      value={invoiceNumber}
+                      onChange={(e) => setInvoiceNumber(e.target.value)}
+                      className="w-full h-[42px] px-3 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono text-left font-bold text-slate-800 outline-none bg-white text-xs"
+                      dir="ltr"
+                      placeholder="شماره فاکتور..."
+                    />
+                  ) : (
+                    <div className="w-full h-[42px] px-3 border border-indigo-100 rounded-xl bg-indigo-50/30 font-mono text-left font-black text-slate-700 flex items-center justify-end text-xs">
+                      {invoiceNumber || "خودکار..."}
+                    </div>
+                  )}
+                </div>
+
+                {/* 4. Date (2 cols) */}
+                <div className="sm:col-span-1 lg:col-span-2">
+                  <label className="block text-xs font-black text-slate-700 mb-1.5 flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-indigo-600" />
+                    <span>تاریخ صدور</span>
                   </label>
                   <div className="relative">
                     <DatePicker
@@ -749,342 +733,309 @@ export default function SaleInvoiceCreate(props: any) {
                           : persian_fa
                       }
                       calendarPosition="bottom-right"
-                      inputClass="w-full pl-11 pr-4 p-3 bg-indigo-50/30 hover:bg-indigo-50 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 focus:bg-white text-indigo-950 font-sans font-black text-center transition-all cursor-pointer outline-none text-sm"
+                      inputClass="w-full h-[42px] pl-8 pr-2.5 bg-indigo-50/20 hover:bg-white border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 text-slate-900 font-mono font-bold text-center transition-all cursor-pointer outline-none text-xs"
                       containerClassName="w-full"
                     />
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-500">
-                      <Calendar className="w-5 h-5" />
+                    <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-indigo-500">
+                      <Calendar className="w-3.5 h-3.5" />
                     </div>
                   </div>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                    <CalendarIcon className="w-4 h-4 text-rose-500" /> تاریخ سررسید (اختیاری)
-                  </label>
-                  <div className="relative">
-                    <DatePicker
-                      value={invoiceDueDate}
-                      onChange={setInvoiceDueDate}
-                      calendar={
-                        storeSettings?.calendarType === "gregorian"
-                          ? undefined
-                          : persian
-                      }
-                      locale={
-                        storeSettings?.calendarType === "gregorian"
-                          ? undefined
-                          : persian_fa
-                      }
-                      calendarPosition="bottom-right"
-                      inputClass="w-full pl-11 pr-10 p-3 bg-rose-50/30 hover:bg-rose-50 border border-rose-100 rounded-xl focus:ring-2 focus:ring-rose-500 focus:bg-white text-rose-950 font-sans font-black text-center transition-all cursor-pointer outline-none text-sm"
-                      containerClassName="w-full"
-                      placeholder="انتخاب سررسید"
-                    />
-                    {invoiceDueDate && <button onClick={() => setInvoiceDueDate(null)} className="absolute right-2 top-1/2 -translate-y-1/2 text-rose-400 hover:text-rose-600 p-1"><X className="w-4 h-4" /></button>}
-                    <div className="absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none text-rose-500">
-                      <CalendarIcon className="w-5 h-5" />
-                    </div>
-                  </div>
-                </div>
-
-                <div className="lg:col-span-2">
-                  <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                    <User className="w-4 h-4 text-indigo-500" /> مشتری (طرف
-                    حساب)
-                  </label>
-                  <div className="flex gap-2">
-                    <div className="flex-1 border border-indigo-100 rounded-xl bg-indigo-50/30 focus-within:ring-2 focus-within:ring-indigo-500 transition-colors">
-                      <SearchableSelect
-                        options={(activePersonsOnly || []).map((p) => ({
-                          value: p.id,
-                        label: p.alias || p.name,
-                        subLabel: p.phone || undefined,
-                        badge: getRoleName(p.role),
-                        imageUrl: p.imageUrl,
-                        searchStr: `${p.alias || ""} ${p.name || ""} ${p.title || ""} ${p.firstName || ""} ${p.lastName || ""} ${p.phone || ""} ${p.nationalId || ""} ${p.personCode || ""} ${p.companyName || ""} ${p.fatherName || ""}`,
-                      }))}
-                      value={customerId}
-                      onChange={(val) => setCustomerId(val)}
-                      placeholder="-- جستجوی مشتری --"
-                      searchPlaceholder="جستجوی شخص یا شرکت..."
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={() => setIsPersonModalOpen && setIsPersonModalOpen(true)}
-                    className="bg-indigo-50 hover:bg-indigo-100 text-indigo-600 border border-indigo-200 rounded-xl px-4 flex items-center justify-center transition-colors"
-                    title="تعریف مشتری جدید"
-                  >
-                    <UserPlus className="w-5 h-5" />
-                  </button>
-                </div>
-                {customerId &&
-                    renderPersonInfoBox(
-                      customerId,
-                      "bg-indigo-50/50 border-indigo-100/50 text-slate-600",
-                    )}
-                </div>
-                <div className="lg:col-span-1">
-                  <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                    <FileText className="w-4 h-4 text-indigo-500" /> توضیحات
-                  </label>
-                  <input
-                    type="text"
-                    value={invoiceDescription || ""}
-                    onChange={(e) => setInvoiceDescription(e.target.value)}
-                    className="w-full p-3 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none bg-indigo-50/20"
-                    placeholder="توضیحات و یادداشت..."
-                  />
-                </div>
-                <div className="lg:col-span-1">
-                  <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                    <Tag className="w-4 h-4 text-indigo-500" /> یادداشت / کد پیگیری
-                  </label>
-                  <input
-                    type="text"
-                    value={invoiceNote || ""}
-                    onChange={(e) => setInvoiceNote(e.target.value)}
-                    className="w-full p-3 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none bg-indigo-50/20"
-                    placeholder="مثال: کد پیگیری ۱۲۳۴۵۶"
-                  />
-                </div>
-                <div className="lg:col-span-1">
-                  <label className="block text-sm font-bold text-slate-600 mb-2 flex items-center gap-1.5">
-                    <Box className="w-4 h-4 text-indigo-500" /> انبار فروش (خروج
-                    کالا){" "}
-                    <span className="text-rose-500 font-extrabold">*</span>
-                  </label>
-                  <select
-                    value={invoiceWarehouseId}
-                    onChange={(e) => handleWarehouseHeaderChange(e.target.value)}
-                    className="w-full p-3 border border-indigo-100/80 rounded-xl focus:ring-2 focus:ring-indigo-500 bg-indigo-50/30 text-base font-bold text-indigo-950 outline-none"
-                  >
-                    <option value="">
-                      -- لطفاً انبار فروش را انتخاب کنید --
-                    </option>
-                    {warehouses
-                      .filter((w) => w.isActive !== false)
-                      .map((v, index) => (
-                        <option key={`${v.id}-${index}`} value={v.id}>
-                          {v.name} {v.isDefault || v.isDefaultSales ? "★ (انبار پیش‌فرض فروش)" : ""}
-                        </option>
-                      ))}
-                  </select>
                 </div>
               </div>
 
-              {/* Logistics, Driver & Recipient Info Section */}
-              <div className="mt-5 pt-5 border-t border-indigo-100/80 bg-gradient-to-br from-indigo-50/40 via-white to-blue-50/30 rounded-2xl p-4.5 border border-indigo-100 shadow-xs space-y-4">
-                <div className="flex items-center justify-between flex-wrap gap-2">
-                  <div className="flex items-center gap-2 text-sm font-black text-slate-800">
-                    <span className="p-1.5 rounded-xl bg-indigo-600 text-white shadow-xs">
-                      <Truck className="w-4 h-4" />
-                    </span>
-                    <span>اطلاعات راننده، تحویل‌گیرنده و حمل کالا</span>
-                  </div>
-                  <span className="text-xs text-indigo-700 font-bold bg-indigo-100/60 px-2.5 py-1 rounded-lg">
-                    ثبت مشخصات شخص راننده / تحویل گیرنده فاکتور
-                  </span>
-                </div>
+              {/* Extra details toggle button */}
+              <div className="pt-2 flex items-center justify-between">
+                <button
+                  type="button"
+                  onClick={() => setIsExtraInfoOpen(!isExtraInfoOpen)}
+                  className="inline-flex items-center gap-2 px-3 py-1.5 text-xs font-black text-indigo-700 hover:text-indigo-900 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer border border-transparent hover:border-indigo-100"
+                >
+                  <ChevronDown className={`w-3.5 h-3.5 transition-transform duration-200 ${isExtraInfoOpen ? "rotate-180" : ""}`} />
+                  <span>{isExtraInfoOpen ? "بستن جزئیات تکمیلی، سررسید و حمل" : "افزودن اطلاعات تکمیلی، سررسید، حمل و راننده"}</span>
+                  {(invoiceDueDate || invoiceDescription || invoiceNote || driverName || vehiclePlateNumber) && (
+                    <span className="w-2 h-2 rounded-full bg-emerald-500 inline-block" title="اطلاعات تکمیلی وارد شده" />
+                  )}
+                </button>
 
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                  {/* Driver Selection */}
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-black text-slate-700 flex items-center gap-1.5">
-                      <User className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>شخص راننده / متصدی حمل</span>
-                    </label>
-                    <SearchableSelect
-                      options={(activePersonsOnly || []).map((p: any) => ({
-                        value: p.id,
-                        label: p.alias || p.name,
-                        subLabel: p.phone || p.mobile || undefined,
-                        badge: getRoleName ? getRoleName(p.role) : undefined,
-                        imageUrl: p.imageUrl,
-                        searchStr: `${p.alias || ""} ${p.name || ""} ${p.phone || ""} ${p.mobile || ""}`,
-                      }))}
-                      value={driverPersonId || ""}
-                      onChange={(val: any) => {
-                        if (setDriverPersonId) setDriverPersonId(val);
-                        const foundPerson = (activePersonsOnly || []).find((p: any) => String(p.id) === String(val));
-                        if (foundPerson) {
-                          if (setDriverName) setDriverName(foundPerson.name || foundPerson.alias || "");
-                          if (setDriverPhone) setDriverPhone(foundPerson.phone || foundPerson.mobile || "");
-                        }
-                      }}
-                      placeholder="-- انتخاب راننده از لیست اشخاص --"
-                      searchPlaceholder="جستجوی راننده..."
-                    />
-                    <div className="flex gap-1.5 pt-1">
+                {customerId && (
+                  <div className="text-[11px] font-bold text-slate-500 hidden sm:block">
+                    {renderPersonInfoBox(customerId, "inline-flex items-center gap-2 text-slate-600")}
+                  </div>
+                )}
+              </div>
+
+              {/* Collapsible Details Panel */}
+              {(isExtraInfoOpen || invoiceLayoutMode === "official") && (
+                <div className="mt-2 pt-4 border-t border-slate-100 bg-slate-50/50 p-4 rounded-2xl border border-slate-200/80 space-y-4 animate-in fade-in duration-200">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-indigo-500" /> عنوان فاکتور
+                      </label>
                       <input
                         type="text"
-                        value={driverName || ""}
-                        onChange={(e) => setDriverName && setDriverName(e.target.value)}
-                        placeholder="نام راننده..."
-                        className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={invoiceTitle}
+                        onChange={(e) => setInvoiceTitle(e.target.value)}
+                        className="w-full h-[38px] px-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none bg-white text-xs"
+                        placeholder="عنوان فاکتور..."
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1.5">
+                        <CalendarIcon className="w-3.5 h-3.5 text-rose-500" /> تاریخ سررسید تسویه
+                      </label>
+                      <div className="relative">
+                        <DatePicker
+                          value={invoiceDueDate}
+                          onChange={setInvoiceDueDate}
+                          calendar={storeSettings?.calendarType === "gregorian" ? undefined : persian}
+                          locale={storeSettings?.calendarType === "gregorian" ? undefined : persian_fa}
+                          calendarPosition="bottom-right"
+                          inputClass="w-full h-[38px] pl-8 pr-3 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-rose-500 text-rose-950 font-mono font-bold text-center transition-all cursor-pointer outline-none text-xs"
+                          containerClassName="w-full"
+                          placeholder="انتخاب سررسید..."
+                        />
+                        {invoiceDueDate && (
+                          <button onClick={() => setInvoiceDueDate(null)} className="absolute right-2 top-1/2 -translate-y-1/2 text-rose-400 hover:text-rose-600 p-1">
+                            <X className="w-3 h-3" />
+                          </button>
+                        )}
+                        <div className="absolute left-2.5 top-1/2 -translate-y-1/2 pointer-events-none text-rose-500">
+                          <CalendarIcon className="w-3.5 h-3.5" />
+                        </div>
+                      </div>
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1.5">
+                        <Tag className="w-3.5 h-3.5 text-indigo-500" /> یادداشت / کد پیگیری
+                      </label>
                       <input
                         type="text"
-                        dir="ltr"
-                        value={driverPhone || ""}
-                        onChange={(e) => setDriverPhone && setDriverPhone(e.target.value)}
-                        placeholder="شماره تماس..."
-                        className="w-32 p-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
+                        value={invoiceNote || ""}
+                        onChange={(e) => setInvoiceNote(e.target.value)}
+                        className="w-full h-[38px] px-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none bg-white text-xs"
+                        placeholder="کد پیگیری، حواله یا ارجاع..."
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-xs font-bold text-slate-600 mb-1 flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-indigo-500" /> توضیحات فاکتور
+                      </label>
+                      <input
+                        type="text"
+                        value={invoiceDescription || ""}
+                        onChange={(e) => setInvoiceDescription(e.target.value)}
+                        className="w-full h-[38px] px-3 border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 font-bold text-slate-800 outline-none bg-white text-xs"
+                        placeholder="توضیحات و شرایط تحویل..."
                       />
                     </div>
                   </div>
 
-                  {/* Recipient Selection */}
-                  <div className="space-y-1.5">
-                    <div className="flex items-center justify-between">
-                      <label className="block text-xs font-black text-slate-700 flex items-center gap-1.5">
-                        <UserCheck className="w-3.5 h-3.5 text-emerald-600" />
-                        <span>شخص تحویل‌گیرنده کالا</span>
-                      </label>
-                      {customerId && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            const foundCustomer = (activePersonsOnly || []).find((p: any) => String(p.id) === String(customerId));
-                            if (foundCustomer) {
-                              if (setReceiverPersonId) setReceiverPersonId(foundCustomer.id);
-                              if (setReceiverName) setReceiverName(foundCustomer.name || foundCustomer.alias || "");
-                              if (setReceiverPhone) setReceiverPhone(foundCustomer.phone || foundCustomer.mobile || "");
+                  {/* Logistics & Driver Subsection */}
+                  <div className="pt-3 border-t border-slate-200/60">
+                    <div className="flex items-center gap-2 text-xs font-black text-slate-800 mb-3">
+                      <Truck className="w-4 h-4 text-indigo-600" />
+                      <span>مشخصات راننده، تحویل‌گیرنده و حمل بار</span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-slate-600 flex items-center gap-1">
+                          <User className="w-3 h-3 text-indigo-600" />
+                          <span>راننده / متصدی حمل</span>
+                        </label>
+                        <SearchableSelect
+                          options={(activePersonsOnly || []).map((p: any) => ({
+                            value: p.id,
+                            label: p.alias || p.name,
+                            subLabel: p.phone || p.mobile || undefined,
+                            badge: getRoleName ? getRoleName(p.role) : undefined,
+                            imageUrl: p.imageUrl,
+                            searchStr: `${p.alias || ""} ${p.name || ""} ${p.phone || ""} ${p.mobile || ""}`,
+                          }))}
+                          value={driverPersonId || ""}
+                          onChange={(val: any) => {
+                            if (setDriverPersonId) setDriverPersonId(val);
+                            const foundPerson = (activePersonsOnly || []).find((p: any) => String(p.id) === String(val));
+                            if (foundPerson) {
+                              if (setDriverName) setDriverName(foundPerson.name || foundPerson.alias || "");
+                              if (setDriverPhone) setDriverPhone(foundPerson.phone || foundPerson.mobile || "");
                             }
                           }}
-                          className="text-[11px] text-indigo-600 hover:text-indigo-800 font-extrabold underline cursor-pointer"
-                        >
-                          خود مشتری
-                        </button>
-                      )}
-                    </div>
-                    <SearchableSelect
-                      options={(activePersonsOnly || []).map((p: any) => ({
-                        value: p.id,
-                        label: p.alias || p.name,
-                        subLabel: p.phone || p.mobile || undefined,
-                        badge: getRoleName ? getRoleName(p.role) : undefined,
-                        imageUrl: p.imageUrl,
-                        searchStr: `${p.alias || ""} ${p.name || ""} ${p.phone || ""} ${p.mobile || ""}`,
-                      }))}
-                      value={receiverPersonId || ""}
-                      onChange={(val: any) => {
-                        if (setReceiverPersonId) setReceiverPersonId(val);
-                        const foundPerson = (activePersonsOnly || []).find((p: any) => String(p.id) === String(val));
-                        if (foundPerson) {
-                          if (setReceiverName) setReceiverName(foundPerson.name || foundPerson.alias || "");
-                          if (setReceiverPhone) setReceiverPhone(foundPerson.phone || foundPerson.mobile || "");
-                        }
-                      }}
-                      placeholder="-- انتخاب تحویل‌گیرنده --"
-                      searchPlaceholder="جستجوی تحویل‌گیرنده..."
-                    />
-                    <div className="flex gap-1.5 pt-1">
-                      <input
-                        type="text"
-                        value={receiverName || ""}
-                        onChange={(e) => setReceiverName && setReceiverName(e.target.value)}
-                        placeholder="نام تحویل‌گیرنده..."
-                        className="w-full p-2 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                      <input
-                        type="text"
-                        dir="ltr"
-                        value={receiverPhone || ""}
-                        onChange={(e) => setReceiverPhone && setReceiverPhone(e.target.value)}
-                        placeholder="شماره تماس..."
-                        className="w-32 p-2 bg-white border border-slate-200 rounded-xl text-xs font-mono text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
+                          placeholder="انتخاب راننده..."
+                          searchPlaceholder="جستجوی شخص راننده..."
+                        />
+                        <div className="flex gap-1.5 pt-0.5">
+                          <input
+                            type="text"
+                            value={driverName || ""}
+                            onChange={(e) => setDriverName && setDriverName(e.target.value)}
+                            placeholder="نام راننده..."
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                          />
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={driverPhone || ""}
+                            onChange={(e) => setDriverPhone && setDriverPhone(e.target.value)}
+                            placeholder="تلفن..."
+                            className="w-28 h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <div className="flex items-center justify-between">
+                          <label className="block text-xs font-bold text-slate-600 flex items-center gap-1">
+                            <UserCheck className="w-3 h-3 text-emerald-600" />
+                            <span>شخص تحویل‌گیرنده</span>
+                          </label>
+                          {customerId && (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                const foundCustomer = (activePersonsOnly || []).find((p: any) => String(p.id) === String(customerId));
+                                if (foundCustomer) {
+                                  if (setReceiverPersonId) setReceiverPersonId(foundCustomer.id);
+                                  if (setReceiverName) setReceiverName(foundCustomer.name || foundCustomer.alias || "");
+                                  if (setReceiverPhone) setReceiverPhone(foundCustomer.phone || foundCustomer.mobile || "");
+                                }
+                              }}
+                              className="text-[10px] text-indigo-600 hover:underline cursor-pointer"
+                            >
+                              خود مشتری
+                            </button>
+                          )}
+                        </div>
+                        <SearchableSelect
+                          options={(activePersonsOnly || []).map((p: any) => ({
+                            value: p.id,
+                            label: p.alias || p.name,
+                            subLabel: p.phone || p.mobile || undefined,
+                            badge: getRoleName ? getRoleName(p.role) : undefined,
+                            imageUrl: p.imageUrl,
+                            searchStr: `${p.alias || ""} ${p.name || ""} ${p.phone || ""} ${p.mobile || ""}`,
+                          }))}
+                          value={receiverPersonId || ""}
+                          onChange={(val: any) => {
+                            if (setReceiverPersonId) setReceiverPersonId(val);
+                            const foundPerson = (activePersonsOnly || []).find((p: any) => String(p.id) === String(val));
+                            if (foundPerson) {
+                              if (setReceiverName) setReceiverName(foundPerson.name || foundPerson.alias || "");
+                              if (setReceiverPhone) setReceiverPhone(foundPerson.phone || foundPerson.mobile || "");
+                            }
+                          }}
+                          placeholder="انتخاب تحویل‌گیرنده..."
+                          searchPlaceholder="جستجوی تحویل‌گیرنده..."
+                        />
+                        <div className="flex gap-1.5 pt-0.5">
+                          <input
+                            type="text"
+                            value={receiverName || ""}
+                            onChange={(e) => setReceiverName && setReceiverName(e.target.value)}
+                            placeholder="نام گیرنده..."
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                          />
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={receiverPhone || ""}
+                            onChange={(e) => setReceiverPhone && setReceiverPhone(e.target.value)}
+                            placeholder="تلفن..."
+                            className="w-28 h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-mono text-slate-800 outline-none"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-slate-600 flex items-center gap-1">
+                          <Truck className="w-3 h-3 text-amber-600" />
+                          <span>پلاک و مدل خودرو</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={vehiclePlateNumber || ""}
+                          onChange={(e) => setVehiclePlateNumber && setVehiclePlateNumber(e.target.value)}
+                          placeholder="مثال: وانت مزدا - ۶۸ / ۱۲۳ ب ۴۵"
+                          className="w-full h-[38px] px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                        />
+                      </div>
+
+                      <div className="space-y-1">
+                        <label className="block text-xs font-bold text-slate-600 flex items-center gap-1">
+                          <MapPin className="w-3 h-3 text-rose-600" />
+                          <span>آدرس و مقصد تحویل بار</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={shippingAddress || ""}
+                          onChange={(e) => setShippingAddress && setShippingAddress(e.target.value)}
+                          placeholder="نشانی محل تخلیه بار..."
+                          className="w-full h-[38px] px-3 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 outline-none"
+                        />
+                      </div>
                     </div>
                   </div>
 
-                  {/* Vehicle Plate */}
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-black text-slate-700 flex items-center gap-1.5">
-                      <Truck className="w-3.5 h-3.5 text-amber-600" />
-                      <span>پلاک / مشخصات خودرو</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={vehiclePlateNumber || ""}
-                      onChange={(e) => setVehiclePlateNumber && setVehiclePlateNumber(e.target.value)}
-                      placeholder="مثال: کامیون بنز - ۶۸ / ۱۲۳ ب ۴۵"
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-
-                  {/* Shipping Address */}
-                  <div className="space-y-1.5">
-                    <label className="block text-xs font-black text-slate-700 flex items-center gap-1.5">
-                      <MapPin className="w-3.5 h-3.5 text-rose-600" />
-                      <span>محل تخلیه / آدرس تحویل</span>
-                    </label>
-                    <input
-                      type="text"
-                      value={shippingAddress || ""}
-                      onChange={(e) => setShippingAddress && setShippingAddress(e.target.value)}
-                      placeholder="نشانی کامل محل تخلیه کالا..."
-                      className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                    />
-                  </div>
-                </div>
-              </div>
-
-              {/* Official Commercial Invoice Details */}
-              {invoiceLayoutMode === 'official' && (
-                <div className="mt-6 pt-5 border-t border-indigo-100 bg-slate-50/70 p-4 rounded-2xl border border-slate-200 space-y-3">
-                  <div className="flex items-center gap-2 text-xs font-black text-slate-800">
-                    <Building2 className="w-4 h-4 text-indigo-600" />
-                    <span>مشخصات تکمیلی فاکتور رسمی تجاری (سازمان امور مالیاتی)</span>
-                  </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-1">
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">شناسه ملی / کد ملی خریدار</label>
-                      <input
-                        type="text"
-                        dir="ltr"
-                        value={buyerNationalId}
-                        onChange={(e) => setBuyerNationalId(e.target.value)}
-                        placeholder="۱۰ یا ۱۱ رقم..."
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
+                  {/* Official Commercial Invoice Details */}
+                  {invoiceLayoutMode === "official" && (
+                    <div className="mt-3 pt-3 border-t border-slate-200/80 space-y-2">
+                      <div className="flex items-center gap-2 text-xs font-black text-slate-800">
+                        <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <span>مشخصات تکمیلی فاکتور رسمی تجاری (سازمان امور مالیاتی)</span>
+                      </div>
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 pt-1">
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">شناسه ملی / کد ملی خریدار</label>
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={buyerNationalId}
+                            onChange={(e) => setBuyerNationalId(e.target.value)}
+                            placeholder="۱۰ یا ۱۱ رقم..."
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg font-mono text-xs text-slate-800 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">کد اقتصادی خریدار</label>
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={buyerEconomicCode}
+                            onChange={(e) => setBuyerEconomicCode(e.target.value)}
+                            placeholder="۱۲ رقم کد اقتصادی..."
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg font-mono text-xs text-slate-800 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">کد پستی ۱۰ رقمی خریدار</label>
+                          <input
+                            type="text"
+                            dir="ltr"
+                            value={buyerPostalCode}
+                            onChange={(e) => setBuyerPostalCode(e.target.value)}
+                            placeholder="کد پستی..."
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg font-mono text-xs text-slate-800 outline-none"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-xs font-bold text-slate-600 mb-1">شرایط تسویه رسمی</label>
+                          <select
+                            value={paymentTerms}
+                            onChange={(e: any) => setPaymentTerms(e.target.value)}
+                            className="w-full h-8 px-2 bg-white border border-slate-200 rounded-lg text-xs font-bold text-slate-800 outline-none"
+                          >
+                            <option value="cash">نقدی (کارتخوان / نقد)</option>
+                            <option value="credit">اعتباری / نسیه رسمی</option>
+                            <option value="cheque">چک صیادی مدت‌دار</option>
+                          </select>
+                        </div>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">کد اقتصادی خریدار</label>
-                      <input
-                        type="text"
-                        dir="ltr"
-                        value={buyerEconomicCode}
-                        onChange={(e) => setBuyerEconomicCode(e.target.value)}
-                        placeholder="۱۲ رقم کد اقتصادی..."
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">کد پستی محل خریدار</label>
-                      <input
-                        type="text"
-                        dir="ltr"
-                        value={buyerPostalCode}
-                        onChange={(e) => setBuyerPostalCode(e.target.value)}
-                        placeholder="کد پستی ۱۰ رقمی..."
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl font-mono text-xs text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-xs font-bold text-slate-600 mb-1">شرایط تسویه رسمی</label>
-                      <select
-                        value={paymentTerms}
-                        onChange={(e: any) => setPaymentTerms(e.target.value)}
-                        className="w-full p-2.5 bg-white border border-slate-200 rounded-xl text-xs font-bold text-slate-800 focus:ring-2 focus:ring-indigo-500 outline-none"
-                      >
-                        <option value="cash">نقدی (کارتخوان / نقد)</option>
-                        <option value="credit">اعتباری / نسیه رسمی</option>
-                        <option value="cheque">چک صیادی مدت‌دار</option>
-                      </select>
-                    </div>
-                  </div>
+                  )}
                 </div>
               )}
             </div>
@@ -1094,39 +1045,93 @@ export default function SaleInvoiceCreate(props: any) {
               className="bg-white rounded-3xl shadow-sm border-2 border-indigo-50 "
               data-invoice-flow="sale"
             >
-              <div className="p-4 sm:p-5 bg-indigo-50/30 border-b border-indigo-100 flex flex-col gap-3">
+              {/* Items List Top Fast Entry Bar */}
+              <div className="p-4 bg-gradient-to-r from-indigo-50/70 via-slate-50 to-indigo-50/40 border-b border-indigo-100 flex flex-col gap-3">
                 <div className="flex flex-wrap justify-between items-center gap-2">
                   <div className="flex items-center gap-2">
-                    <h3 className="font-extrabold text-slate-800 flex items-center gap-2 whitespace-nowrap text-base">
-                      <Package className="w-5 h-5 text-indigo-600" /> لیست اقلام آماده فروش
+                    <h3 className="font-black text-slate-800 flex items-center gap-2 whitespace-nowrap text-sm">
+                      <Package className="w-4 h-4 text-indigo-600" />
+                      <span>لیست اقلام فاکتور</span>
                     </h3>
-                    <span className="text-xs font-bold text-indigo-600 bg-white px-2.5 py-0.5 rounded-full border border-indigo-200">
+                    <span className="text-xs font-mono font-bold text-indigo-700 bg-white px-2 py-0.5 rounded-md border border-indigo-200">
                       {toPersianDigits((items || []).length)} ردیف
                     </span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => setIsBulkModalOpen(true)}
-                      className="px-3 py-1.5 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 hover:border-indigo-300 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                      className="px-2.5 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                       title="انتخاب کاتالوگی و افزودن دسته‌ای اقلام (F4)"
                     >
                       <LayoutGrid className="w-3.5 h-3.5 text-indigo-600" />
-                      <span>افزودن دسته‌ای (F4)</span>
+                      <span>کاتالوگ (F4)</span>
                     </button>
                     {handleAddBlankRow && (
                       <button
                         type="button"
                         onClick={handleAddBlankRow}
-                        className="px-3 py-1.5 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-xl text-xs font-bold flex items-center gap-1.5 transition-all shadow-2xs cursor-pointer"
+                        className="px-2.5 py-1 bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
                         title="افزودن یک سطر خالی دستی"
                       >
                         <Plus className="w-3.5 h-3.5 text-slate-500" />
                         <span>سطر خالی</span>
                       </button>
                     )}
+                    <button
+                      type="button"
+                      onClick={() => setIsProductModalOpen(true)}
+                      className="px-2.5 py-1 bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer"
+                      title="تعریف کالای جدید"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>کالای جدید</span>
+                    </button>
                   </div>
+                </div>
+
+                {/* Instant Entry Controls (Barcode + Search Select) */}
+                <div className="flex flex-col sm:flex-row items-center gap-2 pt-1">
+                  <div className="shrink-0 w-full sm:w-auto">
+                    <FastBarcodeScanner onScan={handleFastBarcodeScan} />
+                  </div>
+
+                  <div className="flex-1 w-full relative z-20">
+                    <div className="border border-indigo-200 hover:border-indigo-400 focus-within:border-indigo-500 rounded-xl bg-white shadow-2xs transition-all">
+                      <SearchableSelect
+                        menuPlacement="bottom"
+                        options={products
+                          .filter(
+                            (p) =>
+                              p.isActive !== false &&
+                              (storeSettings.allowNegativeStock ||
+                                p.type === "service" ||
+                                calculateProductCurrentStock(p.id) > 0),
+                          )
+                          .map((p) => ({
+                            value: p.id,
+                            label: p.name,
+                            subLabel: formatProductStockDetails(p),
+                            badge: p.type === "service" ? "خدمات" : "کالا",
+                            searchStr: `${p.code || ""} ${p.barcode || ""}`,
+                          }))}
+                        value=""
+                        onChange={(val) => handleFastAddProduct(String(val))}
+                        placeholder="⚡ جستجو و افزودن فوری کالا (نام، کد، بارکد)..."
+                        searchPlaceholder="جستجوی آنی کالای مورد نظر برای فروش..."
+                      />
+                    </div>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={() => setIsScannerOpen(true)}
+                    className="p-2.5 bg-white border border-indigo-200 text-indigo-600 rounded-xl hover:bg-indigo-50 transition-colors cursor-pointer shrink-0"
+                    title="اسکن بارکد با دوربین گوشی / وبکم"
+                  >
+                    <ScanLine className="w-4 h-4" />
+                  </button>
                 </div>
               </div>
 
@@ -1575,239 +1580,229 @@ export default function SaleInvoiceCreate(props: any) {
                   </tbody>
                 </table>
               </div>
-              <div ref={itemsEndRef as any} className="p-4 sm:p-5 bg-indigo-50/30 border-t border-indigo-100 flex flex-col md:flex-row justify-between items-center gap-4">
-                <div className="flex-1 w-full flex flex-col md:flex-row items-center gap-2 max-w-2xl">
-                  <div className="flex gap-2">
-                    <FastBarcodeScanner onScan={handleFastBarcodeScan} />
-                  </div>
-                  <div className="flex-[2] relative z-10 w-full">
-                    <div className="border hover:border-indigo-300 rounded-xl bg-white shadow-sm transition-colors relative">
-                      <SearchableSelect
-                        menuPlacement="top"
-                        options={products
-                          .filter(
-                            (p) =>
-                              p.isActive !== false &&
-                              (storeSettings.allowNegativeStock ||
-                                p.type === "service" ||
-                                calculateProductCurrentStock(p.id) > 0),
-                          )
-                          .map((p) => ({
-                            value: p.id,
-                            label: p.name,
-                            subLabel: formatProductStockDetails(p),
-                            badge: p.type === "service" ? "خدمات" : "کالا",
-                            searchStr: `${p.code || ""} ${p.barcode || ""}`,
-                          }))}
-                        value=""
-                        onChange={(val) => handleFastAddProduct(String(val))}
-                        placeholder="جستجو و افزودن سریع کالا به لیست فروش (نام، کد، بارکد)..."
-                        searchPlaceholder="جستجوی کالای مورد نظر برای فروش..."
-                      />
-                    </div>
-                  </div>
-                  <button
-                    onClick={() => setIsScannerOpen(true)}
-                    className="p-[11px] bg-white border border-indigo-200 text-indigo-600 rounded-xl shadow-sm hover:bg-indigo-50 transition-colors focus:ring-2 focus:ring-indigo-500 cursor-pointer"
-                    title="اسکن بارکد با دوربین"
-                  >
-                    <ScanLine className="w-5 h-5" />
-                  </button>
+              {/* Table Footer: Summary count & quick actions */}
+              <div ref={itemsEndRef as any} className="p-3 bg-slate-50 border-t border-slate-200 flex flex-wrap justify-between items-center gap-3 text-xs">
+                <div className="flex items-center gap-2 text-slate-600 font-bold">
+                  <span>مجموع اقلام فاکتور:</span>
+                  <span className="font-mono font-black text-indigo-700 bg-white px-2 py-0.5 rounded border border-slate-200">
+                    {toPersianDigits((items || []).reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0))}
+                  </span>
+                  <span>واحد در {toPersianDigits((items || []).length)} ردیف</span>
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setIsBulkModalOpen(true)}
-                    className="px-4 py-2.5 bg-indigo-50 hover:bg-indigo-100 border border-indigo-200 text-indigo-700 shadow-2xs rounded-xl font-bold flex items-center gap-2 transition-colors whitespace-nowrap outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer text-xs"
-                    title="افزودن دسته‌ای اقلام از کاتالوگ (F4)"
-                  >
-                    <LayoutGrid className="w-4 h-4 text-indigo-600" />
-                    <span>افزودن دسته‌ای (F4)</span>
-                  </button>
+                <div className="flex items-center gap-2">
                   {handleAddBlankRow && (
                     <button
                       type="button"
                       onClick={handleAddBlankRow}
-                      className="px-4 py-2.5 bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 shadow-2xs rounded-xl font-bold flex items-center gap-2 transition-colors whitespace-nowrap outline-none cursor-pointer text-xs"
+                      className="px-3 py-1.5 bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                       title="افزودن یک سطر خالی"
                     >
-                      <Plus className="w-4 h-4 text-slate-500" />
-                      <span>سطر خالی</span>
+                      <Plus className="w-3.5 h-3.5 text-slate-500" />
+                      <span>افزودن سطر</span>
                     </button>
                   )}
                   <button
+                    type="button"
                     onClick={() => setIsProductModalOpen(true)}
-                    className="px-4 py-2.5 bg-white border border-indigo-200 text-indigo-700 shadow-2xs rounded-xl font-bold hover:bg-indigo-50 flex items-center gap-2 transition-colors whitespace-nowrap outline-none focus:ring-2 focus:ring-indigo-500 cursor-pointer text-xs"
+                    className="px-3 py-1.5 bg-white hover:bg-indigo-50 border border-indigo-200 text-indigo-700 rounded-lg text-xs font-bold flex items-center gap-1.5 transition-colors cursor-pointer shadow-2xs"
                   >
-                    <Plus className="w-4 h-4" /> تعریف کالا
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>تعریف کالا</span>
                   </button>
                 </div>
               </div>
             </div>
+          </div>
+          {/* END OF MAIN 8-COLUMN SECTION */}
 
-            {/* Totals & Submit */}
-            <div className="bg-white rounded-3xl shadow-sm border-2 border-indigo-50 ">
-              <div className="p-8">
-                <div className="flex flex-col lg:flex-row justify-between gap-10">
-                  {!activeTab.includes("warehouse") && (
-                    <div className="flex w-full flex-col lg:flex-row justify-between gap-10">
-                      <div className="flex-1 space-y-4">
-                        <div>
-                          <label className="block text-sm font-black text-slate-700 mb-3 ml-1">
-                            تخفیف روی کل فاکتور (%)
-                          </label>
-                          <input
-                            type="number"
-                            min="0"
-                            max="100"
-                            value={overallDiscountPercent}
-                            onChange={(e) =>
-                              setOverallDiscountPercent(Number(e.target.value))
-                            }
-                            className="w-48 p-3.5 bg-indigo-50/30 border border-indigo-100 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono text-left font-bold text-rose-600 outline-none"
-                            dir="ltr"
-                          />
-                          <p className="mt-2 text-xs font-bold text-slate-400 font-sans">
-                            این تخفیف روی مبلغ نهایی پس از کسر تخفیف‌های سطری
-                            اعمال می‌شود.
-                          </p>
-                        </div>
+          {/* Sticky Settlement & Financial Totals Sidebar (4 columns) */}
+          <div className="lg:col-span-4 sticky top-6 space-y-4">
+            {/* Customer Status Card */}
+            {customerId && (
+              <div className="bg-white rounded-2xl p-4 shadow-xs border border-indigo-100 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <div className="w-8 h-8 rounded-full bg-indigo-50 text-indigo-600 flex items-center justify-center font-black text-xs shrink-0">
+                      <User className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <div className="text-xs font-black text-slate-800 line-clamp-1">
+                        {(() => {
+                          const c = (activePersonsOnly || []).find((p: any) => String(p.id) === String(customerId));
+                          return c ? (c.alias || c.name) : "مشتری انتخاب شده";
+                        })()}
                       </div>
-                      <div className="w-full lg:w-[420px] space-y-1">
-                        <div className="bg-indigo-50/40 p-6 rounded-2xl border border-indigo-100/50 space-y-4">
-                          <div className="flex justify-between items-center text-slate-500 font-bold">
-                            <span>جمع مبالغ (بدون تخفیف):</span>
-                            <span
-                              className="font-sans font-black text-slate-700"
-                              dir="rtl"
-                            >
-                              {formatCurrency(invoiceOriginalTotal())}{" "}
-                              <span className="text-[10px]">
-                                {invoiceCurrency}
-                              </span>
-                            </span>
-                          </div>
-                          <div className="flex justify-between items-center text-rose-500 font-bold">
-                            <span>مجموع کل تخفیف‌ها:</span>
-                            <span
-                              className="font-sans font-black text-rose-600"
-                              dir="rtl"
-                            >
-                              {formatCurrency(invoiceTotalDiscount())}{" "}
-                              <span className="text-[10px]">
-                                {invoiceCurrency}
-                              </span>
-                            </span>
-                          </div>
-                          <div className="h-px bg-indigo-100/30 w-full my-2"></div>
-                          <div className="flex justify-between items-center text-slate-400 font-bold text-xs">
-                            <span>ارزش پس از تخفیف سطری:</span>
-                            <span
-                              className="font-sans font-bold text-slate-600"
-                              dir="rtl"
-                            >
-                              {formatCurrency(calculateSubtotal())}{" "}
-                              <span className="text-[10px]">
-                                {invoiceCurrency}
-                              </span>
-                            </span>
-                          </div>
-                          {overallDiscountPercent > 0 && (
-                            <div className="flex justify-between items-center text-slate-400 font-bold text-xs">
-                              <span>تخفیف کلی فاکتور:</span>
-                              <span
-                                className="font-sans font-bold text-slate-600"
-                                dir="rtl"
-                              >
-                                % {overallDiscountPercent}
-                              </span>
-                            </div>
-                          )}
-                          <div className="h-px bg-indigo-100/60 w-full my-4"></div>
-                          <div className="flex justify-between items-center text-xl font-black text-indigo-800">
-                            <span>مبلغ نهایی فاکتور:</span>
-                            <span
-                              className="font-sans text-2xl text-indigo-950"
-                              dir="rtl"
-                            >
-                              {formatCurrency(calculateFinalTotal())}{" "}
-                              <span className="text-xs">{invoiceCurrency}</span>
-                            </span>
-                          </div>
-                          {calculateFinalTotal() > 0 && (
-                            <div className="mt-4 pt-4 border-t border-dashed border-indigo-200 text-right leading-relaxed text-xs font-bold text-indigo-700">
-                              <span className="text-indigo-900 font-black">
-                                {numToPersianWords(calculateFinalTotal())}{" "}
-                                {invoiceCurrency}
-                              </span>
-                            </div>
-                          )}
-                        </div>
+                      <div className="text-[11px] font-mono text-slate-400">
+                        {(() => {
+                          const c = (activePersonsOnly || []).find((p: any) => String(p.id) === String(customerId));
+                          return c?.phone || c?.mobile || "";
+                        })()}
                       </div>
                     </div>
-                  )}
+                  </div>
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-indigo-50 text-indigo-700 border border-indigo-100">
+                    {(() => {
+                      const c = (activePersonsOnly || []).find((p: any) => String(p.id) === String(customerId));
+                      return c && getRoleName ? getRoleName(c.role) : "مشتری";
+                    })()}
+                  </span>
+                </div>
+                {renderPersonInfoBox && (
+                  <div className="pt-1.5 border-t border-slate-100 text-xs">
+                    {renderPersonInfoBox(customerId, "text-xs")}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Financial Summary Card */}
+            <div className="bg-white rounded-2xl p-5 shadow-xs border border-slate-200/80 space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-xs font-black text-slate-800 flex items-center gap-1.5">
+                  <ShoppingCart className="w-4 h-4 text-indigo-600" />
+                  <span>صورت‌حساب فاکتور</span>
+                </span>
+                <span className="text-[11px] font-bold text-slate-400">
+                  {toPersianDigits((items || []).length)} قلم
+                </span>
+              </div>
+
+              {/* Discount on whole invoice */}
+              <div className="bg-slate-50/70 p-2.5 rounded-xl border border-slate-200/60 flex items-center justify-between gap-2">
+                <label className="text-xs font-bold text-slate-600 whitespace-nowrap">
+                  تخفیف روی فاکتور (%):
+                </label>
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    value={overallDiscountPercent}
+                    onChange={(e) => setOverallDiscountPercent(Number(e.target.value))}
+                    className="w-16 h-8 px-2 bg-white border border-slate-200 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono text-center font-bold text-rose-600 outline-none text-xs"
+                    dir="ltr"
+                  />
+                  <span className="text-xs font-bold text-slate-400">%</span>
                 </div>
               </div>
-              <div className="p-6 bg-indigo-50/20 border-t border-indigo-100 flex flex-wrap items-center justify-between gap-3">
-                <div className="text-xs text-slate-500 font-bold">
-                  {invoiceLayoutMode === 'pos' ? (
-                    <span className="flex items-center gap-1.5 text-indigo-700 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100">
-                      <Zap className="w-4 h-4 text-indigo-600" />
-                      <span>کلید میانبر F2: پیش‌نمایش و ثبت نهایی سریع</span>
-                    </span>
+
+              {/* Calculation Lines */}
+              <div className="space-y-2 text-xs">
+                <div className="flex justify-between items-center text-slate-500">
+                  <span>جمع ناخالص اقلام:</span>
+                  <span className="font-mono font-bold text-slate-700" dir="rtl">
+                    {formatCurrency(invoiceOriginalTotal())}{" "}
+                    <span className="text-[10px] text-slate-400">{invoiceCurrency}</span>
+                  </span>
+                </div>
+
+                <div className="flex justify-between items-center text-rose-600">
+                  <span>مجموع کل تخفیف‌ها:</span>
+                  <span className="font-mono font-bold text-rose-600" dir="rtl">
+                    {invoiceTotalDiscount() > 0 ? "-" : ""}
+                    {formatCurrency(invoiceTotalDiscount())}{" "}
+                    <span className="text-[10px]">{invoiceCurrency}</span>
+                  </span>
+                </div>
+
+                <div className="h-px bg-slate-100 my-1"></div>
+
+                <div className="flex justify-between items-center text-slate-400 text-[11px]">
+                  <span>پس از کسر تخفیف سطری:</span>
+                  <span className="font-mono font-bold text-slate-600" dir="rtl">
+                    {formatCurrency(calculateSubtotal())}{" "}
+                    <span className="text-[10px]">{invoiceCurrency}</span>
+                  </span>
+                </div>
+              </div>
+
+              {/* Big Net Payable Total */}
+              <div className="bg-gradient-to-br from-indigo-900 via-indigo-950 to-slate-900 rounded-2xl p-4 text-white shadow-md space-y-2">
+                <div className="flex justify-between items-center text-indigo-200 text-xs font-bold">
+                  <span>مبلغ قابل پرداخت نهایی:</span>
+                  <span className="text-[11px] bg-white/10 px-2 py-0.5 rounded text-indigo-100 font-mono">
+                    {invoiceCurrency}
+                  </span>
+                </div>
+                <div className="text-2xl sm:text-3xl font-black font-mono tracking-tight text-amber-300 text-left" dir="ltr">
+                  {formatCurrency(calculateFinalTotal())}
+                </div>
+                {calculateFinalTotal() > 0 && (
+                  <p className="text-[11px] text-indigo-200 font-bold pt-1.5 border-t border-white/10 leading-relaxed text-right line-clamp-2">
+                    {numToPersianWords(calculateFinalTotal())} {invoiceCurrency}
+                  </p>
+                )}
+              </div>
+
+              {/* Settlement & Save Actions */}
+              <div className="space-y-2.5 pt-1">
+                {/* Primary F2 Settlement Button */}
+                <button
+                  type="button"
+                  onClick={handleTriggerSaveWithValidation}
+                  disabled={submitting || (items || []).length === 0 || (!customerId && invoiceLayoutMode === "official")}
+                  className="w-full py-3.5 px-4 bg-indigo-600 hover:bg-indigo-700 active:scale-[0.99] disabled:bg-indigo-200 text-white rounded-xl font-black text-sm flex items-center justify-center gap-2 transition-all shadow-md hover:shadow-indigo-500/25 cursor-pointer relative"
+                >
+                  {submitting ? (
+                    <RefreshCw className="w-5 h-5 animate-spin" />
                   ) : (
-                    <span>فاکتور رسمی تجاری - کلیه مشخصات مودی و خریدار در پیش‌نمایش چاپی لحاظ خواهد شد.</span>
+                    <Zap className="w-5 h-5 text-amber-300 fill-amber-300" />
                   )}
-                </div>
+                  <span>ثبت و تسویه نهایی فاکتور</span>
+                  <span className="font-mono text-[11px] bg-indigo-800/80 px-2 py-0.5 rounded text-indigo-100 mr-auto">
+                    F2
+                  </span>
+                </button>
 
-                <div className="flex items-center gap-3">
-                  <button
-                    type="button"
-                    disabled={submitting || (items || []).length === 0}
-                    onClick={() => {
-                      if (!isNegativeStockAllowed && Object.keys(rowStockErrors).length > 0) {
-                        const firstErrKey = Object.keys(rowStockErrors)[0];
-                        const firstErr = rowStockErrors[firstErrKey];
-                        const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
-                        el?.scrollIntoView({ behavior: "smooth", block: "center" });
-                        if (typeof customAlert === "function") {
-                          customAlert(
-                            `خطای کسری موجودی در ردیف ${firstErr.rowNumber}:\nتعداد وارد شده برای کالای «${firstErr.productName}» از موجودی انبار «${firstErr.warehouseName}» بیشتر است.\nردیف‌های دارای کسری با کادر قرمز رنگ مشخص شده‌اند.`
-                          );
-                        }
-                        return;
+                {/* Secondary Draft Save Button */}
+                <button
+                  type="button"
+                  disabled={submitting || (items || []).length === 0}
+                  onClick={() => {
+                    if (!isNegativeStockAllowed && Object.keys(rowStockErrors).length > 0) {
+                      const firstErrKey = Object.keys(rowStockErrors)[0];
+                      const firstErr = rowStockErrors[firstErrKey];
+                      const el = document.getElementById(`sale-invoice-item-row-${firstErrKey}`);
+                      el?.scrollIntoView({ behavior: "smooth", block: "center" });
+                      if (typeof customAlert === "function") {
+                        customAlert(
+                          `خطای کسری موجودی در ردیف ${firstErr.rowNumber}:\nتعداد وارد شده برای کالای «${firstErr.productName}» از موجودی انبار «${firstErr.warehouseName}» بیشتر است.`
+                        );
                       }
-                      if (
-                        confirm(
-                          "آیا از ذخیره این فاکتور به عنوان پیش‌نویس اطمینان دارید؟",
-                        )
-                      ) {
-                        saveInvoiceData(null, true);
-                      }
-                    }}
-                    className="px-6 py-3.5 bg-amber-500 hover:bg-amber-600 disabled:bg-amber-200 text-slate-900 rounded-2xl font-bold flex items-center justify-center gap-2 transition-colors shadow-sm outline-none cursor-pointer text-sm"
-                  >
-                    <FileText className="w-4 h-4" />
-                    ذخیره به عنوان پیش‌نویس
-                  </button>
+                      return;
+                    }
+                    if (confirm("آیا از ذخیره این فاکتور به عنوان پیش‌نویس اطمینان دارید؟")) {
+                      saveInvoiceData(null, true);
+                    }
+                  }}
+                  className="w-full py-2.5 px-3 bg-slate-100 hover:bg-slate-200 active:scale-[0.99] disabled:bg-slate-50 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                >
+                  <FileText className="w-3.5 h-3.5 text-slate-500" />
+                  <span>ذخیره موقت به عنوان پیش‌نویس</span>
+                </button>
+              </div>
 
-                  <button
-                    type="button"
-                    onClick={handleTriggerSaveWithValidation}
-                    disabled={submitting || (items || []).length === 0 || (!customerId && invoiceLayoutMode === 'official')}
-                    className="px-8 py-3.5 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-200 text-white rounded-2xl font-black flex items-center justify-center gap-2.5 transition-colors shadow-sm outline-none focus:ring-4 focus:ring-indigo-500/20 cursor-pointer text-sm"
-                  >
-                    {submitting ? (
-                      <RefreshCw className="w-5 h-5 animate-spin" />
-                    ) : (
-                      <Save className="w-5 h-5" />
-                    )}
-                    پیش‌نمایش و ثبت فاکتور
-                  </button>
-                </div>
+              {/* Quick shortcut guide */}
+              <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-400 font-bold">
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-slate-600 border border-slate-200">F2</kbd>
+                  <span>تسویه</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-slate-600 border border-slate-200">F4</kbd>
+                  <span>کاتالوگ</span>
+                </span>
+                <span className="flex items-center gap-1">
+                  <kbd className="px-1.5 py-0.5 rounded bg-slate-100 font-mono text-[10px] text-slate-600 border border-slate-200">Enter</kbd>
+                  <span>افزودن</span>
+                </span>
               </div>
             </div>
+          </div>
+          {/* END OF SIDEBAR (4 COLS) */}
+        </div>
+        {/* END OF 12-COL GRID */}
 
             {isBulkModalOpen && (
               <BulkProductPickerModal
