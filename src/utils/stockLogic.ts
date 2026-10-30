@@ -114,8 +114,21 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
 
     const pid = String(p.id);
     const pDefaultWhId = String(p.warehouseId || defaultWh);
+    // Crucial: Base initial stock must use initialStock if defined, and NEVER fluctuate with p.stock
+    const baseStock = Number(
+      p.initialStock !== undefined && p.initialStock !== null && !isNaN(Number(p.initialStock))
+        ? p.initialStock
+        : (p.initialStockQty !== undefined && p.initialStockQty !== null && !isNaN(Number(p.initialStockQty))
+            ? p.initialStockQty
+            : (p.stock || 0))
+    ) || 0;
+
+    // Freeze initialStock on the product object so subsequent stock updates never overwrite it
+    if (p.initialStock === undefined) {
+      p.initialStock = baseStock;
+    }
+
     const targetWhId = String(p.initialStockWarehouseId || p.warehouseId || defaultWh);
-    const baseStock = Number(p.stock) || 0;
 
     // Ensure target warehouse entry exists
     const targetKey = `${pid}_${targetWhId}`;
@@ -148,12 +161,12 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
       stocksMap[targetKey].physicalStock += baseStock;
       const after = stocksMap[targetKey].physicalStock;
 
-      const docNum = p.initialStockDocNumber || (p.code ? `OPN-${p.code}` : 'موجودی اولیه');
+      const docNum = p.initialStockDocNumber || (p.code ? `INIT-${p.code}` : 'موجودی اولیه');
       const docDate = p.initialStockDate || safeIsoDate(p.createdAt);
       const docDesc = p.initialStockDescription || 'سند موجودی اول دوره و افتتاحیه انبار';
 
       historyList.push({
-        id: generateId(),
+        id: `init-${pid}`,
         productId: pid,
         warehouseId: targetWhId,
         date: docDate,
@@ -183,7 +196,7 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
     if (doc._originTable === 'warehouse_remittances') return 'warehouse_remittance';
     if (doc._originTable === 'sales_invoices') return 'sale';
     if (doc._originTable === 'purchase_invoices') return 'purchase';
-    if (doc._originTable === 'sale_returns') return 'sales_return';
+    if (doc._originTable === 'sale_returns') return 'sale_return';
     if (doc._originTable === 'purchase_returns') return 'purchase_return';
     if (doc._originTable === 'wastes') return 'waste';
     return 'sale';
@@ -253,12 +266,20 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
     });
   });
 
-  // 3. Process physical stock movements (Receipts, Remittances, Returns, Wastes)
+  // 3. Process physical stock movements (Receipts, Remittances, Wastes)
+  // Financial invoices (sale, purchase, returns) do NOT directly modify physical stock
   sortedDocs.forEach((doc: any) => {
     const docType = getDocType(doc);
 
-    // Sales invoices do NOT modify physical stock (Rule 1)
-    if (docType === 'sale' || docType === 'purchase' || docType === 'proforma') {
+    // Skip financial invoices: only approved warehouse docs modify physical stock
+    if (
+      docType === 'sale' ||
+      docType === 'purchase' ||
+      docType === 'proforma' ||
+      docType === 'sale_return' ||
+      docType === 'sales_return' ||
+      docType === 'purchase_return'
+    ) {
       return;
     }
 
@@ -292,7 +313,7 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
       const docTime = doc.time || safeTimeStr(doc.createdAt);
       const docTs = parseDocDateToTimestamp(doc.date, docTime, doc.createdAt);
 
-      if (docType === 'warehouse_receipt' || docType === 'sales_return') {
+      if (docType === 'warehouse_receipt') {
         // Inward physical movement
         const before = stocksMap[key].physicalStock;
         stocksMap[key].physicalStock += q;
@@ -313,14 +334,14 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
           documentType: docType,
           documentId: doc.id,
           documentNumber: doc.invoiceNumber || doc.docNumber || String(doc.id),
-          description: doc.description || (docType === 'sales_return' ? 'برگشت از فروش' : 'رسید ورود به انبار'),
+          description: doc.description || 'رسید ورود به انبار',
           personId: doc.customerId || doc.personId || '',
           personName: doc.customerName || doc.personName || '',
           stockBefore: before,
           stockAfter: after,
         });
-      } else if (docType === 'warehouse_remittance' || docType === 'purchase_return' || docType === 'waste') {
-        // Outward physical movement (Rule 4)
+      } else if (docType === 'warehouse_remittance' || docType === 'waste') {
+        // Outward physical movement
         const before = stocksMap[key].physicalStock;
         stocksMap[key].physicalStock -= q;
         const after = stocksMap[key].physicalStock;
@@ -340,7 +361,7 @@ export function calculateAllWarehouseStocks({ products, warehouses, allDocs }: C
           documentType: docType,
           documentId: doc.id,
           documentNumber: doc.invoiceNumber || doc.docNumber || String(doc.id),
-          description: doc.description || (docType === 'purchase_return' ? 'برگشت از خرید' : docType === 'waste' ? 'ضایعات کالا' : 'حواله خروج از انبار'),
+          description: doc.description || (docType === 'waste' ? 'ضایعات کالا' : 'حواله خروج از انبار'),
           personId: doc.customerId || doc.personId || '',
           personName: doc.customerName || doc.personName || '',
           stockBefore: before,

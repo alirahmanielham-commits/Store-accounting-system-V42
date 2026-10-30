@@ -59,7 +59,7 @@ export default function InitialStockModal({
         setDocNumber(existingDocNum);
       } else {
         const prodCode = product.code ? product.code.replace(/[^a-zA-Z0-9]/g, '') : product.id;
-        setDocNumber(`OPN-${prodCode}`);
+        setDocNumber(`INIT-${prodCode}`);
       }
 
       // Existing initial date
@@ -77,7 +77,9 @@ export default function InitialStockModal({
       setWarehouseId(currentWh.toString());
 
       // Quantity & Price
-      const curStock = product.stock !== undefined ? String(product.stock) : "";
+      const curStock = (product as any).initialStock !== undefined && (product as any).initialStock !== null
+        ? String((product as any).initialStock)
+        : (product.stock !== undefined ? String(product.stock) : "");
       setQuantity(curStock);
       const curPrice = product.purchasePrice || (product as any).buyPrice || product.price || 0;
       setUnitPrice(curPrice ? String(curPrice) : "");
@@ -121,10 +123,11 @@ export default function InitialStockModal({
       const ts = docDate ? docDate.getTime() : Date.now();
 
       const updatedFields = {
+        initialStock: numQty,
         stock: numQty,
         purchasePrice: numPrice,
         warehouseId: warehouseId,
-        initialStockDocNumber: docNumber.trim() || `OPN-${product.code || product.id}`,
+        initialStockDocNumber: docNumber.trim() || `INIT-${product.code || product.id}`,
         initialStockDate: formattedDate,
         initialStockJalaliDate: jalaliDateStr,
         initialStockDescription: description.trim() || "سند موجودی اول دوره و افتتاحیه انبار",

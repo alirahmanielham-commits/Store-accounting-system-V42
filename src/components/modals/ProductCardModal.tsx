@@ -165,8 +165,15 @@ export default function ProductCardModal({
         // 5. Physical Warehouse Documents
         const extractedWarehouseDocs: any[] = [];
 
-        // Add Initial stock if present
-        const initialStock = Number(product.stock) || 0;
+        // Add Initial stock if present (Fixed: Must use product.initialStock to avoid fluctuating with current stock)
+        const prodAny = product as any;
+        const initialStock = Number(
+          prodAny.initialStock !== undefined && prodAny.initialStock !== null && !isNaN(Number(prodAny.initialStock))
+            ? prodAny.initialStock
+            : (prodAny.initialStockQty !== undefined && prodAny.initialStockQty !== null && !isNaN(Number(prodAny.initialStockQty))
+                ? prodAny.initialStockQty
+                : (product.stock || 0))
+        ) || 0;
         if (initialStock !== 0) {
           whStockMap[defaultWhId] = (whStockMap[defaultWhId] || 0) + initialStock;
           kardexRawItems.push({
@@ -344,8 +351,11 @@ export default function ProductCardModal({
           (loadedInvoices || []).forEach((inv: any) => {
             if (inv.status === 'voided' || inv.isDeleted || inv.status === 'draft' || inv.isDraft) return;
             const invType = inv.type || inv.invoiceType || '';
-            const isReceipt = invType === 'warehouse_receipt' || invType === 'sales_return' || invType === 'purchase';
-            const isRemittance = invType === 'warehouse_remittance' || invType === 'purchase_return' || invType === 'waste' || invType === 'sale';
+            const isReceipt = invType === 'warehouse_receipt';
+            const isRemittance = invType === 'warehouse_remittance' || invType === 'waste';
+
+            // Only actual warehouse receipts and remittances belong in physical Kardex
+            if (!isReceipt && !isRemittance) return;
 
             if (!inv.items || !Array.isArray(inv.items)) return;
 

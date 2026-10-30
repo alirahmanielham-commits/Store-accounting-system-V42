@@ -446,8 +446,13 @@ const internalGenerateDocNumber = async (docTypeKey: string): Promise<string> =>
       const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
       items = combined.filter(i => i && !i.isDeleted && (docTypeKey.startsWith('consignment') || docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? (i.type === 'sale' || !i.type) : i.type === docTypeKey)));
     } else if (docTypeKey === 'warehouse_receipt' || docTypeKey === 'warehouse_remittance') {
-      items = await getInvoices();
-      items = items.filter(i => i.type === docTypeKey);
+      const targetTable = mapInvoiceTypeToTable(docTypeKey);
+      const [targetData, generalInvs] = await Promise.all([
+        getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
+        getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
+      ]);
+      const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
+      items = combined.filter(i => i && !i.isDeleted && i.type === docTypeKey);
     } else if (docTypeKey === 'receive_receipt' || docTypeKey === 'pay_receipt' || docTypeKey === 'salary') {
       items = await getTransactions();
       const typeMap: any = { 'receive_receipt': 'receive', 'pay_receipt': 'pay', 'salary': 'salary' };
@@ -461,14 +466,15 @@ const internalGenerateDocNumber = async (docTypeKey: string): Promise<string> =>
     else if (docTypeKey === 'installment') items = await getInstallments();
 
     let maxExisting = 0;
+    const isCashReceipt = docTypeKey === 'receive_receipt' || docTypeKey === 'pay_receipt' || docTypeKey === 'salary';
     let idField = (docTypeKey === 'person' || docTypeKey === 'product') ? 'code' : 
                   (docTypeKey === 'accounting_document' ? 'documentNumber' : 
-                  (docTypeKey.includes('receipt') || docTypeKey === 'salary' ? 'receiptNumber' : 'invoiceNumber'));
+                  (isCashReceipt ? 'receiptNumber' : 'invoiceNumber'));
     
     if (docTypeKey === 'check_issued' || docTypeKey === 'check_received') idField = 'checkNumber';
 
     items.forEach(item => {
-       let valStr = String(item[idField] || '');
+       let valStr = String(item[idField] || item.invoiceNumber || item.documentNumber || item.receiptNumber || '');
        if (prefix && valStr.startsWith(prefix)) {
           valStr = valStr.substring(prefix.length);
        }

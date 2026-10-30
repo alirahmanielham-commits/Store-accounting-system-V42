@@ -108,6 +108,7 @@ import {
 } from "../../utils/unitConversion";
 import { convertToGregorian, toPersianDigits } from "../../utils/format";
 import WarehouseInvoiceSelector from "./WarehouseInvoiceSelector";
+import { generateDocNumber } from "../../services/coreService";
 
 export default function WarehouseDocCreate(props: any) {
   const {
@@ -189,6 +190,18 @@ export default function WarehouseDocCreate(props: any) {
     "sales_return",
     "transfer_in",
   ].includes(warehouseOperationType);
+
+  // Auto-generate separated warehouse document number (REC-... or REM-...)
+  useEffect(() => {
+    if (invoiceMode === "auto" && !props.editingInvoiceId) {
+      const targetType = isReceipt ? "warehouse_receipt" : "warehouse_remittance";
+      generateDocNumber(targetType).then((num) => {
+        if (num) {
+          setInvoiceNumber(num);
+        }
+      });
+    }
+  }, [isReceipt, invoiceMode, props.editingInvoiceId]);
 
   const [splitWarehouseNotice, setSplitWarehouseNotice] = useState<string | null>(null);
 

@@ -156,7 +156,19 @@ export const addProductToServer = async (product: any) => {
     newCode = await generateDocNumber('product');
   }
 
-  const newProduct = { ...product, code: newCode, id: product.id || generateId(), createdAt: now, updatedAt: now };
+  const initialStockVal = product.initialStock !== undefined && product.initialStock !== null && !isNaN(Number(product.initialStock))
+    ? Number(product.initialStock)
+    : (Number(product.stock) || 0);
+
+  const newProduct = {
+    ...product,
+    code: newCode,
+    initialStock: initialStockVal,
+    stock: Number(product.stock !== undefined ? product.stock : initialStockVal),
+    id: product.id || generateId(),
+    createdAt: now,
+    updatedAt: now
+  };
   await appendLocalData('products', newProduct);
   
   if (newProduct.code) {
@@ -198,7 +210,16 @@ export const updateProductToServer = async (id: string, product: any) => {
   const index = products.findIndex((p: any) => String(p.id) === String(id));
   if (index !== -1) {
     const oldProduct = products[index];
-    const newProduct = { ...oldProduct, ...product, updatedAt: Date.now() };
+    const initialStockVal = product.initialStock !== undefined && product.initialStock !== null && !isNaN(Number(product.initialStock))
+      ? Number(product.initialStock)
+      : (oldProduct.initialStock !== undefined && oldProduct.initialStock !== null ? Number(oldProduct.initialStock) : Number(oldProduct.stock || 0));
+
+    const newProduct = {
+      ...oldProduct,
+      ...product,
+      initialStock: initialStockVal,
+      updatedAt: Date.now()
+    };
     
     const newBuy = Number(newProduct.purchasePrice || newProduct.buyPrice || 0);
     const newSell = Number(newProduct.price || newProduct.sellPrice || 0);

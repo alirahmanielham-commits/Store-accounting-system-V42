@@ -118,8 +118,12 @@ const triggerServerStockSync = async () => {
                 p.reservedStock !== newRes
               ) {
                 hasProductChanges = true;
+                const frozenInitialStock = p.initialStock !== undefined && p.initialStock !== null && !isNaN(Number(p.initialStock))
+                  ? Number(p.initialStock)
+                  : (Number(p.stock) || 0);
                 return {
                   ...p,
+                  initialStock: frozenInitialStock,
                   stock: newPhys,
                   physicalStock: newPhys,
                   availableStock: newAvail,

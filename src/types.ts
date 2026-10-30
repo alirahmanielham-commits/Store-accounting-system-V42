@@ -168,6 +168,13 @@ export type Product = {
   price: number;
   purchasePrice?: number; 
   stock?: number;
+  initialStock?: number;
+  initialStockQty?: number;
+  initialStockDocNumber?: string;
+  initialStockDate?: string;
+  initialStockWarehouseId?: string | number;
+  initialStockTimestamp?: number;
+  initialStockDescription?: string;
   minStock?: number;
   unit?: string;
   secondaryUnit?: string;

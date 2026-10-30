@@ -241,8 +241,14 @@ export default function KardexReport() {
       const transactionMap = new Map<string, KardexTransaction>();
 
       // A. Initial Stock from product definition (Registered Initial Stock Document)
-      const initialStockQty = Number(product.stock) || 0;
-      const initialDocNum = (product as any).initialStockDocNumber || (product.code ? `OPN-${product.code}` : 'سند افتتاحیه');
+      const initialStockQty = Number(
+        (product as any).initialStock !== undefined && (product as any).initialStock !== null && !isNaN(Number((product as any).initialStock))
+          ? (product as any).initialStock
+          : ((product as any).initialStockQty !== undefined && (product as any).initialStockQty !== null && !isNaN(Number((product as any).initialStockQty))
+              ? (product as any).initialStockQty
+              : (product.stock || 0))
+      ) || 0;
+      const initialDocNum = (product as any).initialStockDocNumber || (product.code ? `INIT-${product.code}` : 'سند افتتاحیه');
       const initTs = (product as any).initialStockTimestamp || ((product as any).createdAt ? new Date((product as any).createdAt).getTime() : 1);
       const initialDocDate = formatKardexDate(
         (product as any).initialStockJalaliDate || (product as any).initialStockDate || (product as any).createdAt,
@@ -337,8 +343,8 @@ export default function KardexReport() {
 
         matchingItems.forEach((item: any, itemIdx: number) => {
           const docType = inv.type;
-          const isReceipt = docType === 'warehouse_receipt' || docType === 'sales_return';
-          const isRemittance = docType === 'warehouse_remittance' || docType === 'purchase_return' || docType === 'waste';
+          const isReceipt = docType === 'warehouse_receipt';
+          const isRemittance = docType === 'warehouse_remittance' || docType === 'waste';
 
           if (!isReceipt && !isRemittance) return;
 
