@@ -364,16 +364,43 @@ const [priceChangeProduct, setPriceChangeProduct] = useState<any>(null);
 
 const [historyProductId, setHistoryProductId] = useState<string | null>(null);
 
-const [confirmState, setConfirmState] = useState<{
+  const [confirmState, setConfirmState] = useState<{
     isOpen: boolean;
     message: string;
-    onConfirm: () => Promise<void> | void;
+    title?: string;
+    confirmText?: string;
+    cancelText?: string;
+    type?: 'danger' | 'warning' | 'success' | 'info';
+    confirmButtonClass?: string;
     details?: React.ReactNode;
+    onConfirm: () => Promise<void> | void;
     loading?: boolean;
   }>({ isOpen: false, message: "", onConfirm: () => {} });
 
-const confirmAction = (message: string, onConfirm: () => Promise<void> | void, details?: React.ReactNode) => {
-    setConfirmState({ isOpen: true, message, onConfirm, details, loading: false });
+  const confirmAction = (
+    message: string,
+    onConfirm: () => Promise<void> | void,
+    details?: React.ReactNode,
+    options?: {
+      title?: string;
+      confirmText?: string;
+      cancelText?: string;
+      type?: 'danger' | 'warning' | 'success' | 'info';
+      confirmButtonClass?: string;
+    }
+  ) => {
+    setConfirmState({
+      isOpen: true,
+      message,
+      onConfirm,
+      details,
+      loading: false,
+      title: options?.title,
+      confirmText: options?.confirmText,
+      cancelText: options?.cancelText,
+      type: options?.type,
+      confirmButtonClass: options?.confirmButtonClass,
+    });
   };
 
 const { user, loading: authLoading, signIn, signOut } = useAuth();
@@ -5018,10 +5045,11 @@ const renderPersonLink = (
     );
   };
 
-const handleDeleteInvoice = async (id: string | number) => {
+  const handleDeleteInvoice = async (id: string | number) => {
     const invoice = invoices.find((inv) => inv.id.toString() === id.toString());
     if (!invoice) return;
 
+    const isWarehouseDoc = invoice.type === "warehouse_receipt" || invoice.type === "warehouse_remittance";
     const hasLinkedWarehouseOp = invoices.some(
       (inv) =>
         (inv.type === "warehouse_receipt" ||
@@ -5036,76 +5064,153 @@ const handleDeleteInvoice = async (id: string | number) => {
       return;
     }
 
-    
     const typeLabel =
       invoice.type === "sale" ? "فاکتور فروش" :
       invoice.type === "purchase" ? "فاکتور خرید" :
-      invoice.type === "return_sale" ? "برگشت از فروش" :
-      invoice.type === "return_purchase" ? "برگشت از خرید" :
-      invoice.type === "warehouse_receipt" ? "رسید انبار" :
-      invoice.type === "warehouse_remittance" ? "حواله انبار" : "فاکتور";
+      invoice.type === "return_sale" || invoice.type === "sales_return" ? "برگشت از فروش" :
+      invoice.type === "return_purchase" || invoice.type === "purchase_return" ? "برگشت از خرید" :
+      invoice.type === "warehouse_receipt" ? "رسید ورود به انبار" :
+      invoice.type === "warehouse_remittance" ? "حواله خروج از انبار" : "سند / فاکتور";
       
-    const personName = persons.find(p => p.id === invoice.personId)?.name || "نامشخص";
+    const personName = persons.find(p => p.id === invoice.customerId || p.id === invoice.personId)?.name || invoice.customerName || invoice.personName || "انبار داخلی / سازمانی";
+    const whObj = warehouses.find(w => String(w.id) === String(invoice.warehouseId));
+    const whName = whObj ? whObj.name : "انبار مربوطه";
+    const itemsCount = (invoice.items || []).length;
     
     const details = (
-      <div className="flex flex-col gap-2">
-        <div><strong>نوع:</strong> {typeLabel}</div>
-        <div><strong>شماره:</strong> {invoice.invoiceNumber}</div>
-        <div><strong>شخص:</strong> {personName}</div>
-        {invoice.totalAmount !== undefined && <div><strong>مبلغ کل:</strong> {Number(invoice.totalAmount).toLocaleString()} ریال</div>}
-        <div><strong>تاریخ:</strong> {invoice.date}</div>
+      <div className="flex flex-col gap-2 font-medium">
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">نوع سند:</span>
+          <span className="font-black text-slate-800">{typeLabel}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">شماره:</span>
+          <span className="font-mono font-black text-slate-900">#{toPersianDigits(invoice.invoiceNumber || invoice.id)}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">انبار:</span>
+          <span className="font-bold text-slate-800">{whName}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">طرف حساب:</span>
+          <span className="font-bold text-slate-800">{personName}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">اقلام:</span>
+          <span className="font-bold text-slate-800">{toPersianDigits(itemsCount)} قلم کالا</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">تاریخ:</span>
+          <span className="font-bold text-slate-800">{toPersianDigits(invoice.date ? invoice.date.split("T")[0] : "-")}</span>
+        </div>
+        {isWarehouseDoc && (
+          <div className="mt-1 text-[11px] leading-relaxed text-rose-800 bg-rose-50 border border-rose-200 p-2.5 rounded-lg">
+            هشدار: با حذف این سند، اثرات آن بر موجودی انبار و کاردکس لغو شده و رکورد سند به طور کامل پاک می‌شود.
+          </div>
+        )}
       </div>
     );
 
-    confirmAction("حذف این مورد غیرقابل بازگشت است. آیا اطمینان دارید؟", async () => {
-      try {
-        await deleteInvoice(id.toString());
-        await fetchInvoices();
-        await fetchWarehouses();
-      } catch (err: any) {
-        customAlert(err.message);
+    confirmAction(
+      isWarehouseDoc
+        ? `آیا از حذف کامل سند «${typeLabel}» به شماره ${toPersianDigits(invoice.invoiceNumber || invoice.id)} اطمینان دارید؟`
+        : "حذف این مورد غیرقابل بازگشت است. آیا اطمینان دارید؟",
+      async () => {
+        try {
+          await deleteInvoice(id.toString());
+          await recalculateAllWarehouseStocks();
+          await fetchInvoices();
+          await fetchWarehouses();
+          await fetchProducts();
+          showNotification(`سند ${typeLabel} با موفقیت حذف گردید.`, 'success');
+        } catch (err: any) {
+          customAlert(err.message);
+        }
+      },
+      details,
+      {
+        title: isWarehouseDoc ? `حذف ${typeLabel}` : "تایید حذف فاکتور",
+        confirmText: "حذف قطعی",
+        type: "danger",
+        confirmButtonClass: "bg-rose-600 hover:bg-rose-700 text-white"
       }
-    }, details);
+    );
   };
 
-const handleVoidInvoice = async (id: string | number) => {
-    
+  const handleVoidInvoice = async (id: string | number) => {
     const invoice = invoices.find((inv) => inv.id.toString() === id.toString());
-    const typeLabel = invoice ? (
+    if (!invoice) return;
+
+    const isWarehouseDoc = invoice.type === "warehouse_receipt" || invoice.type === "warehouse_remittance";
+    const typeLabel =
       invoice.type === "sale" ? "فاکتور فروش" :
       invoice.type === "purchase" ? "فاکتور خرید" :
-      invoice.type === "return_sale" ? "برگشت از فروش" :
-      invoice.type === "return_purchase" ? "برگشت از خرید" :
-      invoice.type === "warehouse_receipt" ? "رسید انبار" :
-      invoice.type === "warehouse_remittance" ? "حواله انبار" : "فاکتور"
-    ) : "";
+      invoice.type === "return_sale" || invoice.type === "sales_return" ? "برگشت از فروش" :
+      invoice.type === "return_purchase" || invoice.type === "purchase_return" ? "برگشت از خرید" :
+      invoice.type === "warehouse_receipt" ? "رسید ورود به انبار" :
+      invoice.type === "warehouse_remittance" ? "حواله خروج از انبار" : "سند / فاکتور";
       
-    const personName = invoice ? (persons.find(p => p.id === invoice.personId)?.name || "نامشخص") : "";
+    const personName = persons.find(p => p.id === invoice.customerId || p.id === invoice.personId)?.name || invoice.customerName || invoice.personName || "انبار داخلی / سازمانی";
+    const whObj = warehouses.find(w => String(w.id) === String(invoice.warehouseId));
+    const whName = whObj ? whObj.name : "انبار مربوطه";
+    const itemsCount = (invoice.items || []).length;
     
-    const isWarehouseDoc = invoice?.type === "warehouse_receipt" || invoice?.type === "warehouse_remittance";
-    const details = invoice ? (
-      <div className="flex flex-col gap-2">
-        <div><strong>نوع:</strong> {typeLabel}</div>
-        <div><strong>شماره:</strong> {invoice.invoiceNumber}</div>
-        {isWarehouseDoc ? null : <div><strong>شخص:</strong> {personName}</div>}
-        {(!isWarehouseDoc && invoice.totalAmount !== undefined) && <div><strong>مبلغ کل:</strong> {Number(invoice.totalAmount).toLocaleString()} ریال</div>}
-        <div><strong>تاریخ:</strong> {invoice.date}</div>
+    const details = (
+      <div className="flex flex-col gap-2 font-medium">
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">نوع سند:</span>
+          <span className="font-black text-slate-800">{typeLabel}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">شماره:</span>
+          <span className="font-mono font-black text-slate-900">#{toPersianDigits(invoice.invoiceNumber || invoice.id)}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">انبار:</span>
+          <span className="font-bold text-slate-800">{whName}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">طرف حساب:</span>
+          <span className="font-bold text-slate-800">{personName}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">تعداد اقلام:</span>
+          <span className="font-bold text-slate-800">{toPersianDigits(itemsCount)} قلم کالا</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">تاریخ:</span>
+          <span className="font-bold text-slate-800">{toPersianDigits(invoice.date ? invoice.date.split("T")[0] : "-")}</span>
+        </div>
+        <div className="mt-1 text-[11px] leading-relaxed text-amber-900 bg-amber-50 border border-amber-200 p-2.5 rounded-lg">
+          توجه: سند ابطال‌شده دیگر در محاسبات موجودی انبار لحاظ نمی‌شود، اما با وضعیت «ابطال‌شده» در سوابق سیستم حفظ خواهد شد.
+        </div>
       </div>
-    ) : undefined;
+    );
 
     confirmAction(
       isWarehouseDoc 
-        ? "آیا از ابطال این سند انبار اطمینان دارید؟ سند ابطال شده در موجودی کالاها لحاظ نخواهد شد اما در سوابق باقی می‌ماند."
+        ? `آیا از ابطال سند «${typeLabel}» به شماره ${toPersianDigits(invoice.invoiceNumber || invoice.id)} اطمینان دارید؟`
         : "آیا از ابطال این فاکتور اطمینان دارید؟ فاکتور ابطال شده در محاسبات لحاظ نخواهد شد اما در سوابق باقی می‌ماند.", 
       async () => {
-      try {
-        await voidInvoice(id.toString());
-        await fetchInvoices();
-        await fetchWarehouses();
-      } catch (err: any) {
-        customAlert(err.message);
+        try {
+          await voidInvoice(id.toString());
+          await recalculateAllWarehouseStocks();
+          await fetchInvoices();
+          await fetchWarehouses();
+          await fetchProducts();
+          showNotification(`سند ${typeLabel} با موفقیت ابطال شد.`, 'info');
+        } catch (err: any) {
+          customAlert(err.message);
+        }
+      },
+      details,
+      {
+        title: isWarehouseDoc ? `ابطال ${typeLabel}` : "تایید ابطال فاکتور",
+        confirmText: "ابطال قطعی سند",
+        type: "warning",
+        confirmButtonClass: "bg-amber-600 hover:bg-amber-700 text-white"
       }
-    }, details);
+    );
   };
 
 
@@ -5405,44 +5510,128 @@ const handleApprovePurchaseInvoice = async (inv: any) => {
     }
 };
 
-const handleApproveWarehouseReceipt = async (receiptDoc: any) => {
-    if (!receiptDoc || !receiptDoc.id) return;
-    if (receiptDoc.status === "approved" || receiptDoc.status === "final") {
-      customAlert("این رسید انبار قبلاً تایید نهایی شده است.");
+  const handleApproveWarehouseDoc = async (doc: any) => {
+    if (!doc || !doc.id) return;
+    if (doc.status === "approved" || doc.status === "final") {
+      customAlert("این سند انبار قبلاً تایید نهایی شده است.");
       return;
     }
 
-    startAppProcessing("در حال تایید نهایی رسید انبار و اعمال در کاردکس...");
-    try {
-      const updatedReceiptData = {
-        ...receiptDoc,
-        status: "approved",
-        isDraft: false,
-        updatedAt: Date.now()
-      };
+    const isReceipt = doc.type === "warehouse_receipt" || doc.type === "purchase" || doc.type === "sales_return";
+    const docTypeLabel = isReceipt ? "رسید ورود به انبار" : "حواله خروج از انبار";
+    const docNumber = doc.invoiceNumber || doc.documentNumber || String(doc.id);
+    const targetWhObj = warehouses.find((w: any) => String(w.id) === String(doc.warehouseId));
+    const whName = targetWhObj ? targetWhObj.name : "انبار مرکزی";
 
-      await updateInvoice(receiptDoc.id.toString(), updatedReceiptData as any, false, false);
-      await recalculateAllWarehouseStocks();
-      
-      await addSystemLog(
-        "APPROVE_WAREHOUSE_RECEIPT",
-        `تایید نهایی رسید انبار شماره ${receiptDoc.invoiceNumber || receiptDoc.id} و ورود قطعی به کاردکس`,
-        "warehouse_receipts",
-        receiptDoc.id
-      );
+    // Strict shortage validation if approving a remittance
+    if (!isReceipt && getProductStockInfo) {
+      const shortages: string[] = [];
+      const targetWh = doc.warehouseId ? doc.warehouseId.toString() : "";
+      (doc.items || []).forEach((it: any) => {
+        if (it.productId) {
+          const p = products.find((prod: any) => String(prod.id) === String(it.productId));
+          if (p && p.type !== "service") {
+            const sInfo = getProductStockInfo(it.productId);
+            const cur = targetWh && sInfo?.warehouses?.[targetWh]
+              ? Number(sInfo.warehouses[targetWh].physical || 0)
+              : sInfo
+              ? Number(sInfo.totalPhysical || 0)
+              : Number(p.stock || 0);
+            const q = Number(it.quantity) || 0;
+            if (q > cur) {
+              shortages.push(`• ${it.productName || p.name}: موجودی فعلی ${toPersianDigits(cur)}، مقدار حواله ${toPersianDigits(q)} (کسری: ${toPersianDigits(Number((q - cur).toFixed(2)))})`);
+            }
+          }
+        }
+      });
 
-      await fetchInvoices();
-      await fetchWarehouses();
-      await fetchProducts();
-      setSuccessMsg(`رسید انبار شماره ${receiptDoc.invoiceNumber || receiptDoc.id} با موفقیت تایید نهایی شد و مقادیر در کاردکس و موجودی انبار اعمال گردید.`);
-      setTimeout(() => setSuccessMsg(""), 3500);
-    } catch (e: any) {
-      console.error("Error approving warehouse receipt:", e);
-      customAlert(`خطا در تایید رسید انبار: ${e.message || "خطای ناشناخته"}`);
-    } finally {
-      stopAppProcessing();
+      if (shortages.length > 0) {
+        customAlert(
+          `خطای عدم موجودی کافی!\nامکان تایید نهایی حواله وجود ندارد زیرا اقلام زیر در کاردکس انبار «${whName}» کسری دارند:\n\n${shortages.join("\n")}\n\nلطفاً ابتدا موجودی کالا را تامین فرمایید.`
+        );
+        return;
+      }
     }
-};
+
+    const itemsCount = (doc.items || []).length;
+    const totalQty = (doc.items || []).reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0);
+    const personName = doc.customerName || doc.personName || "انبار داخلی / سازمانی";
+
+    const modalDetails = (
+      <div className="flex flex-col gap-2 font-medium">
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">نوع سند:</span>
+          <span className="font-black text-slate-800">{docTypeLabel}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">شماره سند:</span>
+          <span className="font-mono font-black text-slate-900">#{toPersianDigits(docNumber)}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">انبار مربوطه:</span>
+          <span className="font-bold text-slate-800">{whName}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">طرف حساب:</span>
+          <span className="font-bold text-slate-800">{personName}</span>
+        </div>
+        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+          <span className="text-slate-500 font-bold">تعداد اقلام:</span>
+          <span className="font-bold text-slate-800">{toPersianDigits(itemsCount)} قلم ({toPersianDigits(totalQty)} واحد)</span>
+        </div>
+        <div className="mt-1 text-[11px] leading-relaxed text-emerald-800 bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg">
+          {isReceipt
+            ? "با تایید نهایی این سند، موجودی کالاهای فوق بلافاصله در انبار افزایش یافته و در کاردکس ثبت خواهد شد."
+            : "با تایید نهایی این سند، موجودی کالاهای فوق بلافاصله از انبار کسر گردیده و از کاردکس خارج می‌شود."}
+        </div>
+      </div>
+    );
+
+    confirmAction(
+      `آیا از تایید نهایی و قطعی‌سازی سند «${docTypeLabel}» به شماره ${toPersianDigits(docNumber)} اطمینان دارید؟`,
+      async () => {
+        startAppProcessing(`در حال تایید نهایی ${docTypeLabel} و به‌روزرسانی کاردکس...`);
+        try {
+          const updatedDocData = {
+            ...doc,
+            status: "approved",
+            isDraft: false,
+            updatedAt: Date.now()
+          };
+
+          await updateInvoice(doc.id.toString(), updatedDocData as any, false, false);
+          await recalculateAllWarehouseStocks();
+          
+          await addSystemLog(
+            isReceipt ? "APPROVE_WAREHOUSE_RECEIPT" : "APPROVE_WAREHOUSE_REMITTANCE",
+            `تایید نهایی ${docTypeLabel} شماره ${docNumber} و ثبت قطعی در کاردکس انبار ${whName}`,
+            isReceipt ? "warehouse_receipts" : "warehouse_remittances",
+            doc.id
+          );
+
+          await fetchInvoices();
+          await fetchWarehouses();
+          await fetchProducts();
+          setSuccessMsg(`سند ${docTypeLabel} شماره ${toPersianDigits(docNumber)} با موفقیت تایید نهایی شد و اثر آن در موجودی انبار اعمال گردید.`);
+          setTimeout(() => setSuccessMsg(""), 3500);
+        } catch (e: any) {
+          console.error("Error approving warehouse doc:", e);
+          customAlert(`خطا در تایید ${docTypeLabel}: ${e.message || "خطای ناشناخته"}`);
+        } finally {
+          stopAppProcessing();
+        }
+      },
+      modalDetails,
+      {
+        title: `تایید نهایی ${docTypeLabel}`,
+        confirmText: isReceipt ? "تایید و ورود به انبار" : "تایید و خروج از انبار",
+        type: "success",
+        confirmButtonClass: isReceipt ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-purple-600 hover:bg-purple-700 text-white"
+      }
+    );
+  };
+
+  const handleApproveWarehouseReceipt = handleApproveWarehouseDoc;
 
 const handleEditInvoiceAction = async (inv: any) => {
     const isWarehouseDoc = inv.type === "warehouse_receipt" || inv.type === "warehouse_remittance";
@@ -5511,16 +5700,30 @@ const handleEditInvoiceAction = async (inv: any) => {
     if (!isDraft) {
       confirmAction(
         isWarehouseDoc 
-          ? "آیا می‌خواهید این سند انبار را ویرایش کنید؟ نسخه قبلی پس از ذخیره نهایی حذف و با نسخه جدید جایگزین خواهد شد."
+          ? `آیا می‌خواهید سند انبار شماره ${toPersianDigits(inv.invoiceNumber || inv.id)} را ویرایش کنید؟ تغییرات پس از ثبت نهایی در موجودی انبار اعمال خواهد شد.`
           : "آیا می‌خواهید این فاکتور را ویرایش کنید؟ نسخه قبلی پس از ذخیره نهایی حذف و با نسخه جدید جایگزین خواهد شد.",
-        proceedEdit
+        proceedEdit,
+        undefined,
+        {
+          title: isWarehouseDoc ? "ویرایش سند انبار" : "ویرایش فاکتور",
+          confirmText: "شروع ویرایش",
+          type: "info",
+          confirmButtonClass: "bg-blue-600 hover:bg-blue-700 text-white"
+        }
       );
     } else {
       confirmAction(
         isWarehouseDoc 
-          ? "آیا می‌خواهید این پیش‌نویس سند انبار را ویرایش کنید؟" 
+          ? `آیا می‌خواهید پیش‌نویس سند انبار شماره ${toPersianDigits(inv.invoiceNumber || inv.id)} را ویرایش کنید؟` 
           : "آیا می‌خواهید این فاکتور پیش‌نویس را ویرایش کنید؟", 
-        proceedEdit
+        proceedEdit,
+        undefined,
+        {
+          title: isWarehouseDoc ? "ویرایش پیش‌نویس سند انبار" : "ویرایش پیش‌نویس فاکتور",
+          confirmText: "ورود به ویرایشگر",
+          type: "info",
+          confirmButtonClass: "bg-blue-600 hover:bg-blue-700 text-white"
+        }
       );
     }
   };
@@ -7695,7 +7898,7 @@ const renderTabContent = () => {
 
       case "create_warehouse_doc":
         return (
-          <WarehouseDocCreate setIsPersonModalOpen={setIsPersonModalOpen} invoiceNumber={invoiceNumber} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} storeSettings={storeSettings} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} formatCurrency={formatCurrency} submitting={submitting} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} Plus={Plus} Trash2={Trash2} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Tag={Tag} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} formatProductStockDetails={formatProductStockDetails} warehouseOperationType={warehouseOperationType} setWarehouseOperationType={setWarehouseOperationType} warehouseWizardStep={warehouseWizardStep} setWarehouseWizardStep={setWarehouseWizardStep} setSourceInvoiceId={setSourceInvoiceId} customAlert={customAlert} invoices={invoices} hasRemainingWarehouseItems={hasRemainingWarehouseItems} sourceInvoiceId={sourceInvoiceId} deletePreviousDocs={deletePreviousDocs} setDeletePreviousDocs={setDeletePreviousDocs} setInvoiceCurrency={setInvoiceCurrency} setExchangeRate={setExchangeRate} setExchangeRateInput={setExchangeRateInput} deleteInvoice={deleteInvoice} handleVoidInvoice={handleVoidInvoice} setInvoices={setInvoices} fetchInvoices={fetchInvoices} generateId={generateId} handleAddItem={handleAddItem} getProductStockInfo={getProductStockInfo} saveInvoiceData={saveInvoiceData} />
+          <WarehouseDocCreate confirmAction={confirmAction} setIsPersonModalOpen={setIsPersonModalOpen} invoiceNumber={invoiceNumber} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} storeSettings={storeSettings} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} formatCurrency={formatCurrency} submitting={submitting} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} Plus={Plus} Trash2={Trash2} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Tag={Tag} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} formatProductStockDetails={formatProductStockDetails} warehouseOperationType={warehouseOperationType} setWarehouseOperationType={setWarehouseOperationType} warehouseWizardStep={warehouseWizardStep} setWarehouseWizardStep={setWarehouseWizardStep} setSourceInvoiceId={setSourceInvoiceId} customAlert={customAlert} invoices={invoices} hasRemainingWarehouseItems={hasRemainingWarehouseItems} sourceInvoiceId={sourceInvoiceId} deletePreviousDocs={deletePreviousDocs} setDeletePreviousDocs={setDeletePreviousDocs} setInvoiceCurrency={setInvoiceCurrency} setExchangeRate={setExchangeRate} setExchangeRateInput={setExchangeRateInput} deleteInvoice={deleteInvoice} handleVoidInvoice={handleVoidInvoice} setInvoices={setInvoices} fetchInvoices={fetchInvoices} generateId={generateId} handleAddItem={handleAddItem} getProductStockInfo={getProductStockInfo} saveInvoiceData={saveInvoiceData} />
         );
 
       case "create_purchase_return":
@@ -8146,6 +8349,8 @@ const renderTabContent = () => {
     getPersonDisplayName,
     renderPersonLink,
     handleEditInvoiceAction,
+    handleDeleteInvoice,
+    handleVoidInvoice,
     saveInvoiceData,
     handleExecuteTransferAndSubmit,
     formatProductStockDetails,

@@ -106,7 +106,7 @@ import {
   convertPriceToBaseUnit,
   getUnitRatioDirection,
 } from "../../utils/unitConversion";
-import { convertToGregorian } from "../../utils/format";
+import { convertToGregorian, toPersianDigits } from "../../utils/format";
 import WarehouseInvoiceSelector from "./WarehouseInvoiceSelector";
 
 export default function WarehouseDocCreate(props: any) {
@@ -181,6 +181,7 @@ export default function WarehouseDocCreate(props: any) {
     handleVoidInvoice,
     getProductStockInfo,
     saveInvoiceData,
+    confirmAction,
   } = props;
 
   const isReceipt = [
@@ -1412,6 +1413,10 @@ export default function WarehouseDocCreate(props: any) {
                       };
                     });
 
+                    const totalQty = docItems.reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0);
+                    const partyObj = persons?.find((p: any) => String(p.id) === String(customerId));
+                    const partyName = partyObj?.name || "انبار داخلی / سازمانی";
+
                     const draftPayload = {
                       type: targetDocType,
                       title: targetTitle,
@@ -1427,7 +1432,45 @@ export default function WarehouseDocCreate(props: any) {
                       totalAmount: 0,
                     };
 
-                    await saveInvoiceData(draftPayload, true);
+                    const handleSaveDraft = async () => {
+                      await saveInvoiceData(draftPayload, true);
+                    };
+
+                    if (confirmAction) {
+                      confirmAction(
+                        `آیا مایل به ذخیره این سند به عنوان «پیش‌نویس» در انبار «${currentWarehouseName}» هستید؟`,
+                        handleSaveDraft,
+                        <div className="flex flex-col gap-2 font-medium">
+                          <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                            <span className="text-slate-500 font-bold">نوع سند:</span>
+                            <span className="font-bold text-slate-800">{isReceipt ? "پیش‌نویس رسید انبار" : "پیش‌نویس حواله انبار"}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                            <span className="text-slate-500 font-bold">انبار:</span>
+                            <span className="font-bold text-slate-800">{currentWarehouseName}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                            <span className="text-slate-500 font-bold">طرف حساب:</span>
+                            <span className="font-bold text-slate-800">{partyName}</span>
+                          </div>
+                          <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                            <span className="text-slate-500 font-bold">تعداد اقلام:</span>
+                            <span className="font-bold text-slate-800">{toPersianDigits(docItems.length)} قلم ({toPersianDigits(totalQty)} واحد)</span>
+                          </div>
+                          <div className="text-[11px] text-slate-600 bg-slate-100 p-2.5 rounded-lg mt-1 leading-relaxed">
+                            این سند در وضعیت پیش‌نویس ذخیره می‌شود و تا پیش از تایید نهایی تاثیری در موجودی فیزیکی و کاردکس انبار نخواهد داشت.
+                          </div>
+                        </div>,
+                        {
+                          title: isReceipt ? "ذخیره پیش‌نویس رسید انبار" : "ذخیره پیش‌نویس حواله انبار",
+                          confirmText: "ذخیره به عنوان پیش‌نویس",
+                          type: "info",
+                          confirmButtonClass: "bg-slate-700 hover:bg-slate-800 text-white"
+                        }
+                      );
+                    } else {
+                      await handleSaveDraft();
+                    }
                   }}
                   disabled={submitting || (items || []).length === 0}
                   className="flex-1 sm:flex-none px-5 py-3.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer shadow-xs"
@@ -1474,7 +1517,7 @@ export default function WarehouseDocCreate(props: any) {
                           const q = Number(it.quantity) || 0;
                           if (q > cur) {
                             shortages.push(
-                              `• ${it.productName || p.name}: موجودی فعلی ${cur}، مقدار حواله ${q} (کسری: ${Number((q - cur).toFixed(2))})`
+                              `• ${it.productName || p.name}: موجودی فعلی ${toPersianDigits(cur)}، مقدار حواله ${toPersianDigits(q)} (کسری: ${toPersianDigits(Number((q - cur).toFixed(2)))})`
                             );
                           }
                         }
@@ -1525,6 +1568,10 @@ export default function WarehouseDocCreate(props: any) {
                     };
                   });
 
+                  const totalQty = docItems.reduce((acc: number, it: any) => acc + (Number(it.quantity) || 0), 0);
+                  const partyObj = persons?.find((p: any) => String(p.id) === String(customerId));
+                  const partyName = partyObj?.name || "انبار داخلی / سازمانی";
+
                   const fullPayload = {
                     type: targetDocType,
                     title: targetTitle,
@@ -1540,8 +1587,49 @@ export default function WarehouseDocCreate(props: any) {
                     totalAmount: 0,
                   };
 
-                  if (saveInvoiceData) {
-                    await saveInvoiceData(fullPayload, false);
+                  const handleFinalSubmit = async () => {
+                    if (saveInvoiceData) {
+                      await saveInvoiceData(fullPayload, false);
+                    }
+                  };
+
+                  if (confirmAction) {
+                    const docTypeLabel = isReceipt ? "رسید ورود به انبار" : "حواله خروج از انبار";
+                    confirmAction(
+                      `آیا از صدور و تایید نهایی سند «${docTypeLabel}» در انبار «${currentWarehouseName}» اطمینان دارید؟`,
+                      handleFinalSubmit,
+                      <div className="flex flex-col gap-2 font-medium">
+                        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                          <span className="text-slate-500 font-bold">نوع سند:</span>
+                          <span className="font-black text-slate-800">{docTypeLabel}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                          <span className="text-slate-500 font-bold">انبار مربوطه:</span>
+                          <span className="font-bold text-slate-800">{currentWarehouseName}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                          <span className="text-slate-500 font-bold">طرف حساب:</span>
+                          <span className="font-bold text-slate-800">{partyName}</span>
+                        </div>
+                        <div className="flex justify-between border-b border-slate-200/70 pb-1.5">
+                          <span className="text-slate-500 font-bold">تعداد اقلام:</span>
+                          <span className="font-bold text-slate-800">{toPersianDigits(docItems.length)} قلم ({toPersianDigits(totalQty)} واحد)</span>
+                        </div>
+                        <div className="mt-1 text-[11px] leading-relaxed text-emerald-800 bg-emerald-50 border border-emerald-200 p-2.5 rounded-lg">
+                          {isReceipt
+                            ? "با تایید نهایی این سند، موجودی کالاهای فوق بلافاصله در انبار افزایش یافته و وارد کاردکس می‌گردد."
+                            : "با تایید نهایی این سند، موجودی کالاهای فوق بلافاصله از انبار کسر گردیده و از کاردکس خارج می‌شود."}
+                        </div>
+                      </div>,
+                      {
+                        title: isReceipt ? "تایید نهایی و صدور رسید انبار" : "تایید نهایی و صدور حواله انبار",
+                        confirmText: isReceipt ? "تایید و ورود به انبار" : "تایید و خروج از انبار",
+                        type: "success",
+                        confirmButtonClass: isReceipt ? "bg-emerald-600 hover:bg-emerald-700 text-white" : "bg-purple-600 hover:bg-purple-700 text-white"
+                      }
+                    );
+                  } else {
+                    await handleFinalSubmit();
                   }
                 }}
                 disabled={submitting || (items || []).length === 0}

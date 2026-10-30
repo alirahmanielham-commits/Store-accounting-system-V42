@@ -150,6 +150,8 @@ export default function InvoiceRowActionsDropdown({
   }, [isOpen]);
 
   const isPurchase = invoice.type === "purchase" || activeTab === "list_purchase";
+  const isWarehouseDoc = invoice.type === "warehouse_receipt" || invoice.type === "warehouse_remittance" || activeTab === "list_warehouse_docs";
+  const isReceipt = invoice.type === "warehouse_receipt";
 
   return (
     <>
@@ -226,7 +228,7 @@ export default function InvoiceRowActionsDropdown({
                 >
                   <div className="flex items-center gap-2">
                     <Printer className="w-4 h-4 text-slate-500 group-hover:text-slate-700" />
-                    <span>چاپ مستقیم فاکتور</span>
+                    <span>{isWarehouseDoc ? "چاپ مستقیم سند انبار" : "چاپ مستقیم فاکتور"}</span>
                   </div>
                   <span className="text-[10px] text-slate-400">سریع</span>
                 </button>
@@ -253,7 +255,7 @@ export default function InvoiceRowActionsDropdown({
 
               {/* Group 2: Approvals & Workflow Actions */}
               {((isPurchase && onApprovePurchase && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft)) ||
-                (invoice.type === "warehouse_receipt" && onApproveWarehouseReceipt && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft))) && (
+                ((invoice.type === "warehouse_receipt" || invoice.type === "warehouse_remittance") && onApproveWarehouseReceipt && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft))) && (
                 <div className="py-1 space-y-0.5">
                   {isPurchase && onApprovePurchase && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft) && (
                     <button
@@ -274,7 +276,7 @@ export default function InvoiceRowActionsDropdown({
                     </button>
                   )}
 
-                  {invoice.type === "warehouse_receipt" && onApproveWarehouseReceipt && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft) && (
+                  {(invoice.type === "warehouse_receipt" || invoice.type === "warehouse_remittance") && onApproveWarehouseReceipt && (invoice.status === "pending_approval" || invoice.status === "draft" || invoice.isDraft) && (
                     <button
                       type="button"
                       onClick={() => {
@@ -285,10 +287,12 @@ export default function InvoiceRowActionsDropdown({
                     >
                       <div className="flex items-center gap-2">
                         <CheckCircle2 className="w-4 h-4 text-emerald-700 group-hover:scale-110 transition-transform" />
-                        <span>تایید نهایی رسید ورود به انبار</span>
+                        <span>
+                          {invoice.type === "warehouse_receipt" ? "تایید نهایی رسید ورود به انبار" : "تایید نهایی حواله خروج از انبار"}
+                        </span>
                       </div>
                       <span className="text-[9px] bg-emerald-700 text-white font-black px-1.5 py-0.5 rounded-md">
-                        ورود
+                        {invoice.type === "warehouse_receipt" ? "ورود" : "خروج"}
                       </span>
                     </button>
                   )}
@@ -504,7 +508,11 @@ export default function InvoiceRowActionsDropdown({
                     >
                       <div className="flex items-center gap-2">
                         <Edit2 className="w-4 h-4 text-amber-500 group-hover:text-amber-600" />
-                        <span>ویرایش فاکتور</span>
+                        <span>
+                          {isWarehouseDoc
+                            ? (isReceipt ? "ویرایش رسید انبار" : "ویرایش حواله انبار")
+                            : "ویرایش فاکتور"}
+                        </span>
                       </div>
                       <span className="text-[10px] text-amber-600">اصلاح</span>
                     </button>
@@ -521,7 +529,11 @@ export default function InvoiceRowActionsDropdown({
                     >
                       <div className="flex items-center gap-2">
                         <Ban className="w-4 h-4 text-slate-400 group-hover:text-slate-600" />
-                        <span>ابطال سند</span>
+                        <span>
+                          {isWarehouseDoc
+                            ? (isReceipt ? "ابطال رسید انبار" : "ابطال حواله انبار")
+                            : "ابطال سند"}
+                        </span>
                       </div>
                     </button>
                   )}
@@ -537,7 +549,11 @@ export default function InvoiceRowActionsDropdown({
                     >
                       <div className="flex items-center gap-2">
                         <Trash2 className="w-4 h-4 text-rose-500 group-hover:text-rose-600" />
-                        <span>حذف فاکتور</span>
+                        <span>
+                          {isWarehouseDoc
+                            ? (isReceipt ? "حذف رسید انبار" : "حذف حواله انبار")
+                            : "حذف فاکتور"}
+                        </span>
                       </div>
                     </button>
                   )}

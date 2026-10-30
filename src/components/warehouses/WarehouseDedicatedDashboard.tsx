@@ -28,7 +28,10 @@ import {
   TrendingUp,
   MapPin,
   User,
-  Clock
+  Clock,
+  Edit2,
+  Trash2,
+  Ban
 } from "lucide-react";
 import CustomDatePicker from "../ui/CustomDatePicker";
 import WarehouseReportPrintModal from "./WarehouseReportPrintModal";
@@ -55,6 +58,11 @@ interface WarehouseDedicatedDashboardProps {
   handleRecalculateStocks?: () => void;
   recalculating?: boolean;
   showNotification?: (type: string, msg: string) => void;
+  handleDeleteInvoice?: (id: string | number) => void;
+  handleVoidInvoice?: (id: string | number) => void;
+  handleEditInvoiceAction?: (inv: any) => void;
+  triggerInvoicePrint?: (inv: any) => void;
+  confirmAction?: any;
 }
 
 export default function WarehouseDedicatedDashboard({
@@ -76,6 +84,11 @@ export default function WarehouseDedicatedDashboard({
   handleRecalculateStocks,
   recalculating,
   showNotification,
+  handleDeleteInvoice,
+  handleVoidInvoice,
+  handleEditInvoiceAction,
+  triggerInvoicePrint,
+  confirmAction,
 }: WarehouseDedicatedDashboardProps) {
   // Active Tab inside Dedicated Warehouse Dashboard:
   // "stocks" | "documents" | "kardex" | "analytics"
@@ -857,7 +870,7 @@ export default function WarehouseDedicatedDashboard({
                   <th className="py-3 px-4">طرف‌حساب / تحویل‌دهنده / تحویل‌گیرنده</th>
                   <th className="py-3 px-3 text-center w-24">تعداد اقلام</th>
                   <th className="py-3 px-3 text-center w-28">وضعیت سند</th>
-                  <th className="py-3 px-3 text-center w-28">عملیات</th>
+                  <th className="py-3 px-3 text-center w-48">عملیات</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-slate-100">
@@ -868,6 +881,8 @@ export default function WarehouseDedicatedDashboard({
                     doc.type === "sales_return";
                   const isPending = doc.status === "pending_approval";
                   const isApproved = doc.status === "approved" || doc.status === "final";
+                  const isVoided = doc.status === "voided";
+                  const isDraft = doc.status === "draft" || doc.isDraft;
                   const itemsCount = (doc.items || []).length;
 
                   let typeLabel = "سند انبار";
@@ -912,7 +927,11 @@ export default function WarehouseDedicatedDashboard({
                         {toPersianDigits(itemsCount)} قلم
                       </td>
                       <td className="py-3 px-3 text-center">
-                        {isPending ? (
+                        {isVoided ? (
+                          <span className="text-[10px] text-rose-800 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-md font-bold">
+                            ابطال‌شده
+                          </span>
+                        ) : isPending ? (
                           <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-md font-bold">
                             در انتظار تایید
                           </span>
@@ -927,25 +946,81 @@ export default function WarehouseDedicatedDashboard({
                         )}
                       </td>
                       <td className="py-3 px-3 text-center">
-                        <div className="flex items-center justify-center gap-1.5">
+                        <div className="flex items-center justify-center gap-1.5 flex-wrap">
+                          {/* 1. Preview Document */}
                           {setViewingInvoice && (
                             <button
                               type="button"
                               onClick={() => setViewingInvoice(doc)}
                               className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
-                              title="پیش‌نمایش سند"
+                              title="مشاهده و پیش‌نمایش سند"
                             >
                               <Eye className="w-3.5 h-3.5" />
                             </button>
                           )}
-                          {isPending && handleApproveWarehouseReceipt && doc.type === "warehouse_receipt" && (
+
+                          {/* 2. Print Document */}
+                          <button
+                            type="button"
+                            onClick={() => {
+                              if (triggerInvoicePrint) {
+                                triggerInvoicePrint(doc);
+                              } else if (setViewingInvoice) {
+                                setViewingInvoice(doc);
+                              }
+                            }}
+                            className="p-1.5 text-slate-500 hover:text-blue-600 hover:bg-blue-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                            title="چاپ سند انبار"
+                          >
+                            <Printer className="w-3.5 h-3.5" />
+                          </button>
+
+                          {/* 3. Approve Document (Receipt or Remittance) */}
+                          {(isPending || isDraft) && handleApproveWarehouseReceipt && !isVoided && (
                             <button
                               type="button"
                               onClick={() => handleApproveWarehouseReceipt(doc)}
-                              className="px-2 py-1 text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors cursor-pointer shadow-2xs"
-                              title="تایید نهایی و اعمال در موجودی"
+                              className="px-2 py-1 text-[10px] font-black bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg transition-colors cursor-pointer shadow-2xs flex items-center gap-1"
+                              title="تایید نهایی و اعمال در موجودی انبار"
                             >
-                              تایید
+                              <CheckCircle2 className="w-3.5 h-3.5" />
+                              <span>تایید</span>
+                            </button>
+                          )}
+
+                          {/* 4. Edit Document */}
+                          {handleEditInvoiceAction && !isVoided && (
+                            <button
+                              type="button"
+                              onClick={() => handleEditInvoiceAction(doc)}
+                              className="p-1.5 text-slate-500 hover:text-amber-600 hover:bg-amber-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                              title="ویرایش سند انبار"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {/* 5. Void Document */}
+                          {handleVoidInvoice && !isVoided && (
+                            <button
+                              type="button"
+                              onClick={() => handleVoidInvoice(doc.id)}
+                              className="p-1.5 text-slate-500 hover:text-slate-800 hover:bg-slate-100 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                              title="ابطال سند انبار"
+                            >
+                              <Ban className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+
+                          {/* 6. Delete Document */}
+                          {handleDeleteInvoice && (
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteInvoice(doc.id)}
+                              className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 rounded-lg transition-colors cursor-pointer"
+                              title="حذف سند انبار"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
                             </button>
                           )}
                         </div>

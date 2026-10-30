@@ -2202,7 +2202,7 @@ export default function InvoicesList(props: any) {
                                       : undefined
                                   }
                                   onApproveWarehouseReceipt={
-                                    handleApproveWarehouseReceipt && (inv.type === "warehouse_receipt" || activeTab === "list_warehouse_docs")
+                                    handleApproveWarehouseReceipt && (inv.type === "warehouse_receipt" || inv.type === "warehouse_remittance" || activeTab === "list_warehouse_docs")
                                       ? () => handleApproveWarehouseReceipt(inv)
                                       : undefined
                                   }
@@ -2503,7 +2503,7 @@ export default function InvoicesList(props: any) {
                                   : undefined
                               }
                               onApproveWarehouseReceipt={
-                                handleApproveWarehouseReceipt && (inv.type === "warehouse_receipt" || activeTab === "list_warehouse_docs")
+                                handleApproveWarehouseReceipt && (inv.type === "warehouse_receipt" || inv.type === "warehouse_remittance" || activeTab === "list_warehouse_docs")
                                   ? () => handleApproveWarehouseReceipt(inv)
                                   : undefined
                               }

@@ -58,7 +58,11 @@ export default function WarehouseManager(props: any) {
     setViewingInvoice,
     setActiveTab,
     handleApproveWarehouseReceipt,
-    showNotification
+    showNotification,
+    handleDeleteInvoice,
+    handleVoidInvoice,
+    handleEditInvoiceAction,
+    triggerInvoicePrint
   } = props;
 
   const [selectedWarehouseId, setSelectedWarehouseId] = useState<string | number | null>(null);
@@ -90,6 +94,11 @@ export default function WarehouseManager(props: any) {
         handleRecalculateStocks={handleRecalculateStocks}
         recalculating={recalculating}
         showNotification={showNotification}
+        handleDeleteInvoice={handleDeleteInvoice}
+        handleVoidInvoice={handleVoidInvoice}
+        handleEditInvoiceAction={handleEditInvoiceAction}
+        triggerInvoicePrint={triggerInvoicePrint}
+        confirmAction={confirmAction}
       />
     );
   }
