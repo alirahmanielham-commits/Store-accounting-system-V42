@@ -190,7 +190,7 @@ export default function WarehouseInvoiceSelector({
 
         const itemWhObj = warehouses.find((w: any) => w.id?.toString() === itemWhId);
         const itemWhName = itemWhObj?.name || "";
-        const isItemForCurrentWh = !invoiceWarehouseId || itemWhId === invoiceWarehouseId.toString();
+        const isItemForCurrentWh = isReceipt || !invoiceWarehouseId || !itemWhId || itemWhId === invoiceWarehouseId.toString();
 
         return {
           index: idx + 1,
@@ -287,14 +287,14 @@ export default function WarehouseInvoiceSelector({
           if (inv.deliveryStatus !== "partially_processed") return false;
         }
 
-        // Warehouse filter
-        if (warehouseFilter === "current" && invoiceWarehouseId) {
+        // Warehouse filter (for receipts, goods can be received into any chosen warehouse)
+        if (!isReceipt && warehouseFilter === "current" && invoiceWarehouseId) {
           const targetWh = invoiceWarehouseId.toString();
           const hasItemForWh = (inv.items || []).some((it: any) => {
             const itWh = (it.warehouseId || inv.warehouseId || "").toString();
-            return itWh === targetWh;
+            return !itWh || itWh === targetWh;
           });
-          const headerMatches = inv.warehouseId && inv.warehouseId.toString() === targetWh;
+          const headerMatches = !inv.warehouseId || inv.warehouseId.toString() === targetWh;
           if (!hasItemForWh && !headerMatches) {
             return false;
           }

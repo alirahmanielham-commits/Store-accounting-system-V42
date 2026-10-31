@@ -315,7 +315,8 @@ export default function WarehouseDocCreate(props: any) {
     const processedAmounts: Record<string, number> = {};
     pastDocs.forEach((doc: any) => {
       const docWh = (doc.warehouseId || "").toString();
-      if (!targetWhId || docWh === targetWhId) {
+      // For receipts, sum all past receipts across all warehouses for this source invoice
+      if (isReceipt || !targetWhId || docWh === targetWhId) {
         (doc.items || []).forEach((rt: any) => {
           const key = String(rt.productId || rt.productName || "");
           if (key) {
@@ -332,12 +333,16 @@ export default function WarehouseDocCreate(props: any) {
       return prod?.type !== "service";
     });
 
-    const itemsForThisWh = allPhysicalItems.filter((it: any) => {
-      const itWh = (it.warehouseId || sourceInv.warehouseId || "").toString();
-      return !targetWhId || itWh === targetWhId;
-    });
+    // For receipts, purchase invoice items are not bound to any warehouse prior to arrival.
+    // The warehouse keeper chooses the destination warehouse, so all physical items are received into targetWhId.
+    const itemsForThisWh = isReceipt
+      ? allPhysicalItems
+      : allPhysicalItems.filter((it: any) => {
+          const itWh = (it.warehouseId || sourceInv.warehouseId || "").toString();
+          return !targetWhId || !itWh || itWh === targetWhId;
+        });
 
-    if (allPhysicalItems.length > 0 && itemsForThisWh.length === 0) {
+    if (!isReceipt && allPhysicalItems.length > 0 && itemsForThisWh.length === 0) {
       if (customAlert) {
         customAlert(
           `هیچ‌یک از اقلام این فاکتور به انبار «${whName}» تعلق ندارند. لطفاً در مرحله اول انبار مربوطه را انتخاب نمایید.`
@@ -347,7 +352,7 @@ export default function WarehouseDocCreate(props: any) {
     }
 
     const otherWhCount = allPhysicalItems.length - itemsForThisWh.length;
-    if (otherWhCount > 0) {
+    if (!isReceipt && otherWhCount > 0) {
       setSplitWarehouseNotice(
         `توجه: این فاکتور شامل اقلام تفکیکی در چند انبار است. در این حواله فقط ${itemsForThisWh.length} قلم کالا مربوط به «${whName}» قرار گرفته‌اند. تعداد ${otherWhCount} قلم کالا متعلق به سایر انبارها در حواله انبار مربوط به خودشان صادر خواهند شد.`
       );
@@ -386,7 +391,7 @@ export default function WarehouseDocCreate(props: any) {
           selectedUnit: it.selectedUnit || (isSec ? prod?.secondaryUnit : prod?.unit),
           baseQuantity: baseQty,
           baseUnitPrice: baseUnitPrice,
-          warehouseId: invoiceWarehouseId || it.warehouseId || "",
+          warehouseId: invoiceWarehouseId || targetWhId || it.warehouseId || "",
         };
       })
       .filter((it: any) => it.quantity > 0);
@@ -394,9 +399,12 @@ export default function WarehouseDocCreate(props: any) {
     if (remainingItems.length === 0) {
       if (customAlert) {
         customAlert(
-          `تمامی اقلام این فاکتور مربوط به انبار «${whName}» قبلاً تحویل شده‌اند و مانده‌ای برای صدور حواله در این انبار وجود ندارد.`
+          isReceipt
+            ? `تمامی اقلام این فاکتور خرید قبلاً تحویل انبار شده‌اند و مانده‌ای برای صدور رسید ورود وجود ندارد.`
+            : `تمامی اقلام این فاکتور مربوط به انبار «${whName}» قبلاً تحویل شده‌اند و مانده‌ای برای صدور حواله در این انبار وجود ندارد.`
         );
       }
+      return;
     }
 
     setItems(remainingItems);
