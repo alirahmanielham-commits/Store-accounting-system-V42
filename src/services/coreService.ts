@@ -28,6 +28,11 @@ const CACHEABLE_KEYS = [
 export const invalidateCache = (key?: string) => {
   if (key) {
     delete cache[key];
+    Object.keys(cache).forEach(k => {
+      if (k === key || k.endsWith(`:${key}`) || k.includes(`:${key}:`) || k.startsWith(`${key}:`)) {
+        delete cache[k];
+      }
+    });
   } else {
     Object.keys(cache).forEach(k => delete cache[k]);
   }
@@ -237,6 +242,12 @@ export const saveLocalData = async <T>(key: string, data: T, retries = 3): Promi
       throw new Error(errText);
     }
     invalidateCache(key);
+    const authHeaders = getAuthHeaders();
+    const currentStore = authHeaders['x-store-id'] || 'default';
+    const cacheKey = `${currentStore}:${key}`;
+    if (CACHEABLE_KEYS.includes(key)) {
+      cache[cacheKey] = { data: processedData, timestamp: Date.now() };
+    }
     if (!isAppDataChangedSuspended && typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('app_data_changed', { detail: { key } }));
     }

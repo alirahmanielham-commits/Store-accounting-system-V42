@@ -10,6 +10,16 @@ import { BrowserRouter } from 'react-router-dom';
 import InitialSetupWizard from './components/InitialSetupWizard';
 window.addEventListener("error", (e) => { fetch("/api/data/system_logs/append", { method: "POST", headers: {"Content-Type": "application/json"}, body: JSON.stringify({ action: "FRONTEND_ERROR", entityType: "error", entityId: "1", oldData: e.message, newData: e.error?.stack }) }); });
 
+// Early theme initialization to ensure instant dark mode without flicker
+try {
+  const earlyTheme = localStorage.getItem('app_theme') || 
+    (localStorage.getItem('company_profile') ? JSON.parse(localStorage.getItem('company_profile') || '{}').theme : null);
+  if (earlyTheme === 'dark') {
+    document.documentElement.classList.add('dark', 'theme-dark');
+    document.body.classList.add('theme-dark');
+  }
+} catch (_) {}
+
 if ((import.meta as any).env.VITE_SENTRY_DSN && String((import.meta as any).env.VITE_SENTRY_DSN).startsWith('http')) {
   import('@sentry/react').then((Sentry) => {
     try {

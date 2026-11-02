@@ -409,12 +409,30 @@ export default function SettingsTab(props: any) {
                                     </label>
                                     <select
                                       value={settingsForm.theme || "classic"}
-                                      onChange={(e) =>
+                                      onChange={(e) => {
+                                        const val = e.target.value;
                                         setSettingsForm({
                                           ...settingsForm,
-                                          theme: e.target.value,
-                                        })
-                                      }
+                                          theme: val,
+                                        });
+                                        if (props.setStoreSettings) {
+                                          props.setStoreSettings({ ...storeSettings, theme: val });
+                                        }
+                                        if (typeof window !== 'undefined' && window.localStorage) {
+                                          try {
+                                            localStorage.setItem('app_theme', val);
+                                          } catch (_) {}
+                                        }
+                                        if (typeof document !== 'undefined') {
+                                          if (val === 'dark') {
+                                            document.documentElement.classList.add('dark', 'theme-dark');
+                                            document.body.classList.add('theme-dark');
+                                          } else {
+                                            document.documentElement.classList.remove('dark', 'theme-dark');
+                                            document.body.classList.remove('theme-dark');
+                                          }
+                                        }
+                                      }}
                                       className="w-full px-4 py-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 shadow-sm font-bold"
                                     >
                                       <option value="dark">🌙 تم تاریک اداری و ارگونومیک (Slate Dark)</option>

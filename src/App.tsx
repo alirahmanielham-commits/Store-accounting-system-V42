@@ -893,6 +893,11 @@ export default function App() {
       document.documentElement.classList.remove("dark", "theme-dark");
       document.body.classList.remove("theme-dark");
     }
+    if (storeSettings?.theme && typeof window !== "undefined" && window.localStorage) {
+      try {
+        localStorage.setItem("app_theme", storeSettings.theme);
+      } catch (_) {}
+    }
   }, [storeSettings?.theme]);
 
   const appRoutes = (
@@ -2956,11 +2961,39 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                       <button
                         type="button"
                         onClick={async () => {
-                          const isDark = storeSettings?.theme === "dark";
-                          const nextTheme = isDark ? "classic" : "dark";
+                          const isCurrentlyDark = storeSettings?.theme === "dark" || (typeof document !== "undefined" && document.documentElement.classList.contains("dark"));
+                          const nextTheme = isCurrentlyDark ? "classic" : "dark";
+                          
+                          // 1. Immediately update DOM classes for zero flicker
+                          if (typeof document !== "undefined") {
+                            if (nextTheme === "dark") {
+                              document.documentElement.classList.add("dark", "theme-dark");
+                              document.body.classList.add("theme-dark");
+                            } else {
+                              document.documentElement.classList.remove("dark", "theme-dark");
+                              document.body.classList.remove("theme-dark");
+                            }
+                          }
+
+                          // 2. Immediately persist to localStorage
+                          if (typeof window !== "undefined" && window.localStorage) {
+                            try {
+                              localStorage.setItem("app_theme", nextTheme);
+                            } catch (_) {}
+                          }
+
+                          // 3. Update React state immediately
                           const updated = { ...storeSettings, theme: nextTheme };
                           setStoreSettings(updated);
                           setSettingsForm(updated);
+
+                          if (typeof window !== "undefined" && window.localStorage) {
+                            try {
+                              localStorage.setItem("company_profile", JSON.stringify(updated));
+                            } catch (_) {}
+                          }
+
+                          // 4. Persist to server without allowing stale bounce
                           try {
                             await saveStoreSettings(updated);
                           } catch (e) {

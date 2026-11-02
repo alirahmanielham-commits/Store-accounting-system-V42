@@ -21,12 +21,32 @@ import { logActivity, createDiffSummary } from '../utils/auditLogger';
 
 
 export const getStoreSettings = async (): Promise<CompanySettings | null> => {
-  return await getLocalData<CompanySettings | null>('company_profile', null);
+  const data = await getLocalData<CompanySettings | null>('company_profile', null);
+  if (data && typeof window !== 'undefined' && window.localStorage) {
+    const localTheme = localStorage.getItem('app_theme');
+    if (localTheme && data.theme !== localTheme) {
+      data.theme = localTheme as any;
+    }
+  }
+  return data;
 };
 
 export const saveStoreSettings = async (settings: CompanySettings): Promise<void> => {
   const oldSettings = await getStoreSettings();
+  if ((settings as any)?.theme && typeof window !== 'undefined' && window.localStorage) {
+    try {
+      localStorage.setItem('app_theme', (settings as any).theme);
+    } catch (_) {}
+  }
+  if (typeof window !== 'undefined' && window.localStorage) {
+    try {
+      localStorage.setItem('company_profile', JSON.stringify(settings));
+    } catch (_) {}
+  }
   await saveLocalData('company_profile', settings);
+  try {
+    await saveLocalData('store_settings', settings);
+  } catch (_) {}
   try {
     const { diffSummary, changesObj } = createDiffSummary(oldSettings, settings);
     await logActivity({

@@ -773,10 +773,12 @@ const [smsMessages, setSmsMessages] = useState<any[]>([]);
 
 const [storeSettings, setStoreSettings] = useState<any>(() => {
     let cachedProfile: any = {};
+    let savedTheme = 'classic';
     if (typeof window !== 'undefined' && window.localStorage) {
       try {
         const stored = localStorage.getItem('number_format_config') || localStorage.getItem('company_profile');
         if (stored) cachedProfile = JSON.parse(stored);
+        savedTheme = localStorage.getItem('app_theme') || cachedProfile.theme || 'classic';
       } catch (_) {}
     }
     return {
@@ -787,7 +789,7 @@ const [storeSettings, setStoreSettings] = useState<any>(() => {
       currency: "تومان",
       isSetup: false,
       fontFamily: "Vazirmatn",
-      theme: "classic",
+      theme: savedTheme,
       dateFormat: "YYYY/MM/DD",
       dateSeparator: "/",
       dateYearFormat: "YYYY",
@@ -3987,10 +3989,11 @@ const fetchSettings = async () => {
       );
       if (isConfigured) {
         const savedData = data as any;
+        const localTheme = (typeof window !== 'undefined' && window.localStorage) ? localStorage.getItem('app_theme') : null;
         const mergedSettings = {
           ...savedData,
           doc_counters: docCounters,
-          theme: savedData.theme ?? "classic",
+          theme: localTheme || savedData.theme || "classic",
           prefix_warehouse_receipt:
             savedData.prefix_warehouse_receipt ?? "REC-",
           prefix_warehouse_remittance:
@@ -4051,6 +4054,9 @@ const handleSaveSettings = async (e: React.FormEvent) => {
       delete payload.doc_counters;
       setGlobalStoreSettings(payload);
       try {
+        if (payload.theme) {
+          localStorage.setItem('app_theme', payload.theme);
+        }
         localStorage.setItem('company_profile', JSON.stringify(payload));
         localStorage.setItem('number_format_config', JSON.stringify({
           use_decimals: payload.use_decimals,
