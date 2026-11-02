@@ -586,6 +586,36 @@ export default function SettingsTab(props: any) {
                                     </div>
                                   </div>
                                 </label>
+
+                                <div className="p-5 border border-gray-200 rounded-xl bg-white shadow-sm flex flex-col md:flex-row md:items-center justify-between gap-4">
+                                  <div>
+                                    <div className="font-bold text-gray-900 mb-1 flex items-center gap-2">
+                                      <Hash className="w-4 h-4 text-indigo-500" />
+                                      تعداد ارقام اعشار مجاز برای مقادیر کالاها (تعداد/وزن/طول)
+                                    </div>
+                                    <div className="text-sm text-gray-500 font-medium leading-relaxed">
+                                      دقت ارقام اعشار قابل ثبت برای کالاهای وزنی و طولی (مانند کیلوگرم، متر، لیتر) در فاکتورها و اسناد انبار (پیش‌فرض: ۲ رقم اعشار).
+                                    </div>
+                                  </div>
+                                  <div className="w-full md:w-56 shrink-0">
+                                    <select
+                                      value={settingsForm.quantityDecimals !== undefined ? Number(settingsForm.quantityDecimals) : 2}
+                                      onChange={(e) =>
+                                        setSettingsForm({
+                                          ...settingsForm,
+                                          quantityDecimals: parseInt(e.target.value, 10),
+                                        })
+                                      }
+                                      className="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-bold text-gray-800 bg-gray-50 focus:bg-white focus:ring-2 focus:ring-indigo-500 outline-none cursor-pointer"
+                                    >
+                                      <option value={0}>بدون اعشار (صرفاً عدد صحیح)</option>
+                                      <option value={1}>۱ رقم اعشار (دقت ۰.۱)</option>
+                                      <option value={2}>۲ رقم اعشار (دقت ۰.۰۱ - پیش‌فرض)</option>
+                                      <option value={3}>۳ رقم اعشار (دقت ۰.۰۰۱ - گرم و میلیمتر)</option>
+                                      <option value={4}>۴ رقم اعشار (دقت ۰.۰۰۰۱ - فوق دقیق)</option>
+                                    </select>
+                                  </div>
+                                </div>
                               </div>
                             </div>
                           )}

@@ -4945,10 +4945,19 @@ const handleFastBarcodeScan = (code: string) => {
               }
             }
 
-            let qty =
-              field === "quantity"
-                ? Number(value)
-                : Number(updatedItem.quantity);
+            const currentProduct = products.find(
+              (p) => p.id?.toString() === updatedItem.productId?.toString(),
+            );
+            const allowDecimal = currentProduct ? currentProduct.allowDecimalQuantity !== false : true;
+
+            let qtyStr = field === "quantity" ? String(value ?? "") : String(updatedItem.quantity ?? "");
+            let numQty = parseFloat(qtyStr.replace(/[٫\/]/g, ".")) || 0;
+            if (!allowDecimal) {
+              numQty = Math.round(numQty);
+            }
+
+            let rawValToStore: any = field === "quantity" ? value : updatedItem.quantity;
+
             if (isWarehouseTab && sourceInvoiceId) {
               if (sourceInv) {
                 const key = String(
@@ -4961,10 +4970,15 @@ const handleFastBarcodeScan = (code: string) => {
                   const processed = processedAmounts[key] || 0;
                   let maxQty = (Number(srcItem.quantity) || 0) - processed;
                   if (typeof updatedItem.maxQuantity !== "undefined") {
-                    if (qty > updatedItem.maxQuantity)
-                      qty = updatedItem.maxQuantity;
+                    if (numQty > updatedItem.maxQuantity) {
+                      numQty = updatedItem.maxQuantity;
+                      rawValToStore = updatedItem.maxQuantity;
+                    }
                   } else {
-                    if (qty > maxQty) qty = maxQty;
+                    if (numQty > maxQty) {
+                      numQty = maxQty;
+                      rawValToStore = maxQty;
+                    }
                     updatedItem.maxQuantity = maxQty;
                   }
                 }
@@ -4973,9 +4987,13 @@ const handleFastBarcodeScan = (code: string) => {
               isWarehouseTab &&
               typeof updatedItem.maxQuantity !== "undefined"
             ) {
-              if (qty > updatedItem.maxQuantity) qty = updatedItem.maxQuantity;
+              if (numQty > updatedItem.maxQuantity) {
+                numQty = updatedItem.maxQuantity;
+                rawValToStore = updatedItem.maxQuantity;
+              }
             }
-            updatedItem.quantity = qty;
+
+            updatedItem.quantity = rawValToStore as any;
             const price =
               field === "unitPrice"
                 ? Number(value)
@@ -4983,18 +5001,16 @@ const handleFastBarcodeScan = (code: string) => {
             const discPercent =
               field === "discountPercent"
                 ? Number(value)
-
                 : Number(updatedItem.discountPercent);
 
-            const subtotal = qty * price;
+            const subtotal = numQty * price;
             const total = subtotal * (1 - discPercent / 100);
             updatedItem.totalPrice = total > 0 ? total : 0;
 
-            const product = products.find(p => p.id?.toString() === updatedItem.productId?.toString());
-            const ratio = Number(updatedItem.unitRatio || product?.unitRatio || 1);
-            const dir = updatedItem.unitRatioDirection || product?.unitRatioDirection || (product ? getUnitRatioDirection(product) : 'secondary_to_main');
+            const ratio = Number(updatedItem.unitRatio || currentProduct?.unitRatio || 1);
+            const dir = updatedItem.unitRatioDirection || currentProduct?.unitRatioDirection || (currentProduct ? getUnitRatioDirection(currentProduct) : 'secondary_to_main');
             updatedItem.baseUnitPrice = convertPriceToBaseUnit(price, isSec, ratio, dir);
-            updatedItem.baseQuantity = convertQuantityToBaseUnit(qty, isSec, ratio, dir);
+            updatedItem.baseQuantity = convertQuantityToBaseUnit(numQty, isSec, ratio, dir);
           }
 
           return updatedItem;

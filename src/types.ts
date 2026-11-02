@@ -176,6 +176,7 @@ export type Product = {
   initialStockTimestamp?: number;
   initialStockDescription?: string;
   minStock?: number;
+  allowDecimalQuantity?: boolean;
   unit?: string;
   secondaryUnit?: string;
   unitRatio?: number;
@@ -463,6 +464,7 @@ export type CompanySettings = {
   taxPercent: number;
   invoiceNotes: string;
   allowNegativeStock?: boolean;
+  quantityDecimals?: number;
   fontFamily?: string;
   requireWarehouse?: boolean;
   invoicePrefix?: string;

@@ -192,6 +192,45 @@ export function toEnglishDigits(str: string | number | undefined | null): string
     .replace(/[٠-٩]/g, (d) => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString());
 }
 
+export function normalizeQuantityInput(
+  rawInput: string | number | undefined | null,
+  maxDecimals: number = 2,
+  allowDecimal: boolean = true
+): string {
+  if (rawInput === undefined || rawInput === null || rawInput === '') return '';
+  const str = String(rawInput);
+  // Convert Persian and Arabic digits to 0-9
+  let clean = toEnglishDigits(str)
+    .replace(/[٫\/]/g, '.')
+    .replace(/[^0-9.]/g, '');
+
+  if (!allowDecimal || maxDecimals <= 0) {
+    return clean.replace(/\./g, '');
+  }
+
+  // Handle multiple dots: keep only first dot
+  const dotIndex = clean.indexOf('.');
+  if (dotIndex !== -1) {
+    const integerPart = clean.slice(0, dotIndex);
+    const decimalPart = clean.slice(dotIndex + 1).replace(/\./g, '');
+    return `${integerPart}.${decimalPart.slice(0, maxDecimals)}`;
+  }
+
+  return clean;
+}
+
+export function formatQuantity(
+  val: number | string | undefined | null,
+  maxDecimals: number = 2
+): string {
+  if (val === undefined || val === null || val === '') return '0';
+  const num = typeof val === 'number' ? val : parseFloat(toEnglishDigits(String(val)).replace(/[٫\/]/g, '.'));
+  if (isNaN(num)) return '0';
+  if (Number.isInteger(num)) return num.toString();
+  const fixed = num.toFixed(maxDecimals);
+  return parseFloat(fixed).toString();
+}
+
 export function formatDateDisplay(dateInput: string | Date | number | undefined | null, calendarType?: string): string {
   if (!dateInput || dateInput === "-") return "-";
   try {

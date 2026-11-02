@@ -83,6 +83,7 @@ export default function FastProductCreateModal({
       category: category || "بدون دسته‌بندی",
       type: 'product',
       code: barcode.trim() || `P${Math.floor(Math.random() * 10000)}`, // auto code if empty
+      allowDecimalQuantity: true,
     };
 
     try {

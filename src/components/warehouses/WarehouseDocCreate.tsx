@@ -106,7 +106,7 @@ import {
   convertPriceToBaseUnit,
   getUnitRatioDirection,
 } from "../../utils/unitConversion";
-import { convertToGregorian, toPersianDigits } from "../../utils/format";
+import { convertToGregorian, toPersianDigits, normalizeQuantityInput } from "../../utils/format";
 import WarehouseInvoiceSelector from "./WarehouseInvoiceSelector";
 import { generateDocNumber } from "../../services/coreService";
 
@@ -1268,44 +1268,49 @@ export default function WarehouseDocCreate(props: any) {
 
                         {/* Quantity Field */}
                         <td className="p-3.5">
-                          <div className="flex flex-col gap-1">
-                            <div className="relative">
-                              <input
-                                type="number"
-                                min="0"
-                                step="any"
-                                value={item.quantity}
-                                onChange={(e) => {
-                                  const val = Number(e.target.value) || 0;
-                                  if (
-                                    typeof item.maxQuantity !== "undefined" &&
-                                    item.maxQuantity > 0 &&
-                                    val > item.maxQuantity
-                                  ) {
-                                    if (customAlert) {
-                                      customAlert(
-                                        `حداکثر مقدار مجاز طبق فاکتور مرجع: ${item.maxQuantity} ${item.selectedUnit || ""}`
-                                      );
-                                    }
-                                    handleItemChange(item.id, "quantity", item.maxQuantity);
-                                  } else {
-                                    handleItemChange(item.id, "quantity", e.target.value);
-                                  }
-                                }}
-                                className="w-full p-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono text-center font-black text-slate-900 outline-none text-sm"
-                                dir="ltr"
-                              />
-                            </div>
+                          {(() => {
+                            const allowDecimal = p ? p.allowDecimalQuantity !== false : true;
+                            const maxDecimals = storeSettings?.quantityDecimals !== undefined ? Number(storeSettings.quantityDecimals) : 2;
+                            return (
+                              <div className="flex flex-col gap-1">
+                                <div className="relative">
+                                  <input
+                                    type="text"
+                                    value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ""}
+                                    onChange={(e) => {
+                                      const normalized = normalizeQuantityInput(e.target.value, maxDecimals, allowDecimal);
+                                      const numVal = parseFloat(normalized) || 0;
+                                      if (
+                                        typeof item.maxQuantity !== "undefined" &&
+                                        item.maxQuantity > 0 &&
+                                        numVal > item.maxQuantity
+                                      ) {
+                                        if (customAlert) {
+                                          customAlert(
+                                            `حداکثر مقدار مجاز طبق فاکتور مرجع: ${item.maxQuantity} ${item.selectedUnit || ""}`
+                                          );
+                                        }
+                                        handleItemChange(item.id, "quantity", item.maxQuantity);
+                                      } else {
+                                        handleItemChange(item.id, "quantity", normalized);
+                                      }
+                                    }}
+                                    className="w-full p-2 bg-white border border-slate-200 rounded-xl focus:ring-2 focus:ring-indigo-500 font-mono text-center font-black text-slate-900 outline-none text-sm"
+                                    dir="ltr"
+                                  />
+                                </div>
 
-                            {typeof item.maxQuantity !== "undefined" && item.maxQuantity > 0 && (
-                              <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
-                                <span>سقف مانده فاکتور:</span>
-                                <span className="font-mono text-indigo-700 font-bold">
-                                  {item.maxQuantity}
-                                </span>
+                                {typeof item.maxQuantity !== "undefined" && item.maxQuantity > 0 && (
+                                  <div className="flex items-center justify-between text-[10px] text-slate-500 font-bold px-1">
+                                    <span>سقف مانده فاکتور:</span>
+                                    <span className="font-mono text-indigo-700 font-bold">
+                                      {item.maxQuantity}
+                                    </span>
+                                  </div>
+                                )}
                               </div>
-                            )}
-                          </div>
+                            );
+                          })()}
                         </td>
 
                         {/* Unit Selection */}

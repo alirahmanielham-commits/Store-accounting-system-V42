@@ -1,4 +1,5 @@
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from "../../utils/unitConversion";
+import { normalizeQuantityInput } from "../../utils/format";
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { motion } from 'framer-motion';
 import CustomDatePicker from '../ui/CustomDatePicker';
@@ -560,55 +561,61 @@ import {
 
                         {/* تعداد */}
                         <td className="py-2 px-3 align-middle">
-                          <div className="flex items-center justify-center gap-1">
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (handleIncrementQuantity) {
-                                  handleIncrementQuantity(item.id, -1);
-                                } else {
-                                  const current = Number(item.quantity) || 0;
-                                  const next = Math.max(0.01, Number((current - 1).toFixed(4)));
-                                  handleItemChange(item.id, "quantity", next);
-                                }
-                              }}
-                              className="w-7 h-8 shrink-0 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-rose-600 transition-colors cursor-pointer"
-                              title="کاهش یک واحد"
-                            >
-                              <Minus className="w-3.5 h-3.5" />
-                            </button>
-                            <div className="w-20 min-w-0">
-                              <input
-                                type="text"
-                                dir="ltr"
-                                value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ""}
-                                onChange={(e) => {
-                                  const raw = e.target.value
-                                    .replace(/[۰-۹]/g, d => "۰۱۲۳۴۵۶۷۸۹".indexOf(d).toString())
-                                    .replace(/[٠-٩]/g, d => "٠١٢٣٤٥٦٧٨٩".indexOf(d).toString())
-                                    .replace(/[^0-9.]/g, "");
-                                  handleItemChange(item.id, "quantity", raw);
-                                }}
-                                className="w-full h-8 px-1.5 bg-white border border-slate-200 rounded-lg focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono text-center font-black text-slate-800 outline-none text-sm transition-all"
-                              />
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                if (handleIncrementQuantity) {
-                                  handleIncrementQuantity(item.id, 1);
-                                } else {
-                                  const current = Number(item.quantity) || 0;
-                                  const next = Number((current + 1).toFixed(4));
-                                  handleItemChange(item.id, "quantity", next);
-                                }
-                              }}
-                              className="w-7 h-8 shrink-0 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-emerald-600 transition-colors cursor-pointer"
-                              title="افزایش یک واحد"
-                            >
-                              <Plus className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
+                          {(() => {
+                            const product = item.productId
+                              ? products.find((p: any) => p.id?.toString() === item.productId?.toString())
+                              : null;
+                            const allowDecimal = product ? product.allowDecimalQuantity !== false : true;
+                            const maxDecimals = storeSettings?.quantityDecimals !== undefined ? Number(storeSettings.quantityDecimals) : 2;
+                            return (
+                              <div className="flex items-center justify-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (handleIncrementQuantity) {
+                                      handleIncrementQuantity(item.id, -1);
+                                    } else {
+                                      const current = parseFloat(String(item.quantity).replace(/[٫\/]/g, '.')) || 0;
+                                      const next = Math.max(0.01, Number((current - 1).toFixed(maxDecimals)));
+                                      handleItemChange(item.id, "quantity", next);
+                                    }
+                                  }}
+                                  className="w-7 h-8 shrink-0 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-rose-600 transition-colors cursor-pointer"
+                                  title="کاهش یک واحد"
+                                >
+                                  <Minus className="w-3.5 h-3.5" />
+                                </button>
+                                <div className="w-20 min-w-0">
+                                  <input
+                                    type="text"
+                                    dir="ltr"
+                                    value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ""}
+                                    onChange={(e) => {
+                                      const raw = normalizeQuantityInput(e.target.value, maxDecimals, allowDecimal);
+                                      handleItemChange(item.id, "quantity", raw);
+                                    }}
+                                    className="w-full h-8 px-1.5 bg-white border border-slate-200 rounded-lg focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 font-mono text-center font-black text-slate-800 outline-none text-sm transition-all"
+                                  />
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    if (handleIncrementQuantity) {
+                                      handleIncrementQuantity(item.id, 1);
+                                    } else {
+                                      const current = parseFloat(String(item.quantity).replace(/[٫\/]/g, '.')) || 0;
+                                      const next = Number((current + 1).toFixed(maxDecimals));
+                                      handleItemChange(item.id, "quantity", next);
+                                    }
+                                  }}
+                                  className="w-7 h-8 shrink-0 flex items-center justify-center rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 hover:text-emerald-600 transition-colors cursor-pointer"
+                                  title="افزایش یک واحد"
+                                >
+                                  <Plus className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            );
+                          })()}
                         </td>
 
                         {/* واحد */}

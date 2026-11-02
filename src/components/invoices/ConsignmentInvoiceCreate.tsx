@@ -10,7 +10,7 @@ import DatePicker from 'react-multi-date-picker';
 import persian from 'react-date-object/calendars/persian';
 import persian_fa from 'react-date-object/locales/persian_fa';
 import DateObject from 'react-date-object';
-import { toPersianDigits, addCommas, removeCommas } from '../../utils/format';
+import { toPersianDigits, addCommas, removeCommas, normalizeQuantityInput } from '../../utils/format';
 import { Invoice, InvoiceItem, Product, Warehouse, Person } from '../../types';
 import { addInvoice, updateInvoice, generateDocNumber } from '../../services/invoiceService';
 import { getUnitRatioDirection, getPriceForSelectedUnit, convertQuantityToBaseUnit } from '../../utils/unitConversion';
@@ -464,7 +464,7 @@ export default function ConsignmentInvoiceCreate({
       if (item.id !== rowId) return item;
       const unit = product.unit || 'عدد';
       const price = product.salePrice || product.purchasePrice || product.price || 0;
-      const qty = item.quantity || 1;
+      const qty = Number(item.quantity) || 1;
       return {
         ...item,
         productId: product.id,
@@ -625,13 +625,21 @@ export default function ConsignmentInvoiceCreate({
       const updated = { ...item, [field]: value };
 
       if (field === 'quantity' || field === 'unitPrice') {
-        const q = field === 'quantity' ? Math.max(0, parseFloat(value) || 0) : item.quantity;
-        const p = field === 'unitPrice' ? Math.max(0, parseFloat(value) || 0) : item.unitPrice;
-        updated.quantity = q;
+        const prod = products.find(p => String(p.id) === String(item.productId));
+        const allowDecimal = prod ? prod.allowDecimalQuantity !== false : true;
+
+        let numQ = field === 'quantity'
+          ? (parseFloat(String(value).replace(/[٫\/]/g, '.')) || 0)
+          : (parseFloat(String(item.quantity).replace(/[٫\/]/g, '.')) || 0);
+
+        if (!allowDecimal) numQ = Math.round(numQ);
+
+        const p = field === 'unitPrice' ? Math.max(0, parseFloat(value) || 0) : Number(item.unitPrice || 0);
+        updated.quantity = (field === 'quantity' ? value : numQ) as any;
         updated.unitPrice = p;
-        updated.totalPrice = q * p;
-        updated.lineTotal = q * p;
-        updated.remainingQuantity = Math.max(0, q - (item.settledQuantity || 0) - (item.returnedQuantity || 0));
+        updated.totalPrice = numQ * p;
+        updated.lineTotal = numQ * p;
+        updated.remainingQuantity = Math.max(0, numQ - (item.settledQuantity || 0) - (item.returnedQuantity || 0));
       }
 
       return updated;
@@ -1303,13 +1311,21 @@ export default function ConsignmentInvoiceCreate({
 
                       {/* Quantity */}
                       <td className="p-3 text-center">
-                        <input
-                          type="number"
-                          min={1}
-                          value={item.quantity}
-                          onChange={(e) => handleItemFieldChange(item.id, 'quantity', e.target.value)}
-                          className="w-24 text-center font-mono font-bold py-1 px-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 outline-none"
-                        />
+                        {(() => {
+                          const allowDecimal = product ? product.allowDecimalQuantity !== false : true;
+                          return (
+                            <input
+                              type="text"
+                              dir="ltr"
+                              value={item.quantity !== undefined && item.quantity !== null ? item.quantity : ''}
+                              onChange={(e) => {
+                                const raw = normalizeQuantityInput(e.target.value, 2, allowDecimal);
+                                handleItemFieldChange(item.id, 'quantity', raw);
+                              }}
+                              className="w-24 text-center font-mono font-bold py-1 px-2 border border-slate-300 dark:border-slate-600 rounded-lg bg-white dark:bg-slate-800 text-slate-800 dark:text-slate-100 focus:ring-2 focus:ring-amber-500 outline-none"
+                            />
+                          );
+                        })()}
                       </td>
 
                       {/* Unit Switcher */}

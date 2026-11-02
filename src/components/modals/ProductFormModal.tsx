@@ -63,6 +63,7 @@ export default function ProductFormModal({
   const [newProductDesc, setNewProductDesc] = useState("");
   const [newProductImageUrl, setNewProductImageUrl] = useState("");
   const [newProductIsActive, setNewProductIsActive] = useState(true);
+  const [newProductAllowDecimal, setNewProductAllowDecimal] = useState(true);
   const [submittingProduct, setSubmittingProduct] = useState(false);
   
   const [currentProductPriceHistory, setCurrentProductPriceHistory] = useState<any[]>([]);
@@ -94,6 +95,7 @@ export default function ProductFormModal({
           setNewProductDesc(product.description || "");
           setNewProductImageUrl(product.imageUrl || "");
           setNewProductIsActive(product.isActive !== false);
+          setNewProductAllowDecimal(product.allowDecimalQuantity !== false);
           
           if (product.id) {
             getProductPriceHistory(product.id.toString()).then(setCurrentProductPriceHistory).catch(console.error);
@@ -120,6 +122,7 @@ export default function ProductFormModal({
           setNewProductDesc("");
           setNewProductImageUrl("");
           setNewProductIsActive(true);
+          setNewProductAllowDecimal(product.allowDecimalQuantity !== false);
           setCurrentProductPriceHistory([]);
         }
       } else {
@@ -140,6 +143,7 @@ export default function ProductFormModal({
         setNewProductDesc("");
         setNewProductImageUrl("");
         setNewProductIsActive(true);
+        setNewProductAllowDecimal(true);
         setCurrentProductPriceHistory([]);
       }
       setProductFormTab("general");
@@ -234,6 +238,7 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
         description: newProductDesc,
         imageUrl: newProductImageUrl,
         isActive: newProductIsActive,
+        allowDecimalQuantity: newProductAllowDecimal,
       };
 
       const validation = productSchema.safeParse(payload);
@@ -562,6 +567,32 @@ const handleSubmitProduct = async (e?: React.FormEvent) => {
                                         )}
                                     </div>
                                   )}
+                                </div>
+                              </div>
+
+                              {/* امکان ثبت مقدار اعشاری */}
+                              <div className="mt-4 pt-4 border-t border-blue-200/60 flex items-center justify-between">
+                                <div className="flex flex-col gap-0.5">
+                                  <span className="text-xs font-bold text-blue-900">
+                                    امکان ثبت مقدار اعشاری (وزن، متراژ، لیتر و...)
+                                  </span>
+                                  <span className="text-[11px] text-blue-700/80">
+                                    اجازه ورود مقادیر کسری/اعشاری در فاکتورها و اسناد انبار (مانند ۲.۵ یا ۱.۷۵). در صورت غیرفعال بودن، فقط اعداد صحیح پذیرفته می‌شوند.
+                                  </span>
+                                </div>
+                                <div className="flex items-center gap-2.5">
+                                  <label className="relative inline-flex items-center cursor-pointer">
+                                    <input
+                                      type="checkbox"
+                                      className="sr-only peer"
+                                      checked={newProductAllowDecimal}
+                                      onChange={(e) => setNewProductAllowDecimal(e.target.checked)}
+                                    />
+                                    <div className="w-10 h-5 bg-gray-300 peer-focus:outline-none rounded-full peer peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:right-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                  </label>
+                                  <span className={`text-xs font-black ${newProductAllowDecimal ? "text-blue-800 bg-blue-100/70 px-2 py-0.5 rounded" : "text-gray-500 bg-gray-100 px-2 py-0.5 rounded"}`}>
+                                    {newProductAllowDecimal ? "مجاز (اعشاری)" : "فقط صحیح"}
+                                  </span>
                                 </div>
                               </div>
                             </div>
