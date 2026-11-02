@@ -1339,9 +1339,13 @@ export default function App() {
                         CheckSquare={CheckSquare}
                         productCategories={productCategories}
                         ChevronDown={ChevronDown}
-                        ChevronUp={ChevronUp}
                         Check={Check}
-                        X={X} />} />
+                        X={X}
+                        setActiveTab={setActiveTab}
+                        setStoreSettings={setStoreSettings}
+                        showNotification={showNotification}
+                        activeFinancialYear={activeFinancialYear}
+                        activeStoreId={appState.activeStoreId} />} />
 <Route path="/inventory_report" element={<InventoryReport showNotification={showNotification} categories={productCategories} formatNumber={formatNumber} storeSettings={storeSettings} />} />
 <Route path="/order_list" element={<OrderList 
                         formatCurrency={formatCurrency} 
@@ -1380,6 +1384,21 @@ export default function App() {
                       </motion.div>} />
 <Route path="/data_reconciliation" element={<DatabaseReconciliation />} />
 <Route path="/database" element={<DatabaseDashboard showNotification={showNotification} />} />
+<Route path="/businesses" element={<BusinessManager 
+  showNotification={showNotification}
+  availableStores={appState.availableStores} 
+  setAvailableStores={appState.setAvailableStores} 
+  onSelectStore={async (id: string) => {
+    sessionStorage.setItem("activeBusinessChosen", "true");
+    localStorage.setItem("activeBusinessChosen", "true");
+    appState.setIsStoreSelectionOpen(false);
+    await appState.switchBusiness(id);
+    setActiveTab("settings");
+  }}
+  onClose={() => setActiveTab("settings")}
+  user={user}
+  onSignOut={appState.signOut}
+/>} />
 <Route path="/personal_notes" element={<PersonalNotesManager storeSettings={storeSettings} />} />
 <Route path="/update" element={<SystemUpdatePage storeSettings={storeSettings} setActiveTab={setActiveTab} />} />
 <Route path="/quick_price_inquiry" element={<QuickPriceInquiry products={products}

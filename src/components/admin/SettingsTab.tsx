@@ -38,136 +38,478 @@ export default function SettingsTab(props: any) {
   // Destruct icons
   const { 
     Settings, Save, Upload, Info, Bell, Shield, PaintBucket,
-    Store, DollarSign, FileText, CheckCircle, Smartphone, MapPin, Printer, Key, Mail, Building, Calculator, Plus, X, List, Hash, Tag, Activity, ArrowRight, ArrowLeft, Download, Sparkles
-  } = lucide;
+    Store, DollarSign, FileText, CheckCircle, Smartphone, MapPin, Printer, Key, Mail, Building, Calculator, Plus, X, List, Hash, Tag, Activity, ArrowRight, ArrowLeft, Download, Sparkles,
+    Database, RefreshCw, Cpu, ShieldCheck, Sliders, Calendar, Search, ExternalLink, Layers, Keyboard, FolderTree, Coins, ChevronLeft
+  } = lucide as any;
 
   const [smsCategoryFilter, setSmsCategoryFilter] = useState<'all' | 'invoices' | 'treasury' | 'warehouse' | 'checks' | 'loans'>('all');
   const [smsSearchQuery, setSmsSearchQuery] = useState('');
   const [notifySubTab, setNotifySubTab] = useState<'general' | 'zyxel_gsm' | 'security_alerts'>('general');
+  const [settingsCategory, setSettingsCategory] = useState<'system' | 'financial' | 'data'>('system');
+  const [settingsSearchQuery, setSettingsSearchQuery] = useState('');
+
+  // Automatically map settingsTab to its parent category
+  useEffect(() => {
+    if (['financial', 'financial_years', 'financial_years_hub', 'numbering', 'inventory_control', 'features'].includes(settingsTab)) {
+      setSettingsCategory('financial');
+    } else if (['businesses', 'businesses_hub', 'database', 'database_hub', 'reconciliation', 'reconciliation_hub', 'data_reconciliation', 'audit_logs', 'audit_logs_hub', 'system_logs', 'database_logs', 'diagnostics', 'diagnostics_hub', 'system_diagnostics', 'sync_manager'].includes(settingsTab)) {
+      setSettingsCategory('data');
+    } else {
+      setSettingsCategory('system');
+    }
+  }, [settingsTab]);
+
+  const allTabs = [
+    // 1. تنظیمات سیستم و عمومی
+    {
+      id: "general",
+      category: "system",
+      label: "اطلاعات پایه و هویت فروشگاه",
+      shortLabel: "پروفایل فروشگاه",
+      description: "نام فروشگاه، نشان‌واره (لوگو)، تم و پوسته، اطلاعات تماس و آدرس",
+      icon: Store,
+      badge: "عمومی",
+      badgeColor: "indigo",
+      keywords: ["نام", "فروشگاه", "لوگو", "پوسته", "تم", "تاریک", "روشن", "آدرس", "تلفن", "کد اقتصادی"],
+    },
+    {
+      id: "date_time",
+      category: "system",
+      label: "گاه‌شمار، تاریخ و ساعت سیستم",
+      shortLabel: "تاریخ و ساعت",
+      description: "تقویم شمسی/میلادی، فرمت‌های نمایش تاریخ، فرمت ۲۴ یا ۱۲ ساعته",
+      icon: Calendar || lucide.Calendar,
+      badge: "زمان",
+      badgeColor: "blue",
+      keywords: ["تقویم", "شمسی", "میلادی", "ساعت", "تاریخ", "زمان", "جلالی"],
+    },
+    {
+      id: "notification",
+      category: "system",
+      label: "سامانه پیامک و اطلاع‌رسانی",
+      shortLabel: "پیامک و ارتباطات",
+      description: "تنظیمات وب‌سرویس پیامک، پیامک‌های خودکار فاکتور و بدهکاران",
+      icon: Bell,
+      badge: "پیامک",
+      badgeColor: "amber",
+      keywords: ["پیامک", "اس ام اس", "درگاه", "کاوه نگار", "ملی پیامک", "اطلاع رسانی", "قالب", "هشدار"],
+    },
+    {
+      id: "printing",
+      category: "system",
+      label: "قالب چاپ و تنظیمات پرینتر",
+      shortLabel: "چاپ و پرینتر",
+      description: "اندازه کاغذ فاکتور، سربرگ و پانویس، پرینتر حرارتی و استودیو چاپ",
+      icon: Printer,
+      badge: "چاپ",
+      badgeColor: "purple",
+      keywords: ["چاپ", "پرینتر", "فاکتور", "A4", "A5", "حرارتی", "استودیو چاپ", "فیش پرینتر"],
+    },
+    {
+      id: "mobile_permissions",
+      category: "system",
+      label: "دسترسی‌های اپلیکیشن همراه",
+      shortLabel: "نسخه موبایل",
+      description: "سطوح دسترسی و مجوزهای ویژه کاربران در نسخه گوشی و تبلت",
+      icon: Smartphone,
+      badge: "موبایل",
+      badgeColor: "emerald",
+      keywords: ["موبایل", "اپلیکیشن", "دسترسی", "همراه", "گوشی", "تبلت"],
+    },
+    {
+      id: "api_management",
+      category: "system",
+      label: "مرکز کلیدهای API و ارتباطات",
+      shortLabel: "کلیدهای API",
+      description: "ایجاد و ابطال توکن‌های وب‌سرویس، وب‌هوک‌ها و ارتباطات نرم‌افزاری",
+      icon: Key || lucide.Key,
+      badge: "امنیت",
+      badgeColor: "slate",
+      keywords: ["API", "توکن", "وب سرویس", "کلید", "اتصال", "وب هوک"],
+    },
+    {
+      id: "quick_codes",
+      category: "system",
+      label: "کدهای دسترسی سریع (۲ رقمی)",
+      shortLabel: "کدهای سریع",
+      description: "شخصی‌سازی کدهای ۲ رقمی کیبورد جهت جابه‌جایی آنی میان صفحات",
+      icon: Keyboard || lucide.Keyboard,
+      badge: "سریع",
+      badgeColor: "teal",
+      keywords: ["کد سریع", "میانبر", "کیبورد", "دسترسی سریع", "کلید میانبر"],
+    },
+
+    // 2. تنظیمات مالی، حسابداری و انبارداری
+    {
+      id: "financial",
+      category: "financial",
+      label: "ارز، اعداد اعشاری و محاسبات",
+      shortLabel: "ارز و اعشار",
+      description: "واحد پول (تومان/ریال)، فعال‌سازی ارقام اعشار، تعداد اعشار و نرخ تسعیر",
+      icon: Calculator,
+      badge: "محاسبات",
+      badgeColor: "emerald",
+      keywords: ["ارز", "تومان", "ریال", "اعشار", "ممیز", "ارقام", "محاسبات", "نرخ تسعیر"],
+    },
+    {
+      id: "financial_years_hub",
+      category: "financial",
+      label: "سال‌های مالی و دوره‌های حسابداری",
+      shortLabel: "سال‌های مالی",
+      description: "مشاهده وضعیت سال مالی فعال، تعریف دوره مالی جدید و بستن حساب‌ها",
+      icon: Calendar || lucide.Calendar,
+      badge: "دوره مالی",
+      badgeColor: "indigo",
+      keywords: ["سال مالی", "دوره مالی", "افتتاحیه", "اختتامیه", "بستن حساب", "مانده اول دوره"],
+    },
+    {
+      id: "numbering",
+      category: "financial",
+      label: "شماره‌گذاری خودکار اسناد مالی",
+      shortLabel: "شماره‌گذاری اسناد",
+      description: "پیشوند و تعداد ارقام فاکتورها، رسید و حواله انبار، فیش حقوقی و چک‌ها",
+      icon: FileText,
+      badge: "سریال اسناد",
+      badgeColor: "blue",
+      keywords: ["شماره", "پیشوند", "سریال", "فاکتور", "رسید", "حواله", "حقوق", "چک"],
+    },
+    {
+      id: "inventory_control",
+      category: "financial",
+      label: "سیاست‌های انبارداری و کاردکس",
+      shortLabel: "کنترل موجودی",
+      description: "مجوز یا منع موجودی منفی، آستانه هشدار کسری و انبار پیش‌فرض",
+      icon: Box,
+      badge: "انبارداری",
+      badgeColor: "amber",
+      keywords: ["انبار", "موجودی منفی", "کسری موجودی", "کاردکس", "حداقل موجودی", "انبار پیش فرض"],
+    },
+    {
+      id: "features",
+      category: "financial",
+      label: "قوانین فروش، فاکتور و ارزش افزوده",
+      shortLabel: "فروش و مالیات",
+      description: "نرخ مالیات بر ارزش افزوده، بارکدخوان در فاکتور، گیت‌های اعتبارسنجی",
+      icon: Sliders || lucide.Sliders,
+      badge: "قوانین فروش",
+      badgeColor: "purple",
+      keywords: ["مالیات", "ارزش افزوده", "تخفیف", "بارکدخوان", "فروش", "اعتبارسنجی", "فاکتور"],
+    },
+
+    // 3. مدیریت داده‌ها و پشتیبان‌گیری
+    {
+      id: "businesses_hub",
+      category: "data",
+      label: "مدیریت کسب‌وکارها و دیتابیس‌ها",
+      shortLabel: "کسب‌وکارها",
+      description: "مدیریت چندشرکته، پایگاه‌های داده مجزا و سوییچ سریع میان دفاتر",
+      icon: Building,
+      badge: "چندکسب‌وکاره",
+      badgeColor: "blue",
+      keywords: ["کسب و کار", "دیتابیس", "پایگاه داده", "چند شعبه", "شرکت", "دفتر مالی"],
+    },
+    {
+      id: "database_hub",
+      category: "data",
+      label: "پشتیبان‌گیری و بازیابی داده‌ها",
+      shortLabel: "پشتیبان‌گیری",
+      description: "تولید فایل پشتیبان، بازیابی نسخه ذخیره‌شده و زمان‌بندی خودکار",
+      icon: Database || lucide.Database,
+      badge: "امنیت داده",
+      badgeColor: "emerald",
+      keywords: ["بک آپ", "پشتیبان", "بازیابی", "دانلود پشتیبان", "ریستور", "اکسپورت"],
+    },
+    {
+      id: "reconciliation_hub",
+      category: "data",
+      label: "تطبیق و بازسازی هوشمند داده‌ها",
+      shortLabel: "تطبیق و بازسازی",
+      description: "مغایرت‌گیری کاردکس، بازسازی مانده اشخاص و اصلاح تراز انبار و دفتر معین",
+      icon: RefreshCw || lucide.RefreshCw,
+      badge: "نگهداری",
+      badgeColor: "teal",
+      keywords: ["تطبیق", "بازسازی", "مغایرت", "کاردکس", "اصلاح مانده", "تراز انبار"],
+    },
+    {
+      id: "audit_logs_hub",
+      category: "data",
+      label: "مرکز ممیزی و لاگ‌های امنیتی",
+      shortLabel: "لاگ و ممیزی",
+      description: "ردیابی تغییرات اسناد توسط کاربران، لاگ وقایع پایگاه داده و خطاهای سرور",
+      icon: Activity,
+      badge: "ممیزی",
+      badgeColor: "slate",
+      keywords: ["لاگ", "ممیزی", "ردیابی", "لاگ کاربر", "لاگ سیستم", "تاریخچه تغییرات"],
+    },
+    {
+      id: "diagnostics_hub",
+      category: "data",
+      label: "پایش سلامت سیستم و عیب‌یابی",
+      shortLabel: "پایش سلامت",
+      description: "بررسی اتصال دیتابیس PostgreSQL، اسناد فاقد ثبت دوبل و همگام‌سازی ابری",
+      icon: Cpu || lucide.Cpu,
+      badge: "عیب‌یابی",
+      badgeColor: "rose",
+      keywords: ["عیب یابی", "سلامت", "تست دیتابیس", "پستگرس", "اسناد معوق", "همگام سازی"],
+    },
+  ];
+
+  const categories = [
+    {
+      id: "system",
+      label: "سیستم و عمومی",
+      icon: Sliders || lucide.Sliders,
+      count: allTabs.filter((t) => t.category === "system").length,
+      badgeColor: "indigo",
+    },
+    {
+      id: "financial",
+      label: "مالی و حسابداری",
+      icon: Calculator || lucide.Calculator,
+      count: allTabs.filter((t) => t.category === "financial").length,
+      badgeColor: "emerald",
+    },
+    {
+      id: "data",
+      label: "داده و پشتیبان",
+      icon: Database || lucide.Database,
+      count: allTabs.filter((t) => t.category === "data").length,
+      badgeColor: "blue",
+    },
+  ];
+
+  const isSearching = settingsSearchQuery.trim().length > 0;
+  const normalizedSearch = settingsSearchQuery.trim().toLowerCase();
+
+  const filteredTabs = allTabs.filter((tab) => {
+    if (isSearching) {
+      const matchLabel = tab.label.toLowerCase().includes(normalizedSearch);
+      const matchShort = tab.shortLabel?.toLowerCase().includes(normalizedSearch);
+      const matchDesc = tab.description.toLowerCase().includes(normalizedSearch);
+      const matchKeywords = tab.keywords?.some((k) => k.toLowerCase().includes(normalizedSearch));
+      return matchLabel || matchShort || matchDesc || matchKeywords;
+    }
+    return tab.category === settingsCategory;
+  });
 
   return (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="bg-gray-50/50 rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-7xl mx-auto h-[85vh] flex flex-col"
-                  >
-                    <div className="bg-gradient-to-l from-indigo-900 to-indigo-700 px-8 py-5 flex items-center justify-between shrink-0 shadow-md">
-                      <div className="flex flex-col">
-                        <h1 className="text-xl font-extrabold text-white flex items-center gap-3">
-                          <Settings className="w-6 h-6 text-indigo-200" />
-                          تنظیمات جامع سیستم
-                        </h1>
-                        <p className="mt-1.5 text-indigo-100/80 text-sm max-w-xl leading-relaxed">
-                          پیکربندی کامل امکانات فروشگاه، حسابداری، اطلاع‌رسانی،
-                          شخصی‌سازی چاپ و شماره‌گذاری اسناد.
-                        </p>
-                      </div>
-                      <button
-                        onClick={(e) => {
-                          e.preventDefault();
-                          confirmAction(
-                            "آیا از ذخیره تنظیمات اطمینان دارید؟",
-                            () => handleSaveSettings(e as any),
-                          );
-                        }}
-                        disabled={submittingSettings}
-                        className="px-6 py-2.5 bg-white text-indigo-700 hover:bg-indigo-50 rounded-xl font-black transition-all shadow-sm flex items-center gap-2 cursor-pointer border-none disabled:opacity-50"
-                      >
-                        {submittingSettings ? (
-                          <span className="w-5 h-5 border-2 border-indigo-700/30 border-t-indigo-700 rounded-full animate-spin"></span>
-                        ) : (
-                          <Save className="w-5 h-5" />
-                        )}
-                        ذخیره تنظیمات
-                      </button>
-                    </div>
+    <motion.div
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+      className="bg-gray-50/50 rounded-2xl shadow-sm border border-gray-200 overflow-hidden max-w-7xl mx-auto h-[88vh] flex flex-col"
+    >
+      {/* Top Header */}
+      <div className="bg-gradient-to-l from-indigo-950 via-indigo-900 to-indigo-800 px-7 py-4 flex items-center justify-between shrink-0 shadow-md">
+        <div className="flex flex-col">
+          <div className="flex items-center gap-2 text-xs font-bold text-indigo-200/90 mb-1">
+            <span
+              className="hover:text-white transition-colors cursor-pointer"
+              onClick={() => {
+                setSettingsCategory("system");
+                setSettingsTab("general");
+              }}
+            >
+              مرکز جامع تنظیمات
+            </span>
+            <span>/</span>
+            <span>
+              {settingsCategory === "system"
+                ? "تنظیمات سیستم و عمومی"
+                : settingsCategory === "financial"
+                  ? "تنظیمات مالی و حسابداری"
+                  : "مدیریت داده و پشتیبان"}
+            </span>
+            <span>/</span>
+            <span className="text-amber-300 font-extrabold">
+              {allTabs.find((t) => t.id === settingsTab)?.shortLabel ||
+                allTabs.find((t) => t.id === settingsTab)?.label ||
+                "پیکربندی"}
+            </span>
+          </div>
+          <h1 className="text-lg font-black text-white flex items-center gap-2.5">
+            <Settings className="w-5 h-5 text-indigo-300" />
+            مرکز جامع تنظیمات و مدیریت سیستم
+          </h1>
+          <p className="mt-0.5 text-indigo-100/70 text-xs leading-relaxed">
+            مدیریت یکپارچه و ساختاریافته امکانات فروشگاه، قوانین حسابداری و انبار، و نگهداری دیتابیس
+          </p>
+        </div>
 
-                    <div className="flex flex-1 overflow-hidden">
-                      {/* Sidebar */}
-                      <div className="w-64 bg-white border-l border-gray-200 shrink-0 flex flex-col overflow-y-auto custom-scrollbar p-4 gap-2">
-                        {[
-                          {
-                            id: "general",
-                            label: "اطلاعات پایه و عمومی",
-                            icon: Store,
-                          },
-                          {
-                            id: "features",
-                            label: "تنظیمات انبار و فروش",
-                            icon: Box,
-                          },
-                          {
-                            id: "financial",
-                            label: "مالی و حسابداری",
-                            icon: Calculator,
-                          },
-                          {
-                            id: "numbering",
-                            label: "شماره‌گذاری اسناد",
-                            icon: FileText,
-                          },
-                          {
-                            id: "printing",
-                            label: "چاپ و قالب فاکتور",
-                            icon: Printer,
-                          },
-                          {
-                            id: "date_time",
-                            label: "تاریخ و ساعت",
-                            icon: lucide.Calendar,
-                          },
-                          {
-                            id: "notification",
-                            label: "پیامک و ارتباطات",
-                            icon: Bell,
-                          },
-                          {
-                            id: "mobile_permissions",
-                            label: "دسترسی‌های اپلیکیشن همراه",
-                            icon: Smartphone,
-                          },
-                          {
-                            id: "api_management",
-                            label: "مرکز مدیریت کلیدهای API",
-                            icon: lucide.Key,
-                          },
-                          {
-                            id: "quick_codes",
-                            label: "کدهای دسترسی سریع (۲ رقمی)",
-                            icon: lucide.Keyboard,
-                          },
-                          {
-                            id: "inventory_control",
-                            label: "کنترل موجودی",
-                            icon: Box,
-                          },
-                          {
-                            id: "sync_manager",
-                            label: "مدیریت همگام‌سازی",
-                            icon: lucide.RefreshCw,
-                            action: () => props.setActiveTab("sync_manager"),
-                          },
-                        ].map((tab) => {
-                          const Icon = tab.icon;
-                          const isActive = settingsTab === tab.id;
-                          return (
-                            <button
-                              key={tab.id}
-                              onClick={() => tab.action ? tab.action() : setSettingsTab(tab.id)}
-                              className={`w-full flex items-center gap-3 px-4 py-3 rounded-xl transition-all font-bold ${
-                                isActive
-                                  ? "bg-indigo-50 text-indigo-700 shadow-sm border border-indigo-100"
-                                  : "text-gray-600 hover:bg-gray-50 hover:text-gray-900 border border-transparent"
-                              }`}
-                            >
-                              <Icon
-                                className={`w-5 h-5 ${isActive ? "text-indigo-600" : "text-gray-400"}`}
-                              />
-                              {tab.label}
-                            </button>
-                          );
-                        })}
+        <div className="flex items-center gap-3">
+          <button
+            onClick={(e) => {
+              e.preventDefault();
+              confirmAction(
+                "آیا از ذخیره تنظیمات اطمینان دارید؟",
+                () => handleSaveSettings(e as any),
+              );
+            }}
+            disabled={submittingSettings}
+            className="px-5 py-2.5 bg-white text-indigo-700 hover:bg-indigo-50 rounded-xl font-black transition-all shadow-sm flex items-center gap-2 cursor-pointer border-none disabled:opacity-50 text-xs"
+          >
+            {submittingSettings ? (
+              <span className="w-4 h-4 border-2 border-indigo-700/30 border-t-indigo-700 rounded-full animate-spin"></span>
+            ) : (
+              <Save className="w-4 h-4 text-indigo-700" />
+            )}
+            <span>ذخیره تنظیمات</span>
+          </button>
+        </div>
+      </div>
+
+      <div className="flex flex-1 overflow-hidden">
+        {/* Unified 3-Category Sidebar */}
+        <div className="w-80 bg-white border-l border-gray-200 shrink-0 flex flex-col overflow-hidden">
+          {/* 1. Category Switcher */}
+          <div className="p-3 border-b border-gray-200 bg-gray-50/70">
+            <div className="text-[11px] font-black text-gray-500 mb-2 px-1 flex items-center justify-between">
+              <span>دسته‌بندی کلان تنظیمات</span>
+              <span className="text-[10px] text-indigo-600 bg-indigo-50 px-2 py-0.5 rounded-full font-bold">
+                ۳ شاخه اصلی
+              </span>
+            </div>
+            <div className="grid grid-cols-3 gap-1.5 p-1 bg-gray-200/70 rounded-xl">
+              {categories.map((cat) => {
+                const CatIcon = cat.icon;
+                const isSelected = settingsCategory === cat.id && !settingsSearchQuery;
+                return (
+                  <button
+                    key={cat.id}
+                    type="button"
+                    onClick={() => {
+                      setSettingsSearchQuery("");
+                      setSettingsCategory(cat.id as any);
+                      const firstTabOfCat = allTabs.find((t) => t.category === cat.id);
+                      if (firstTabOfCat) {
+                        setSettingsTab(firstTabOfCat.id);
+                      }
+                    }}
+                    className={`flex flex-col items-center justify-center py-2 px-1 rounded-lg transition-all cursor-pointer relative ${
+                      isSelected
+                        ? "bg-white text-indigo-700 shadow-sm font-black"
+                        : "text-gray-600 hover:text-gray-900 hover:bg-white/50 font-bold"
+                    }`}
+                  >
+                    <CatIcon className={`w-4 h-4 mb-1 ${isSelected ? "text-indigo-600" : "text-gray-500"}`} />
+                    <span className="text-[11px] leading-tight text-center">{cat.label}</span>
+                    <span className={`text-[9px] px-1.5 py-0.2 mt-0.5 rounded-full font-bold ${
+                      isSelected ? "bg-indigo-100 text-indigo-800" : "bg-gray-300/60 text-gray-600"
+                    }`}>
+                      {cat.count}
+                    </span>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+
+          {/* 2. Fast Settings Search */}
+          <div className="p-3 border-b border-gray-100">
+            <div className="relative">
+              <input
+                type="text"
+                value={settingsSearchQuery}
+                onChange={(e) => setSettingsSearchQuery(e.target.value)}
+                placeholder="جستجو در تمام تنظیمات..."
+                className="w-full pl-8 pr-9 py-2 text-xs font-bold rounded-xl border border-gray-200 bg-gray-50/50 focus:bg-white focus:border-indigo-500 focus:ring-2 focus:ring-indigo-100 transition-all outline-none"
+              />
+              <Search className="w-4 h-4 text-gray-400 absolute right-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              {settingsSearchQuery && (
+                <button
+                  type="button"
+                  onClick={() => setSettingsSearchQuery("")}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 p-0.5 text-gray-400 hover:text-gray-600 rounded-full hover:bg-gray-200"
+                  title="پاک کردن جستجو"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+            {settingsSearchQuery && (
+              <div className="mt-1.5 px-1 flex items-center justify-between text-[10px] text-gray-500 font-bold">
+                <span>نتیجه: {filteredTabs.length} مورد</span>
+                <button
+                  type="button"
+                  onClick={() => setSettingsSearchQuery("")}
+                  className="text-indigo-600 hover:underline cursor-pointer"
+                >
+                  پاک کردن فیلتر
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* 3. Sub-tabs List */}
+          <div className="flex-1 overflow-y-auto custom-scrollbar p-3 space-y-1">
+            {filteredTabs.map((tab) => {
+              const TabIcon = tab.icon;
+              const isActive =
+                settingsTab === tab.id ||
+                (tab.id === "financial_years_hub" && settingsTab === "financial_years") ||
+                (tab.id === "database_hub" && settingsTab === "database") ||
+                (tab.id === "businesses_hub" && settingsTab === "businesses") ||
+                (tab.id === "reconciliation_hub" &&
+                  (settingsTab === "reconciliation" || settingsTab === "data_reconciliation")) ||
+                (tab.id === "audit_logs_hub" &&
+                  (settingsTab === "audit_logs" ||
+                    settingsTab === "system_logs" ||
+                    settingsTab === "database_logs")) ||
+                (tab.id === "diagnostics_hub" &&
+                  (settingsTab === "diagnostics" || settingsTab === "system_diagnostics"));
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => {
+                    setSettingsTab(tab.id);
+                    if (tab.category !== settingsCategory) {
+                      setSettingsCategory(tab.category as any);
+                    }
+                  }}
+                  className={`w-full text-right p-2.5 rounded-xl transition-all cursor-pointer flex flex-col gap-1 border ${
+                    isActive
+                      ? "bg-indigo-50/90 border-indigo-200 text-indigo-900 shadow-xs"
+                      : "border-transparent text-gray-700 hover:bg-gray-50 hover:border-gray-200/80"
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div
+                        className={`p-1.5 rounded-lg shrink-0 ${
+                          isActive
+                            ? "bg-indigo-600 text-white shadow-2xs"
+                            : "bg-gray-100 text-gray-500"
+                        }`}
+                      >
+                        <TabIcon className="w-4 h-4" />
                       </div>
+                      <span className="text-xs font-black truncate">{tab.label}</span>
+                    </div>
+                    {tab.badge && (
+                      <span
+                        className={`text-[9px] px-1.5 py-0.5 rounded-md font-extrabold shrink-0 ${
+                          isActive
+                            ? "bg-indigo-200 text-indigo-800"
+                            : "bg-gray-100 text-gray-600"
+                        }`}
+                      >
+                        {tab.badge}
+                      </span>
+                    )}
+                  </div>
+                  <p
+                    className={`text-[10px] leading-relaxed line-clamp-1 pr-7 ${
+                      isActive ? "text-indigo-700/80" : "text-gray-400"
+                    }`}
+                  >
+                    {tab.description}
+                  </p>
+                </button>
+              );
+            })}
+          </div>
+        </div>
 
                       {/* Content Area */}
                       <div className="flex-1 bg-gray-50/30 overflow-y-auto custom-scrollbar p-6 lg:p-8">
@@ -2666,6 +3008,430 @@ export default function SettingsTab(props: any) {
                             showNotification={props.showNotification}
                             confirmAction={props.confirmAction}
                           />
+                        )}
+
+                        {(settingsTab === "financial_years" || settingsTab === "financial_years_hub") && (
+                          <div className="flex flex-col gap-6">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                              <div>
+                                <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                                  <lucide.Calendar className="w-5 h-5 text-indigo-600" />
+                                  مدیریت سال‌های مالی و دوره‌های حسابداری
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  کنترل دوره‌های مالی فعال، ثبت اسناد افتتاحیه و اختتامیه، و استانداردهای تاریخ و گاه‌شمار
+                                </p>
+                              </div>
+                              {props.setActiveTab && (
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab("financial_years")}
+                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start"
+                                >
+                                  <lucide.ExternalLink className="w-4 h-4" />
+                                  <span>ورود به مدیریت کامل سال‌های مالی</span>
+                                </button>
+                              )}
+                            </div>
+
+                            {/* Active Fiscal Year Card */}
+                            <div className="bg-gradient-to-br from-indigo-50/70 to-blue-50/40 p-5 rounded-2xl border border-indigo-100">
+                              <div className="flex items-start justify-between flex-wrap gap-3">
+                                <div>
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-indigo-600 bg-indigo-100/80 px-2 py-0.5 rounded-md">
+                                    دوره مالی فعال سیستم
+                                  </span>
+                                  <h4 className="text-base font-extrabold text-slate-800 mt-2">
+                                    {props.activeFinancialYear?.name || "سال مالی جاری"}
+                                  </h4>
+                                  <p className="text-xs text-slate-600 mt-1">
+                                    {props.activeFinancialYear ? (
+                                      <>
+                                        شروع: <span className="font-mono font-bold">{props.activeFinancialYear.startDate}</span> | پایان: <span className="font-mono font-bold">{props.activeFinancialYear.endDate}</span>
+                                      </>
+                                    ) : (
+                                      "سال مالی تعریف‌شده در سیستم در دسترس است."
+                                    )}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 text-emerald-800 text-xs font-black">
+                                  <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                                  <span>فعال و آماده ثبت سند</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Quick Action Navigation Grid */}
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div 
+                                onClick={() => props.setActiveTab && props.setActiveTab("financial_years")}
+                                className="p-4 bg-white rounded-xl border border-gray-200 hover:border-indigo-400 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+                              >
+                                <div>
+                                  <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                                    <lucide.Calendar className="w-5 h-5" />
+                                  </div>
+                                  <h5 className="text-xs font-black text-slate-800">تعریف و بستن سال مالی</h5>
+                                  <p className="text-[11px] text-gray-500 mt-1">
+                                    تعریف دوره مالی جدید، بررسی وضعیت دوره‌ها و صدور سند اختتامیه
+                                  </p>
+                                </div>
+                                <div className="mt-3 text-[11px] font-extrabold text-indigo-600 flex items-center gap-1">
+                                  <span>ورود به سال‌های مالی</span>
+                                  <lucide.ChevronLeft className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
+
+                              <div 
+                                onClick={() => props.setActiveTab && props.setActiveTab("chart_of_accounts")}
+                                className="p-4 bg-white rounded-xl border border-gray-200 hover:border-teal-400 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+                              >
+                                <div>
+                                  <div className="w-9 h-9 rounded-lg bg-teal-50 text-teal-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                                    <lucide.FolderTree className="w-5 h-5" />
+                                  </div>
+                                  <h5 className="text-xs font-black text-slate-800">کدینگ حساب‌ها (کل و معین)</h5>
+                                  <p className="text-[11px] text-gray-500 mt-1">
+                                    ساختار درختی حساب‌های دوبل، تطبیق حساب‌های تفصیلی و سرفصل‌ها
+                                  </p>
+                                </div>
+                                <div className="mt-3 text-[11px] font-extrabold text-teal-600 flex items-center gap-1">
+                                  <span>شجره حساب‌ها</span>
+                                  <lucide.ChevronLeft className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
+
+                              <div 
+                                onClick={() => props.setActiveTab && props.setActiveTab("opening_balances")}
+                                className="p-4 bg-white rounded-xl border border-gray-200 hover:border-amber-400 hover:shadow-xs transition-all cursor-pointer flex flex-col justify-between group"
+                              >
+                                <div>
+                                  <div className="w-9 h-9 rounded-lg bg-amber-50 text-amber-600 flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
+                                    <lucide.Coins className="w-5 h-5" />
+                                  </div>
+                                  <h5 className="text-xs font-black text-slate-800">مانده‌های اول دوره اشخاص</h5>
+                                  <p className="text-[11px] text-gray-500 mt-1">
+                                    تنظیم و تثبیت مانده حساب آغازین مشتریان، تامین‌کنندگان و پرسنل
+                                  </p>
+                                </div>
+                                <div className="mt-3 text-[11px] font-extrabold text-amber-600 flex items-center gap-1">
+                                  <span>مانده اول دوره</span>
+                                  <lucide.ChevronLeft className="w-3.5 h-3.5" />
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {(settingsTab === "businesses" || settingsTab === "businesses_hub") && (
+                          <div className="flex flex-col gap-6">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                              <div>
+                                <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                                  <Building className="w-5 h-5 text-indigo-600" />
+                                  مدیریت کسب‌وکارها و پایگاه‌های داده (Multi-Business)
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  پیکربندی چندین کسب‌وکار، شرکت یا فروشگاه با پایگاه‌های داده مستقل در PostgreSQL
+                                </p>
+                              </div>
+                              {props.setActiveTab && (
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab("businesses")}
+                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start"
+                                >
+                                  <lucide.ExternalLink className="w-4 h-4" />
+                                  <span>ورود به مدیریت کسب‌وکارها</span>
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="bg-slate-50 p-5 rounded-2xl border border-slate-200">
+                              <div className="flex items-center justify-between flex-wrap gap-3">
+                                <div>
+                                  <span className="text-[10px] font-black uppercase tracking-wider text-slate-500 bg-slate-200 px-2 py-0.5 rounded-md">
+                                    کسب‌وکار فعال کنونی
+                                  </span>
+                                  <h4 className="text-base font-extrabold text-slate-900 mt-2">
+                                    {storeSettings?.storeName || "کسب‌وکار اصلی"}
+                                  </h4>
+                                  <p className="text-xs text-slate-500 mt-1">
+                                    شناسه دیتابیس فعال: <span className="font-mono font-bold text-indigo-600">{props.activeStoreId || 'default'}</span>
+                                  </p>
+                                </div>
+                                <div className="px-3 py-1 bg-indigo-50 border border-indigo-200 rounded-xl text-xs font-black text-indigo-700">
+                                  محیط مجزا و ایزوله
+                                </div>
+                              </div>
+                            </div>
+
+                            <div className="p-5 bg-white rounded-2xl border border-gray-200">
+                              <h4 className="text-xs font-black text-gray-700 mb-2">امکانات مدیریت چندکسب‌وکاره:</h4>
+                              <ul className="text-xs text-gray-600 space-y-2 list-disc list-inside leading-relaxed">
+                                <li>تعریف کسب‌وکار و پایگاه داده نامحدود بدون نیاز به نصب دوباره برنامه</li>
+                                <li>جابه‌جایی فوق‌سریع میان پایگاه‌های داده از طریق منوی سوییچر بالای صفحه</li>
+                                <li>پشتیبان‌گیری و بازیابی مجزا برای هر کسب‌وکار به صورت کاملاً مستقل</li>
+                              </ul>
+                              <div className="mt-4 pt-4 border-t border-gray-100 flex gap-3">
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab && props.setActiveTab("businesses")}
+                                  className="px-4 py-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black transition-colors cursor-pointer"
+                                >
+                                  ایجاد کسب‌وکار جدید یا تغییر دیتابیس
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {(settingsTab === "database" || settingsTab === "database_hub") && (
+                          <div className="flex flex-col gap-6">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                              <div>
+                                <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                                  <lucide.Database className="w-5 h-5 text-indigo-600" />
+                                  مدیریت، پشتیبان‌گیری و بازیابی پایگاه داده
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  تهیه فایل نسخه پشتیبان، بارگذاری و بازگردانی دیتابیس و زمان‌بندی خودکار پشتیبان
+                                </p>
+                              </div>
+                              {props.setActiveTab && (
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab("database")}
+                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start"
+                                >
+                                  <lucide.ExternalLink className="w-4 h-4" />
+                                  <span>ورود به مرکز پشتیبان‌گیری</span>
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="p-5 bg-gradient-to-br from-emerald-50/50 to-teal-50/30 rounded-2xl border border-emerald-100 flex flex-col justify-between">
+                                <div>
+                                  <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-700 flex items-center justify-center mb-3">
+                                    <lucide.Download className="w-5 h-5" />
+                                  </div>
+                                  <h4 className="text-sm font-black text-slate-800">پشتیبان‌گیری کامل (Full Backup)</h4>
+                                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                    تولید نسخه پشتیبان امن و رمزنگاری‌شده شامل فاکتورها، انبار، چک‌ها، اسناد دوبل و مشتریان.
+                                  </p>
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-emerald-100/60">
+                                  <button
+                                    type="button"
+                                    onClick={() => props.setActiveTab && props.setActiveTab("database")}
+                                    className="w-full py-2 px-3 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer text-center"
+                                  >
+                                    دانلود پشتیبان یا ورود به پنل دیتابیس
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="p-5 bg-gradient-to-br from-indigo-50/50 to-blue-50/30 rounded-2xl border border-indigo-100 flex flex-col justify-between">
+                                <div>
+                                  <div className="w-10 h-10 rounded-xl bg-indigo-100 text-indigo-700 flex items-center justify-center mb-3">
+                                    <lucide.RefreshCw className="w-5 h-5" />
+                                  </div>
+                                  <h4 className="text-sm font-black text-slate-800">پشتیبان‌گیری زمان‌بندی‌شده خودکار</h4>
+                                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                    تنظیم بازه‌های زمانی روزانه یا هفتگی برای پشتیبان‌گیری خودکار بدون نیاز به اقدام کاربر.
+                                  </p>
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-indigo-100/60">
+                                  <button
+                                    type="button"
+                                    onClick={() => props.setActiveTab && props.setActiveTab("backup_config")}
+                                    className="w-full py-2 px-3 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer text-center"
+                                  >
+                                    تنظیمات زمان‌بندی پشتیبان
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {(settingsTab === "reconciliation" || settingsTab === "reconciliation_hub" || settingsTab === "data_reconciliation") && (
+                          <div className="flex flex-col gap-6">
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-gray-100">
+                              <div>
+                                <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                                  <lucide.RefreshCw className="w-5 h-5 text-indigo-600" />
+                                  تطبیق و بازسازی هوشمند داده‌ها (Data Reconciliation)
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  مغایرت‌گیری تراز انبار، همگام‌سازی کاردکس کالاها و اصلاح مانده حساب‌ها
+                                </p>
+                              </div>
+                              {props.setActiveTab && (
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab("data_reconciliation")}
+                                  className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-xs flex items-center gap-1.5 cursor-pointer self-start"
+                                >
+                                  <lucide.ExternalLink className="w-4 h-4" />
+                                  <span>ورود به مرکز تطبیق داده‌ها</span>
+                                </button>
+                              )}
+                            </div>
+
+                            <div className="p-5 bg-white rounded-2xl border border-gray-200 space-y-4">
+                              <h4 className="text-xs font-black text-slate-800">عملیات بازسازی و تطبیق شامل:</h4>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-xs">
+                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                  <span className="font-extrabold text-slate-900 block mb-1">تطبیق کاردکس و موجودی انبار</span>
+                                  <span className="text-slate-500 text-[11px]">محاسبه مجدد مانده ریالی و تعدادی بر اساس کلیه اسناد تاییدشده رسید و حواله</span>
+                                </div>
+                                <div className="p-3 bg-slate-50 rounded-xl border border-slate-100">
+                                  <span className="font-extrabold text-slate-900 block mb-1">تطبیق دفاتر معین اشخاص</span>
+                                  <span className="text-slate-500 text-[11px]">همگام‌سازی مانده بدهکاری/بستانکاری اشخاص با فاکتورها، دریافت‌ها و پرداخت‌ها</span>
+                                </div>
+                              </div>
+                              <div className="pt-2">
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab && props.setActiveTab("data_reconciliation")}
+                                  className="px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-colors cursor-pointer"
+                                >
+                                  شروع بررسی و تطبیق هوشمند
+                                </button>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {(settingsTab === "audit_logs" || settingsTab === "audit_logs_hub" || settingsTab === "system_logs" || settingsTab === "database_logs") && (
+                          <div className="flex flex-col gap-6">
+                            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                              <div>
+                                <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                                  <Activity className="w-5 h-5 text-indigo-600" />
+                                  مرکز ممیزی، لاگ وقایع و امنیت سیستم
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  ردیابی تغییرات اسناد توسط کاربران، لاگ وقایع دیتابیس و تاریخچه دستکاری داده‌ها
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                              <div className="p-5 bg-white rounded-2xl border border-gray-200 flex flex-col justify-between">
+                                <div>
+                                  <div className="w-10 h-10 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center mb-3">
+                                    <Activity className="w-5 h-5" />
+                                  </div>
+                                  <h4 className="text-sm font-black text-slate-800">لاگ وقایع و فعالیت‌های کاربران</h4>
+                                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                    ثبت ورود و خروج، صدور و ویرایش فاکتورها، تغییر مشخصات کالا و اشخاص همراه با جزئیات مرورگر و IP.
+                                  </p>
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-gray-100">
+                                  <button
+                                    type="button"
+                                    onClick={() => props.setActiveTab && props.setActiveTab("system_logs")}
+                                    className="w-full py-2 px-3 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-xl text-xs font-black transition-colors cursor-pointer text-center"
+                                  >
+                                    مشاهده لاگ کاربران
+                                  </button>
+                                </div>
+                              </div>
+
+                              <div className="p-5 bg-white rounded-2xl border border-gray-200 flex flex-col justify-between">
+                                <div>
+                                  <div className="w-10 h-10 rounded-xl bg-slate-100 text-slate-600 flex items-center justify-center mb-3">
+                                    <lucide.Database className="w-5 h-5" />
+                                  </div>
+                                  <h4 className="text-sm font-black text-slate-800">لاگ وقایع پایگاه داده و سیستم</h4>
+                                  <p className="text-xs text-slate-600 mt-1 leading-relaxed">
+                                    ثبت تراکنش‌های پایگاه داده، خطاهای سیستمی سرور و وضعیت پایداری جداول PostgreSQL.
+                                  </p>
+                                </div>
+                                <div className="mt-4 pt-3 border-t border-gray-100">
+                                  <button
+                                    type="button"
+                                    onClick={() => props.setActiveTab && props.setActiveTab("database_logs")}
+                                    className="w-full py-2 px-3 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-black transition-colors cursor-pointer text-center"
+                                  >
+                                    مشاهده لاگ دیتابیس
+                                  </button>
+                                </div>
+                              </div>
+                            </div>
+                          </div>
+                        )}
+
+                        {(settingsTab === "diagnostics" || settingsTab === "diagnostics_hub" || settingsTab === "system_diagnostics") && (
+                          <div className="flex flex-col gap-6">
+                            <div className="flex items-center justify-between pb-4 border-b border-gray-100">
+                              <div>
+                                <h3 className="text-lg font-black text-gray-800 flex items-center gap-2">
+                                  <lucide.Cpu className="w-5 h-5 text-indigo-600" />
+                                  پایش سلامت سیستم، عیب‌یابی و همگام‌سازی
+                                </h3>
+                                <p className="text-xs text-gray-500 mt-1">
+                                  بررسی ارتباط با پایگاه داده PostgreSQL، اسناد مالی فاقد ثبت دوبل و مدیریت همگام‌سازی ابری
+                                </p>
+                              </div>
+                            </div>
+
+                            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                              <div className="p-4 bg-white rounded-xl border border-gray-200 flex flex-col justify-between">
+                                <div>
+                                  <div className="w-9 h-9 rounded-lg bg-blue-50 text-blue-600 flex items-center justify-center mb-2">
+                                    <lucide.Cpu className="w-5 h-5" />
+                                  </div>
+                                  <h4 className="text-xs font-black text-slate-800">پایش سلامت و عیب‌یابی</h4>
+                                  <p className="text-[11px] text-gray-500 mt-1">تست اتصالات دیتابیس و وضعیت اجزای سرور</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab && props.setActiveTab("system_diagnostics")}
+                                  className="mt-3 py-1.5 px-2 bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg text-xs font-black transition-colors cursor-pointer"
+                                >
+                                  ورود به پایش سلامت
+                                </button>
+                              </div>
+
+                              <div className="p-4 bg-white rounded-xl border border-gray-200 flex flex-col justify-between">
+                                <div>
+                                  <div className="w-9 h-9 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center mb-2">
+                                    <lucide.AlertCircle className="w-5 h-5" />
+                                  </div>
+                                  <h4 className="text-xs font-black text-slate-800">اسناد مالی فاقد سند دوبل</h4>
+                                  <p className="text-[11px] text-gray-500 mt-1">شناسایی و صدور خودکار اسناد حسابداری معوق</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab && props.setActiveTab("unvouchered_financials")}
+                                  className="mt-3 py-1.5 px-2 bg-rose-50 hover:bg-rose-100 text-rose-700 rounded-lg text-xs font-black transition-colors cursor-pointer"
+                                >
+                                  بررسی اسناد معوق
+                                </button>
+                              </div>
+
+                              <div className="p-4 bg-white rounded-xl border border-gray-200 flex flex-col justify-between">
+                                <div>
+                                  <div className="w-9 h-9 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center mb-2">
+                                    <lucide.RefreshCw className="w-5 h-5" />
+                                  </div>
+                                  <h4 className="text-xs font-black text-slate-800">مدیریت همگام‌سازی ابری</h4>
+                                  <p className="text-[11px] text-gray-500 mt-1">همگام‌سازی داده‌های آفلاین با سرور مرکزی</p>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => props.setActiveTab && props.setActiveTab("sync_manager")}
+                                  className="mt-3 py-1.5 px-2 bg-indigo-50 hover:bg-indigo-100 text-indigo-700 rounded-lg text-xs font-black transition-colors cursor-pointer"
+                                >
+                                  مدیریت همگام‌سازی
+                                </button>
+                              </div>
+                            </div>
+                          </div>
                         )}
                         </div>
                       </div>
