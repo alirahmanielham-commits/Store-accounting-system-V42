@@ -3,7 +3,7 @@ import {
   ArrowDownLeft, ArrowUpRight, User, Landmark, Wallet, DollarSign,
   Calendar, Hash, FileText, CheckCircle2, RefreshCw, Printer,
   ArrowRight, Search, Check, Zap, Plus, X, Phone, CreditCard,
-  ChevronDown, AlertCircle, Share2
+  ChevronDown, AlertCircle, Share2, Store
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import num2persian from 'num2persian';
@@ -28,6 +28,8 @@ interface Props {
   calculatePersonBalance?: (personId: any) => { status: string; amount: number; isDebtor?: boolean; isCreditor?: boolean };
   onBack?: () => void;
   showNotification?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
+  onTypeChange?: (type: 'receive' | 'pay') => void;
+  onRefresh?: () => void;
 }
 
 export default function MobileReceiptForm({
@@ -43,9 +45,12 @@ export default function MobileReceiptForm({
   fetchPersons,
   calculatePersonBalance,
   onBack,
-  showNotification
+  showNotification,
+  onTypeChange,
+  onRefresh
 }: Props) {
   const currency = storeSettings?.currency || 'تومان';
+  const storeName = storeSettings?.store_name || storeSettings?.storeName || 'سامانه مالی تراز';
 
   // Form State
   const [receiptType, setReceiptType] = useState<'receive' | 'pay'>(initialType);
@@ -76,6 +81,11 @@ export default function MobileReceiptForm({
   // Submission State
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [savedReceipt, setSavedReceipt] = useState<any | null>(null);
+
+  // Sync when initialType changes
+  useEffect(() => {
+    setReceiptType(initialType);
+  }, [initialType]);
 
   // Auto-select default bank or cashbox on mount
   useEffect(() => {
@@ -127,11 +137,18 @@ export default function MobileReceiptForm({
     setAmountStr(addCommas(newTotal));
   };
 
+  // Switch between Receive and Pay
+  const handleSwitchType = (type: 'receive' | 'pay') => {
+    setReceiptType(type);
+    if (onTypeChange) onTypeChange(type);
+    try { playAudioFeedback('info'); } catch (_) {}
+  };
+
   // Quick Person Creation
   const handleCreateQuickPerson = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newPersonName.trim()) {
-      if (showNotification) showNotification('لطفاً نام طرف‌حساب را وارد فرمایید.', 'error');
+      if (showNotification) showNotification('لطفاً نام طرف‌حساب را وارد فرمایید.', 'warning');
       return;
     }
     setIsSavingNewPerson(true);
@@ -174,15 +191,19 @@ export default function MobileReceiptForm({
     if (isSubmitting) return;
 
     if (!selectedPerson) {
-      if (showNotification) showNotification('لطفاً طرف‌حساب را انتخاب فرمایید.', 'error');
+      if (showNotification) showNotification('لطفاً ابتدا طرف‌حساب را انتخاب فرمایید.', 'warning');
+      setIsPersonDrawerOpen(true);
       return;
     }
     if (parsedAmount <= 0) {
-      if (showNotification) showNotification('لطفاً مبلغ معتبری وارد نمایید.', 'error');
+      if (showNotification) showNotification('لطفاً مبلغ رسید را وارد فرمایید.', 'warning');
+      const inputEl = document.getElementById('mobile-receipt-amount-input');
+      if (inputEl) inputEl.focus();
       return;
     }
     if (!selectedResource) {
-      if (showNotification) showNotification('لطفاً حساب بانکی یا صندوق را انتخاب فرمایید.', 'error');
+      if (showNotification) showNotification('لطفاً محل تسویه (بانک یا صندوق) را انتخاب فرمایید.', 'warning');
+      setIsResourceDrawerOpen(true);
       return;
     }
 
@@ -261,7 +282,7 @@ export default function MobileReceiptForm({
   if (savedReceipt) {
     const isRec = savedReceipt.type === 'receive';
     return (
-      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 p-4 font-sans" dir="rtl">
+      <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 p-4 font-sans pb-24" dir="rtl">
         <div className="my-auto max-w-sm mx-auto w-full bg-white dark:bg-slate-900 rounded-3xl p-6 shadow-xl border border-slate-100 dark:border-slate-800 text-center">
           <div className={`w-20 h-20 mx-auto rounded-3xl flex items-center justify-center mb-4 ${
             isRec ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400' : 'bg-rose-500/10 text-rose-600 dark:text-rose-400'
@@ -309,21 +330,11 @@ export default function MobileReceiptForm({
             <button
               type="button"
               onClick={resetForm}
-              className="w-full h-13 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 transition-all cursor-pointer"
+              className="w-full h-14 bg-indigo-600 hover:bg-indigo-700 active:scale-98 text-white rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg shadow-indigo-600/25 transition-all cursor-pointer"
             >
               <Zap className="w-4 h-4" />
               <span>ثبت رسید بعدی</span>
             </button>
-
-            {onBack && (
-              <button
-                type="button"
-                onClick={onBack}
-                className="w-full h-12 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 rounded-2xl font-bold text-xs flex items-center justify-center gap-2 transition-all cursor-pointer"
-              >
-                <span>بازگشت به داشبورد موبایل</span>
-              </button>
-            )}
           </div>
         </div>
       </div>
@@ -334,58 +345,60 @@ export default function MobileReceiptForm({
   const personBalanceInfo = selectedPerson && calculatePersonBalance ? calculatePersonBalance(selectedPerson.id) : null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 font-sans pb-28" dir="rtl">
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 font-sans pb-36 relative" dir="rtl">
       {/* Top App Bar */}
-      <header className="sticky top-0 z-30 bg-white/90 dark:bg-slate-900/90 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-2.5">
-          {onBack && (
-            <button
-              type="button"
-              onClick={onBack}
-              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
-              aria-label="بازگشت"
-            >
-              <ArrowRight className="w-5 h-5" />
-            </button>
-          )}
+      <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 h-14 flex items-center justify-between">
+        <div className="flex items-center gap-2">
+          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
+            isReceive ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40' : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40'
+          }`}>
+            {isReceive ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
+          </div>
           <div>
-            <h1 className="text-sm font-black text-slate-900 dark:text-white">
+            <h1 className="text-xs font-black text-slate-900 dark:text-white leading-tight">
               {isReceive ? 'ثبت رسید دریافت وجه' : 'ثبت رسید پرداخت وجه'}
             </h1>
-            <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium">پورتال اختصاصی همراه</p>
+            <p className="text-[10px] text-slate-400 font-medium">{storeName}</p>
           </div>
         </div>
 
-        {/* Switch Receive / Pay toggle pill */}
-        <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
-          <button
-            type="button"
-            onClick={() => {
-              setReceiptType('receive');
-              try { playAudioFeedback('info'); } catch (_) {}
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-              isReceive
-                ? 'bg-emerald-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            دریافت
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setReceiptType('pay');
-              try { playAudioFeedback('info'); } catch (_) {}
-            }}
-            className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-              !isReceive
-                ? 'bg-rose-600 text-white shadow-sm'
-                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-            }`}
-          >
-            پرداخت
-          </button>
+        <div className="flex items-center gap-2">
+          {onRefresh && (
+            <button
+              type="button"
+              onClick={onRefresh}
+              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
+              title="به‌روزرسانی اطلاعات"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+            </button>
+          )}
+
+          {/* Switch Receive / Pay toggle pill */}
+          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
+            <button
+              type="button"
+              onClick={() => handleSwitchType('receive')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                isReceive
+                  ? 'bg-emerald-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              دریافت
+            </button>
+            <button
+              type="button"
+              onClick={() => handleSwitchType('pay')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
+                !isReceive
+                  ? 'bg-rose-600 text-white shadow-xs'
+                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
+              }`}
+            >
+              پرداخت
+            </button>
+          </div>
         </div>
       </header>
 
@@ -405,6 +418,7 @@ export default function MobileReceiptForm({
           {/* Huge Numeric Input */}
           <div className="relative flex items-center">
             <input
+              id="mobile-receipt-amount-input"
               type="text"
               inputMode="numeric"
               placeholder="۰"
@@ -630,31 +644,71 @@ export default function MobileReceiptForm({
             />
           </div>
         </div>
+
+        {/* 5. In-Flow Big Submit Button Card (Clearly visible at the bottom of the form) */}
+        <div className="pt-2 pb-2">
+          <button
+            type="button"
+            onClick={handleSubmitReceipt}
+            disabled={isSubmitting}
+            className={`w-full h-15 rounded-2xl font-black text-sm flex items-center justify-center gap-2.5 shadow-xl transition-all active:scale-98 cursor-pointer ${
+              isReceive
+                ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30 ring-2 ring-emerald-500/20'
+                : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/30 ring-2 ring-rose-500/20'
+            }`}
+          >
+            {isSubmitting ? (
+              <>
+                <RefreshCw className="w-5 h-5 animate-spin" />
+                <span>در حال ثبت سند و تراکنش...</span>
+              </>
+            ) : (
+              <>
+                {isReceive ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+                <span>
+                  {isReceive ? 'ثبت و تایید نهایی رسید دریافت' : 'ثبت و تایید نهایی رسید پرداخت'}
+                  {parsedAmount > 0 && ` (${addCommas(parsedAmount)} ${currency})`}
+                </span>
+              </>
+            )}
+          </button>
+
+          {/* Helpful Validation Status Message */}
+          {(!selectedPerson || parsedAmount <= 0) && (
+            <p className="text-[11px] text-center text-slate-500 dark:text-slate-400 mt-2 font-medium">
+              {!selectedPerson && parsedAmount <= 0
+                ? '👈 لطفاً ابتدا طرف‌حساب و مبلغ را مشخص فرمایید.'
+                : !selectedPerson
+                ? '👈 لطفاً ابتدا طرف‌حساب را انتخاب نمایید.'
+                : '👈 لطفاً مبلغ رسید را وارد نمایید.'}
+            </p>
+          )}
+        </div>
       </main>
 
-      {/* Sticky Bottom Action Bar (Thumb Zone) */}
-      <div className="fixed bottom-0 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 p-3 pb-safe max-w-lg mx-auto">
+      {/* Floating Sticky Submit Bar (Positioned above the 64px bottom nav, never hidden!) */}
+      <div className="fixed bottom-16 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 p-2.5 max-w-lg mx-auto shadow-lg">
         <button
           type="button"
-          disabled={isSubmitting || parsedAmount <= 0 || !selectedPerson}
           onClick={handleSubmitReceipt}
-          className={`w-full h-14 rounded-2xl font-black text-sm flex items-center justify-center gap-2 shadow-lg transition-all active:scale-98 cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+          disabled={isSubmitting}
+          className={`w-full h-13 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer ${
             isReceive
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/30'
-              : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/30'
+              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25'
+              : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25'
           }`}
         >
           {isSubmitting ? (
             <>
-              <RefreshCw className="w-5 h-5 animate-spin" />
-              <span>در حال ثبت تراکنش...</span>
+              <RefreshCw className="w-4 h-4 animate-spin" />
+              <span>در حال ثبت سند...</span>
             </>
           ) : (
             <>
-              {isReceive ? <ArrowDownLeft className="w-5 h-5" /> : <ArrowUpRight className="w-5 h-5" />}
+              {isReceive ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
               <span>
-                {isReceive ? 'ثبت و تایید دریافت' : 'ثبت و تایید پرداخت'}
-                {parsedAmount > 0 && ` (${addCommas(parsedAmount)} ${currency})`}
+                {isReceive ? 'تایید و ثبت رسید دریافت' : 'تایید و ثبت رسید پرداخت'}
+                {parsedAmount > 0 ? ` (${addCommas(parsedAmount)} ${currency})` : ''}
               </span>
             </>
           )}

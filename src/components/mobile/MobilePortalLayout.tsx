@@ -1,11 +1,6 @@
 import React, { useState } from 'react';
-import {
-  Home, ArrowDownLeft, ArrowUpRight, History,
-  LogOut, RefreshCw
-} from 'lucide-react';
-import MobileHub from './MobileHub';
+import { ArrowDownLeft, ArrowUpRight, RefreshCw, Store } from 'lucide-react';
 import MobileReceiptForm from './MobileReceiptForm';
-import MobileReceiptsHistory from './MobileReceiptsHistory';
 
 interface Props {
   storeSettings?: any;
@@ -23,7 +18,7 @@ interface Props {
   onLogout?: () => void;
 }
 
-export type MobileTab = 'hub' | 'receive' | 'pay' | 'history';
+export type MobileTab = 'receive' | 'pay';
 
 export default function MobilePortalLayout({
   storeSettings,
@@ -37,10 +32,22 @@ export default function MobilePortalLayout({
   fetchCashboxes,
   fetchPersons,
   calculatePersonBalance,
-  showNotification,
+  showNotification: externalShowNotification,
   onLogout
 }: Props) {
-  const [activeScreen, setActiveScreen] = useState<MobileTab>('hub');
+  // Mobile mode is strictly restricted to receipt registration (Receive and Pay)
+  const [activeTab, setActiveTab] = useState<MobileTab>('receive');
+  const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
+
+  const triggerNotification = (msg: string, type: 'success' | 'error' | 'info' | 'warning' = 'info') => {
+    setToast({ msg, type });
+    if (externalShowNotification) {
+      externalShowNotification(msg, type);
+    }
+    setTimeout(() => {
+      setToast(prev => (prev?.msg === msg ? null : prev));
+    }, 3500);
+  };
 
   const handleRefresh = async () => {
     try {
@@ -48,137 +55,84 @@ export default function MobilePortalLayout({
       if (fetchAccounts) await fetchAccounts();
       if (fetchCashboxes) await fetchCashboxes();
       if (fetchPersons) await fetchPersons();
-      if (showNotification) showNotification('داده‌ها به‌روزرسانی شدند.', 'info');
-    } catch (_) {}
+      triggerNotification('اطلاعات با موفقیت به‌روزرسانی شد.', 'info');
+    } catch (_) {
+      triggerNotification('خطا در به‌روزرسانی اطلاعات', 'error');
+    }
   };
 
   return (
-    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans" dir="rtl">
-      {/* Dynamic Mobile Views */}
-      {activeScreen === 'hub' && (
-        <MobileHub
-          storeSettings={storeSettings}
-          user={user}
-          transactions={transactions}
-          persons={persons}
-          accounts={accounts}
-          cashboxes={cashboxes}
-          onOpenReceive={() => setActiveScreen('receive')}
-          onOpenPay={() => setActiveScreen('pay')}
-          onViewHistory={() => setActiveScreen('history')}
-          onRefresh={handleRefresh}
-        />
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans relative" dir="rtl">
+      {/* Floating Mobile Toast Banner */}
+      {toast && (
+        <div className="fixed top-4 left-4 right-4 z-50 max-w-sm mx-auto transition-all transform animate-in fade-in slide-in-from-top-4 duration-200">
+          <div className={`px-4 py-3 rounded-2xl shadow-xl flex items-center gap-3 text-sm font-bold text-white ${
+            toast.type === 'success' ? 'bg-emerald-600 shadow-emerald-500/20' :
+            toast.type === 'error' ? 'bg-rose-600 shadow-rose-500/20' :
+            toast.type === 'warning' ? 'bg-amber-600 shadow-amber-500/20' :
+            'bg-slate-800 shadow-slate-900/20'
+          }`}>
+            <span>{toast.type === 'success' ? '✓' : toast.type === 'error' ? '✕' : 'ℹ'}</span>
+            <span className="flex-1 leading-snug">{toast.msg}</span>
+            <button
+              type="button"
+              onClick={() => setToast(null)}
+              className="text-white/80 hover:text-white text-xs px-1.5 py-0.5 rounded cursor-pointer"
+            >
+              ✕
+            </button>
+          </div>
+        </div>
       )}
 
-      {activeScreen === 'receive' && (
-        <MobileReceiptForm
-          initialType="receive"
-          persons={persons}
-          accounts={accounts}
-          cashboxes={cashboxes}
-          storeSettings={storeSettings}
-          transactions={transactions}
-          fetchTransactions={fetchTransactions}
-          fetchAccounts={fetchAccounts}
-          fetchCashboxes={fetchCashboxes}
-          fetchPersons={fetchPersons}
-          calculatePersonBalance={calculatePersonBalance}
-          onBack={() => setActiveScreen('hub')}
-          showNotification={showNotification}
-        />
-      )}
+      {/* Main Single Receipt Form (Dedicated and isolated) */}
+      <MobileReceiptForm
+        key={activeTab}
+        initialType={activeTab}
+        persons={persons}
+        accounts={accounts}
+        cashboxes={cashboxes}
+        storeSettings={storeSettings}
+        transactions={transactions}
+        fetchTransactions={fetchTransactions}
+        fetchAccounts={fetchAccounts}
+        fetchCashboxes={fetchCashboxes}
+        fetchPersons={fetchPersons}
+        calculatePersonBalance={calculatePersonBalance}
+        showNotification={triggerNotification}
+        onTypeChange={(t) => setActiveTab(t)}
+        onRefresh={handleRefresh}
+      />
 
-      {activeScreen === 'pay' && (
-        <MobileReceiptForm
-          initialType="pay"
-          persons={persons}
-          accounts={accounts}
-          cashboxes={cashboxes}
-          storeSettings={storeSettings}
-          transactions={transactions}
-          fetchTransactions={fetchTransactions}
-          fetchAccounts={fetchAccounts}
-          fetchCashboxes={fetchCashboxes}
-          fetchPersons={fetchPersons}
-          calculatePersonBalance={calculatePersonBalance}
-          onBack={() => setActiveScreen('hub')}
-          showNotification={showNotification}
-        />
-      )}
-
-      {activeScreen === 'history' && (
-        <MobileReceiptsHistory
-          transactions={transactions}
-          storeSettings={storeSettings}
-          onBack={() => setActiveScreen('hub')}
-        />
-      )}
-
-      {/* Fixed Bottom Thumb-Zone Navigation Bar */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 max-w-lg mx-auto">
-        <div className="grid grid-cols-4 items-center h-16 px-2 pb-safe">
-          {/* 1. Hub / Home */}
+      {/* Fixed Bottom Navigation Bar - STRICTLY LIMITED TO THE TWO ALLOWED OPERATIONS */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 max-w-lg mx-auto shadow-lg">
+        <div className="grid grid-cols-2 items-center h-16 px-3 pb-safe gap-2">
+          {/* 1. ثبت رسید دریافت */}
           <button
             type="button"
-            onClick={() => setActiveScreen('hub')}
-            className={`flex flex-col items-center justify-center py-1 transition-all cursor-pointer ${
-              activeScreen === 'hub'
-                ? 'text-indigo-600 dark:text-indigo-400 font-black'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
+            onClick={() => setActiveTab('receive')}
+            className={`flex items-center justify-center gap-2 h-12 rounded-2xl transition-all cursor-pointer font-black text-xs ${
+              activeTab === 'receive'
+                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
+                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
             }`}
           >
-            <div className={`p-1 rounded-xl transition-all ${activeScreen === 'hub' ? 'bg-indigo-50 dark:bg-indigo-950/50' : ''}`}>
-              <Home className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] tracking-tight mt-0.5">داشبورد</span>
+            <ArrowDownLeft className={`w-4 h-4 ${activeTab === 'receive' ? 'text-white' : 'text-emerald-600'}`} />
+            <span>ثبت رسید دریافت</span>
           </button>
 
-          {/* 2. Receive */}
+          {/* 2. ثبت رسید پرداخت */}
           <button
             type="button"
-            onClick={() => setActiveScreen('receive')}
-            className={`flex flex-col items-center justify-center py-1 transition-all cursor-pointer ${
-              activeScreen === 'receive'
-                ? 'text-emerald-600 dark:text-emerald-400 font-black'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
+            onClick={() => setActiveTab('pay')}
+            className={`flex items-center justify-center gap-2 h-12 rounded-2xl transition-all cursor-pointer font-black text-xs ${
+              activeTab === 'pay'
+                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
+                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
             }`}
           >
-            <div className={`p-1 rounded-xl transition-all ${activeScreen === 'receive' ? 'bg-emerald-50 dark:bg-emerald-950/50' : ''}`}>
-              <ArrowDownLeft className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] tracking-tight mt-0.5">دریافت</span>
-          </button>
-
-          {/* 3. Pay */}
-          <button
-            type="button"
-            onClick={() => setActiveScreen('pay')}
-            className={`flex flex-col items-center justify-center py-1 transition-all cursor-pointer ${
-              activeScreen === 'pay'
-                ? 'text-rose-600 dark:text-rose-400 font-black'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
-            }`}
-          >
-            <div className={`p-1 rounded-xl transition-all ${activeScreen === 'pay' ? 'bg-rose-50 dark:bg-rose-950/50' : ''}`}>
-              <ArrowUpRight className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] tracking-tight mt-0.5">پرداخت</span>
-          </button>
-
-          {/* 4. History */}
-          <button
-            type="button"
-            onClick={() => setActiveScreen('history')}
-            className={`flex flex-col items-center justify-center py-1 transition-all cursor-pointer ${
-              activeScreen === 'history'
-                ? 'text-indigo-600 dark:text-indigo-400 font-black'
-                : 'text-slate-400 hover:text-slate-600 dark:hover:text-slate-300 font-medium'
-            }`}
-          >
-            <div className={`p-1 rounded-xl transition-all ${activeScreen === 'history' ? 'bg-indigo-50 dark:bg-indigo-950/50' : ''}`}>
-              <History className="w-5 h-5" />
-            </div>
-            <span className="text-[10px] tracking-tight mt-0.5">رسیدها</span>
+            <ArrowUpRight className={`w-4 h-4 ${activeTab === 'pay' ? 'text-white' : 'text-rose-600'}`} />
+            <span>ثبت رسید پرداخت</span>
           </button>
         </div>
       </nav>
