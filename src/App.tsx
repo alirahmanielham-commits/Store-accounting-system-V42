@@ -269,6 +269,7 @@ const WelcomePage = React.lazy(() => import('./components/WelcomePage'));
 const SyncManager = React.lazy(() => import('./components/admin/SyncManager'));
 const MobileRestrictedMenu = React.lazy(() => import('./components/MobileRestrictedMenu'));
 const MobileRestrictedAccess = React.lazy(() => import('./components/mobile/MobileRestrictedAccess'));
+const MobilePortalLayout = React.lazy(() => import('./components/mobile/MobilePortalLayout'));
 import { MOBILE_ALLOWED_TABS } from './components/MobileRestrictedMenu';
 import { hasPagePermission } from './utils/permissionUtils';
 import AccessRestricted from './components/common/AccessRestricted';
@@ -2118,7 +2119,26 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
             </div>
           )}
           {isMobileScreen ? (
-            <MobileRestrictedAccess />
+            <Suspense fallback={
+              <div className="flex h-screen items-center justify-center bg-slate-50 dark:bg-slate-950 p-8">
+                <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div>
+              </div>
+            }>
+              <MobilePortalLayout
+                storeSettings={storeSettings}
+                user={user}
+                persons={persons}
+                accounts={accounts}
+                cashboxes={cashboxes}
+                transactions={transactions}
+                fetchTransactions={appState.fetchTransactions}
+                fetchAccounts={appState.fetchAccounts}
+                fetchCashboxes={appState.fetchCashboxes}
+                fetchPersons={appState.fetchPersons}
+                calculatePersonBalance={appState.calculatePersonBalance}
+                onLogout={signOut}
+              />
+            </Suspense>
           ) : systemModule === "selector" ? (
             <ModuleSelector
               storeSettings={storeSettings}
@@ -3234,9 +3254,7 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                     className={`mx-auto transition-all duration-300 print:max-w-none print:w-full print:px-0 ${isFullWidth || activeTab === "person_profile" || activeTab === "person_ledger" || activeTab === "product_card" ? "max-w-full xl:px-4" : "max-w-6xl"}`}
                   >
                     <Suspense fallback={<div className="flex h-full items-center justify-center p-8"><div className="animate-spin rounded-full h-8 w-8 border-b-2 border-indigo-600"></div></div>}>
-                    {isMobileScreen ? (
-                      <MobileRestrictedAccess />
-                    ) : user && activeTab !== "welcome_page" && !hasPagePermission(user, activeTab) ? (
+                    {user && activeTab !== "welcome_page" && !hasPagePermission(user, activeTab) ? (
                       <AccessRestricted activeTab={activeTab} user={user} onGoHome={() => setActiveTab("welcome_page")} />
                     ) : (
                       appRoutes
