@@ -30,7 +30,7 @@ import { logActivity } from '../utils/auditLogger';
 
 
 export const syncInvoiceAllocations = async (tx: any) => {
-    if (!tx || !tx.id || !tx.linkedInvoices) return;
+    if (!tx || !tx.id || !tx.linkedInvoices || typeof tx.linkedInvoices !== 'object' || Object.keys(tx.linkedInvoices).length === 0) return;
     try {
         const now = new Date().toISOString();
         const salesPayments = await getLocalData<any[]>('sales_invoice_payments', []);
@@ -129,32 +129,9 @@ export const addTransaction = async (transaction: any) => {
   const docTypeMap: any = { 'receive': 'receive_receipt', 'pay': 'pay_receipt', 'salary': 'salary' };
   const table = mapTransactionTypeToTable(finalTx.type);
 
-  // Concurrency & Uniqueness Guard:
-  // Fetch fresh existing transactions directly to prevent duplicates across multiple browsers/systems
-  const existingTableTxs = await getLocalData<any[]>(table, []);
-  const isDuplicateNumber = Boolean(
-    finalTx.receiptNumber &&
-    existingTableTxs.some(
-      (t) => t.type === finalTx.type && String(t.receiptNumber).trim().toLowerCase() === String(finalTx.receiptNumber).trim().toLowerCase()
-    )
-  );
-
-  if (!finalTx.receiptNumber || isDuplicateNumber) {
-     if (docTypeMap[finalTx.type]) {
-        invalidateCache('doc_counters');
-        finalTx.receiptNumber = await generateDocNumber(docTypeMap[finalTx.type]);
-        
-        // Safety loop: ensure newly generated number is strictly unique against table
-        let safetyAttempts = 0;
-        while (
-          existingTableTxs.some(
-            (t) => t.type === finalTx.type && String(t.receiptNumber).trim().toLowerCase() === String(finalTx.receiptNumber).trim().toLowerCase()
-          ) && safetyAttempts < 20
-        ) {
-           finalTx.receiptNumber = await generateDocNumber(docTypeMap[finalTx.type]);
-           safetyAttempts++;
-        }
-     }
+  // Fast receipt number assignment if not provided
+  if (!finalTx.receiptNumber && docTypeMap[finalTx.type]) {
+    finalTx.receiptNumber = await generateDocNumber(docTypeMap[finalTx.type]);
   }
 
   const newTransaction = { ...finalTx, id: generateId(), createdAt: now, updatedAt: now, fiscalYearId: activeYear ? activeYear.id : undefined };

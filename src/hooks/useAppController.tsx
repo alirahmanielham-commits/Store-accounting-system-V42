@@ -2683,20 +2683,11 @@ const checkDebtThreshold = async (personId: string | number) => {
       return;
 
     try {
-      const [
-        allPersons,
-        allInvoices,
-        allTransactions,
-        allIssuedChecks,
-        allReceivedChecks,
-      ] = await Promise.all([
-        getPersons(),
-        getInvoices(),
-        getTransactions(),
-        getIssuedChecks(),
-        getReceivedChecks(),
-      ]);
-
+      const allPersons = (persons && persons.length > 0) ? persons : await getPersons();
+      const allInvoices = invoices || [];
+      const allTransactions = transactions || [];
+      const allIssuedChecks = issuedChecks || [];
+      const allReceivedChecks = receivedChecks || [];
 
       const person = allPersons.find(
         (p: any) => p.id.toString() === personId.toString(),

@@ -503,10 +503,10 @@ export default function KeyboardReceiptPage({
           showNotification(`حواله بین [${payerName}] و [${payeeName}] به مبلغ ${addCommas(parsedAmount)} ${currency} ثبت شد.`, 'success');
         }
 
-        if (fetchTransactions) fetchTransactions();
+        if (fetchTransactions) Promise.resolve(fetchTransactions()).catch(console.error);
         if (autoPrint) setIsPrintModalOpen(true);
         if (thenNew) {
-          setTimeout(() => resetToStepOne(true), 300);
+          setTimeout(() => resetToStepOne(true), 80);
         }
       } catch (err: any) {
         if (showNotification) {
@@ -622,10 +622,10 @@ export default function KeyboardReceiptPage({
         showNotification(`رسید ${receiptType === 'receive' ? 'دریافت' : 'پرداخت'} شماره ${receiptNumber} با موفقیت ثبت شد.`, 'success');
       }
 
-      // Refresh global states
-      if (fetchTransactions) fetchTransactions();
-      if (fetchAccounts) fetchAccounts();
-      if (fetchCashboxes) fetchCashboxes();
+      // Refresh global states in background
+      if (fetchTransactions) Promise.resolve(fetchTransactions()).catch(console.error);
+      if (fetchAccounts) Promise.resolve(fetchAccounts()).catch(console.error);
+      if (fetchCashboxes) Promise.resolve(fetchCashboxes()).catch(console.error);
 
       if (autoPrint) {
         setIsPrintModalOpen(true);
@@ -634,7 +634,7 @@ export default function KeyboardReceiptPage({
       if (thenNew) {
         setTimeout(() => {
           resetToStepOne(true);
-        }, 300);
+        }, 80);
       }
     } catch (err: any) {
       if (showNotification) {

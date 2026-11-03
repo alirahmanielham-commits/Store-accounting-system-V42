@@ -447,56 +447,63 @@ const internalGenerateDocNumber = async (docTypeKey: string): Promise<string> =>
     delete cache['doc_counters'];
     const counters = await getLocalData<Record<string, number>>('doc_counters', {}, { _nocache: Date.now() });
     
-    let items: any[] = [];
-    if (docTypeKey === 'sale' || docTypeKey === 'purchase' || docTypeKey.includes('return') || docTypeKey === 'proforma' || docTypeKey.startsWith('consignment')) {
-      const targetTable = mapInvoiceTypeToTable(docTypeKey);
-      const [targetData, generalInvs] = await Promise.all([
-        getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
-        getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
-      ]);
-      const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
-      items = combined.filter(i => i && !i.isDeleted && (docTypeKey.startsWith('consignment') || docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? (i.type === 'sale' || !i.type) : i.type === docTypeKey)));
-    } else if (docTypeKey === 'warehouse_receipt' || docTypeKey === 'warehouse_remittance') {
-      const targetTable = mapInvoiceTypeToTable(docTypeKey);
-      const [targetData, generalInvs] = await Promise.all([
-        getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
-        getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
-      ]);
-      const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
-      items = combined.filter(i => i && !i.isDeleted && i.type === docTypeKey);
-    } else if (docTypeKey === 'receive_receipt' || docTypeKey === 'pay_receipt' || docTypeKey === 'salary') {
-      items = await getTransactions();
-      const typeMap: any = { 'receive_receipt': 'receive', 'pay_receipt': 'pay', 'salary': 'salary' };
-      items = items.filter(i => i.type === typeMap[docTypeKey]);
-    } else if (docTypeKey === 'check_issued') items = await getIssuedChecks();
-    else if (docTypeKey === 'check_received') items = await getReceivedChecks();
-    else if (docTypeKey === 'person') items = await getPersons();
-    else if (docTypeKey === 'product') items = await getProducts();
-    else if (docTypeKey === 'accounting_document') items = await getAccountingDocuments();
-    else if (docTypeKey === 'loan') items = await getLoans();
-    else if (docTypeKey === 'installment') items = await getInstallments();
+    let nextValue: number;
+    if (counters && counters[docTypeKey] && counters[docTypeKey] >= start - 1) {
+      // Fast path: counter sequence is already tracking accurately, increment instantly
+      nextValue = counters[docTypeKey] + 1;
+    } else {
+      // Initial baseline discovery across existing historical records
+      let items: any[] = [];
+      if (docTypeKey === 'sale' || docTypeKey === 'purchase' || docTypeKey.includes('return') || docTypeKey === 'proforma' || docTypeKey.startsWith('consignment')) {
+        const targetTable = mapInvoiceTypeToTable(docTypeKey);
+        const [targetData, generalInvs] = await Promise.all([
+          getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
+          getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
+        ]);
+        const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
+        items = combined.filter(i => i && !i.isDeleted && (docTypeKey.startsWith('consignment') || docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? (i.type === 'sale' || !i.type) : i.type === docTypeKey)));
+      } else if (docTypeKey === 'warehouse_receipt' || docTypeKey === 'warehouse_remittance') {
+        const targetTable = mapInvoiceTypeToTable(docTypeKey);
+        const [targetData, generalInvs] = await Promise.all([
+          getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
+          getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
+        ]);
+        const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
+        items = combined.filter(i => i && !i.isDeleted && i.type === docTypeKey);
+      } else if (docTypeKey === 'receive_receipt' || docTypeKey === 'pay_receipt' || docTypeKey === 'salary') {
+        items = await getTransactions();
+        const typeMap: any = { 'receive_receipt': 'receive', 'pay_receipt': 'pay', 'salary': 'salary' };
+        items = items.filter(i => i.type === typeMap[docTypeKey]);
+      } else if (docTypeKey === 'check_issued') items = await getIssuedChecks();
+      else if (docTypeKey === 'check_received') items = await getReceivedChecks();
+      else if (docTypeKey === 'person') items = await getPersons();
+      else if (docTypeKey === 'product') items = await getProducts();
+      else if (docTypeKey === 'accounting_document') items = await getAccountingDocuments();
+      else if (docTypeKey === 'loan') items = await getLoans();
+      else if (docTypeKey === 'installment') items = await getInstallments();
 
-    let maxExisting = 0;
-    const isCashReceipt = docTypeKey === 'receive_receipt' || docTypeKey === 'pay_receipt' || docTypeKey === 'salary';
-    let idField = (docTypeKey === 'person' || docTypeKey === 'product') ? 'code' : 
-                  (docTypeKey === 'accounting_document' ? 'documentNumber' : 
-                  (isCashReceipt ? 'receiptNumber' : 'invoiceNumber'));
-    
-    if (docTypeKey === 'check_issued' || docTypeKey === 'check_received') idField = 'checkNumber';
+      let maxExisting = 0;
+      const isCashReceipt = docTypeKey === 'receive_receipt' || docTypeKey === 'pay_receipt' || docTypeKey === 'salary';
+      let idField = (docTypeKey === 'person' || docTypeKey === 'product') ? 'code' : 
+                    (docTypeKey === 'accounting_document' ? 'documentNumber' : 
+                    (isCashReceipt ? 'receiptNumber' : 'invoiceNumber'));
+      
+      if (docTypeKey === 'check_issued' || docTypeKey === 'check_received') idField = 'checkNumber';
 
-    items.forEach(item => {
-       let valStr = String(item[idField] || item.invoiceNumber || item.documentNumber || item.receiptNumber || '');
-       if (prefix && valStr.startsWith(prefix)) {
-          valStr = valStr.substring(prefix.length);
-       }
-       let val = parseInt(valStr.replace(/\D/g, ''), 10);
-       if (!isNaN(val) && val > maxExisting) {
-           maxExisting = val;
-       }
-    });
+      items.forEach(item => {
+         let valStr = String(item[idField] || item.invoiceNumber || item.documentNumber || item.receiptNumber || '');
+         if (prefix && valStr.startsWith(prefix)) {
+            valStr = valStr.substring(prefix.length);
+         }
+         let val = parseInt(valStr.replace(/\D/g, ''), 10);
+         if (!isNaN(val) && val > maxExisting) {
+             maxExisting = val;
+         }
+      });
 
-    const counterVal = counters[docTypeKey] || 0;
-    const nextValue = Math.max(counterVal, maxExisting, start - 1) + 1;
+      const counterVal = counters[docTypeKey] || 0;
+      nextValue = Math.max(counterVal, maxExisting, start - 1) + 1;
+    }
 
     counters[docTypeKey] = nextValue;
     await saveLocalData('doc_counters', counters);

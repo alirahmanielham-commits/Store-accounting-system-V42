@@ -754,7 +754,7 @@ router.post('/api/data/batch', async (req, res) => {
       // Group operations by key
       const keys = new Set(validOperations.map((op: any) => op.key));
       const results: any[] = [];
-      const sysLogs = (await getDbData('system_logs')) || [];
+      const newBatchLogs: any[] = [];
       const timestamp = Date.now();
       const clientInfo = extractClientInfo(req);
 
@@ -766,18 +766,11 @@ router.post('/api/data/batch', async (req, res) => {
             if (!KNOWN_TABLES.includes(key)) continue;
             await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
             const keyOps = validOperations.filter((op: any) => op.key === key);
-            let existingData: any[] | null = null;
             for (const op of keyOps) {
               if (op.type === 'append' && op.data) {
                 await syncTableSchema(client, key, { ...op.data, version: 1, createdAt: '', updatedAt: '', rawDate: '', displayDate: '' });
-              } else if (op.type === 'update') {
-                if (!existingData) {
-                  existingData = (await getDbData(key)) || [];
-                }
-                const targetId = String(op.id || (op.data && op.data.id) || '');
-                const existing = Array.isArray(existingData) ? existingData.find((x: any) => x && String(x.id) === targetId) : null;
-                const sampleUpdated = { ...(existing || {}), ...(op.data || {}), version: 1, createdAt: '', updatedAt: '', rawDate: '', displayDate: '' };
-                await syncTableSchema(client, key, sampleUpdated);
+              } else if (op.type === 'update' && op.data) {
+                await syncTableSchema(client, key, { ...op.data, version: 1, createdAt: '', updatedAt: '', rawDate: '', displayDate: '' });
               }
             }
           }
@@ -785,8 +778,6 @@ router.post('/api/data/batch', async (req, res) => {
           await client.query('BEGIN');
           for (const key of Array.from(keys)) {
             if (!KNOWN_TABLES.includes(key)) continue;
-            let data = (await getDbData(key)) || [];
-            if (!Array.isArray(data)) data = [];
 
             const keyOps = validOperations.filter((op: any) => op.key === key);
             for (const op of keyOps) {
@@ -803,7 +794,7 @@ router.post('/api/data/batch', async (req, res) => {
                 const colNames = itemKeys.map(k => `"${k}"`).join(', ');
                 await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
                 results.push({ id: item.id, status: 'appended' });
-                sysLogs.unshift({
+                newBatchLogs.push({
                   id: Math.random().toString(36).substring(2, 15),
                   action: 'CREATE',
                   userId: userInfo.userId,
@@ -826,7 +817,11 @@ router.post('/api/data/batch', async (req, res) => {
                 });
               } else if (op.type === 'update') {
                 const targetId = String(op.id || (op.data && op.data.id) || '');
-                const existing = targetId ? data.find((x: any) => x && String(x.id) === targetId) : null;
+                let existing: any = null;
+                if (targetId) {
+                  const rowRes = await client.query(`SELECT * FROM "${key}" WHERE id = $1`, [targetId]);
+                  existing = rowRes.rows && rowRes.rows.length > 0 ? rowRes.rows[0] : null;
+                }
                 if (existing) {
                   // Optimistic Locking Check
                   if (op.version !== undefined && existing.version !== undefined && Number(op.version) !== Number(existing.version)) {
@@ -842,7 +837,7 @@ router.post('/api/data/batch', async (req, res) => {
                   const colNames = itemKeys.map(k => `"${k}"`).join(', ');
                   await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
                   results.push({ id: targetId, status: 'updated' });
-                  sysLogs.unshift({
+                  newBatchLogs.push({
                     id: Math.random().toString(36).substring(2, 15),
                     action: 'UPDATE',
                     userId: userInfo.userId,
@@ -867,14 +862,18 @@ router.post('/api/data/batch', async (req, res) => {
               } else if (op.type === 'delete') {
                 const targetId = String(op.id || (op.data && op.data.id) || '');
                 if (targetId) {
-                  const existing = data.find((x: any) => x && String(x.id) === targetId);
+                  let existing: any = null;
+                  try {
+                    const rowRes = await client.query(`SELECT * FROM "${key}" WHERE id = $1`, [targetId]);
+                    existing = rowRes.rows && rowRes.rows.length > 0 ? rowRes.rows[0] : null;
+                  } catch (_) {}
                   if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
                     await client.query(`UPDATE "${key}" SET deleted_at = NOW(), "isDeleted" = true WHERE id = $1`, [targetId]);
                   } else {
                     await client.query(`DELETE FROM "${key}" WHERE id = $1`, [targetId]);
                   }
                   results.push({ id: targetId, status: 'deleted' });
-                  sysLogs.unshift({
+                  newBatchLogs.push({
                     id: Math.random().toString(36).substring(2, 15),
                     action: 'DELETE',
                     userId: userInfo.userId,
@@ -929,23 +928,23 @@ router.post('/api/data/batch', async (req, res) => {
                      data.push(item);
                  }
                  results.push({ id: item.id, status: 'appended' });
-                 sysLogs.unshift({ 
+                 newBatchLogs.push({ 
                    id: Math.random().toString(36).substring(2, 15), 
                    action: 'CREATE', 
                    userId: userInfo.userId, 
-                   username: userInfo.username,
-                   userName: userInfo.userName,
-                   userRole: userInfo.userRole,
+                   username: userInfo.username, 
+                   userName: userInfo.userName, 
+                   userRole: userInfo.userRole, 
                    details: generateActionDescription('CREATE', key, item), 
                    entityType: key, 
                    entityId: item.id, 
                    newData: item,
-                   changes: JSON.stringify(item),
-                   ip: clientInfo.ip,
-                   browser: clientInfo.browser,
-                   os: clientInfo.os,
-                   device: clientInfo.device,
-                   userAgent: clientInfo.userAgent,
+                   changes: JSON.stringify(item), 
+                   ip: clientInfo.ip, 
+                   browser: clientInfo.browser, 
+                   os: clientInfo.os, 
+                   device: clientInfo.device, 
+                   userAgent: clientInfo.userAgent, 
                    timestamp 
                  });
               } else if (op.type === 'update') {
@@ -960,7 +959,7 @@ router.post('/api/data/batch', async (req, res) => {
                       const nextVersion = ((Number(oldItem.version) || 0) + 1);
                       data[idx] = { ...data[idx], ...(op.data || {}), id: targetId, version: nextVersion, updatedAt: new Date().toISOString() };
                       results.push({ id: targetId, status: 'updated' });
-                      sysLogs.unshift({ 
+                      newBatchLogs.push({ 
                         id: Math.random().toString(36).substring(2, 15), 
                         action: 'UPDATE', 
                         userId: userInfo.userId, 
@@ -996,7 +995,7 @@ router.post('/api/data/batch', async (req, res) => {
                          data.splice(idx, 1);
                       }
                       results.push({ id: targetId, status: 'deleted' });
-                      sysLogs.unshift({ 
+                      newBatchLogs.push({ 
                         id: Math.random().toString(36).substring(2, 15), 
                         action: 'DELETE', 
                         userId: userInfo.userId, 
@@ -1023,15 +1022,36 @@ router.post('/api/data/batch', async (req, res) => {
         }
       }
       
-      try {
-        await setDbData('system_logs', sysLogs);
-        // Notify admin for any sensitive operations in this batch
-        for (const opLog of sysLogs.slice(0, validOperations.length)) {
-          dispatchAdminNotificationIfSensitive(opLog).catch(e => console.error(e));
+      // Save logs and send notifications in the background so client receives instant response
+      (async () => {
+        try {
+          if (newBatchLogs.length > 0) {
+            if (isPgActive() && getActivePgPool()) {
+              const pool = getActivePgPool();
+              for (const l of newBatchLogs) {
+                await syncTableSchema(pool, 'system_logs', l);
+                const { itemKeys: logKeys, itemVals: logVals } = preparePgItem('system_logs', l);
+                const logPlaceholders = logKeys.map((_, i) => `$${i + 1}`).join(', ');
+                const logColNames = logKeys.map(k => `"${k}"`).join(', ');
+                await pool.query(
+                  `INSERT INTO "system_logs" (${logColNames}) VALUES (${logPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${logKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
+                  logVals
+                );
+              }
+            } else {
+              const currentLogs = (await getDbData('system_logs')) || [];
+              const updated = Array.isArray(currentLogs) ? [...newBatchLogs, ...currentLogs].slice(0, 3000) : newBatchLogs;
+              await setDbData('system_logs', updated);
+            }
+            for (const opLog of newBatchLogs) {
+              dispatchAdminNotificationIfSensitive(opLog).catch(e => console.error(e));
+            }
+          }
+        } catch (logErr) {
+          console.warn('System log save error in batch background:', logErr);
         }
-      } catch (logErr) {
-        console.warn('System log save error in batch:', logErr);
-      }
+      })();
+
       res.json({ success: true, results });
     } catch(err: any) {
       if (err.message && err.message.includes('CONCURRENCY_CONFLICT')) {
