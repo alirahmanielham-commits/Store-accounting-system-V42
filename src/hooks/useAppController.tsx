@@ -534,6 +534,7 @@ useEffect(() => {
 
 useEffect(() => {
     setLastCreatedReceipt(null);
+    setAutoSaveInvoiceId(null);
     if (editingInvoiceId) return; // Prevent overwriting title/type when editing
     if (activeTab === "create_sale") {
       setInvoiceType("sale");
@@ -1451,7 +1452,16 @@ useEffect(() => {
             };
 
             if (autoSaveInvoiceId) {
-              await updateInvoice(autoSaveInvoiceId, payload);
+              try {
+                await updateInvoice(autoSaveInvoiceId, payload);
+              } catch (updErr) {
+                console.warn("Auto-save update failed, recreating draft:", updErr);
+                const added = await addInvoice(payload);
+                setAutoSaveInvoiceId(added.id);
+                if (added.invoiceNumber) {
+                  setInvoiceNumber(added.invoiceNumber);
+                }
+              }
             } else {
               const added = await addInvoice(payload);
               setAutoSaveInvoiceId(added.id);
@@ -1520,8 +1530,12 @@ const restoreDraft = () => {
         setExchangeRateInput(parsed.exchangeRateInput || "1");
         setInvoiceDescription(parsed.invoiceDescription || "");
         setInvoiceNote(parsed.invoiceNote || "");
-        setInvoiceDueDate(parsed.invoiceDueDate ? new Date(parsed.invoiceDueDate) : null);
-        setAutoSaveInvoiceId(parsed.autoSaveInvoiceId || null);
+        const restoredDraftId = parsed.autoSaveInvoiceId;
+        if (restoredDraftId && (invoices || []).some((i: any) => String(i.id) === String(restoredDraftId))) {
+          setAutoSaveInvoiceId(restoredDraftId);
+        } else {
+          setAutoSaveInvoiceId(null);
+        }
 
         // Timeout to let activeTab's effect finish, then override
         setTimeout(() => {
@@ -6636,11 +6650,16 @@ const getInvoiceNumber = (typeOverride?: string) => {
         });
       } else if (autoSaveInvoiceId) {
         // Promote draft in place without delete/recreate overhead
-        addedInvoice = await updateInvoice(autoSaveInvoiceId, {
-          ...savePayload,
-          isDraft: isDraftOverride ? true : false,
-          status: isDraftOverride ? "draft" : (savePayload.status || "approved")
-        } as any, true, true);
+        try {
+          addedInvoice = await updateInvoice(autoSaveInvoiceId, {
+            ...savePayload,
+            isDraft: isDraftOverride ? true : false,
+            status: isDraftOverride ? "draft" : (savePayload.status || "approved")
+          } as any, true, true);
+        } catch (updErr) {
+          console.warn("Draft not found on server during promote, creating fresh invoice:", updErr);
+          addedInvoice = await addInvoice(savePayload as any, true, true);
+        }
         setAutoSaveInvoiceId(null);
         if (isDraftOverride) {
           setEditingInvoiceId(addedInvoice.id);

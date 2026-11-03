@@ -1164,7 +1164,30 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
     }
   }
 
-  const newInvoice = await updateLocalData(table, id, updatedData);
+  let newInvoice: any;
+  try {
+    newInvoice = await updateLocalData(table, id, updatedData);
+  } catch (err: any) {
+    if (err?.message?.includes('Not found') || err?.status === 404 || String(err).includes('404')) {
+      console.warn(`Invoice ${id} not found in ${table}, saving as new/migrated invoice into ${table}...`);
+      try {
+        const allInvs = await getInvoices().catch(() => []);
+        const existing = allInvs.find(i => String(i.id) === String(id));
+        if (existing) {
+          const oldTable = mapInvoiceTypeToTable(existing.type || 'sale');
+          if (oldTable !== table) {
+            await batchLocalData([{ type: 'delete', key: oldTable, id }]).catch(() => {});
+          }
+        }
+      } catch (_) {}
+      newInvoice = await appendLocalData(table, { ...updatedData, id });
+      if (!newInvoice || typeof newInvoice !== 'object' || !newInvoice.id) {
+        newInvoice = { ...updatedData, id };
+      }
+    } else {
+      throw err;
+    }
+  }
   
   if (newInvoice && newInvoice.invoiceNumber) {
       await updateDocCounter(newInvoice.type, newInvoice.invoiceNumber);

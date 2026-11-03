@@ -1351,11 +1351,33 @@ router.put('/api/data/:key/:id', async (req, res) => {
          
          const data = (await getDbData(key)) || [];
          const index = data.findIndex((x: any) => String(x.id) === String(id));
+         let oldItem: any = null;
          if (index === -1) {
-            return res.status(404).json({ error: 'Not found' });
+            if (INVOICE_TABLE_KEYS.includes(key)) {
+               // If invoice was created in another invoice table (e.g. sale vs purchase), migrate it
+               for (const otherKey of INVOICE_TABLE_KEYS) {
+                  if (otherKey === key) continue;
+                  const otherData = (await getDbData(otherKey)) || [];
+                  const otherIdx = otherData.findIndex((x: any) => String(x.id) === String(id));
+                  if (otherIdx !== -1) {
+                     oldItem = otherData[otherIdx];
+                     try {
+                        const client = await getActivePgPool().connect();
+                        try {
+                           await client.query(`DELETE FROM "${otherKey}" WHERE id = $1`, [id]);
+                        } finally {
+                           client.release();
+                        }
+                     } catch (_) {}
+                     break;
+                  }
+               }
+            } else {
+               return res.status(404).json({ error: 'Not found' });
+            }
+         } else {
+            oldItem = data[index];
          }
-         
-         const oldItem = data[index];
          capturedOldItem = oldItem;
          if (key === 'accounting_documents' && oldItem) {
            if (oldItem.status === 'permanent' || oldItem.status === 'finalized' || oldItem.isFinalized) {
@@ -1366,7 +1388,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
              });
            }
          }
-         if (req.body && req.body.version !== undefined && oldItem.version !== undefined) {
+         if (oldItem && req.body && req.body.version !== undefined && oldItem.version !== undefined) {
            if (Number(req.body.version) !== Number(oldItem.version)) {
              if (releaseServerLock) releaseServerLock();
              return res.status(409).json({
@@ -1377,8 +1399,11 @@ router.put('/api/data/:key/:id', async (req, res) => {
              });
            }
          }
-         const nextVersion = (Number(oldItem.version) || 0) + 1;
-         const newItem = { ...oldItem, ...updatedItem, id, version: nextVersion, updatedAt: new Date().toISOString() }; // ensure id is preserved
+         const nextVersion = oldItem ? (Number(oldItem.version) || 0) + 1 : 1;
+         const newItem = { ...(oldItem || {}), ...updatedItem, id, version: nextVersion, updatedAt: new Date().toISOString() };
+         if (!oldItem) {
+            newItem.createdAt = newItem.createdAt || Date.now();
+         }
          mergedItem = newItem;
 
          const stockCheck = await validateSalesInvoiceStock({ ...mergedItem, _originTable: key }, releaseServerLock);
@@ -1460,10 +1485,30 @@ router.put('/api/data/:key/:id', async (req, res) => {
       } else {
          const data = (await getDbData(key)) || [];
          if (Array.isArray(data)) {
-           const index = data.findIndex((x: any) => String(x.id) === String(id));
-           if (index !== -1) {
-             const oldItem = data[index];
-             capturedOldItem = oldItem;
+           let index = data.findIndex((x: any) => String(x.id) === String(id));
+           let oldItem: any = null;
+           if (index === -1) {
+             if (INVOICE_TABLE_KEYS.includes(key)) {
+               for (const otherKey of INVOICE_TABLE_KEYS) {
+                 if (otherKey === key) continue;
+                 const otherData = (await getDbData(otherKey)) || [];
+                 if (Array.isArray(otherData)) {
+                   const otherIdx = otherData.findIndex((x: any) => String(x.id) === String(id));
+                   if (otherIdx !== -1) {
+                     oldItem = otherData[otherIdx];
+                     otherData.splice(otherIdx, 1);
+                     await setDbData(otherKey, otherData);
+                     break;
+                   }
+                 }
+               }
+             } else {
+               return res.status(404).json({ error: 'Not found' });
+             }
+           } else {
+             oldItem = data[index];
+           }
+           capturedOldItem = oldItem;
              if (key === 'accounting_documents' && oldItem) {
                if (oldItem.status === 'permanent' || oldItem.status === 'finalized' || oldItem.isFinalized) {
                  if (releaseServerLock) releaseServerLock();
@@ -1473,7 +1518,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
                  });
                }
              }
-             if (req.body && req.body.version !== undefined && oldItem.version !== undefined) {
+             if (oldItem && req.body && req.body.version !== undefined && oldItem.version !== undefined) {
                if (Number(req.body.version) !== Number(oldItem.version)) {
                  if (releaseServerLock) releaseServerLock();
                  return res.status(409).json({
@@ -1484,8 +1529,11 @@ router.put('/api/data/:key/:id', async (req, res) => {
                  });
                }
              }
-             const nextVersion = (Number(oldItem.version) || 0) + 1;
-             const newItem = { ...oldItem, ...updatedItem, id, version: nextVersion, updatedAt: new Date().toISOString() };
+             const nextVersion = oldItem ? (Number(oldItem.version) || 0) + 1 : 1;
+             const newItem = { ...(oldItem || {}), ...updatedItem, id, version: nextVersion, updatedAt: new Date().toISOString() };
+             if (!oldItem) {
+               newItem.createdAt = newItem.createdAt || Date.now();
+             }
              mergedItem = newItem;
 
              const stockCheck = await validateSalesInvoiceStock({ ...mergedItem, _originTable: key }, releaseServerLock);
@@ -1525,12 +1573,13 @@ router.put('/api/data/:key/:id', async (req, res) => {
                  }
              }
              
-             data[index] = newItem;
+             if (index !== -1) {
+               data[index] = newItem;
+             } else {
+               data.push(newItem);
+             }
 
              await setDbData(key, data);
-           } else {
-             return res.status(404).json({ error: 'Not found' });
-           }
          } else {
            return res.status(400).json({ error: 'Target is not an array' });
          }
