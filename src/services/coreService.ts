@@ -22,7 +22,11 @@ const CACHEABLE_KEYS = [
   'financial_years',
   'product_categories',
   'person_groups',
-  'ledger_accounts'
+  'ledger_accounts',
+  'accounts',
+  'cashboxes',
+  'persons',
+  'doc_counters'
 ];
 
 export const invalidateCache = (key?: string) => {
@@ -444,8 +448,7 @@ const internalGenerateDocNumber = async (docTypeKey: string): Promise<string> =>
     const lenObj = settings[lenKey as keyof CompanySettings];
     const len = lenObj && !isNaN(Number(lenObj)) ? Number(lenObj) : 6;
 
-    delete cache['doc_counters'];
-    const counters = await getLocalData<Record<string, number>>('doc_counters', {}, { _nocache: Date.now() });
+    const counters = await getLocalData<Record<string, number>>('doc_counters', {});
     
     let nextValue: number;
     if (counters && counters[docTypeKey] && counters[docTypeKey] >= start - 1) {
@@ -457,16 +460,16 @@ const internalGenerateDocNumber = async (docTypeKey: string): Promise<string> =>
       if (docTypeKey === 'sale' || docTypeKey === 'purchase' || docTypeKey.includes('return') || docTypeKey === 'proforma' || docTypeKey.startsWith('consignment')) {
         const targetTable = mapInvoiceTypeToTable(docTypeKey);
         const [targetData, generalInvs] = await Promise.all([
-          getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
-          getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
+          getLocalData<any[]>(targetTable, []).catch(() => []),
+          getLocalData<any[]>('invoices', []).catch(() => [])
         ]);
         const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
         items = combined.filter(i => i && !i.isDeleted && (docTypeKey.startsWith('consignment') || docTypeKey.includes('return') ? i.type === docTypeKey : (docTypeKey === 'sale' ? (i.type === 'sale' || !i.type) : i.type === docTypeKey)));
       } else if (docTypeKey === 'warehouse_receipt' || docTypeKey === 'warehouse_remittance') {
         const targetTable = mapInvoiceTypeToTable(docTypeKey);
         const [targetData, generalInvs] = await Promise.all([
-          getLocalData<any[]>(targetTable, [], { _nocache: Date.now() }).catch(() => []),
-          getLocalData<any[]>('invoices', [], { _nocache: Date.now() }).catch(() => [])
+          getLocalData<any[]>(targetTable, []).catch(() => []),
+          getLocalData<any[]>('invoices', []).catch(() => [])
         ]);
         const combined = [...(Array.isArray(targetData) ? targetData : []), ...(Array.isArray(generalInvs) ? generalInvs : [])];
         items = combined.filter(i => i && !i.isDeleted && i.type === docTypeKey);
@@ -506,7 +509,10 @@ const internalGenerateDocNumber = async (docTypeKey: string): Promise<string> =>
     }
 
     counters[docTypeKey] = nextValue;
-    await saveLocalData('doc_counters', counters);
+    const authHeaders = getAuthHeaders();
+    const currentStore = authHeaders['x-store-id'] || 'default';
+    cache[`${currentStore}:doc_counters`] = { data: counters, timestamp: Date.now() };
+    saveLocalData('doc_counters', counters).catch(() => {});
 
     const numStr = String(nextValue).padStart(len, '0');
     return `${prefix}${numStr}`;
@@ -541,11 +547,13 @@ export const updateDocCounter = async (docTypeKey: string, generatedNumber: stri
         const val = parseInt(valStr.replace(/\D/g, ''), 10);
         
         if (!isNaN(val)) {
-            delete cache['doc_counters'];
-            const counters = await getLocalData<Record<string, number>>('doc_counters', {}, { _nocache: Date.now() });
+            const counters = await getLocalData<Record<string, number>>('doc_counters', {});
             if (counters[docTypeKey] === undefined || val > counters[docTypeKey]) {
                 counters[docTypeKey] = val;
-                await saveLocalData('doc_counters', counters);
+                const authHeaders = getAuthHeaders();
+                const currentStore = authHeaders['x-store-id'] || 'default';
+                cache[`${currentStore}:doc_counters`] = { data: counters, timestamp: Date.now() };
+                saveLocalData('doc_counters', counters).catch(() => {});
             }
         }
     } catch (e) {
@@ -584,19 +592,13 @@ export const addDatabaseLog = async (action: string, entityType: string, entityI
      newData: newData ? JSON.stringify(newData) : null
   };
 
-  logs.unshift(newLog); // Add to beginning
-  if (logs.length > 2000) {
-     logs.length = 2000;
-  }
-  
-  // Directly save without recursive logging
+  // Directly append single log record without loading/resending historical logs
   try {
-    await fetch('/api/data/database_logs', {
+    const authHeaders = getAuthHeaders();
+    await fetch('/api/data/database_logs/append', {
       method: 'POST',
-      headers: { 'Authorization': 'Bearer ' + (localStorage.getItem('access_token') || ''), 
-        'x-store-id': localStorage.getItem('activeStoreId') || 'default',
- 'Content-Type': 'application/json' },
-      body: JSON.stringify(logs)
+      headers: { ...authHeaders, 'Content-Type': 'application/json' },
+      body: JSON.stringify(newLog)
     });
   } catch(e) {}
 };

@@ -1,7 +1,7 @@
 
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables, preparePgItem } from '../db/schema-sync';
-import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations } from '../db/kv-store';
+import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations, appendLogEntries, getChildTableCandidates } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
 // import { loginSchema } from '../schemas/validation';
 import { Client, Pool } from 'pg';
@@ -593,12 +593,7 @@ router.post('/api/system_logs', async (req, res) => {
       userAgent: logEntry.userAgent || clientInfo.userAgent,
     };
 
-    let sysLogs = (await getDbData('system_logs')) || [];
-    if (!Array.isArray(sysLogs)) sysLogs = [];
-    sysLogs.unshift(fullLog);
-    if (sysLogs.length > 3000) sysLogs.length = 3000;
-
-    await setDbData('system_logs', sysLogs);
+    await appendLogEntries('system_logs', [fullLog]);
     dispatchAdminNotificationIfSensitive(fullLog).catch(e => console.error(e));
     res.json({ success: true, log: fullLog });
   } catch (err: any) {
@@ -769,6 +764,14 @@ router.post('/api/data/batch', async (req, res) => {
             for (const op of keyOps) {
               if (op.type === 'append' && op.data) {
                 await syncTableSchema(client, key, { ...op.data, version: 1, createdAt: '', updatedAt: '', rawDate: '', displayDate: '' });
+                if (Array.isArray(op.data.items) && op.data.items.length > 0) {
+                  const childCandidates = getChildTableCandidates(key);
+                  const childTable = childCandidates[0];
+                  if (childTable) {
+                    await client.query(`CREATE TABLE IF NOT EXISTS "${childTable}" (id VARCHAR PRIMARY KEY)`);
+                    await syncTableSchema(client, childTable, { ...op.data.items[0], version: 1, createdAt: '', updatedAt: '' });
+                  }
+                }
               } else if (op.type === 'update' && op.data) {
                 await syncTableSchema(client, key, { ...op.data, version: 1, createdAt: '', updatedAt: '', rawDate: '', displayDate: '' });
               }
@@ -788,11 +791,34 @@ router.post('/api/data/batch', async (req, res) => {
                 item.createdAt = item.createdAt || new Date().toISOString();
                 item.updatedAt = item.updatedAt || new Date().toISOString();
 
-                await syncTableSchema(client, key, item);
-                const { itemKeys, itemVals } = preparePgItem(key, item);
+                let finalItem = { ...item };
+                let related: any = null;
+                if (['invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes', 'accounting_documents', 'stocktakings'].includes(key) && Array.isArray(finalItem.items)) {
+                    const rel = await handleRelations(key, finalItem);
+                    finalItem = rel.strippedData;
+                    related = rel;
+                }
+
+                await syncTableSchema(client, key, finalItem);
+                const { itemKeys, itemVals } = preparePgItem(key, finalItem);
                 const placeholders = itemKeys.map((_, i) => `$${i + 1}`).join(', ');
                 const colNames = itemKeys.map(k => `"${k}"`).join(', ');
                 await client.query(`INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${itemKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itemVals);
+
+                if (related && related.childTable) {
+                    const fId = finalItem.id;
+                    const col = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
+                    await client.query(`CREATE TABLE IF NOT EXISTS "${related.childTable}" (id VARCHAR PRIMARY KEY)`);
+                    await client.query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
+                    for (const it of related.items) {
+                        await syncTableSchema(client, related.childTable, it);
+                        const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, it);
+                        const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+                        const itColNames = itKeys.map(k => `"${k}"`).join(', ');
+                        await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+                    }
+                }
+
                 results.push({ id: item.id, status: 'appended' });
                 newBatchLogs.push({
                   id: Math.random().toString(36).substring(2, 15),
@@ -1026,23 +1052,7 @@ router.post('/api/data/batch', async (req, res) => {
       (async () => {
         try {
           if (newBatchLogs.length > 0) {
-            if (isPgActive() && getActivePgPool()) {
-              const pool = getActivePgPool();
-              for (const l of newBatchLogs) {
-                await syncTableSchema(pool, 'system_logs', l);
-                const { itemKeys: logKeys, itemVals: logVals } = preparePgItem('system_logs', l);
-                const logPlaceholders = logKeys.map((_, i) => `$${i + 1}`).join(', ');
-                const logColNames = logKeys.map(k => `"${k}"`).join(', ');
-                await pool.query(
-                  `INSERT INTO "system_logs" (${logColNames}) VALUES (${logPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${logKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
-                  logVals
-                );
-              }
-            } else {
-              const currentLogs = (await getDbData('system_logs')) || [];
-              const updated = Array.isArray(currentLogs) ? [...newBatchLogs, ...currentLogs].slice(0, 3000) : newBatchLogs;
-              await setDbData('system_logs', updated);
-            }
+            await appendLogEntries('system_logs', newBatchLogs);
             for (const opLog of newBatchLogs) {
               dispatchAdminNotificationIfSensitive(opLog).catch(e => console.error(e));
             }
@@ -1299,18 +1309,7 @@ router.post('/api/data/:key/append', async (req, res) => {
             userAgent: clientInfo.userAgent
           };
 
-          sysLogs.unshift(log);
-          if (sysLogs.length > 3000) sysLogs.length = 3000;
-
-          if (isPgActive() && getActivePgPool()) {
-             await syncTableSchema(getActivePgPool(), 'system_logs', log);
-             const { itemKeys: keys, itemVals: vals } = preparePgItem('system_logs', log);
-             const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-             const colNames = keys.map(k => `"${k}"`).join(', ');
-             await getActivePgPool().query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
-          } else {
-             await setDbData('system_logs', sysLogs);
-          }
+          await appendLogEntries('system_logs', [log]);
           dispatchAdminNotificationIfSensitive(log).catch(e => console.error(e));
         } catch (logErr) {
           console.error('Error writing system_logs on create:', logErr);
@@ -1570,18 +1569,7 @@ router.put('/api/data/:key/:id', async (req, res) => {
             userAgent: clientInfo.userAgent
           };
 
-          sysLogs.unshift(log);
-          if (sysLogs.length > 3000) sysLogs.length = 3000;
-
-          if (isPgActive() && getActivePgPool()) {
-             await syncTableSchema(getActivePgPool(), 'system_logs', log);
-             const { itemKeys: keys, itemVals: vals } = preparePgItem('system_logs', log);
-             const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
-             const colNames = keys.map(k => `"${k}"`).join(', ');
-             await getActivePgPool().query(`INSERT INTO "system_logs" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO UPDATE SET ${keys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, vals);
-          } else {
-             await setDbData('system_logs', sysLogs);
-          }
+          await appendLogEntries('system_logs', [log]);
           dispatchAdminNotificationIfSensitive(log).catch(e => console.error(e));
         } catch (logErr) {
           console.error('Error writing system_logs on update:', logErr);
@@ -1741,14 +1729,16 @@ router.post('/api/data/:key', async (req, res) => {
             });
 
             if (logs.length > 0) {
-               let sysLogs = (await getDbData('system_logs')) || [];
-               if (!Array.isArray(sysLogs)) sysLogs = [];
-               sysLogs.unshift(...logs);
-               if (sysLogs.length > 3000) sysLogs.length = 3000;
-               await setDbData('system_logs', sysLogs);
-               for (const l of logs) {
-                  dispatchAdminNotificationIfSensitive(l).catch(e => console.error(e));
-               }
+               (async () => {
+                 try {
+                   await appendLogEntries('system_logs', logs);
+                   for (const l of logs) {
+                      dispatchAdminNotificationIfSensitive(l).catch(e => console.error(e));
+                   }
+                 } catch (logErr) {
+                   console.error('Audit log error in background:', logErr);
+                 }
+               })();
             }
          }
       } catch(err) {
@@ -1824,10 +1814,7 @@ router.delete('/api/data/:key/:id', async (req, res) => {
               ip: clientInfo.ip,
               userAgent: clientInfo.userAgent
             };
-            const sysLogs = (await getDbData('system_logs')) || [];
-            sysLogs.unshift(log);
-            if (sysLogs.length > 3000) sysLogs.length = 3000;
-            await setDbData('system_logs', sysLogs);
+            await appendLogEntries('system_logs', [log]);
             dispatchAdminNotificationIfSensitive(log).catch(e => console.error(e));
           }
         } catch (logErr) {

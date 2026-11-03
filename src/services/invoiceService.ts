@@ -167,26 +167,17 @@ export const addTransaction = async (transaction: any) => {
   }
 
   operations.push({ type: 'append', key: table, data: newTransaction });
-  await batchLocalData(operations);
-  
-  if (newTransaction.receiptNumber) {
-     const docTypeMap: any = { 'receive': 'receive_receipt', 'pay': 'pay_receipt', 'salary': 'salary' };
-     if (docTypeMap[newTransaction.type]) {
-         await updateDocCounter(docTypeMap[newTransaction.type], newTransaction.receiptNumber);
-     }
-  }
 
   // Auto-generate detailed accounting document with full explanation
-  try {
-     if (
-       transaction.skipAccounting ||
-       transaction.method === 'check' ||
-       transaction.method === 'person_transfer' ||
-       transaction.resourceType === 'person' ||
-       transaction.isPersonTransfer
-     ) {
-        return newTransaction;
-     }
+  const shouldSkipAccounting = 
+    transaction.skipAccounting ||
+    transaction.method === 'check' ||
+    transaction.method === 'person_transfer' ||
+    transaction.resourceType === 'person' ||
+    transaction.isPersonTransfer;
+
+  if (!shouldSkipAccounting) {
+    try {
 
      const docType = transaction.type === 'receive' ? 'receipt' : 'payment';
      const ledgerAccounts = await getLedgerAccounts();
@@ -417,18 +408,34 @@ export const addTransaction = async (transaction: any) => {
                ledgerAccountId: resourceLedgerId});
          }
      }
-     if (!transaction.skipAccounting) {
-         await addAccountingDocument({
+     if (!transaction.skipAccounting && items.length >= 2) {
+         const docNum = await generateDocNumber('accounting_document');
+         const accountingDoc = {
+            id: generateId(),
+            documentNumber: docNum,
             date: transaction.date || new Date().toISOString().split('T')[0],
             description: docDescription,
             status: 'approved',
             sourceType: docType,
             sourceId: newTransaction.id,
-            items});
+            items: items.map(i => ({ ...i, currency })),
+            currency,
+            fiscalYearId: newTransaction.fiscalYearId,
+            createdAt: Date.now()
+         };
+         operations.push({ type: 'append', key: 'accounting_documents', data: accountingDoc });
+         updateDocCounter('accounting_document', docNum).catch(() => {});
      }
-  } catch(e) {}
+  } catch(e) {
+     console.warn('Accounting document generation warning:', e);
+  }
+  }
 
-    await syncInvoiceAllocations(newTransaction);
+  if (operations.length > 0) {
+    await batchLocalData(operations);
+  }
+
+  syncInvoiceAllocations(newTransaction).catch(e => console.warn('syncInvoiceAllocations background err:', e));
   return newTransaction;
 };
 

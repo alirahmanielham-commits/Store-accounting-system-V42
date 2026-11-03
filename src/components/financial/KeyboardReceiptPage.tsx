@@ -17,7 +17,11 @@ import {
   getLedgerAccounts,
   addAccountingDocument,
   getAccountingDocuments,
-  deleteAccountingDocument
+  deleteAccountingDocument,
+  batchLocalData,
+  generateId,
+  generateDocNumber,
+  updateDocCounter
 } from '../../services/dataService';
 import ReceiptPrintModal from '../print/ReceiptPrintModal';
 import { useDirtyForm } from '../../hooks/useDirtyForm';
@@ -368,8 +372,14 @@ export default function KeyboardReceiptPage({
         const nowDate = new Date(nowTimestamp);
         const nowTimeStr = `${String(nowDate.getHours()).padStart(2, '0')}:${String(nowDate.getMinutes()).padStart(2, '0')}`;
 
+        const receiveId = generateId();
+        const payId = generateId();
+        const finalReceiptNumber = await generateDocNumber('receive_receipt');
+        const payReceiptNum = `${finalReceiptNumber}-P`;
+
         // 1. Transaction 1: Receive from payer
-        const txReceive = await addTransaction({
+        const txReceive = {
+          id: receiveId,
           type: 'receive',
           method: 'person_transfer',
           resourceType: 'person',
@@ -380,9 +390,12 @@ export default function KeyboardReceiptPage({
           targetPersonName: payeeName,
           transferDirection,
           amount: parsedAmount,
+          receiptNumber: finalReceiptNumber,
+          pairedTransactionId: payId,
           date: convertedDate || new Date().toISOString(),
           time: nowTimeStr,
           createdAt: nowTimestamp,
+          updatedAt: nowTimestamp,
           rawDate: dateStr,
           displayDate: dateStr,
           description: noteStr || `دریافت وجه بابت حواله و انتقال به طرف‌حساب: ${payeeName}`,
@@ -390,12 +403,11 @@ export default function KeyboardReceiptPage({
           trackingNumber: trackingNumber || undefined,
           skipAccounting: true,
           isPersonTransfer: true
-        });
+        };
 
         // 2. Transaction 2: Pay to payee
-        const finalReceiptNumber = txReceive?.receiptNumber || 'REC';
-        const payReceiptNum = `${finalReceiptNumber}-P`;
-        const txPay = await addTransaction({
+        const txPay = {
+          id: payId,
           type: 'pay',
           method: 'person_transfer',
           resourceType: 'person',
@@ -408,10 +420,11 @@ export default function KeyboardReceiptPage({
           amount: parsedAmount,
           receiptNumber: payReceiptNum,
           originalReceiptNumber: finalReceiptNumber,
-          pairedTransactionId: txReceive.id,
+          pairedTransactionId: receiveId,
           date: convertedDate || new Date().toISOString(),
           time: nowTimeStr,
           createdAt: nowTimestamp,
+          updatedAt: nowTimestamp,
           rawDate: dateStr,
           displayDate: dateStr,
           description: noteStr || `پرداخت وجه از محل دریافت از طرف‌حساب: ${payerName}`,
@@ -419,9 +432,7 @@ export default function KeyboardReceiptPage({
           trackingNumber: trackingNumber || undefined,
           skipAccounting: true,
           isPersonTransfer: true
-        });
-
-        await updateTransaction(txReceive.id, { ...txReceive, pairedTransactionId: txPay.id });
+        };
 
         // 3. Balanced Accounting Document (Direct person-to-person without cash/bank account 11)
         const ledgerAccounts = await getLedgerAccounts();
@@ -446,12 +457,17 @@ export default function KeyboardReceiptPage({
         }
 
         const formattedAmt = Number(parsedAmount).toLocaleString('fa-IR');
-        await addAccountingDocument({
+        const docNum = await generateDocNumber('accounting_document');
+        const accountingDoc = {
+          id: generateId(),
+          documentNumber: docNum,
           date: convertedDate ? convertedDate.split('T')[0] : new Date().toISOString().split('T')[0],
           description: `حواله و انتقال وجه بین اشخاص به مبلغ ${formattedAmt} ${currency} - پرداخت از [${payerName}] و دریافت توسط [${payeeName}] (شماره رسید: ${finalReceiptNumber})`,
           status: 'approved',
           sourceType: 'person_transfer',
-          sourceId: txReceive.id,
+          sourceId: receiveId,
+          createdAt: nowTimestamp,
+          currency,
           items: [
             {
               description: `دریافت وجه طی حواله از ${payerName} (رسید شماره ${finalReceiptNumber})`,
@@ -459,6 +475,7 @@ export default function KeyboardReceiptPage({
               credit: 0,
               ledgerAccountId: payeeLedgerId,
               detailedAccountId: payee.id,
+              currency
             },
             {
               description: `پرداخت وجه طی حواله به ${payeeName} (رسید شماره ${finalReceiptNumber})`,
@@ -466,21 +483,20 @@ export default function KeyboardReceiptPage({
               credit: Number(parsedAmount),
               ledgerAccountId: payerLedgerId,
               detailedAccountId: payer.id,
+              currency
             }
           ]
-        });
+        };
 
-        // Clean up any stray auto-created docs touching account 11
-        try {
-          const freshAccDocs = await getAccountingDocuments();
-          const badDocs = freshAccDocs.filter((d: any) => 
-            (String(d.sourceId) === String(txReceive.id) || String(d.sourceId) === String(txPay.id) || String(d.sourceId) === String(finalReceiptNumber) || String(d.sourceId) === String(payReceiptNum)) &&
-            d.sourceType !== 'person_transfer'
-          );
-          for (const bd of badDocs) {
-            await deleteAccountingDocument(bd.id);
-          }
-        } catch (_) {}
+        // All saved atomically in one single database batch call!
+        await batchLocalData([
+          { type: 'append', key: 'receipt_transactions', data: txReceive },
+          { type: 'append', key: 'payment_transactions', data: txPay },
+          { type: 'append', key: 'accounting_documents', data: accountingDoc }
+        ]);
+
+        updateDocCounter('receive_receipt', finalReceiptNumber).catch(() => {});
+        updateDocCounter('accounting_document', docNum).catch(() => {});
 
         playSound('success', soundMuted);
         const createdObj = {

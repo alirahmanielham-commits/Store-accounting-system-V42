@@ -1,7 +1,7 @@
 
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables } from '../db/schema-sync';
-import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations, invalidateKvCache } from '../db/kv-store';
+import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations, invalidateKvCache, appendLogEntries } from '../db/kv-store';
 
 const getFormattedBackupDate = () => {
    return new Intl.DateTimeFormat('fa-IR-u-nu-latn', {

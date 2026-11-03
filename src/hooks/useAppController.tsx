@@ -1,7 +1,7 @@
 import { exportToExcel, formatDecimalForExcel } from "../utils/exportUtils";
 import { autoGenerateRentCommitments, settleRentInstallmentWithPayment } from "../services/hrService";
 import { hasPagePermission, getPageTitle } from "../utils/permissionUtils";
-import { suspendAppDataChanged, resumeAppDataChanged, invalidateCache, getAuthHeaders } from "../services/coreService";
+import { suspendAppDataChanged, resumeAppDataChanged, invalidateCache, getAuthHeaders, batchLocalData } from "../services/coreService";
 import { syncBusinessDataToIndexedDb } from "../services/indexedDbService";
 import CustomDatePicker from "../components/ui/CustomDatePicker";
 import { SystemUpdatePage } from "../components/admin/SystemUpdatePage";
@@ -3010,10 +3010,9 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
     try {
       updateAppProcessing("مرحله ۱ از ۳: اعتبارسنجی اطلاعات مالی و طرف‌حساب...");
 
-      // Concurrency check before persisting:
+      // Concurrency check before persisting (in-memory fast lookup without redundant HTTP roundtrip):
       let finalReceiptNumber = payload.receiptNumber;
-      const freshTransactions = await getTransactions();
-      const isTaken = freshTransactions.some(
+      const isTaken = (transactions || []).some(
         (t: any) => t.type === payload.type && String(t.receiptNumber).trim().toLowerCase() === String(finalReceiptNumber).trim().toLowerCase()
       );
       if (isTaken) {
@@ -3041,8 +3040,12 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
         const payerName = payload.payerName || formatPersonName(payerObj) || "طرف پرداخت‌کننده";
         const payeeName = payload.payeeName || formatPersonName(payeeObj) || "طرف دریافت‌کننده";
 
-        // 1. Transaction 1 (Receive from payer)
-        const txReceive = await addTransaction({
+        const receiveId = generateId();
+        const payId = generateId();
+        const payReceiptNum = `${finalReceiptNumber}-P`;
+
+        const txReceive = {
+          id: receiveId,
           type: "receive",
           method: "person_transfer",
           resourceType: "person",
@@ -3054,6 +3057,7 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
           transferDirection: payload.transferDirection,
           amount: payload.amount,
           receiptNumber: finalReceiptNumber,
+          pairedTransactionId: payId,
           date: payload.date,
           time: payload.time,
           rawDate: payload.rawDate,
@@ -3062,11 +3066,13 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
           note: payload.note,
           linkedInvoices: payload.type === "receive" ? receiptLinkedInvoices : {},
           skipAccounting: true,
-        });
+          isPersonTransfer: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
 
-        // 2. Transaction 2 (Pay to payee)
-        const payReceiptNum = `${finalReceiptNumber}-P`;
-        const txPay = await addTransaction({
+        const txPay = {
+          id: payId,
           type: "pay",
           method: "person_transfer",
           resourceType: "person",
@@ -3079,7 +3085,7 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
           amount: payload.amount,
           receiptNumber: payReceiptNum,
           originalReceiptNumber: finalReceiptNumber,
-          pairedTransactionId: txReceive.id,
+          pairedTransactionId: receiveId,
           date: payload.date,
           time: payload.time,
           rawDate: payload.rawDate,
@@ -3088,12 +3094,11 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
           note: payload.note,
           linkedInvoices: payload.type === "pay" ? receiptLinkedInvoices : {},
           skipAccounting: true,
-        });
+          isPersonTransfer: true,
+          createdAt: Date.now(),
+          updatedAt: Date.now()
+        };
 
-        // Link txReceive to txPay
-        await updateTransaction(txReceive.id, { ...txReceive, pairedTransactionId: txPay.id });
-
-        // 3. Balanced Accounting Document
         const ledgerAccounts = await getLedgerAccounts();
         const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
 
@@ -3117,13 +3122,18 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
 
         const formattedAmt = Number(payload.amount || 0).toLocaleString('fa-IR');
         const currencyStr = storeSettings?.currency || 'تومان';
+        const docNum = await generateDocNumber('accounting_document');
 
-        await addAccountingDocument({
+        const accountingDoc = {
+          id: generateId(),
+          documentNumber: docNum,
           date: payload.date || new Date().toISOString().split('T')[0],
           description: `حواله و انتقال وجه بین اشخاص به مبلغ ${formattedAmt} ${currencyStr} - پرداخت از [${payerName}] و دریافت توسط [${payeeName}] (شماره رسید: ${finalReceiptNumber})`,
           status: 'approved',
           sourceType: 'person_transfer',
-          sourceId: txReceive.id,
+          sourceId: receiveId,
+          currency: currencyStr,
+          createdAt: Date.now(),
           items: [
             {
               description: `دریافت وجه طی حواله از ${payerName} (رسید شماره ${finalReceiptNumber})`,
@@ -3131,6 +3141,7 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
               credit: 0,
               ledgerAccountId: payeeLedgerId,
               detailedAccountId: payeeId,
+              currency: currencyStr
             },
             {
               description: `پرداخت وجه طی حواله به ${payeeName} (رسید شماره ${finalReceiptNumber})`,
@@ -3138,25 +3149,24 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
               credit: Number(payload.amount),
               ledgerAccountId: payerLedgerId,
               detailedAccountId: payerId,
+              currency: currencyStr
             }
           ]
-        });
+        };
 
-        // Ensure no stray auto-documents touching account 11 exist for these transactions
-        try {
-          const freshAccDocs = await getAccountingDocuments();
-          const badDocs = freshAccDocs.filter((d: any) => 
-            (String(d.sourceId) === String(txReceive.id) || String(d.sourceId) === String(txPay.id)) &&
-            d.sourceType !== 'person_transfer'
-          );
-          for (const bd of badDocs) {
-            await deleteAccountingDocument(bd.id);
-          }
-        } catch (_) {}
+        // All saved in ONE atomic batch call to the database!
+        await batchLocalData([
+          { type: 'append', key: 'receipt_transactions', data: txReceive },
+          { type: 'append', key: 'payment_transactions', data: txPay },
+          { type: 'append', key: 'accounting_documents', data: accountingDoc }
+        ]);
+
+        updateDocCounter('receive_receipt', finalReceiptNumber).catch(() => {});
+        updateDocCounter('accounting_document', docNum).catch(() => {});
 
         createdReceiptObj = {
           ...txReceive,
-          pairedTransactionId: txPay.id,
+          pairedTransactionId: payId,
           isPersonTransfer: true,
           payerName,
           payeeName,
@@ -3165,7 +3175,7 @@ const handleSubmitReceipt = (type: "receive" | "pay", e: React.FormEvent, custom
         };
 
         rollbackActions.push(async () => {
-          await deleteTransaction(txReceive.id.toString());
+          await deleteTransaction(receiveId);
         });
       } else if (payload.method === "check") {
         updateAppProcessing(

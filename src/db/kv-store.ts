@@ -100,6 +100,14 @@ export async function innerGetDbData(key: string) {
       } else if (key === 'backupConfig') {
           const res = await targetPool.query(`SELECT * FROM "${key}"`);
           return res.rows.length > 0 ? parseJSONFields(res.rows[0]) : null;
+      } else if (key === 'system_logs' || key === 'database_logs') {
+          try {
+            const res = await targetPool.query(`SELECT * FROM "${key}" ORDER BY "timestamp" DESC LIMIT 3000`);
+            return res.rows.map(parseJSONFields);
+          } catch (_) {
+            const res = await targetPool.query(`SELECT * FROM "${key}" LIMIT 3000`);
+            return res.rows.map(parseJSONFields);
+          }
       }
 
       const res = await targetPool.query(`SELECT * FROM "${key}"${isSoftDeletable ? ' WHERE deleted_at IS NULL' : ''}`);
@@ -126,7 +134,71 @@ export async function innerGetDbData(key: string) {
   }
 }
 
+export async function appendLogEntries(key: string, entries: any[]) {
+  if (!entries || !Array.isArray(entries) || entries.length === 0) return;
+  const isGlobalTable = GLOBAL_MAIN_DB_TABLES.includes(key);
+  const currentStore = storeContext.getStore() || 'default';
+  const targetStoreId = isGlobalTable ? 'default' : currentStore;
+
+  if (!activePgPools[targetStoreId]) {
+    try {
+      await loadPgPoolForStore(targetStoreId);
+    } catch (_) {}
+  }
+  const targetPool = isGlobalTable ? (activePgPools['default'] || null) : (isPgActive() ? getActivePgPool() : (activePgPools[currentStore] || null));
+
+  const sanitized = entries.filter(Boolean).map(item => {
+    const it = (typeof item === 'object') ? { ...item } : { details: String(item) };
+    if (!it.id) it.id = Math.random().toString(36).substring(2, 15);
+    if (!it.timestamp) it.timestamp = Date.now();
+    return it;
+  });
+
+  if (targetPool) {
+    const client = await targetPool.connect();
+    try {
+      await client.query(`CREATE TABLE IF NOT EXISTS "${key}" (id VARCHAR PRIMARY KEY)`);
+      if (sanitized.length > 0 && !tableSchemas.has(key)) {
+        await syncTableSchema(client, key, sanitized[0]);
+      }
+      await client.query('BEGIN');
+      for (const item of sanitized) {
+        if (!tableSchemas.has(key)) {
+          await syncTableSchema(client, key, item);
+        }
+        const { itemKeys: keys, itemVals: vals } = preparePgItem(key, item);
+        const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
+        const colNames = keys.map(k => `"${k}"`).join(', ');
+        await client.query(
+          `INSERT INTO "${key}" (${colNames}) VALUES (${placeholders}) ON CONFLICT(id) DO NOTHING`,
+          vals
+        );
+      }
+      await client.query('COMMIT');
+    } catch (err: any) {
+      await client.query('ROLLBACK');
+      console.error(`Error appending log entries to ${key}:`, err.message);
+    } finally {
+      client.release();
+    }
+  } else {
+    const fileData = await getFileData(targetStoreId);
+    let list = fileData[key];
+    if (!Array.isArray(list)) list = [];
+    list = [...sanitized, ...list].slice(0, 3000);
+    fileData[key] = list;
+    scheduleFileSave(targetStoreId);
+  }
+}
+
 export async function innerSetDbData(key: string, data: any) {
+  // CRITICAL: Audit logs must NEVER be truncated under any circumstances!
+  if (key === 'system_logs' || key === 'database_logs') {
+    const itemsToAppend = Array.isArray(data) ? data.slice(0, 50) : [data];
+    await appendLogEntries(key, itemsToAppend);
+    return;
+  }
+
   const isGlobalTable = GLOBAL_MAIN_DB_TABLES.includes(key);
   const currentStore = storeContext.getStore() || 'default';
   const targetStoreId = isGlobalTable ? 'default' : currentStore;
@@ -216,6 +288,8 @@ export async function innerSetDbData(key: string, data: any) {
 export function getChildTableCandidates(key: string): string[] {
     if (key === "warehouse_receipts") return ["warehouse_receipt_items", "warehouse_receipts_item", "warehouse_receipts_items"];
     if (key === "warehouse_remittances") return ["warehouse_remittance_items", "warehouse_remittances_item", "warehouse_remittances_items"];
+    if (key === "accounting_documents") return ["accounting_document_items"];
+    if (key === "stocktakings") return ["stocktaking_items"];
     if (key === "invoices") return ["invoice_items"];
     if (key.endsWith('s')) return [key.substring(0, key.length - 1) + "_items"];
     return [key + "_items"];
@@ -278,6 +352,11 @@ export async function getDbData(key: string) {
 }
 
 export async function setDbData(key: string, data: any) {
+  if (key === 'system_logs' || key === 'database_logs') {
+    const itemsToAppend = Array.isArray(data) ? data.slice(0, 50) : [data];
+    await appendLogEntries(key, itemsToAppend);
+    return;
+  }
   if ((key === 'invoices' || key === 'sales_invoices' || key === 'purchase_invoices' || key === 'warehouse_receipts' || key === 'warehouse_remittances' || key === 'proforma_invoices' || key === 'sale_returns' || key === 'purchase_returns' || key === 'wastes') && Array.isArray(data)) {
       const childCandidates = getChildTableCandidates(key);
       const childTable = childCandidates[0];

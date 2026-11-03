@@ -486,6 +486,8 @@ export async function ensurePostgresTables(poolOverride?: any) {
       'CREATE INDEX IF NOT EXISTS idx_persons_phone ON "persons" ("phone")',
       'CREATE INDEX IF NOT EXISTS idx_products_code ON "products" ("code")',
       'CREATE INDEX IF NOT EXISTS idx_products_barcode ON "products" ("barcode")',
+      'CREATE INDEX IF NOT EXISTS idx_syslogs_timestamp ON "system_logs" ("timestamp" DESC)',
+      'CREATE INDEX IF NOT EXISTS idx_dblogs_timestamp ON "database_logs" ("timestamp" DESC)',
     ];
     for (const idxQuery of essentialIndexes) {
       try {
