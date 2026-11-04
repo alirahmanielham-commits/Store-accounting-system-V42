@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { ArrowDownLeft, ArrowUpRight, RefreshCw, Store } from 'lucide-react';
 import MobileReceiptForm from './MobileReceiptForm';
+import { playAudioFeedback } from '../../utils/audio';
 
 interface Props {
   storeSettings?: any;
@@ -104,35 +105,53 @@ export default function MobilePortalLayout({
         onRefresh={handleRefresh}
       />
 
-      {/* Fixed Bottom Navigation Bar - STRICTLY LIMITED TO THE TWO ALLOWED OPERATIONS */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 max-w-lg mx-auto shadow-lg">
-        <div className="grid grid-cols-2 items-center h-16 px-3 pb-safe gap-2">
+      {/* Redesigned Modern Mobile Bottom Menu (Exclusively Receive & Pay) */}
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/80 dark:border-slate-800/80 max-w-lg mx-auto shadow-2xl px-3 pt-2 pb-safe">
+        <div className="grid grid-cols-2 gap-2 h-14">
           {/* 1. ثبت رسید دریافت */}
           <button
             type="button"
-            onClick={() => setActiveTab('receive')}
-            className={`flex items-center justify-center gap-2 h-12 rounded-2xl transition-all cursor-pointer font-black text-xs ${
+            onClick={() => {
+              setActiveTab('receive');
+              try { playAudioFeedback('info'); } catch (_) {}
+            }}
+            className={`flex items-center justify-center gap-2.5 rounded-2xl transition-all duration-200 cursor-pointer select-none ${
               activeTab === 'receive'
-                ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/20'
-                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-600/30 ring-2 ring-emerald-500/20 font-black text-xs active:scale-98'
+                : 'bg-slate-100/90 hover:bg-slate-200/90 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300 font-bold text-xs'
             }`}
           >
-            <ArrowDownLeft className={`w-4 h-4 ${activeTab === 'receive' ? 'text-white' : 'text-emerald-600'}`} />
-            <span>ثبت رسید دریافت</span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+              activeTab === 'receive'
+                ? 'bg-white/20 text-white'
+                : 'bg-emerald-50 dark:bg-emerald-950/40 text-emerald-600 dark:text-emerald-400'
+            }`}>
+              <ArrowDownLeft className="w-4 h-4" />
+            </div>
+            <span className="tracking-tight">ثبت رسید دریافت</span>
           </button>
 
           {/* 2. ثبت رسید پرداخت */}
           <button
             type="button"
-            onClick={() => setActiveTab('pay')}
-            className={`flex items-center justify-center gap-2 h-12 rounded-2xl transition-all cursor-pointer font-black text-xs ${
+            onClick={() => {
+              setActiveTab('pay');
+              try { playAudioFeedback('info'); } catch (_) {}
+            }}
+            className={`flex items-center justify-center gap-2.5 rounded-2xl transition-all duration-200 cursor-pointer select-none ${
               activeTab === 'pay'
-                ? 'bg-rose-600 text-white shadow-md shadow-rose-600/20'
-                : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300'
+                ? 'bg-rose-600 text-white shadow-lg shadow-rose-600/30 ring-2 ring-rose-500/20 font-black text-xs active:scale-98'
+                : 'bg-slate-100/90 hover:bg-slate-200/90 dark:bg-slate-800/80 dark:hover:bg-slate-700/80 text-slate-600 dark:text-slate-300 font-bold text-xs'
             }`}
           >
-            <ArrowUpRight className={`w-4 h-4 ${activeTab === 'pay' ? 'text-white' : 'text-rose-600'}`} />
-            <span>ثبت رسید پرداخت</span>
+            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+              activeTab === 'pay'
+                ? 'bg-white/20 text-white'
+                : 'bg-rose-50 dark:bg-rose-950/40 text-rose-600 dark:text-rose-400'
+            }`}>
+              <ArrowUpRight className="w-4 h-4" />
+            </div>
+            <span className="tracking-tight">ثبت رسید پرداخت</span>
           </button>
         </div>
       </nav>

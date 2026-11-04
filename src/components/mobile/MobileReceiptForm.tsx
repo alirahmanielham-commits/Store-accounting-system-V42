@@ -345,11 +345,11 @@ export default function MobileReceiptForm({
   const personBalanceInfo = selectedPerson && calculatePersonBalance ? calculatePersonBalance(selectedPerson.id) : null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 font-sans pb-36 relative" dir="rtl">
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 font-sans pb-28 relative" dir="rtl">
       {/* Top App Bar */}
       <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 h-14 flex items-center justify-between">
-        <div className="flex items-center gap-2">
-          <div className={`w-8 h-8 rounded-xl flex items-center justify-center font-black text-xs ${
+        <div className="flex items-center gap-2.5">
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${
             isReceive ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40' : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40'
           }`}>
             {isReceive ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
@@ -367,37 +367,19 @@ export default function MobileReceiptForm({
             <button
               type="button"
               onClick={onRefresh}
-              className="w-8 h-8 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
+              className="w-9 h-9 rounded-xl flex items-center justify-center text-slate-500 hover:text-slate-700 dark:hover:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer"
               title="به‌روزرسانی اطلاعات"
             >
-              <RefreshCw className="w-3.5 h-3.5" />
+              <RefreshCw className="w-4 h-4" />
             </button>
           )}
 
-          {/* Switch Receive / Pay toggle pill */}
-          <div className="flex items-center bg-slate-100 dark:bg-slate-800 p-0.5 rounded-xl border border-slate-200/60 dark:border-slate-700/60">
-            <button
-              type="button"
-              onClick={() => handleSwitchType('receive')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                isReceive
-                  ? 'bg-emerald-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              دریافت
-            </button>
-            <button
-              type="button"
-              onClick={() => handleSwitchType('pay')}
-              className={`px-3 py-1.5 rounded-lg text-xs font-black transition-all cursor-pointer ${
-                !isReceive
-                  ? 'bg-rose-600 text-white shadow-xs'
-                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900'
-              }`}
-            >
-              پرداخت
-            </button>
+          <div className={`px-2.5 py-1 rounded-xl text-[11px] font-black border ${
+            isReceive
+              ? 'bg-emerald-50 text-emerald-700 border-emerald-200/80 dark:bg-emerald-950/40 dark:text-emerald-400 dark:border-emerald-800/40'
+              : 'bg-rose-50 text-rose-700 border-rose-200/80 dark:bg-rose-950/40 dark:text-rose-400 dark:border-rose-800/40'
+          }`}>
+            {isReceive ? 'دریافت' : 'پرداخت'}
           </div>
         </div>
       </header>
@@ -686,34 +668,7 @@ export default function MobileReceiptForm({
         </div>
       </main>
 
-      {/* Floating Sticky Submit Bar (Positioned above the 64px bottom nav, never hidden!) */}
-      <div className="fixed bottom-16 left-0 right-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-t border-slate-200/80 dark:border-slate-800/80 p-2.5 max-w-lg mx-auto shadow-lg">
-        <button
-          type="button"
-          onClick={handleSubmitReceipt}
-          disabled={isSubmitting}
-          className={`w-full h-13 rounded-2xl font-black text-xs sm:text-sm flex items-center justify-center gap-2 shadow-md transition-all active:scale-98 cursor-pointer ${
-            isReceive
-              ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25'
-              : 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25'
-          }`}
-        >
-          {isSubmitting ? (
-            <>
-              <RefreshCw className="w-4 h-4 animate-spin" />
-              <span>در حال ثبت سند...</span>
-            </>
-          ) : (
-            <>
-              {isReceive ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}
-              <span>
-                {isReceive ? 'تایید و ثبت رسید دریافت' : 'تایید و ثبت رسید پرداخت'}
-                {parsedAmount > 0 ? ` (${addCommas(parsedAmount)} ${currency})` : ''}
-              </span>
-            </>
-          )}
-        </button>
-      </div>
+
 
       {/* Person Selection Bottom Sheet Drawer */}
       <AnimatePresence>
