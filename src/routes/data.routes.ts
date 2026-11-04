@@ -648,6 +648,11 @@ router.get('/api/data/:key', async (req, res) => {
       if (Array.isArray(data)) {
         let items = [...data];
 
+        // Soft delete filtering for check management
+        if (['checkbooks', 'issued_checks', 'received_checks'].includes(key)) {
+          items = items.filter((item: any) => item && !item.deleted_at && !item.deletedAt && !item.isDeleted);
+        }
+
         // Search filtering
         if (search && typeof search === 'string' && search.trim()) {
           const q = search.trim().toLowerCase();

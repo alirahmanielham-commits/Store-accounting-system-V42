@@ -155,12 +155,19 @@ export default function CheckbooksManager(props: any) {
         setIsSubmitting(true);
         const payload = {
           accountId: cbAccountId,
-          bankName: selectedAcc?.bankName || '',
+          account_id: cbAccountId,
+          bankName: selectedAcc?.bankName || selectedAcc?.title || '',
+          bank_name: selectedAcc?.bankName || selectedAcc?.title || '',
           accountNumber: selectedAcc?.accountNumber || selectedAcc?.cardNumber || '',
+          account_number: selectedAcc?.accountNumber || selectedAcc?.cardNumber || '',
           startNumber: cleanStart,
+          start_number: cleanStart,
           endNumber: cleanEnd,
+          end_number: cleanEnd,
           totalLeaves: calculatedTotalLeaves,
-          issuedDate: cbIssued ? convertToGregorian(cbIssued) : null
+          total_leaves: calculatedTotalLeaves,
+          issuedDate: cbIssued ? convertToGregorian(cbIssued) : null,
+          issued_date: cbIssued ? convertToGregorian(cbIssued) : null
         };
         try {
           if (editingCheckbookId) {
@@ -183,22 +190,36 @@ export default function CheckbooksManager(props: any) {
   };
 
   const deleteCb = async (cb: any) => {
+    const cbLeaves = allIssuedChecks.filter(c => String(c.checkbookId) === String(cb.id));
+    const blankCount = cbLeaves.filter(c => !c.status || c.status === 'blank').length;
+    const usedCount = cbLeaves.filter(c => c.status && c.status !== 'blank').length;
+    const bankTitle = cb.bankName || cb.bank_name || 'بانک';
+    const startNo = cb.startNumber || cb.start_number || '';
+    const endNo = cb.endNumber || cb.end_number || '';
+
+    let message = '';
+    if (usedCount === 0) {
+      message = `این دسته‌چک (از سریال ${startNo} تا ${endNo} عهده بانک «${bankTitle}») دارای ${blankCount} برگه سفید بدون استفاده است. با تایید شما، این دسته‌چک و تمامی ${blankCount} برگه سفید آن به صورت کامل از سیستم حذف خواهند شد. آیا اطمینان دارید؟`;
+    } else {
+      message = `این دسته‌چک دارای ${usedCount} برگه صادرشده و ${blankCount} برگه سفید بدون استفاده است. با تایید شما، تمامی ${blankCount} برگه سفید بدون استفاده حذف شده و دسته‌چک بایگانی می‌شود (برگه‌های صادرشده برای حفظ اسناد و سوابق مالی باقی می‌مانند). آیا اطمینان دارید؟`;
+    }
+
     setConfirmModalData({
       isOpen: true,
-      title: 'حذف دسته چک',
-      message: `آیا از حذف دسته چک سریال ${cb.startNumber} تا ${cb.endNumber} عهده بانک «${cb.bankName || 'بانکی'}» مطمئن هستید؟ (برگه‌های صادر شده حفظ خواهند شد و برگه‌های سفید حذف می‌شوند)`,
+      title: 'حذف دسته‌چک',
+      message,
       onConfirm: async () => {
         setConfirmModalData(null);
         try {
           await deleteCheckbook(cb.id.toString());
-          notify('دسته چک با موفقیت حذف شد', 'success');
+          notify('دسته‌چک و برگه‌های بدون استفاده با موفقیت حذف شدند', 'success');
           await loadData();
           if (selectedCbForLeaves?.id === cb.id) {
             setSelectedCbForLeaves(null);
           }
         } catch (error: any) {
           console.error('Error deleting checkbook:', error);
-          notify(error?.message || 'خطا در حذف دسته چک', 'error');
+          notify(error?.message || 'خطا در حذف دسته‌چک', 'error');
         }
       }
     });
@@ -789,9 +810,15 @@ export default function CheckbooksManager(props: any) {
                 <button 
                   onClick={confirmModalData.onConfirm} 
                   disabled={isSubmitting} 
-                  className="px-5 py-2.5 rounded-xl bg-indigo-600 text-white font-bold text-sm hover:bg-indigo-700 transition-colors flex items-center gap-2 cursor-pointer"
+                  className={`px-5 py-2.5 rounded-xl text-white font-bold text-sm transition-colors flex items-center gap-2 cursor-pointer shadow-sm ${
+                    confirmModalData.title.includes('حذف')
+                      ? 'bg-rose-600 hover:bg-rose-700 focus:ring-4 focus:ring-rose-100'
+                      : 'bg-indigo-600 hover:bg-indigo-700 focus:ring-4 focus:ring-indigo-100'
+                  }`}
                 >
-                  {isSubmitting ? 'در حال ثبت...' : 'بله، تایید میکنم'}
+                  {isSubmitting 
+                    ? 'در حال انجام...' 
+                    : (confirmModalData.title.includes('حذف') ? 'بله، حذف شود' : 'بله، تایید میکنم')}
                 </button>
               </div>
             </motion.div>

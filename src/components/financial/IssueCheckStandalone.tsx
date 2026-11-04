@@ -88,15 +88,17 @@ export default function IssueCheckStandalone() {
   const payeeNameOptions = useMemo(() => persons.map(p => ({ value: p.name, label: p.name })), [persons]);
   const checkbookOptions = useMemo(() => {
     return checkbooks
-      .filter(cb => !cb.deletedAt)
+      .filter(cb => !cb.deletedAt && !cb.deleted_at && !cb.isDeleted)
       .map(cb => {
-        const acc = accounts.find(a => String(a.id) === String(cb.accountId));
-        const bankName = acc?.bankName || cb.bankName || 'حساب بانکی';
+        const acc = accounts.find(a => String(a.id) === String(cb.accountId || cb.account_id));
+        const bankName = acc?.bankName || acc?.title || cb.bankName || cb.bank_name || 'حساب بانکی';
         const accNo = acc?.accountNumber ? ` (حساب: ${acc.accountNumber})` : '';
+        const startNo = cb.startNumber || cb.start_number || '';
+        const endNo = cb.endNumber || cb.end_number || '';
         const blankCount = allChecks.filter(c => String(c.checkbookId) === String(cb.id) && (!c.status || c.status === 'blank')).length;
         return { 
           value: String(cb.id), 
-          label: `${bankName}${accNo} | برگه‌های ${cb.startNumber} تا ${cb.endNumber} (${blankCount} برگ سفید)`
+          label: `${bankName}${accNo} | برگه‌های ${startNo} تا ${endNo} (${blankCount} برگ سفید)`
         };
       });
   }, [checkbooks, accounts, allChecks]);
@@ -241,9 +243,9 @@ export default function IssueCheckStandalone() {
   };
 
   const selectedCheckbook = useMemo(() => {
-    const cb = checkbooks.find(c => c.id === checkbookId);
+    const cb = checkbooks.find(c => String(c.id) === String(checkbookId));
     if (!cb) return null;
-    const acc = accounts.find(a => String(a.id) === String(cb.accountId));
+    const acc = accounts.find(a => String(a.id) === String(cb.accountId || cb.account_id));
     return { ...cb, ...acc };
   }, [checkbooks, checkbookId, accounts]);
 

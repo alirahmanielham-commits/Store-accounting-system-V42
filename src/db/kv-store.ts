@@ -265,9 +265,7 @@ export async function innerSetDbData(key: string, data: any) {
              } else {
                 for (const item of data) {
                    if (!item.id) item.id = Math.random().toString(36).substring(2, 15);
-                   if (!tableSchemas.has(key)) {
-                      await syncTableSchema(client, key, item);
-                   }
+                   await syncTableSchema(client, key, item);
                    const { itemKeys: keys, itemVals: vals } = preparePgItem(key, item);
                    const placeholders = keys.map((_, i) => `$${i + 1}`).join(', ');
                    const colNames = keys.map(k => `"${k}"`).join(', ');

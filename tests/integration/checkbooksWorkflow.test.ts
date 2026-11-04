@@ -111,4 +111,68 @@ describe('Integration — Checkbooks & Leaves Management Workflow', () => {
     expect(Number(updated.amount)).toBe(25000000);
     expect(updated.payeeName).toBe('فروشگاه پارس ابزار');
   });
+
+  test('Deleting a mistakenly registered checkbook with 0 used leaves purges both checkbook and leaves', async () => {
+    // Register mistaken checkbook
+    const cbMistaken = {
+      id: 'cb-mistake-202',
+      accountId: 'acc-1',
+      bankName: 'بانک پاسارگاد',
+      startNumber: '2001',
+      endNumber: '2004',
+      totalLeaves: 4
+    };
+
+    await request(app)
+      .post('/api/data/checkbooks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send([cbMistaken]);
+
+    // Leaves are all blank
+    const blankLeaves = [
+      { id: 'leaf-2001', checkbookId: 'cb-mistake-202', checkNumber: '2001', status: 'blank', amount: 0 },
+      { id: 'leaf-2002', checkbookId: 'cb-mistake-202', checkNumber: '2002', status: 'blank', amount: 0 },
+      { id: 'leaf-2003', checkbookId: 'cb-mistake-202', checkNumber: '2003', status: 'blank', amount: 0 },
+      { id: 'leaf-2004', checkbookId: 'cb-mistake-202', checkNumber: '2004', status: 'blank', amount: 0 },
+    ];
+
+    await request(app)
+      .post('/api/data/issued_checks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(blankLeaves);
+
+    // Delete checkbook via batch or checkbook deletion endpoint
+    const batchDelRes = await request(app)
+      .post('/api/data/batch')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        operations: [
+          { type: 'delete', key: 'checkbooks', id: 'cb-mistake-202' }
+        ]
+      });
+
+    expect(batchDelRes.status).toBe(200);
+
+    // Also verify deleting unused leaves
+    const purgeLeavesRes = await request(app)
+      .post('/api/data/batch')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        operations: blankLeaves.map(l => ({ type: 'delete', key: 'issued_checks', id: l.id }))
+      });
+
+    expect(purgeLeavesRes.status).toBe(200);
+
+    // Verify checkbook is gone
+    const cbs = await request(app)
+      .get('/api/data/checkbooks')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(cbs.body.filter((c: any) => c.id === 'cb-mistake-202').length).toBe(0);
+
+    // Verify leaves are gone
+    const leaves = await request(app)
+      .get('/api/data/issued_checks')
+      .set('Authorization', `Bearer ${adminToken}`);
+    expect(leaves.body.filter((l: any) => l.checkbookId === 'cb-mistake-202').length).toBe(0);
+  });
 });

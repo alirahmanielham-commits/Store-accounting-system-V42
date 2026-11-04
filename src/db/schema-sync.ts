@@ -203,11 +203,16 @@ export function findMatchingColumn(knownCols: Map<string, string>, propKey: stri
     }
   }
 
-  // 5. Camel case conversion: e.g. created_at -> createdAt
-  const camelProp = propKey.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase()).toLowerCase();
-  for (const [colName, colType] of knownCols.entries()) {
-    if (colName.toLowerCase() === camelProp) {
-      return { dbColName: colName, colType };
+  // 5. Camel case conversion: e.g. bank_name -> bankName, created_at -> createdAt
+  const camelProp = propKey.replace(/_([a-z])/g, (_, letter) => letter.toUpperCase());
+  if (camelProp !== propKey) {
+    if (knownCols.has(camelProp)) {
+      return { dbColName: camelProp, colType: knownCols.get(camelProp) || '' };
+    }
+    for (const [colName, colType] of knownCols.entries()) {
+      if (colName === camelProp || colName.toLowerCase() === camelProp.toLowerCase()) {
+        return { dbColName: colName, colType };
+      }
     }
   }
   return null;
@@ -224,11 +229,15 @@ export function preparePgItem(key: string, item: Record<string, any>) {
     let targetCol = k;
     let colType = '';
 
-    if (colMap) {
+    if (colMap && colMap.size > 0) {
       const matched = findMatchingColumn(colMap, k);
       if (matched) {
         targetCol = matched.dbColName;
         colType = matched.colType;
+      } else {
+        // Critical safeguard: if colMap exists and this key does NOT exist in the table,
+        // do not send it in the INSERT/UPDATE query to prevent PostgreSQL 42703 column does not exist errors!
+        continue;
       }
     }
 
@@ -463,6 +472,92 @@ export async function ensurePostgresTables(poolOverride?: any) {
               ALTER TABLE "system_logs" ADD COLUMN IF NOT EXISTS "timestamp" NUMERIC;
             `);
           } catch (sysLogErr: any) {}
+        }
+        if (key === 'checkbooks') {
+          try {
+            await p.query(`
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "bankName" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "bank_name" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "accountId" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "account_id" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "accountNumber" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "account_number" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "startNumber" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "start_number" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "endNumber" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "end_number" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "totalLeaves" INTEGER;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "total_leaves" INTEGER;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "issuedDate" TEXT;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "issued_date" TEXT;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "fiscalYearId" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "fiscal_year_id" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "description" TEXT;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "deletedAt" TEXT;
+            `);
+          } catch (_) {}
+        }
+        if (key === 'issued_checks') {
+          try {
+            await p.query(`
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "checkbookId" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "checkbook_id" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "bankAccountId" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "bank_account_id" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "checkNumber" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "check_number" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "sayadId" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "sayad_id" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "amount" DOUBLE PRECISION DEFAULT 0;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "issueDate" TEXT;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "issue_date" TEXT;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "dueDate" TEXT;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "due_date" TEXT;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "payeeId" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "payee_id" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "status" VARCHAR DEFAULT 'blank';
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "receiptNumber" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "receipt_number" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "assignedToId" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "assigned_to_id" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "description" TEXT;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "image_url" TEXT;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "fiscalYearId" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "fiscal_year_id" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "deletedAt" TEXT;
+            `);
+          } catch (_) {}
+        }
+        if (key === 'received_checks') {
+          try {
+            await p.query(`
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "checkNumber" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "check_number" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "sayadId" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "sayad_id" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "bankName" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "bank_name" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "branchName" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "branch_name" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "amount" DOUBLE PRECISION DEFAULT 0;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "receiveDate" TEXT;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "receive_date" TEXT;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "dueDate" TEXT;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "due_date" TEXT;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "payerId" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "payer_id" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "status" VARCHAR DEFAULT 'received';
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "receiptNumber" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "receipt_number" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "assignedToId" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "assigned_to_id" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "accountId" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "account_id" VARCHAR;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "description" TEXT;
+              ALTER TABLE "received_checks" ADD COLUMN IF NOT EXISTS "deletedAt" TEXT;
+            `);
+          } catch (_) {}
         }
       } catch (err: any) {
         console.error(`Error creating/updating table ${key}:`, err.message);

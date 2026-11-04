@@ -172,15 +172,32 @@ export const getCheckbooks = async () => {
   if (data && (data as any).data) return data; // Server-side paginated response
   const list = Array.isArray(data) ? data : [];
   return list
-    .filter((c: any) => !c.deletedAt)
+    .filter((c: any) => !c.deletedAt && !c.deleted_at && !c.isDeleted)
+    .map((c: any) => ({
+      ...c,
+      bankName: c.bankName || c.bank_name || '',
+      bank_name: c.bank_name || c.bankName || '',
+      accountId: c.accountId || c.account_id || '',
+      account_id: c.account_id || c.accountId || '',
+      startNumber: c.startNumber || c.start_number || '',
+      start_number: c.start_number || c.startNumber || '',
+      endNumber: c.endNumber || c.end_number || '',
+      end_number: c.end_number || c.endNumber || '',
+      totalLeaves: c.totalLeaves !== undefined ? Number(c.totalLeaves) : (c.total_leaves !== undefined ? Number(c.total_leaves) : 0),
+      total_leaves: c.totalLeaves !== undefined ? Number(c.totalLeaves) : (c.total_leaves !== undefined ? Number(c.total_leaves) : 0),
+      issuedDate: c.issuedDate || c.issued_date || null,
+      issued_date: c.issuedDate || c.issued_date || null,
+      accountNumber: c.accountNumber || c.account_number || '',
+      fiscalYearId: c.fiscalYearId || c.fiscal_year_id || undefined,
+    }))
     .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 };
 
 export const ensureCheckbookLeaves = async (checkbookId?: string) => {
   const checkbooks = await getLocalData<any[]>('checkbooks', []);
   const targetCheckbooks = checkbookId 
-    ? checkbooks.filter(cb => String(cb.id) === String(checkbookId) && !cb.deletedAt)
-    : checkbooks.filter(cb => !cb.deletedAt);
+    ? checkbooks.filter(cb => String(cb.id) === String(checkbookId) && !cb.deletedAt && !cb.deleted_at && !cb.isDeleted)
+    : checkbooks.filter(cb => !cb.deletedAt && !cb.deleted_at && !cb.isDeleted);
 
   if (targetCheckbooks.length === 0) return [];
 
@@ -210,7 +227,7 @@ export const ensureCheckbookLeaves = async (checkbookId?: string) => {
         issuedChecks.push({
           id: generateId(),
           checkbookId: String(cb.id),
-          bankAccountId: cb.accountId ? String(cb.accountId) : undefined,
+          bankAccountId: (cb.accountId || cb.account_id) ? String(cb.accountId || cb.account_id) : undefined,
           checkNumber: leafNo,
           sayadId: '0000000000000000',
           amount: 0,
@@ -239,33 +256,49 @@ export const addCheckbook = async (record: any) => {
   const now = Date.now();
   const activeYear = await getActiveFinancialYear();
   
-  const startNumStr = cleanCbNumber(record.startNumber);
-  const endNumStr = cleanCbNumber(record.endNumber);
+  const startNumStr = cleanCbNumber(record.startNumber || record.start_number);
+  const endNumStr = cleanCbNumber(record.endNumber || record.end_number);
   const start = parseInt(startNumStr, 10);
   const end = parseInt(endNumStr, 10);
   const totalLeaves = (!isNaN(start) && !isNaN(end) && end >= start) 
     ? (end - start + 1) 
-    : (Number(record.totalLeaves) || 0);
+    : (Number(record.totalLeaves || record.total_leaves) || 0);
 
+  const rawIssuedDate = record.issuedDate || record.issued_date;
   let cleanIssuedDate: string | null = null;
-  if (record.issuedDate && String(record.issuedDate).trim()) {
+  if (rawIssuedDate && String(rawIssuedDate).trim()) {
     try {
-      cleanIssuedDate = convertToGregorian(record.issuedDate);
+      cleanIssuedDate = convertToGregorian(rawIssuedDate);
     } catch (_) {
       cleanIssuedDate = null;
     }
   }
 
+  const bankName = record.bankName || record.bank_name || '';
+  const accountId = record.accountId || record.account_id || '';
+  const accountNumber = record.accountNumber || record.account_number || '';
+
   const newItem = { 
     ...record, 
     id: generateId(), 
+    accountId,
+    account_id: accountId,
+    bankName,
+    bank_name: bankName,
+    accountNumber,
+    account_number: accountNumber,
     startNumber: startNumStr || record.startNumber,
+    start_number: startNumStr || record.startNumber,
     endNumber: endNumStr || record.endNumber,
+    end_number: endNumStr || record.endNumber,
     totalLeaves,
+    total_leaves: totalLeaves,
     issuedDate: cleanIssuedDate,
+    issued_date: cleanIssuedDate,
     createdAt: now, 
     updatedAt: now, 
-    fiscalYearId: activeYear ? activeYear.id : undefined 
+    fiscalYearId: activeYear ? activeYear.id : undefined,
+    fiscal_year_id: activeYear ? activeYear.id : undefined
   };
   data.push(newItem);
   await saveLocalData('checkbooks', data);
@@ -277,7 +310,7 @@ export const addCheckbook = async (record: any) => {
          issuedChecks.push({
              id: generateId(),
              checkbookId: String(newItem.id),
-             bankAccountId: newItem.accountId ? String(newItem.accountId) : undefined,
+             bankAccountId: accountId ? String(accountId) : undefined,
              checkNumber: String(i).padStart(padding, '0'),
              sayadId: '0000000000000000',
              amount: 0,
@@ -310,13 +343,14 @@ export const updateCheckbook = async (id: string, record: any) => {
     const end = parseInt(endNumStr, 10);
     const totalLeaves = (!isNaN(start) && !isNaN(end) && end >= start) 
       ? (end - start + 1) 
-      : (Number(record.totalLeaves) || data[index].totalLeaves || 0);
+      : (Number(record.totalLeaves || record.total_leaves) || data[index].totalLeaves || 0);
 
-    let cleanIssuedDate: string | null = data[index].issuedDate || null;
-    if (record.issuedDate !== undefined) {
-      if (record.issuedDate && String(record.issuedDate).trim()) {
+    let cleanIssuedDate: string | null = data[index].issuedDate || data[index].issued_date || null;
+    const rawIssuedDate = record.issuedDate !== undefined ? record.issuedDate : record.issued_date;
+    if (rawIssuedDate !== undefined) {
+      if (rawIssuedDate && String(rawIssuedDate).trim()) {
         try {
-          cleanIssuedDate = convertToGregorian(record.issuedDate);
+          cleanIssuedDate = convertToGregorian(rawIssuedDate);
         } catch (_) {
           cleanIssuedDate = null;
         }
@@ -325,17 +359,32 @@ export const updateCheckbook = async (id: string, record: any) => {
       }
     }
 
+    const bankName = record.bankName || record.bank_name || data[index].bankName || data[index].bank_name || '';
+    const accountId = record.accountId || record.account_id || data[index].accountId || data[index].account_id || '';
+    const accountNumber = record.accountNumber || record.account_number || data[index].accountNumber || data[index].account_number || '';
+
     data[index] = { 
       ...data[index], 
       ...record, 
+      accountId,
+      account_id: accountId,
+      bankName,
+      bank_name: bankName,
+      accountNumber,
+      account_number: accountNumber,
       startNumber: startNumStr || data[index].startNumber,
+      start_number: startNumStr || data[index].startNumber,
       endNumber: endNumStr || data[index].endNumber,
+      end_number: endNumStr || data[index].endNumber,
       totalLeaves,
+      total_leaves: totalLeaves,
       issuedDate: cleanIssuedDate,
+      issued_date: cleanIssuedDate,
       updatedAt: Date.now() 
     };
     if (activeYear) {
       data[index].fiscalYearId = activeYear.id;
+      data[index].fiscal_year_id = activeYear.id;
     }
     await saveLocalData('checkbooks', data);
 
@@ -356,18 +405,20 @@ export const deleteCheckbook = async (id: string) => {
   const data = await getLocalData<any[]>('checkbooks', []);
   const index = data.findIndex(c => String(c.id) === String(id));
   if (index !== -1) {
-    data[index].deletedAt = new Date().toISOString();
-    await saveLocalData('checkbooks', data);
+    const targetCb = data[index];
+    let usedCount = 0;
 
-    // Remove unused blank leaves associated with this checkbook
+    // Purge unused blank leaves associated with this checkbook
     try {
       const issuedChecks = await getLocalData<any[]>('issued_checks', []);
       let checksChanged = false;
       const remainingChecks = issuedChecks.filter((c: any) => {
         if (String(c.checkbookId) === String(id)) {
-          if (c.status === 'blank' || !c.status) {
+          if (!c.status || c.status === 'blank') {
             checksChanged = true;
             return false;
+          } else {
+            usedCount++;
           }
         }
         return true;
@@ -376,6 +427,22 @@ export const deleteCheckbook = async (id: string) => {
         await saveLocalData('issued_checks', remainingChecks);
       }
     } catch (_) {}
+
+    if (usedCount === 0) {
+      // Checkbook was mistakenly registered or all leaves were blank -> remove completely from list
+      const remainingCb = data.filter(c => String(c.id) !== String(id));
+      await saveLocalData('checkbooks', remainingCb);
+    } else {
+      // Some checks were issued/cashed -> mark deleted so historical audit is preserved
+      data[index].deletedAt = new Date().toISOString();
+      data[index].deleted_at = new Date().toISOString();
+      data[index].isDeleted = true;
+      await saveLocalData('checkbooks', data);
+    }
+
+    if (typeof addSystemLog !== 'undefined') {
+      await addSystemLog('DELETE_' + 'Checkbook'.toUpperCase(), `حذف دسته‌چک عهده بانک ${targetCb.bankName || targetCb.bank_name || ''} از سریال ${targetCb.startNumber || ''} تا ${targetCb.endNumber || ''}`, 'Checkbook', String(id));
+    }
   }
   return;
 };
