@@ -162,43 +162,135 @@ export const deleteCashbox = async (id: string) => {
   await batchLocalData([{ type: 'delete', key: 'cashboxes', id }]);
 };
 
+const cleanCbNumber = (val: any): string => {
+  if (val === null || val === undefined) return '';
+  return String(val).replace(/[۰-۹]/g, d => '0123456789'['۰۱۲۳۴۵۶۷۸۹'.indexOf(d)]).trim();
+};
+
 export const getCheckbooks = async () => {
   const data = await getLocalData<any>('checkbooks', []);
   if (data && (data as any).data) return data; // Server-side paginated response
-  return (Array.isArray(data) ? data : []).sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const list = Array.isArray(data) ? data : [];
+  return list
+    .filter((c: any) => !c.deletedAt)
+    .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
+};
+
+export const ensureCheckbookLeaves = async (checkbookId?: string) => {
+  const checkbooks = await getLocalData<any[]>('checkbooks', []);
+  const targetCheckbooks = checkbookId 
+    ? checkbooks.filter(cb => String(cb.id) === String(checkbookId) && !cb.deletedAt)
+    : checkbooks.filter(cb => !cb.deletedAt);
+
+  if (targetCheckbooks.length === 0) return [];
+
+  const issuedChecks = await getLocalData<any[]>('issued_checks', []);
+  let changed = false;
+  const now = Date.now();
+  const activeYear = await getActiveFinancialYear();
+
+  for (const cb of targetCheckbooks) {
+    if (!cb.startNumber || !cb.endNumber) continue;
+    const startStr = cleanCbNumber(cb.startNumber);
+    const endStr = cleanCbNumber(cb.endNumber);
+    const start = parseInt(startStr, 10);
+    const end = parseInt(endStr, 10);
+    if (isNaN(start) || isNaN(end) || end < start) continue;
+
+    const padding = startStr.length;
+    const existingLeafNumbers = new Set(
+      issuedChecks
+        .filter(c => String(c.checkbookId) === String(cb.id))
+        .map(c => String(c.checkNumber))
+    );
+
+    for (let i = start; i <= end; i++) {
+      const leafNo = String(i).padStart(padding, '0');
+      if (!existingLeafNumbers.has(leafNo)) {
+        issuedChecks.push({
+          id: generateId(),
+          checkbookId: String(cb.id),
+          bankAccountId: cb.accountId ? String(cb.accountId) : undefined,
+          checkNumber: leafNo,
+          sayadId: '0000000000000000',
+          amount: 0,
+          issueDate: null,
+          dueDate: null,
+          payeeId: null,
+          status: 'blank',
+          createdAt: now,
+          updatedAt: now,
+          fiscalYearId: activeYear ? activeYear.id : undefined
+        });
+        existingLeafNumbers.add(leafNo);
+        changed = true;
+      }
+    }
+  }
+
+  if (changed) {
+    await saveLocalData('issued_checks', issuedChecks);
+  }
+  return issuedChecks;
 };
 
 export const addCheckbook = async (record: any) => {
   const data = await getLocalData<any[]>('checkbooks', []);
   const now = Date.now();
   const activeYear = await getActiveFinancialYear();
-  const newItem = { ...record, id: generateId(), createdAt: now, updatedAt: now, fiscalYearId: activeYear ? activeYear.id : undefined };
+  
+  const startNumStr = cleanCbNumber(record.startNumber);
+  const endNumStr = cleanCbNumber(record.endNumber);
+  const start = parseInt(startNumStr, 10);
+  const end = parseInt(endNumStr, 10);
+  const totalLeaves = (!isNaN(start) && !isNaN(end) && end >= start) 
+    ? (end - start + 1) 
+    : (Number(record.totalLeaves) || 0);
+
+  let cleanIssuedDate: string | null = null;
+  if (record.issuedDate && String(record.issuedDate).trim()) {
+    try {
+      cleanIssuedDate = convertToGregorian(record.issuedDate);
+    } catch (_) {
+      cleanIssuedDate = null;
+    }
+  }
+
+  const newItem = { 
+    ...record, 
+    id: generateId(), 
+    startNumber: startNumStr || record.startNumber,
+    endNumber: endNumStr || record.endNumber,
+    totalLeaves,
+    issuedDate: cleanIssuedDate,
+    createdAt: now, 
+    updatedAt: now, 
+    fiscalYearId: activeYear ? activeYear.id : undefined 
+  };
   data.push(newItem);
   await saveLocalData('checkbooks', data);
   
-  if (newItem.startNumber && newItem.endNumber) {
-     const start = parseInt(newItem.startNumber);
-     const end = parseInt(newItem.endNumber);
-     if (!isNaN(start) && !isNaN(end) && end >= start) {
-         const padding = newItem.startNumber.length;
-         const issuedChecks = await getLocalData<any[]>('issued_checks', []);
-         for (let i = start; i <= end; i++) {
-             issuedChecks.push({
-                 id: generateId(),
-                 checkbookId: newItem.id,
-                 checkNumber: String(i).padStart(padding, '0'),
-                 amount: 0,
-                 issueDate: "",
-                 dueDate: "",
-                 payeeId: "",
-                 status: 'blank',
-                 createdAt: now,
-                 updatedAt: now,
-                 fiscalYearId: activeYear ? activeYear.id : undefined
-             });
-         }
-         await saveLocalData('issued_checks', issuedChecks);
+  if (!isNaN(start) && !isNaN(end) && end >= start) {
+     const padding = startNumStr.length;
+     const issuedChecks = await getLocalData<any[]>('issued_checks', []);
+     for (let i = start; i <= end; i++) {
+         issuedChecks.push({
+             id: generateId(),
+             checkbookId: String(newItem.id),
+             bankAccountId: newItem.accountId ? String(newItem.accountId) : undefined,
+             checkNumber: String(i).padStart(padding, '0'),
+             sayadId: '0000000000000000',
+             amount: 0,
+             issueDate: null,
+             dueDate: null,
+             payeeId: null,
+             status: 'blank',
+             createdAt: now,
+             updatedAt: now,
+             fiscalYearId: activeYear ? activeYear.id : undefined
+         });
      }
+     await saveLocalData('issued_checks', issuedChecks);
   }
 
   if (typeof addSystemLog !== 'undefined') {
@@ -212,15 +304,48 @@ export const updateCheckbook = async (id: string, record: any) => {
   const index = data.findIndex((p: any) => String(p.id) === String(id));
   if (index !== -1) {
     const activeYear = await getActiveFinancialYear();
-    data[index] = { ...data[index], ...record, updatedAt: Date.now() };
+    const startNumStr = record.startNumber ? cleanCbNumber(record.startNumber) : cleanCbNumber(data[index].startNumber);
+    const endNumStr = record.endNumber ? cleanCbNumber(record.endNumber) : cleanCbNumber(data[index].endNumber);
+    const start = parseInt(startNumStr, 10);
+    const end = parseInt(endNumStr, 10);
+    const totalLeaves = (!isNaN(start) && !isNaN(end) && end >= start) 
+      ? (end - start + 1) 
+      : (Number(record.totalLeaves) || data[index].totalLeaves || 0);
+
+    let cleanIssuedDate: string | null = data[index].issuedDate || null;
+    if (record.issuedDate !== undefined) {
+      if (record.issuedDate && String(record.issuedDate).trim()) {
+        try {
+          cleanIssuedDate = convertToGregorian(record.issuedDate);
+        } catch (_) {
+          cleanIssuedDate = null;
+        }
+      } else {
+        cleanIssuedDate = null;
+      }
+    }
+
+    data[index] = { 
+      ...data[index], 
+      ...record, 
+      startNumber: startNumStr || data[index].startNumber,
+      endNumber: endNumStr || data[index].endNumber,
+      totalLeaves,
+      issuedDate: cleanIssuedDate,
+      updatedAt: Date.now() 
+    };
     if (activeYear) {
       data[index].fiscalYearId = activeYear.id;
     }
     await saveLocalData('checkbooks', data);
+
+    if (!isNaN(start) && !isNaN(end) && end >= start) {
+      await ensureCheckbookLeaves(String(id));
+    }
   
-  if (typeof addSystemLog !== 'undefined') {
-    await addSystemLog('UPDATE_' + 'Checkbook'.toUpperCase(), 'ویرایش رکورد در checkbooks', 'Checkbook', data[index].id);
-  }
+    if (typeof addSystemLog !== 'undefined') {
+      await addSystemLog('UPDATE_' + 'Checkbook'.toUpperCase(), 'ویرایش رکورد در checkbooks', 'Checkbook', data[index].id);
+    }
 
     return data[index];
   }
@@ -233,6 +358,24 @@ export const deleteCheckbook = async (id: string) => {
   if (index !== -1) {
     data[index].deletedAt = new Date().toISOString();
     await saveLocalData('checkbooks', data);
+
+    // Remove unused blank leaves associated with this checkbook
+    try {
+      const issuedChecks = await getLocalData<any[]>('issued_checks', []);
+      let checksChanged = false;
+      const remainingChecks = issuedChecks.filter((c: any) => {
+        if (String(c.checkbookId) === String(id)) {
+          if (c.status === 'blank' || !c.status) {
+            checksChanged = true;
+            return false;
+          }
+        }
+        return true;
+      });
+      if (checksChanged) {
+        await saveLocalData('issued_checks', remainingChecks);
+      }
+    } catch (_) {}
   }
   return;
 };
@@ -330,7 +473,7 @@ export const addIssuedCheck = async (record: any) => {
   }
   const existingRaw = await getIssuedChecks();
   const existing = Array.isArray(existingRaw) ? existingRaw : (existingRaw?.data || []);
-  if (record.checkNumber && record.checkbookId && existing.some((c: any) => c.checkNumber === record.checkNumber && c.checkbookId === record.checkbookId && c.status !== 'cancelled')) {
+  if (record.checkNumber && record.checkbookId && existing.some((c: any) => String(c.checkNumber) === String(record.checkNumber) && String(c.checkbookId) === String(record.checkbookId) && c.status !== 'cancelled' && c.status !== 'blank')) {
     throw new Error('این شماره چک قبلاً در این دسته‌چک ثبت شده است');
   }
 
@@ -380,7 +523,7 @@ export const updateIssuedCheck = async (id: string, record: any) => {
   const oldChecks = Array.isArray(oldChecksRaw) ? oldChecksRaw : (oldChecksRaw?.data || []);
   const previous = oldChecks.find((c: any) => String(c.id) === String(id));
 
-  if (record.checkNumber && record.checkbookId && oldChecks.some((c: any) => String(c.id) !== String(id) && c.checkNumber === record.checkNumber && c.checkbookId === record.checkbookId && c.status !== 'cancelled')) {
+  if (record.checkNumber && record.checkbookId && oldChecks.some((c: any) => String(c.id) !== String(id) && String(c.checkNumber) === String(record.checkNumber) && String(c.checkbookId) === String(record.checkbookId) && c.status !== 'cancelled' && c.status !== 'blank')) {
     throw new Error('این شماره چک قبلاً در این دسته‌چک ثبت شده است');
   }
 

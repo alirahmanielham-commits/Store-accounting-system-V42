@@ -28,10 +28,6 @@ const router = Router();
       } catch (_) {}
     }
 
-    if (!activePgPools['default']) {
-      return [];
-    }
-
     let users = (await getDbData('users')) || [];
     if (!Array.isArray(users) || users.length === 0) {
       const hashedPassword = await bcrypt.hash('admin', 10);
@@ -171,13 +167,6 @@ router.post('/api/auth/login', async (req, res) => {
       try {
         await loadPgPoolForStore('default');
       } catch (_) {}
-    }
-
-    if (!activePgPools['default']) {
-      return res.status(503).json({
-        error: 'اتصال به پایگاه داده PostgreSQL برقرار نیست. سیستم فقط با اتصال به پایگاه داده PostgreSQL کار می‌کند. لطفاً ابتدا ویزارد راه‌اندازی را تکمیل نمایید.',
-        needsSetup: true
-      });
     }
 
     const { username, password } = req.body;

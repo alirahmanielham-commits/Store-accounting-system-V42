@@ -81,16 +81,16 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                     <label className="block text-xs font-black text-gray-700 mb-1">دسته چک بانکی مرجع</label>
                     <select value={icCheckbookId} onChange={e => {
                       setIcCheckbookId(e.target.value);
-                      const selectedCb = checkbooks.find(x => x.id == e.target.value);
+                      const selectedCb = (checkbooks || []).find(x => String(x.id) === String(e.target.value));
                       if (selectedCb) {
-                        const availableCheck = issuedChecks.find(ic => String(ic.checkbookId) === String(selectedCb.id) && ic.status === 'blank');
+                        const availableCheck = (issuedChecks || []).find(ic => String(ic.checkbookId) === String(selectedCb.id) && (!ic.status || ic.status === 'blank'));
                         if (availableCheck) setIcCheckNumber(availableCheck.checkNumber);
                       }
                     }} className="w-full border rounded-xl px-4 py-2 text-sm bg-white">
                       <option value="">-- بدون انتخاب (صدور مستقیم) --</option>
-                      {(checkbooks || []).map(cb => {
-                        const acc = accounts.find(a => a.id == cb.accountId);
-                        return <option key={cb.id} value={cb.id}>{acc?.bankName || 'نامشخص'} (برگه‌های: {cb.startNumber} تا {cb.endNumber})</option>;
+                      {(checkbooks || []).filter(cb => !cb.deletedAt).map(cb => {
+                        const acc = (accounts || []).find(a => String(a.id) === String(cb.accountId));
+                        return <option key={cb.id} value={cb.id}>{acc?.bankName || cb.bankName || 'نامشخص'} (برگه‌های: {cb.startNumber} تا {cb.endNumber})</option>;
                       })}
                     </select>
                   </div>
@@ -99,7 +99,7 @@ formatDateDisplay, storeSettings, toPersianDigits}) {
                     {icCheckbookId ? (
                       <select required value={icCheckNumber} onChange={e => setIcCheckNumber(e.target.value)} className="w-full border rounded-xl px-4 py-2 text-sm font-mono text-center bg-white" dir="ltr">
                         <option value="">-- انتخاب از برگ‌های سفید --</option>
-                        {(issuedChecks || []).filter(ic => String(ic.checkbookId) === String(icCheckbookId) && ic.status === 'blank').map(c => (
+                        {(issuedChecks || []).filter(ic => String(ic.checkbookId) === String(icCheckbookId) && (!ic.status || ic.status === 'blank')).map(c => (
                           <option key={c.id} value={c.checkNumber}>{c.checkNumber}</option>
                         ))}
                       </select>

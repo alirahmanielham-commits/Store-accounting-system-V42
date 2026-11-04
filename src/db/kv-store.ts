@@ -129,8 +129,12 @@ export async function innerGetDbData(key: string) {
       throw e;
     }
   } else {
-    // Strictly no local database engine or local file storage
-    return (key === 'company_profile' || key === 'store_settings' || key === 'backupConfig') ? null : [];
+    const fileData = await getFileData(targetStoreId);
+    const val = fileData[key];
+    if (val === undefined || val === null) {
+      return (key === 'company_profile' || key === 'store_settings' || key === 'backupConfig') ? null : [];
+    }
+    return val;
   }
 }
 
@@ -280,8 +284,10 @@ export async function innerSetDbData(key: string, data: any) {
        client.release();
     }
   } else {
-     console.warn(`[kv-store] PostgreSQL connection not active for key '${key}'. Write skipped.`);
-     return false;
+     const fileData = await getFileData(targetStoreId);
+     fileData[key] = data;
+     scheduleFileSave(targetStoreId);
+     return true;
   }
 }
 

@@ -3,7 +3,7 @@ import {
   ArrowDownLeft, ArrowUpRight, User, Landmark, Wallet, DollarSign,
   Calendar, Hash, FileText, CheckCircle2, RefreshCw, Printer,
   ArrowRight, Search, Check, Zap, Plus, X, Phone, CreditCard,
-  ChevronDown, AlertCircle, Share2, Store
+  ChevronDown, AlertCircle, Share2, Store, Menu
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import num2persian from 'num2persian';
@@ -30,6 +30,7 @@ interface Props {
   showNotification?: (msg: string, type: 'success' | 'error' | 'info' | 'warning') => void;
   onTypeChange?: (type: 'receive' | 'pay') => void;
   onRefresh?: () => void;
+  onOpenMenu?: () => void;
 }
 
 export default function MobileReceiptForm({
@@ -47,7 +48,8 @@ export default function MobileReceiptForm({
   onBack,
   showNotification,
   onTypeChange,
-  onRefresh
+  onRefresh,
+  onOpenMenu
 }: Props) {
   const currency = storeSettings?.currency || 'تومان';
   const storeName = storeSettings?.store_name || storeSettings?.storeName || 'سامانه مالی تراز';
@@ -345,11 +347,23 @@ export default function MobileReceiptForm({
   const personBalanceInfo = selectedPerson && calculatePersonBalance ? calculatePersonBalance(selectedPerson.id) : null;
 
   return (
-    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 font-sans pb-28 relative" dir="rtl">
-      {/* Top App Bar */}
+    <div className="flex flex-col min-h-screen bg-slate-50 dark:bg-slate-950 font-sans pb-12 relative" dir="rtl">
+      {/* Top App Bar with Hamburger Menu */}
       <header className="sticky top-0 z-30 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 px-4 h-14 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs ${
+          {onOpenMenu && (
+            <button
+              type="button"
+              onClick={onOpenMenu}
+              className="w-10 h-10 rounded-2xl flex items-center justify-center text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 active:scale-95 transition-all cursor-pointer bg-slate-100/90 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/80 shadow-xs"
+              aria-label="منوی اصلی موبایل"
+              title="منوی اصلی"
+            >
+              <Menu className="w-5 h-5" />
+            </button>
+          )}
+
+          <div className={`w-9 h-9 rounded-xl flex items-center justify-center font-black text-xs shrink-0 ${
             isReceive ? 'bg-emerald-50 text-emerald-600 dark:bg-emerald-950/40' : 'bg-rose-50 text-rose-600 dark:bg-rose-950/40'
           }`}>
             {isReceive ? <ArrowDownLeft className="w-4 h-4" /> : <ArrowUpRight className="w-4 h-4" />}

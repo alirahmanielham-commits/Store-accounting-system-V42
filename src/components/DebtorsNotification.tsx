@@ -73,6 +73,12 @@ export default function DebtorsNotification({
 
   // Load and refresh debtors
   const refreshDebtors = useCallback(() => {
+    // Suppress debtors showcase on mobile
+    if (typeof window !== 'undefined' && (window.innerWidth < 768 || /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent))) {
+      setVisible(false);
+      return [];
+    }
+
     if (!settings?.debtorNotificationEnabled) {
       setVisible(false);
       return [];

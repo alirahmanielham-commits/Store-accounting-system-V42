@@ -1841,27 +1841,29 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
 
   return (
     <>
-      <DebtorsNotification 
-        persons={persons} 
-        settings={storeSettings} 
-        accountingDocuments={accountingDocuments}
-        calculatePersonBalance={calculatePersonBalance} 
-        onOpenPersonProfile={(pid) => { 
-          setProfilePersonId(pid); 
-          setActiveTab("person_profile");
-        }} 
-        onOpenPersonLedger={(pid) => {
-          setLedgerPersonId(pid);
-          setActiveTab("person_ledger");
-        }}
-        onSendSms={(phone, text) => {
-          setIsComposeOpen(true);
-        }}
-        onOpenSettings={() => {
-          setSettingsTab("notifications");
-          setActiveTab("settings");
-        }}
-      />
+      {!isMobileScreen && (
+        <DebtorsNotification 
+          persons={persons} 
+          settings={storeSettings} 
+          accountingDocuments={accountingDocuments}
+          calculatePersonBalance={calculatePersonBalance} 
+          onOpenPersonProfile={(pid) => { 
+            setProfilePersonId(pid); 
+            setActiveTab("person_profile");
+          }} 
+          onOpenPersonLedger={(pid) => {
+            setLedgerPersonId(pid);
+            setActiveTab("person_ledger");
+          }}
+          onSendSms={(phone, text) => {
+            setIsComposeOpen(true);
+          }}
+          onOpenSettings={() => {
+            setSettingsTab("notifications");
+            setActiveTab("settings");
+          }}
+        />
+      )}
           <AnimatePresence>
             {notification && (
               <motion.div

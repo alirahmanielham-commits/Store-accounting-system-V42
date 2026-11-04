@@ -261,6 +261,18 @@ export function preparePgItem(key: string, item: Record<string, any>) {
         val = null;
       }
     }
+
+    const isDateCol = colType && (colType.includes('timestamp') || colType.includes('date') || colType.includes('time'));
+    if (isDateCol) {
+      if (typeof val === 'string') {
+        const trimmed = val.trim();
+        if (trimmed === '' || trimmed === 'null' || trimmed === 'undefined') {
+          val = null;
+        }
+      } else if (!val) {
+        val = null;
+      }
+    }
     itemVals.push(val);
   }
   return { itemKeys, itemVals };

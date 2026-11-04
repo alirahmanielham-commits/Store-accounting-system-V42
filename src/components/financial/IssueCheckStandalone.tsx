@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { updateIssuedCheck, getIssuedChecks, getCheckbooks, getPersons, getAccounts } from "../../services/dataService";
+import { updateIssuedCheck, addIssuedCheck, getIssuedChecks, getCheckbooks, getPersons, getAccounts, ensureCheckbookLeaves } from "../../services/dataService";
 import { getStoreSettings } from "../../services/settingsService";
 import { addTransaction } from "../../services/invoiceService";
 import { convertToGregorian, formatDateDisplay } from "../../utils/format";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp, Edit3 } from "lucide-react";
+import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp, Edit3, RefreshCw } from "lucide-react";
 import Select from "react-select";
 import CreatableSelect from "react-select/creatable";
 import CurrencyInput from "../common/CurrencyInput";
@@ -42,24 +42,44 @@ export default function IssueCheckStandalone() {
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
 
   const load = async () => {
-    setPersons(await getPersons());
-    setCheckbooks(await getCheckbooks());
-    setAllChecks(await getIssuedChecks());
-    setAccounts(await getAccounts());
-    const settings = await getStoreSettings();
-    if (settings?.currency) {
-      setCurrency(settings.currency);
+    try {
+      const [p, cb, c, a, settings] = await Promise.all([
+        getPersons(),
+        getCheckbooks(),
+        getIssuedChecks(),
+        getAccounts(),
+        getStoreSettings()
+      ]);
+      setPersons(p || []);
+      setCheckbooks(cb || []);
+      const checksList = Array.isArray(c) ? c : (c?.data || []);
+      setAllChecks(checksList);
+      setAccounts(a || []);
+      if (settings?.currency) {
+        setCurrency(settings.currency);
+      }
+    } catch (err) {
+      console.error("Error loading issue check data:", err);
     }
   };
 
   useEffect(() => {
     load();
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const qCb = params.get('checkbookId');
+      const qLeaf = params.get('checkLeafId');
+      const qNum = params.get('checkNumber');
+      if (qCb) setCheckbookId(qCb);
+      if (qLeaf) setCheckLeafId(qLeaf);
+      if (qNum) setCheckNumber(qNum);
+    } catch (_) {}
   }, []);
 
   const availableLeaves = useMemo(() => {
     if (!checkbookId) return [];
     return allChecks
-      .filter(c => c.checkbookId === checkbookId && c.status === 'blank')
+      .filter(c => String(c.checkbookId) === String(checkbookId) && (!c.status || c.status === 'blank'))
       .sort((a, b) => Number(a.checkNumber) - Number(b.checkNumber));
   }, [allChecks, checkbookId]);
 
@@ -67,15 +87,20 @@ export default function IssueCheckStandalone() {
   const personOptions = useMemo(() => persons.map(p => ({ value: p.id, label: p.name })), [persons]);
   const payeeNameOptions = useMemo(() => persons.map(p => ({ value: p.name, label: p.name })), [persons]);
   const checkbookOptions = useMemo(() => {
-    return checkbooks.map(cb => {
-      const acc = accounts.find(a => String(a.id) === String(cb.accountId));
-      return { 
-        value: cb.id, 
-        label: acc ? `${acc.bankName} - شعبه ${acc.branchName || 'مرکزی'} - حساب ${acc.accountNumber}` : `دسته‌چک ${cb.id}`
-      };
-    });
-  }, [checkbooks, accounts]);
-  const leafOptions = useMemo(() => availableLeaves.map(l => ({ value: l.id, label: `سریال ${l.checkNumber}` })), [availableLeaves]);
+    return checkbooks
+      .filter(cb => !cb.deletedAt)
+      .map(cb => {
+        const acc = accounts.find(a => String(a.id) === String(cb.accountId));
+        const bankName = acc?.bankName || cb.bankName || 'حساب بانکی';
+        const accNo = acc?.accountNumber ? ` (حساب: ${acc.accountNumber})` : '';
+        const blankCount = allChecks.filter(c => String(c.checkbookId) === String(cb.id) && (!c.status || c.status === 'blank')).length;
+        return { 
+          value: String(cb.id), 
+          label: `${bankName}${accNo} | برگه‌های ${cb.startNumber} تا ${cb.endNumber} (${blankCount} برگ سفید)`
+        };
+      });
+  }, [checkbooks, accounts, allChecks]);
+  const leafOptions = useMemo(() => availableLeaves.map(l => ({ value: String(l.id), label: `برگه چک شماره: ${l.checkNumber}` })), [availableLeaves]);
 
   // Set dirty state
   useEffect(() => {
@@ -143,19 +168,32 @@ export default function IssueCheckStandalone() {
       const finalIssueDate = convertToGregorian(issueDate || new Date().toISOString());
       const finalDueDate = convertToGregorian(dueDate);
 
-      await updateIssuedCheck(checkLeafId, {
+      const selectedCb = checkbooks.find(c => String(c.id) === String(checkbookId));
+      const checkPayload = {
         payeeId,
         payeeName, 
         amount: Number(amount),
-        checkbookId,
+        checkbookId: String(checkbookId),
+        bankAccountId: selectedCb?.accountId ? String(selectedCb.accountId) : undefined,
         checkNumber,
-        sayadId,
+        sayadId: sayadId || '0000000000000000',
         issueDate: finalIssueDate,
         dueDate: finalDueDate,
         reason,
         description,
         status: status
-      });
+      };
+
+      let activeLeafId = checkLeafId;
+      if (checkLeafId) {
+        await updateIssuedCheck(String(checkLeafId), checkPayload);
+      } else {
+        const created = await addIssuedCheck(checkPayload);
+        if (created?.id) {
+          activeLeafId = String(created.id);
+          setCheckLeafId(activeLeafId);
+        }
+      }
 
       if (status === "issued") {
         const person = persons.find(p => String(p.id) === String(payeeId)) || { name: payeeName };
@@ -302,19 +340,18 @@ export default function IssueCheckStandalone() {
 
               <div className="space-y-2">
                 <label className="text-sm font-bold text-slate-700 flex items-center gap-1">
-                  دسته‌چک <span className="text-rose-500">*</span>
+                  دسته‌چک بانکی <span className="text-rose-500">*</span>
                 </label>
                 <Select
-                  isDisabled={!payeeId}
                   options={checkbookOptions}
-                  value={checkbookOptions.find(opt => opt.value === checkbookId) || null}
+                  value={checkbookOptions.find(opt => String(opt.value) === String(checkbookId)) || null}
                   onChange={(val: any) => {
                      setCheckbookId(val?.value || '');
                      setCheckLeafId(''); 
                      setCheckNumber('');
                      if (errors.checkbookId) setErrors(prev => ({...prev, checkbookId: ''}));
                   }}
-                  placeholder="ابتدا شخص را انتخاب کنید..."
+                  placeholder="انتخاب دسته‌چک بانکی..."
                   className="font-sans"
                   menuPortalTarget={document.body}
                   styles={{
@@ -334,14 +371,21 @@ export default function IssueCheckStandalone() {
               </div>
 
               <div className="space-y-2">
-                <label className="text-sm font-bold text-slate-700">برگ چک (سفید) <span className="text-rose-500">*</span></label>
+                <div className="flex items-center justify-between">
+                  <label className="text-sm font-bold text-slate-700">برگ چک (سفید) <span className="text-rose-500">*</span></label>
+                  {checkbookId && availableLeaves.length > 0 && (
+                    <span className="text-xs font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full">
+                      {availableLeaves.length} برگ سفید
+                    </span>
+                  )}
+                </div>
                 <Select
                   isDisabled={!checkbookId}
                   options={leafOptions}
-                  value={leafOptions.find(opt => opt.value === checkLeafId) || null}
+                  value={leafOptions.find(opt => String(opt.value) === String(checkLeafId)) || null}
                   onChange={(val: any) => {
                      setCheckLeafId(val?.value || '');
-                     const leaf = availableLeaves.find(l => l.id === val?.value);
+                     const leaf = availableLeaves.find(l => String(l.id) === String(val?.value));
                      setCheckNumber(leaf ? leaf.checkNumber : '');
                      if (errors.checkLeafId) setErrors(prev => ({...prev, checkLeafId: ''}));
                   }}
@@ -363,7 +407,26 @@ export default function IssueCheckStandalone() {
                 />
                 {errors.checkLeafId && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.checkLeafId}</p>}
                 {checkbookId && availableLeaves.length === 0 && (
-                    <p className="text-xs text-amber-500 flex items-center gap-1 mt-1"><Info className="w-3 h-3"/> برگ سفیدی موجود نیست.</p>
+                  <div className="flex items-center justify-between p-2.5 bg-amber-50 rounded-xl border border-amber-200 mt-2">
+                    <p className="text-xs text-amber-700 flex items-center gap-1 font-bold">
+                      <Info className="w-3.5 h-3.5 shrink-0"/> هیچ برگ چک سفیدی برای این دسته چک یافت نشد.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setLoading(true);
+                        try {
+                          await ensureCheckbookLeaves(checkbookId);
+                          await load();
+                        } catch (_) {}
+                        finally { setLoading(false); }
+                      }}
+                      className="px-2.5 py-1 bg-amber-600 hover:bg-amber-700 text-white rounded-lg text-[11px] font-bold cursor-pointer transition-colors flex items-center gap-1"
+                    >
+                      <RefreshCw className="w-3 h-3" />
+                      تولید برگه‌های سفید
+                    </button>
+                  </div>
                 )}
               </div>
             </div>
