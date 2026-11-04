@@ -1,10 +1,10 @@
 import React, { useState, useEffect, useMemo } from "react";
-import { updateIssuedCheck, addIssuedCheck, getIssuedChecks, getCheckbooks, getPersons, getAccounts, ensureCheckbookLeaves } from "../../services/dataService";
+import { updateIssuedCheck, addIssuedCheck, getIssuedChecks, getCheckbooks, getPersons, getAccounts, ensureCheckbookLeaves, generateDocNumber } from "../../services/dataService";
 import { getStoreSettings } from "../../services/settingsService";
 import { addTransaction } from "../../services/invoiceService";
 import { convertToGregorian, formatDateDisplay } from "../../utils/format";
 import { motion, AnimatePresence } from "framer-motion";
-import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp, Edit3, RefreshCw } from "lucide-react";
+import { CheckCircle, Building2, User, CreditCard, Save, Calendar, Paperclip, UploadCloud, FileText, AlertCircle, Plus, Info, X, ChevronDown, ChevronUp, Edit3, RefreshCw, Zap, Clock, ArrowLeft } from "lucide-react";
 import Select from "react-select";
 import CreatableSelect from "react-select/creatable";
 import CurrencyInput from "../common/CurrencyInput";
@@ -22,6 +22,7 @@ export default function IssueCheckStandalone() {
   const [payeeId, setPayeeId] = useState("");
   const [checkbookId, setCheckbookId] = useState("");
   const [showConfirmModal, setShowConfirmModal] = useState(false);
+  const [confirmModalAction, setConfirmModalAction] = useState<"issued" | "issued_and_next">("issued");
   const [checkLeafId, setCheckLeafId] = useState("");
   const [checkNumber, setCheckNumber] = useState("");
   
@@ -37,6 +38,7 @@ export default function IssueCheckStandalone() {
   const [isDirty, setIsDirty] = useState(false);
   const [loading, setLoading] = useState(false);
   const [success, setSuccess] = useState(false);
+  const [successMessage, setSuccessMessage] = useState("");
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [submitError, setSubmitError] = useState("");
   const [showPreviewMobile, setShowPreviewMobile] = useState(false);
@@ -148,15 +150,28 @@ export default function IssueCheckStandalone() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const confirmSave = () => {
+  const confirmSave = (action: "issued" | "issued_and_next" = "issued") => {
     if (!validateForm()) {
       setSubmitError("لطفاً خطاهای فرم را برطرف کنید.");
       return;
     }
+    setConfirmModalAction(action);
     setShowConfirmModal(true);
   };
 
-  const handleSave = async (status: "issued" | "draft") => {
+  const setQuickDueDate = (days: number) => {
+    try {
+      const base = issueDate ? new Date(issueDate) : new Date();
+      const target = new Date(base.getTime() + days * 24 * 60 * 60 * 1000);
+      const y = target.getFullYear();
+      const m = String(target.getMonth() + 1).padStart(2, '0');
+      const d = String(target.getDate()).padStart(2, '0');
+      setDueDate(`${y}-${m}-${d}`);
+      if (errors.dueDate) setErrors(prev => ({ ...prev, dueDate: '' }));
+    } catch (_) {}
+  };
+
+  const handleSave = async (status: "issued" | "draft", andNextLeaf: boolean = false) => {
     setSubmitError("");
     setSuccess(false);
 
@@ -171,7 +186,16 @@ export default function IssueCheckStandalone() {
       const finalDueDate = convertToGregorian(dueDate);
 
       const selectedCb = checkbooks.find(c => String(c.id) === String(checkbookId));
-      const checkPayload = {
+      
+      // Fast single-pass receipt number generation upfront
+      let receiptNumber: string | undefined = undefined;
+      if (status === "issued") {
+        try {
+          receiptNumber = await generateDocNumber('pay_receipt');
+        } catch (_) {}
+      }
+
+      const checkPayload: any = {
         payeeId,
         payeeName, 
         amount: Number(amount),
@@ -183,58 +207,102 @@ export default function IssueCheckStandalone() {
         dueDate: finalDueDate,
         reason,
         description,
-        status: status
+        status: status,
+        ...(receiptNumber ? { receiptNumber } : {})
       };
 
-      let activeLeafId = checkLeafId;
-      if (checkLeafId) {
-        await updateIssuedCheck(String(checkLeafId), checkPayload);
+      const activeLeafId = checkLeafId;
+      const person = persons.find(p => String(p.id) === String(payeeId)) || { name: payeeName };
+
+      // Concurrently execute check update and payment transaction creation
+      const tasks: Promise<any>[] = [];
+
+      if (activeLeafId) {
+        tasks.push(updateIssuedCheck(String(activeLeafId), checkPayload));
       } else {
-        const created = await addIssuedCheck(checkPayload);
-        if (created?.id) {
-          activeLeafId = String(created.id);
-          setCheckLeafId(activeLeafId);
-        }
+        tasks.push(addIssuedCheck(checkPayload));
       }
 
       if (status === "issued") {
-        const person = persons.find(p => String(p.id) === String(payeeId)) || { name: payeeName };
-        const savedTx = await addTransaction({
-          type: "pay",
-          method: "check",
-          personId: payeeId,
-          amount: Number(amount),
-          date: finalIssueDate,
-          description: description || `پرداخت چک به شماره ${checkNumber} در وجه ${person.name || 'نامشخص'}`,
-          checkNumber: checkNumber,
-          checkDueDate: finalDueDate,
-          checkbookId: checkbookId,
-          sourceType: "check_issued",
-          sourceId: checkLeafId
-        });
-        
-        if (savedTx && savedTx.receiptNumber) {
-           await updateIssuedCheck(checkLeafId, { receiptNumber: savedTx.receiptNumber });
-        }
+        tasks.push(
+          addTransaction({
+            type: "pay",
+            method: "check",
+            personId: payeeId,
+            amount: Number(amount),
+            date: finalIssueDate,
+            description: description || `پرداخت چک به شماره ${checkNumber} در وجه ${person.name || 'نامشخص'}`,
+            checkNumber: checkNumber,
+            checkDueDate: finalDueDate,
+            checkbookId: checkbookId,
+            sourceType: "check_issued",
+            sourceId: activeLeafId,
+            receiptNumber: receiptNumber
+          })
+        );
       }
+
+      await Promise.all(tasks);
+
+      // Optimistically update allChecks in memory without blocking on network
+      setAllChecks(prev => prev.map(c => {
+        if (String(c.id) === String(activeLeafId)) {
+          return { ...c, ...checkPayload, status };
+        }
+        return c;
+      }));
+
+      // Trigger background silent refresh to guarantee backend consistency
+      getIssuedChecks().then(res => {
+        const list = Array.isArray(res) ? res : (res?.data || []);
+        if (list.length > 0) setAllChecks(list);
+      }).catch(() => {});
+
       setSuccess(true);
       setIsDirty(false);
-      
-      await load();
-      
-      setTimeout(() => {
-        setPayeeId("");
-        setCheckbookId("");
-        setCheckLeafId("");
-        setCheckNumber("");
+
+      if (andNextLeaf) {
+        // Find next blank leaf in the current checkbook
+        const remainingLeaves = availableLeaves.filter(l => String(l.id) !== String(activeLeafId));
+        setSuccessMessage(`چک شماره ${checkNumber} با موفقیت ثبت شد. برگه بعدی آماده ورود اطلاعات است.`);
+        
+        // Reset form inputs for next check but keep checkbook and issue date
         setAmount("");
-        setSayadId("");
         setDueDate("");
-        setPayeeName("");
         setReason("");
         setDescription("");
-        setSuccess(false);
-      }, 3000);
+        
+        if (remainingLeaves.length > 0) {
+          const nextLeaf = remainingLeaves[0];
+          setCheckLeafId(String(nextLeaf.id));
+          setCheckNumber(nextLeaf.checkNumber || '');
+          setSayadId(nextLeaf.sayadId && nextLeaf.sayadId !== '0000000000000000' ? nextLeaf.sayadId : '');
+        } else {
+          setCheckLeafId("");
+          setCheckNumber("");
+          setSayadId("");
+        }
+
+        setTimeout(() => {
+          setSuccess(false);
+          setSuccessMessage("");
+        }, 3000);
+      } else {
+        setSuccessMessage(`چک شماره ${checkNumber} با موفقیت صادر و ثبت شد.`);
+        setTimeout(() => {
+          setPayeeId("");
+          setCheckLeafId("");
+          setCheckNumber("");
+          setAmount("");
+          setSayadId("");
+          setDueDate("");
+          setPayeeName("");
+          setReason("");
+          setDescription("");
+          setSuccess(false);
+          setSuccessMessage("");
+        }, 1200);
+      }
     } catch (err: any) {
       setSubmitError(err.message || "خطا در ثبت چک");
     } finally {
@@ -254,9 +322,6 @@ export default function IssueCheckStandalone() {
     setPayeeId(newPersonId);
     
     if (!newPersonId) {
-       setCheckbookId('');
-       setCheckLeafId('');
-       setCheckNumber('');
        setPayeeName('');
     } else {
        const person = persons.find(p => p.id === newPersonId);
@@ -264,6 +329,35 @@ export default function IssueCheckStandalone() {
     }
     
     if (errors.payeeId) setErrors(prev => ({...prev, payeeId: ''}));
+  };
+
+  const handleCheckbookChange = (val: any) => {
+    const selectedCbId = val?.value || '';
+    setCheckbookId(selectedCbId);
+    
+    if (selectedCbId) {
+      // Auto-select the first available blank leaf in this checkbook
+      const leaves = allChecks
+        .filter(c => String(c.checkbookId) === String(selectedCbId) && (!c.status || c.status === 'blank'))
+        .sort((a, b) => Number(a.checkNumber) - Number(b.checkNumber));
+      
+      if (leaves.length > 0) {
+        setCheckLeafId(String(leaves[0].id));
+        setCheckNumber(leaves[0].checkNumber || '');
+        if (leaves[0].sayadId && leaves[0].sayadId !== '0000000000000000') {
+          setSayadId(leaves[0].sayadId);
+        }
+      } else {
+        setCheckLeafId('');
+        setCheckNumber('');
+      }
+    } else {
+      setCheckLeafId('');
+      setCheckNumber('');
+    }
+
+    if (errors.checkbookId) setErrors(prev => ({...prev, checkbookId: ''}));
+    if (errors.checkLeafId) setErrors(prev => ({...prev, checkLeafId: ''}));
   };
 
   return (
@@ -287,14 +381,14 @@ export default function IssueCheckStandalone() {
           <AnimatePresence>
             {success && (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-4 bg-emerald-50 border border-emerald-200 text-emerald-800 rounded-2xl flex items-center gap-3">
-                <CheckCircle className="w-6 h-6 text-emerald-500" />
-                <span className="font-bold">چک با موفقیت صادر و ثبت شد.</span>
+                <CheckCircle className="w-6 h-6 text-emerald-500 shrink-0" />
+                <span className="font-bold">{successMessage || "چک با موفقیت صادر و ثبت شد."}</span>
               </motion.div>
             )}
             
             {submitError && (
               <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -10 }} className="p-4 bg-rose-50 border border-rose-200 text-rose-800 rounded-2xl flex items-center gap-3">
-                <AlertCircle className="w-6 h-6 text-rose-500" />
+                <AlertCircle className="w-6 h-6 text-rose-500 shrink-0" />
                 <span className="font-bold">{submitError}</span>
               </motion.div>
             )}
@@ -347,12 +441,7 @@ export default function IssueCheckStandalone() {
                 <Select
                   options={checkbookOptions}
                   value={checkbookOptions.find(opt => String(opt.value) === String(checkbookId)) || null}
-                  onChange={(val: any) => {
-                     setCheckbookId(val?.value || '');
-                     setCheckLeafId(''); 
-                     setCheckNumber('');
-                     if (errors.checkbookId) setErrors(prev => ({...prev, checkbookId: ''}));
-                  }}
+                  onChange={handleCheckbookChange}
                   placeholder="انتخاب دسته‌چک بانکی..."
                   className="font-sans"
                   menuPortalTarget={document.body}
@@ -386,9 +475,13 @@ export default function IssueCheckStandalone() {
                   options={leafOptions}
                   value={leafOptions.find(opt => String(opt.value) === String(checkLeafId)) || null}
                   onChange={(val: any) => {
-                     setCheckLeafId(val?.value || '');
-                     const leaf = availableLeaves.find(l => String(l.id) === String(val?.value));
+                     const selectedId = val?.value || '';
+                     setCheckLeafId(selectedId);
+                     const leaf = availableLeaves.find(l => String(l.id) === String(selectedId));
                      setCheckNumber(leaf ? leaf.checkNumber : '');
+                     if (leaf?.sayadId && leaf.sayadId !== '0000000000000000') {
+                       setSayadId(leaf.sayadId);
+                     }
                      if (errors.checkLeafId) setErrors(prev => ({...prev, checkLeafId: ''}));
                   }}
                   placeholder={!checkbookId ? "ابتدا دسته‌چک را انتخاب کنید..." : "انتخاب از برگ‌های سفید..."}
@@ -520,6 +613,33 @@ export default function IssueCheckStandalone() {
                    </div>
                 </div>
                 {errors.dueDate && <p className="text-xs text-rose-500 flex items-center gap-1 mt-1"><AlertCircle className="w-3 h-3"/> {errors.dueDate}</p>}
+                
+                {/* Fast One-Click Due Date Shortcuts */}
+                <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                  <span className="text-[11px] text-slate-400 font-bold ml-1 flex items-center gap-0.5">
+                    <Clock className="w-3 h-3 text-indigo-400" />
+                    انتخاب سریع:
+                  </span>
+                  {[
+                    { label: "امروز", days: 0 },
+                    { label: "+۱۵ روز", days: 15 },
+                    { label: "+۳۰ روز (۱ ماه)", days: 30 },
+                    { label: "+۴۵ روز", days: 45 },
+                    { label: "+۶۰ روز (۲ ماه)", days: 60 },
+                    { label: "+۹۰ روز (۳ ماه)", days: 90 },
+                    { label: "+۱۸۰ روز (۶ ماه)", days: 180 },
+                  ].map(btn => (
+                    <button
+                      key={btn.days}
+                      type="button"
+                      disabled={!checkLeafId}
+                      onClick={() => setQuickDueDate(btn.days)}
+                      className="text-[11px] px-2 py-0.5 rounded-lg bg-indigo-50 hover:bg-indigo-100 text-indigo-700 font-bold transition-all border border-indigo-100 active:scale-95 disabled:opacity-40 disabled:pointer-events-none cursor-pointer"
+                    >
+                      {btn.label}
+                    </button>
+                  ))}
+                </div>
               </div>
 
               <div className="space-y-2 md:col-span-2">
@@ -612,23 +732,35 @@ export default function IssueCheckStandalone() {
           </section>
 
           {/* Action Buttons */}
-          <div className="flex flex-col sm:flex-row items-center justify-end gap-4 pt-4">
+          <div className="flex flex-col sm:flex-row items-center justify-end gap-3 pt-4">
              <button
                type="button"
                onClick={() => handleSave("draft")}
                disabled={loading || !checkLeafId}
-               className="w-full sm:w-auto px-8 py-4 rounded-2xl font-bold text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
+               className="w-full sm:w-auto px-6 py-3.5 rounded-2xl font-bold text-slate-700 bg-white border-2 border-slate-200 hover:bg-slate-50 hover:border-slate-300 transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 text-sm cursor-pointer"
              >
-               <Save className="w-5 h-5" />
+               <Save className="w-4 h-4 text-slate-500" />
                ذخیره پیش‌نویس
              </button>
+             
              <button
                type="button"
-               onClick={confirmSave}
+               onClick={() => confirmSave("issued_and_next")}
                disabled={loading || !checkLeafId}
-               className="w-full sm:w-auto px-10 py-4 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_8px_20px_rgb(79,70,229,0.3)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95"
+               className="w-full sm:w-auto px-6 py-3.5 rounded-2xl font-bold text-amber-900 bg-amber-400 hover:bg-amber-500 shadow-sm transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 text-sm cursor-pointer"
+               title="چک فعلی را صادر می‌کند و بلافاصله برگه بعدی همین دسته‌چک را آماده صدور می‌کند"
              >
-               <CheckCircle className="w-5 h-5" />
+               <Zap className="w-4 h-4 fill-amber-900" />
+               ثبت سریع و برگه بعدی
+             </button>
+
+             <button
+               type="button"
+               onClick={() => confirmSave("issued")}
+               disabled={loading || !checkLeafId}
+               className="w-full sm:w-auto px-8 py-3.5 rounded-2xl font-bold text-white bg-indigo-600 hover:bg-indigo-700 shadow-[0_8px_20px_rgb(79,70,229,0.25)] transition-all flex items-center justify-center gap-2 disabled:opacity-50 active:scale-95 text-sm cursor-pointer"
+             >
+               <CheckCircle className="w-4 h-4" />
                {loading ? "در حال ثبت..." : "تأیید و صدور نهایی"}
              </button>
           </div>
@@ -739,18 +871,27 @@ export default function IssueCheckStandalone() {
         <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
           <div className="bg-white rounded-3xl shadow-xl border border-slate-200 p-8 max-w-lg w-full" dir="rtl">
             <h3 className="text-xl font-black text-slate-800 mb-6 flex items-center gap-2">
-              <CheckCircle className="w-6 h-6 text-indigo-500" />
-              تایید نهایی صدور چک
+              {confirmModalAction === "issued_and_next" ? (
+                <>
+                  <Zap className="w-6 h-6 text-amber-500 fill-amber-500" />
+                  تایید صدور و آماده‌سازی برگه بعدی
+                </>
+              ) : (
+                <>
+                  <CheckCircle className="w-6 h-6 text-indigo-500" />
+                  تایید نهایی صدور چک
+                </>
+              )}
             </h3>
             
             <div className="bg-slate-50 p-6 rounded-2xl border border-slate-100 mb-6 space-y-4">
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="text-slate-500">شماره چک:</span>
-                <span className="font-bold text-slate-800">{checkNumber}</span>
+                <span className="font-bold text-slate-800 font-mono">{checkNumber}</span>
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="text-slate-500">مبلغ چک:</span>
-                <span className="font-bold text-slate-800">{Number(amount).toLocaleString('fa-IR')} ریال</span>
+                <span className="font-bold text-slate-800">{Number(amount).toLocaleString('fa-IR')} {currency}</span>
               </div>
               <div className="flex justify-between border-b border-slate-200 pb-2">
                 <span className="text-slate-500">در وجه:</span>
@@ -762,15 +903,17 @@ export default function IssueCheckStandalone() {
               </div>
             </div>
             
-            <p className="text-slate-600 mb-8 text-sm">
-              آیا از صحت اطلاعات فوق اطمینان دارید؟ با تایید نهایی، سند مالی متصل (در صورت لزوم) ایجاد خواهد شد.
+            <p className="text-slate-600 mb-8 text-sm leading-relaxed">
+              {confirmModalAction === "issued_and_next"
+                ? "با تایید، این چک صادر و ثبت مالی می‌شود و بلافاصله برگه چک سفید بعدی در همین دسته‌چک انتخاب خواهد شد تا بتوانید سریعاً چک بعدی را ثبت کنید."
+                : "آیا از صحت اطلاعات فوق اطمینان دارید؟ با تایید نهایی، برگه چک صادر و سند مالی متصل در سیستم ثبت می‌شود."}
             </p>
             
             <div className="flex justify-end gap-3">
               <button 
                 type="button"
                 onClick={() => setShowConfirmModal(false)}
-                className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors"
+                className="px-6 py-2.5 rounded-xl border border-slate-300 text-slate-700 font-bold hover:bg-slate-50 transition-colors cursor-pointer"
                 disabled={loading}
               >
                 انصراف
@@ -779,13 +922,27 @@ export default function IssueCheckStandalone() {
                 type="button"
                 onClick={() => {
                   setShowConfirmModal(false);
-                  handleSave("issued");
+                  handleSave("issued", confirmModalAction === "issued_and_next");
                 }}
-                className="px-6 py-2.5 rounded-xl bg-indigo-600 text-white font-bold hover:bg-indigo-700 transition-colors shadow-sm flex items-center gap-2"
+                className={`px-6 py-2.5 rounded-xl font-bold transition-all shadow-sm flex items-center gap-2 cursor-pointer ${
+                  confirmModalAction === "issued_and_next" 
+                    ? "bg-amber-500 hover:bg-amber-600 text-slate-900" 
+                    : "bg-indigo-600 hover:bg-indigo-700 text-white"
+                }`}
                 disabled={loading}
               >
-                {loading && <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />}
-                تایید و صدور
+                {loading && <div className="w-4 h-4 border-2 border-current border-t-transparent rounded-full animate-spin" />}
+                {confirmModalAction === "issued_and_next" ? (
+                  <>
+                    <Zap className="w-4 h-4 fill-slate-900" />
+                    تایید و ثبت برگه بعدی
+                  </>
+                ) : (
+                  <>
+                    <CheckCircle className="w-4 h-4" />
+                    تایید و صدور
+                  </>
+                )}
               </button>
             </div>
           </div>

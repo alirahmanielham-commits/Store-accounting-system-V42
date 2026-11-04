@@ -619,12 +619,20 @@ export const updateIssuedCheck = async (id: string, record: any) => {
   }
 
   const updatedData = { ...record, updatedAt: Date.now() };
+  if (activeYear) updatedData.fiscalYearId = activeYear.id;
+
   try {
      const saved = await updateLocalData('issued_checks', id, updatedData);
-     await addCheckAuditLog({ checkId: saved.id, checkType: 'issued', action: 'update', oldValues: previous, newValues: saved, userId: record.userId || 'system' });
+     
+     // Parallelize background tasks (audit log, history log, system log, accounting sync)
+     const sideEffects: Promise<any>[] = [];
+
+     sideEffects.push(
+       addCheckAuditLog({ checkId: saved.id, checkType: 'issued', action: 'update', oldValues: previous, newValues: saved, userId: record.userId || 'system' })
+     );
      
      if (previous && previous.status !== saved.status) {
-       await addCheckHistoryLog({
+       sideEffects.push(addCheckHistoryLog({
          checkId: saved.id,
          checkType: 'issued',
          oldStatus: previous.status,
@@ -633,9 +641,9 @@ export const updateIssuedCheck = async (id: string, record: any) => {
          userId: record.userId || 'system',
          transactionId: record.transactionId !== undefined ? record.transactionId : saved.transactionId,
          receiptNumber: record.receiptNumber !== undefined ? record.receiptNumber : saved.receiptNumber
-       });
+       }));
      } else if (!previous && record.status) {
-       await addCheckHistoryLog({
+       sideEffects.push(addCheckHistoryLog({
          checkId: saved.id,
          checkType: 'issued',
          oldStatus: record.oldStatus || undefined,
@@ -644,15 +652,17 @@ export const updateIssuedCheck = async (id: string, record: any) => {
          userId: record.userId || 'system',
          transactionId: record.transactionId !== undefined ? record.transactionId : saved.transactionId,
          receiptNumber: record.receiptNumber !== undefined ? record.receiptNumber : saved.receiptNumber
-       });
+       }));
      }
 
      if (typeof addSystemLog !== 'undefined') {
-       await addSystemLog('UPDATE_' + 'IssuedCheck'.toUpperCase(), 'ویرایش رکورد در issued_checks', 'IssuedCheck', saved.id);
+       sideEffects.push(addSystemLog('UPDATE_' + 'IssuedCheck'.toUpperCase(), 'ویرایش رکورد در issued_checks', 'IssuedCheck', saved.id));
      }
-     if (saved) {
-       await syncCheckAccountingDocument('issued', saved, previous);
+     if (saved && saved.status !== 'blank' && Number(saved.amount) > 0) {
+       sideEffects.push(syncCheckAccountingDocument('issued', saved, previous));
      }
+
+     await Promise.all(sideEffects);
      return saved;
   } catch (e) {
      throw e;
@@ -1696,6 +1706,9 @@ export const executeFiscalYearClosing = async (
 };
 
 export const syncCheckAccountingDocument = async (checkType: 'issued' | 'received', check: any, previousCheck?: any) => {
+  if (!check || check.status === 'blank' || !check.amount || Number(check.amount) <= 0) {
+    return;
+  }
   try {
     const ledgerAccounts = await getLedgerAccounts();
     const defaultLedger = ledgerAccounts.length > 0 ? ledgerAccounts[0].id : '';
