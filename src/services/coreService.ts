@@ -241,7 +241,12 @@ export const saveLocalData = async <T>(key: string, data: T, retries = 3): Promi
       let errText = 'خطا در ذخیره‌سازی داده‌ها در سرور';
       try {
         const errJson = await res.json();
-        errText = errJson.error || errJson.message || errText;
+        if (errJson.details && Array.isArray(errJson.details)) {
+          const detailMsgs = errJson.details.map((d: any) => `${d.path?.join('.') || ''}: ${d.message}`).join(', ');
+          errText = `${errJson.error || ''} (${detailMsgs})`;
+        } else {
+          errText = errJson.error || errJson.message || errText;
+        }
       } catch (_) {}
       throw new Error(errText);
     }

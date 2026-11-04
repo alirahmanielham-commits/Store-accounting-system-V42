@@ -246,7 +246,14 @@ export const ensureCheckbookLeaves = async (checkbookId?: string) => {
   }
 
   if (changed) {
-    await saveLocalData('issued_checks', issuedChecks);
+    const sanitizedChecks = issuedChecks.map((c: any) => ({
+      ...c,
+      checkNumber: String(c.checkNumber || '').trim() || '0',
+      sayadId: c.sayadId ? String(c.sayadId).trim() : '0000000000000000',
+      amount: Number(c.amount) || 0,
+      status: c.status || 'blank',
+    }));
+    await saveLocalData('issued_checks', sanitizedChecks);
   }
   return issuedChecks;
 };
@@ -323,7 +330,14 @@ export const addCheckbook = async (record: any) => {
              fiscalYearId: activeYear ? activeYear.id : undefined
          });
      }
-     await saveLocalData('issued_checks', issuedChecks);
+     const sanitizedChecks = issuedChecks.map((c: any) => ({
+       ...c,
+       checkNumber: String(c.checkNumber || '').trim() || '0',
+       sayadId: c.sayadId ? String(c.sayadId).trim() : '0000000000000000',
+       amount: Number(c.amount) || 0,
+       status: c.status || 'blank',
+     }));
+     await saveLocalData('issued_checks', sanitizedChecks);
   }
 
   if (typeof addSystemLog !== 'undefined') {

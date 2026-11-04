@@ -1658,6 +1658,7 @@ router.post('/api/data/:key', async (req, res) => {
     if (key !== 'system_logs') {
       const validationResult = validateData(key, data);
       if (!validationResult.success) {
+        console.error(`[Validation Error] Key "${key}":`, JSON.stringify((validationResult as any).error?.errors, null, 2));
         return res.status(400).json({ error: 'Validation failed', details: (validationResult as any).error?.errors });
       }
     }
