@@ -50,6 +50,8 @@ export default function ProductsTab(props: any) {
     isProductActionsMenuOpen,
     setIsFastProductModalOpen,
     setEditingProductId,
+    setPricingWizardInvoice,
+    setPricingWizardItems,
     ...rest
   } = props;
   
@@ -60,6 +62,69 @@ export default function ProductsTab(props: any) {
   } = lucide;
 
   const [openDropdownId, setOpenDropdownId] = useState<string | number | null>(null);
+
+  const handleOpenPricingWizardForProducts = (targetProducts?: any[]) => {
+    let listToOpen: any[] = [];
+    if (targetProducts && targetProducts.length > 0) {
+      listToOpen = targetProducts;
+    } else if (selectedProductIds && selectedProductIds.length > 0) {
+      listToOpen = (products || []).filter((p: any) => selectedProductIds.includes(p.id));
+    } else {
+      const filtered = (products || []).filter((p: any) => {
+        const matchString = (
+          (p.name || '') + " " + (p.code || "") + " " + (p.barcode || "") + " " + (p.description || "")
+        ).toLowerCase();
+        const matchesSearch = matchString.includes((productSearchTerm || "").toLowerCase());
+        const matchesCat = selectedProductCategory === "all" || p.categoryId?.toString() === selectedProductCategory.toString();
+        return matchesSearch && matchesCat;
+      });
+      listToOpen = filtered.slice(0, 50);
+    }
+
+    if (!listToOpen || listToOpen.length === 0) {
+      if (showNotification) showNotification('لطفاً حداقل یک کالا را انتخاب کنید.', 'error');
+      return;
+    }
+
+    const wizardItems = listToOpen.map((prod: any) => {
+      const prodDir = prod?.unitRatioDirection || 'multiply';
+      const purchaseP = Math.round(Number(prod.purchasePrice || prod.buyPrice || 0));
+      const saleP = Math.round(Number(prod.price || prod.sellPrice || 0));
+      const marginP = purchaseP > 0 && saleP > 0 
+        ? Math.round(((saleP - purchaseP) / purchaseP) * 100) 
+        : 0;
+
+      return {
+        productId: prod.id,
+        productName: prod.name,
+        purchasePrice: purchaseP,
+        originalUnitPrice: purchaseP,
+        isSecondaryUnit: false,
+        invoiceUnit: prod.unit || 'واحد اصلی',
+        mainUnit: prod.unit || 'عدد',
+        secondaryUnit: prod.secondaryUnit || prod.subUnit || '',
+        unitRatio: prod.unitRatio || 1,
+        unitRatioDirection: prodDir,
+        marginPercent: marginP,
+        salePrice: saleP,
+      };
+    });
+
+    const setWItems = props.setPricingWizardItems || setPricingWizardItems;
+    const setWInvoice = props.setPricingWizardInvoice || setPricingWizardInvoice;
+
+    if (setWItems && setWInvoice) {
+      setWItems(wizardItems);
+      setWInvoice({
+        id: 'selected_products',
+        invoiceNumber: 'کالاهای منتخب',
+        isCustomSelection: true,
+        date: new Date().toISOString()
+      });
+    } else {
+      if (showNotification) showNotification('خطا در بارگذاری پنجره قیمت‌گذاری', 'error');
+    }
+  };
 
   const handleExportFilteredProductsExcel = () => {
     try {
@@ -145,21 +210,36 @@ export default function ProductsTab(props: any) {
                       </div>
                       <div className="flex flex-wrap items-center gap-2">
 {selectedProductIds.length > 0 && (
-  <div className="flex items-center gap-2 bg-indigo-50 px-3 py-1.5 rounded-xl border border-indigo-100 mr-2">
-    <span className="text-sm font-bold text-indigo-700">{toPersianDigits(selectedProductIds.length)} مورد انتخاب شده:</span>
+  <div className="flex flex-wrap items-center gap-2 bg-indigo-50/90 px-3.5 py-1.5 rounded-2xl border border-indigo-200/80 mr-2 shadow-xs">
+    <span className="text-xs font-black text-indigo-900 flex items-center gap-1.5">
+      <CheckCircle className="w-4 h-4 text-indigo-600" />
+      {toPersianDigits(selectedProductIds.length)} کالا انتخاب شده:
+    </span>
     <button
-      onClick={() => setIsGroupPriceModalOpen(true)}
-      className="px-3 py-1.5 bg-white hover:bg-indigo-100 text-indigo-600 rounded-lg flex items-center gap-2 transition-colors text-sm font-bold border border-indigo-200 shadow-sm"
+      type="button"
+      onClick={() => handleOpenPricingWizardForProducts()}
+      className="px-3.5 py-1.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl flex items-center gap-1.5 transition-all text-xs font-black shadow-sm hover:shadow-indigo-500/20 active:scale-95 cursor-pointer"
+      title="تغییر قیمت فروش، محاسبه حاشیه سود و چاپ بارکد یا لیست قیمت مشابه فاکتور خرید"
     >
-      <Tag className="w-4 h-4" />
-      تغییر قیمت
+      <Tag className="w-3.5 h-3.5" />
+      <span>تغییر قیمت و چاپ</span>
+      <Printer className="w-3.5 h-3.5 opacity-80" />
     </button>
     <button
+      type="button"
       onClick={() => setPrintingBarcodeProduct(products.filter(p => selectedProductIds.includes(p.id)))}
-      className="px-3 py-1.5 bg-white hover:bg-indigo-100 text-indigo-600 rounded-lg flex items-center gap-2 transition-colors text-sm font-bold border border-indigo-200 shadow-sm"
+      className="px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl flex items-center gap-1.5 transition-colors text-xs font-bold border border-slate-200 shadow-xs cursor-pointer"
     >
-      <Printer className="w-4 h-4" />
-      چاپ بارکد
+      <Barcode className="w-3.5 h-3.5 text-slate-500" />
+      چاپ سریع بارکد
+    </button>
+    <button
+      type="button"
+      onClick={() => setSelectedProductIds([])}
+      className="p-1.5 text-slate-400 hover:text-slate-600 hover:bg-indigo-100/60 rounded-lg transition-colors cursor-pointer"
+      title="لغو انتخاب‌ها"
+    >
+      <X className="w-3.5 h-3.5" />
     </button>
   </div>
 )}
@@ -182,6 +262,16 @@ export default function ProductsTab(props: any) {
                                 exit={{ opacity: 0, y: 10 }}
                                 className="absolute top-full right-0 mt-2 w-64 bg-white rounded-xl shadow-xl border border-slate-100 py-2 z-50 overflow-hidden"
                               >
+                                <button
+                                  onClick={() => {
+                                    setIsProductActionsMenuOpen(false);
+                                    handleOpenPricingWizardForProducts();
+                                  }}
+                                  className="w-full px-4 py-2.5 text-right text-sm text-indigo-700 hover:bg-indigo-50 transition-colors flex items-center gap-2 font-bold border-b border-slate-100 mb-1"
+                                >
+                                  <Tag className="w-4 h-4 text-indigo-600" />
+                                  تغییر قیمت و چاپ {selectedProductIds.length > 0 ? `(${toPersianDigits(selectedProductIds.length)} کالا)` : 'کالاهای جاری'}
+                                </button>
                                 <button
                                   onClick={() => {
                                     handleExportProductsData();
@@ -763,6 +853,16 @@ export default function ProductsTab(props: any) {
                                           </button>
                                           <div className={`absolute left-4 mt-2 w-48 origin-top-left rounded-xl bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none transition-all z-50 ${openDropdownId === p.id ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
                                             <div className="py-1">
+                                              <button
+                                                onClick={() => {
+                                                  setOpenDropdownId(null);
+                                                  handleOpenPricingWizardForProducts([p]);
+                                                }}
+                                                className="text-indigo-700 font-bold group/item flex w-full items-center px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-800 transition-colors text-right border-b border-slate-100"
+                                              >
+                                                <Tag className="ml-3 h-4 w-4 text-indigo-500 group-hover/item:text-indigo-700" aria-hidden="true" />
+                                                تغییر قیمت و چاپ
+                                              </button>
                                               <button
                                                 onClick={() => {
                                                   setViewingProduct(p);

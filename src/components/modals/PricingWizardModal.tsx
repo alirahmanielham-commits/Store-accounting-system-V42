@@ -89,16 +89,20 @@ export default function PricingWizardModal(props: any) {
       for (const item of pricingWizardItems) {
         const p = products.find((prod: any) => String(prod.id) === String(item.productId));
         if (p) {
+          const newSale = Number(item.salePrice) || 0;
+          const newBuy = Number(item.purchasePrice) || 0;
           await updateProduct(p.id.toString(), {
             ...p,
-            price: Number(item.salePrice) || 0,
-            purchasePrice: Number(item.purchasePrice) || 0,
+            price: newSale,
+            sellPrice: newSale,
+            purchasePrice: newBuy,
+            buyPrice: newBuy,
             priceChangeDate: pricingWizardInvoice?.date || new Date().toISOString(),
           });
         }
       }
       await fetchProducts();
-      setSuccessMsg("قیمت‌های خرید و فروش کالاها بر اساس واحد اصلی با موفقیت ذخیره شدند.");
+      setSuccessMsg("قیمت‌های فروش و خرید کالاها با موفقیت در سیستم بروزرسانی شدند.");
 
       if (shouldPrint) {
         setPricingPrintMode(shouldPrint);
@@ -245,14 +249,18 @@ export default function PricingWizardModal(props: any) {
                 <div>
                   <div className="flex items-center gap-2">
                     <h3 className="font-extrabold text-slate-800 text-lg">
-                      قیمت‌گذاری و چاپ بارکد کالاها
+                      {pricingWizardInvoice?.isCustomSelection
+                        ? "تغییر قیمت فروش و چاپ کالاهای انتخابی"
+                        : "قیمت‌گذاری و چاپ بارکد کالاها"}
                     </h3>
                     <span className="text-[11px] font-black px-2.5 py-0.5 rounded-full bg-emerald-100 text-emerald-800 border border-emerald-200">
                       مبنا: واحد اصلی
                     </span>
                   </div>
                   <p className="text-xs font-bold text-slate-500 mt-0.5">
-                    فاکتور خرید شماره {toPersianDigits(pricingWizardInvoice?.invoiceNumber || pricingWizardInvoice?.id || "")} • کلیه قیمت‌ها و بارکدها بر اساس واحد اصلی ثبت می‌شوند
+                    {pricingWizardInvoice?.isCustomSelection
+                      ? `تعداد ${toPersianDigits(pricingWizardItems.length)} کالای انتخاب‌شده از فهرست کالاها • ثبت تغییرات در سیستم و چاپ بارکد یا لیست قیمت`
+                      : `فاکتور خرید شماره ${toPersianDigits(pricingWizardInvoice?.invoiceNumber || pricingWizardInvoice?.id || "")} • کلیه قیمت‌ها و بارکدها بر اساس واحد اصلی ثبت می‌شوند`}
                   </p>
                 </div>
               </div>
@@ -305,7 +313,9 @@ export default function PricingWizardModal(props: any) {
               <div className="flex items-center gap-2 text-emerald-900 font-bold">
                 <Info className="w-4 h-4 text-emerald-600 shrink-0" />
                 <span>
-                  اگر کالایی در فاکتور با <strong>واحد فرعی</strong> (کارتن، متر و...) ثبت شده باشد، قیمت خرید آن خودکار به <strong>واحد اصلی</strong> (عدد، شاخه و...) تبدیل شده و در کالا و بارکد درج می‌گردد.
+                  {pricingWizardInvoice?.isCustomSelection
+                    ? "قیمت‌های فروش جدید یا درصد سود را تعیین نمایید. با ذخیره، قیمت‌های جدید ثبت شده و می‌توانید برچسب بارکد یا لیست قیمت A4 را بلافاصله چاپ فرمایید."
+                    : "اگر کالایی در فاکتور با واحد فرعی (کارتن، متر و...) ثبت شده باشد، قیمت خرید آن خودکار به واحد اصلی (عدد، شاخه و...) تبدیل شده و در کالا و بارکد درج می‌گردد."}
                 </span>
               </div>
               <div className="flex items-center gap-2">
@@ -805,17 +815,18 @@ export default function PricingWizardModal(props: any) {
               </h2>
               <div className="flex gap-8 text-lg font-bold text-slate-600">
                 <span>
-                  مرجع: فاکتور خرید{" "}
-                  {toPersianDigits(
-                    pricingWizardInvoice?.invoiceNumber || "",
-                  )}
+                  {pricingWizardInvoice?.isCustomSelection
+                    ? `فهرست کالاهای انتخابی: ${toPersianDigits(pricingWizardItems.length)} قلم کالا`
+                    : `مرجع: فاکتور خرید ${toPersianDigits(pricingWizardInvoice?.invoiceNumber || "")}`}
                 </span>
-                <span>
-                  تاریخ فاکتور:{" "}
-                  {formatDateDisplay(
-                    pricingWizardInvoice?.date || pricingWizardInvoice?.jalaliDate,
-                  )}
-                </span>
+                {!pricingWizardInvoice?.isCustomSelection && (
+                  <span>
+                    تاریخ فاکتور:{" "}
+                    {formatDateDisplay(
+                      pricingWizardInvoice?.date || pricingWizardInvoice?.jalaliDate,
+                    )}
+                  </span>
+                )}
                 <span>
                   تاریخ قیمت‌گذاری: {formatDateDisplay(new Date())}
                 </span>
