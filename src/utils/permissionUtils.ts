@@ -94,6 +94,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
     description: 'مشتریان، تامین‌کنندگان، گردش معین و مطالبات',
     items: [
       { id: 'persons', label: 'فهرست اشخاص و طرف‌حساب‌ها', defaultRoles: ['admin', 'manager', 'accountant', 'cashier'] },
+      { id: 'create_person', label: 'ثبت شخص جدید (موبایل و فرم)', defaultRoles: ['admin', 'manager', 'accountant', 'cashier'] },
       { id: 'person_profile', label: 'پروفایل و پرونده شخص', defaultRoles: ['admin', 'manager', 'accountant', 'cashier'] },
       { id: 'person_ledger', label: 'کارت حساب و گردش معین شخص', defaultRoles: ['admin', 'manager', 'accountant'] },
       { id: 'debts_credits', label: 'گزارش بدهکاران و بستانکاران', defaultRoles: ['admin', 'manager', 'accountant'] },

@@ -199,6 +199,10 @@ export default function PersonsManager(props: any) {
   const [rowLoadingId, setRowLoadingId] = useState<string | null>(null);
 
   const handleOpenNewPersonModal = (defaultRole: string = "customer") => {
+    if (typeof window !== "undefined" && window.innerWidth < 768 && setActiveTab) {
+      setActiveTab("create_person");
+      return;
+    }
     setEditingPersonId(null);
     setNewPersonType("real");
     setNewPersonTitle("");
