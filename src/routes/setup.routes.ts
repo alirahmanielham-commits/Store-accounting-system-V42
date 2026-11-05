@@ -569,15 +569,28 @@ router.post('/api/setup/wizard-complete', async (req: any, res) => {
   }
 });
 
-router.get('/api/system/info', requireRole(['admin']), (req, res) => {
+router.get('/api/system/info', requireRole(['admin', 'manager', 'accountant']), (req, res) => {
+    const interfaces = os.networkInterfaces();
+    const networkIps: string[] = [];
+    for (const name of Object.keys(interfaces)) {
+      for (const net of interfaces[name] || []) {
+        if (net.family === 'IPv4' && !net.internal) {
+          networkIps.push(net.address);
+        }
+      }
+    }
+
     res.json({
       platform: os.platform(),
+      hostname: os.hostname(),
       arch: os.arch(),
       totalMem: os.totalmem(),
       freeMem: os.freemem(),
       cpus: os.cpus().length,
       uptime: os.uptime(),
-      nodeVersion: process.version
+      nodeVersion: process.version,
+      port: Number(process.env.PORT) || 3000,
+      networkIps: Array.from(new Set(networkIps))
     });
   });
 

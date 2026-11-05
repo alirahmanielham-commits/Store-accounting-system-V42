@@ -3,1817 +3,558 @@
 <head>
     <meta http-equiv="X-UA-Compatible" content="IE=edge">
     <meta charset="UTF-8">
-    <title>پنل مدیریت و راه‌اندازی سرور حسابداری - Server Management Console</title>
-    <!-- تنظیمات اجرای HTA در ویندوز -->
+    <title>پنل مدیریت و راه‌اندازی سرور حسابداری</title>
     <HTA:APPLICATION
         ID="AccountingServerApp"
         APPLICATIONNAME="AccountingServerManager"
-        SCROLL="no"
+        SCROLL="yes"
         SINGLEINSTANCE="yes"
         WINDOWSTATE="normal"
-        BORDER="dialog"
+        BORDER="thin"
+        NAVIGABLE="yes"
         MAXIMIZEBUTTON="yes"
         MINIMIZEBUTTON="yes"
         SYSMENU="yes"
-        ICON="shell32.dll,22"
-    >
-    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
+    />
     <style>
-        /* Reset & Base Variables */
-        :root {
-            --bg-canvas: #f8fafc;
-            --bg-card: #ffffff;
-            --border-subtle: #e2e8f0;
-            --border-medium: #cbd5e1;
-            --text-main: #0f172a;
-            --text-muted: #64748b;
-            --text-subtle: #94a3b8;
-            --primary: #2563eb;
-            --primary-hover: #1d4ed8;
-            --primary-light: #eff6ff;
-            --success: #059669;
-            --success-hover: #047857;
-            --success-light: #ecfdf5;
-            --danger: #dc2626;
-            --danger-hover: #b91c1c;
-            --danger-light: #fef2f2;
-            --warning: #d97706;
-            --warning-hover: #b45309;
-            --warning-light: #fffbeb;
-            --indigo: #4f46e5;
-            --indigo-light: #eef2ff;
-        }
-
         * {
             box-sizing: border-box;
-            outline: none;
-            -webkit-font-smoothing: antialiased;
-        }
-
-        body, html {
             margin: 0;
             padding: 0;
-            height: 100%;
-            width: 100%;
-            overflow: hidden;
             font-family: 'Vazirmatn', 'IRANYekanXFaNum', 'Segoe UI', Tahoma, Arial, sans-serif;
-            background: #f8fafc;
-            color: #0f172a;
-            direction: rtl;
-            text-align: right;
-            user-select: none;
         }
 
-        /* SVG Icon Utilities */
-        .icon-svg {
-            display: inline-block;
-            vertical-align: middle;
-            width: 18px;
-            height: 18px;
-            stroke-width: 1.8;
-            stroke: currentColor;
-            fill: none;
-            stroke-linecap: round;
-            stroke-linejoin: round;
-            flex-shrink: 0;
-        }
-        .icon-lg {
-            width: 22px;
-            height: 22px;
-        }
-        .icon-sm {
-            width: 15px;
-            height: 15px;
-        }
-
-        /* App Container */
-        .app-layout {
+        body {
+            background-color: #0f172a;
+            color: #f8fafc;
+            min-height: 100vh;
             display: flex;
             flex-direction: column;
-            height: 100%;
-            width: 100%;
-            background: #f8fafc;
+            overflow-x: hidden;
+            font-size: 14px;
         }
 
-        /* Top Header */
-        .header-bar {
-            background: #ffffff;
-            border-bottom: 1px solid #e2e8f0;
-            padding: 12px 24px;
+        .header {
+            background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid #334155;
+            padding: 20px 28px;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.03);
-            z-index: 30;
-            flex-shrink: 0;
         }
 
-        .brand-section {
+        .header-title {
             display: flex;
             align-items: center;
-            gap: 12px;
+            gap: 14px;
         }
-        .brand-avatar {
+
+        .logo-icon {
             width: 44px;
             height: 44px;
-            border-radius: 10px;
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            color: #2563eb;
+            background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+            border-radius: 12px;
             display: flex;
             align-items: center;
             justify-content: center;
+            box-shadow: 0 4px 12px rgba(16, 185, 129, 0.25);
+            font-weight: 900;
+            font-size: 20px;
+            color: #ffffff;
         }
-        .brand-avatar svg {
-            width: 24px;
-            height: 24px;
-        }
-        .brand-info h1 {
-            margin: 0;
-            font-size: 15px;
+
+        .header-text h1 {
+            font-size: 18px;
             font-weight: 800;
-            color: #0f172a;
-            line-height: 1.3;
-        }
-        .brand-info p {
-            margin: 2px 0 0 0;
-            font-size: 11.5px;
-            color: #64748b;
+            color: #f1f5f9;
         }
 
-        /* Status & KPI strip in Header */
-        .header-metrics {
-            display: flex;
-            align-items: center;
-            gap: 12px;
+        .header-text p {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 3px;
         }
 
-        .metric-chip {
-            background: #f8fafc;
-            border: 1px solid #e2e8f0;
-            border-radius: 8px;
-            padding: 5px 12px;
-            display: flex;
-            flex-direction: column;
-            min-width: 115px;
-        }
-        .metric-title {
-            font-size: 10px;
-            font-weight: 600;
-            color: #64748b;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .metric-value {
-            font-size: 12.5px;
-            font-weight: 800;
-            color: #0f172a;
-            direction: ltr;
-            text-align: left;
-            font-family: 'JetBrains Mono', Consolas, monospace;
-            font-variant-numeric: tabular-nums;
-            margin-top: 2px;
-        }
-        .metric-value.online { color: #059669; }
-        .metric-value.offline { color: #dc2626; }
-        .metric-value.highlight { color: #2563eb; }
-
-        .live-status-pill {
+        .status-pill {
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            padding: 7px 14px;
-            border-radius: 8px;
-            font-size: 12px;
-            font-weight: 700;
-            border: 1px solid transparent;
-            transition: all 0.2s;
+            background-color: rgba(30, 41, 59, 0.8);
+            border: 1px solid #334155;
+            padding: 6px 14px;
+            border-radius: 9999px;
+            font-size: 13px;
+            font-weight: 600;
         }
-        .live-status-pill.online {
-            background: #ecfdf5;
-            color: #047857;
-            border-color: #a7f3d0;
-        }
-        .live-status-pill.offline {
-            background: #fef2f2;
-            color: #b91c1c;
-            border-color: #fecaca;
-        }
-        .live-status-pill.busy {
-            background: #fffbeb;
-            color: #b45309;
-            border-color: #fde68a;
-        }
+
         .status-dot {
-            width: 8px;
-            height: 8px;
+            width: 10px;
+            height: 10px;
             border-radius: 50%;
-            background: currentColor;
-            display: inline-block;
+            background-color: #94a3b8;
         }
 
-        .header-actions {
-            display: flex;
-            align-items: center;
-            gap: 8px;
+        .status-dot.online {
+            background-color: #10b981;
+            box-shadow: 0 0 10px #10b981;
         }
 
-        /* Nav Tabs Bar */
-        .navigation-bar {
-            background: #ffffff;
-            border-bottom: 1px solid #e2e8f0;
-            padding: 0 24px;
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            flex-shrink: 0;
-        }
-        .nav-item-btn {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            padding: 12px 16px;
-            font-size: 12.5px;
-            font-weight: 700;
-            color: #64748b;
-            background: transparent;
-            border: none;
-            border-bottom: 2px solid transparent;
-            cursor: pointer;
-            transition: all 0.15s ease-in-out;
-            font-family: inherit;
-        }
-        .nav-item-btn:hover {
-            color: #0f172a;
-            background: #f8fafc;
-        }
-        .nav-item-btn.active {
-            color: #2563eb;
-            border-bottom-color: #2563eb;
-            background: #ffffff;
+        .status-dot.checking {
+            background-color: #f59e0b;
         }
 
-        /* Main Workspace */
-        .workspace-body {
+        .status-dot.offline {
+            background-color: #ef4444;
+        }
+
+        .container {
             flex: 1;
-            overflow-y: auto;
-            padding: 20px 24px;
-            background: #f8fafc;
+            max-width: 900px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 24px 20px;
             display: flex;
             flex-direction: column;
+            gap: 20px;
         }
 
-        .tab-content {
-            display: none;
-            height: 100%;
-            flex-direction: column;
-        }
-        .tab-content.active {
-            display: flex;
-        }
-
-        /* Cards & Grids */
         .card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 12px;
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 16px;
             padding: 20px;
-            box-shadow: 0 1px 3px rgba(0, 0, 0, 0.02);
-            margin-bottom: 16px;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.3);
         }
 
-        .card-header-line {
+        .card-header {
             display: flex;
             align-items: center;
             justify-content: space-between;
             margin-bottom: 16px;
             padding-bottom: 12px;
-            border-bottom: 1px solid #f1f5f9;
-        }
-        .card-title-group {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-        }
-        .card-title-icon {
-            width: 32px;
-            height: 32px;
-            border-radius: 8px;
-            background: #f1f5f9;
-            color: #334155;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-        .card-title-text {
-            font-size: 13.5px;
-            font-weight: 800;
-            color: #0f172a;
-        }
-        .card-subtitle-text {
-            font-size: 11px;
-            color: #64748b;
-            margin-top: 2px;
+            border-bottom: 1px solid #2d3748;
         }
 
-        /* Buttons Standard */
-        .btn-base {
-            display: inline-flex;
+        .card-title {
+            font-size: 15px;
+            font-weight: 700;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .info-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .info-box {
+            background: #0f172a;
+            border: 1px solid #26334d;
+            border-radius: 10px;
+            padding: 12px 14px;
+        }
+
+        .info-label {
+            font-size: 11px;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .info-value {
+            font-size: 14px;
+            font-weight: 700;
+            color: #38bdf8;
+            direction: ltr;
+            text-align: right;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+            gap: 14px;
+        }
+
+        .btn {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 14px 16px;
+            border-radius: 12px;
+            border: 1px solid transparent;
+            cursor: pointer;
+            transition: all 0.15s ease;
+            text-align: right;
+            width: 100%;
+        }
+
+        .btn-icon {
+            width: 36px;
+            height: 36px;
+            border-radius: 8px;
+            display: flex;
             align-items: center;
             justify-content: center;
-            gap: 8px;
-            padding: 9px 16px;
-            border-radius: 8px;
-            font-size: 12.5px;
+            font-size: 16px;
+            flex-shrink: 0;
+        }
+
+        .btn-content {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .btn-label {
+            font-size: 13px;
             font-weight: 700;
-            cursor: pointer;
-            border: 1px solid transparent;
-            font-family: inherit;
-            transition: all 0.15s ease-in-out;
-            white-space: nowrap;
         }
-        .btn-base:hover {
-            transform: translateY(-1px);
-            box-shadow: 0 2px 5px rgba(0,0,0,0.06);
-        }
-        .btn-base:active {
-            transform: translateY(0);
+
+        .btn-sub {
+            font-size: 11px;
+            opacity: 0.8;
         }
 
         .btn-primary {
             background: #2563eb;
             color: #ffffff;
-            border-color: #2563eb;
+            border-color: #3b82f6;
         }
         .btn-primary:hover {
             background: #1d4ed8;
-            border-color: #1d4ed8;
+        }
+        .btn-primary .btn-icon {
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .btn-success {
             background: #059669;
             color: #ffffff;
-            border-color: #059669;
+            border-color: #10b981;
         }
         .btn-success:hover {
             background: #047857;
-            border-color: #047857;
+        }
+        .btn-success .btn-icon {
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .btn-danger {
             background: #dc2626;
             color: #ffffff;
-            border-color: #dc2626;
+            border-color: #ef4444;
         }
         .btn-danger:hover {
             background: #b91c1c;
-            border-color: #b91c1c;
+        }
+        .btn-danger .btn-icon {
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .btn-warning {
             background: #d97706;
             color: #ffffff;
-            border-color: #d97706;
+            border-color: #f59e0b;
         }
         .btn-warning:hover {
             background: #b45309;
-            border-color: #b45309;
+        }
+        .btn-warning .btn-icon {
+            background: rgba(255, 255, 255, 0.2);
         }
 
         .btn-secondary {
-            background: #ffffff;
-            color: #334155;
-            border-color: #cbd5e1;
+            background: #334155;
+            color: #f8fafc;
+            border-color: #475569;
         }
         .btn-secondary:hover {
-            background: #f8fafc;
-            color: #0f172a;
-            border-color: #94a3b8;
+            background: #475569;
+        }
+        .btn-secondary .btn-icon {
+            background: rgba(255, 255, 255, 0.1);
         }
 
-        .btn-outline-primary {
-            background: #eff6ff;
-            color: #2563eb;
-            border-color: #bfdbfe;
-        }
-        .btn-outline-primary:hover {
-            background: #dbeafe;
-            border-color: #93c5fd;
-        }
-
-        .btn-block {
-            width: 100%;
-        }
-
-        /* 2-Column & 3-Column Grid */
-        .grid-2 {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-        .grid-3 {
-            display: grid;
-            grid-template-columns: 1fr 1fr 1fr;
-            gap: 16px;
-        }
-        .grid-4 {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            gap: 12px;
-        }
-
-        /* Action Launch Box */
-        .launch-card {
-            background: #ffffff;
-            border: 1px solid #e2e8f0;
-            border-radius: 10px;
-            padding: 16px;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            transition: all 0.2s;
-        }
-        .launch-card:hover {
-            border-color: #cbd5e1;
-            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.04);
-        }
-        .launch-card-header {
-            display: flex;
-            align-items: flex-start;
-            gap: 12px;
-            margin-bottom: 12px;
-        }
-        .launch-icon-badge {
-            width: 40px;
-            height: 40px;
-            border-radius: 8px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            flex-shrink: 0;
-        }
-        .launch-icon-green { background: #ecfdf5; color: #059669; }
-        .launch-icon-blue { background: #eff6ff; color: #2563eb; }
-        .launch-icon-purple { background: #f5f3ff; color: #7c3aed; }
-        .launch-icon-amber { background: #fffbeb; color: #d97706; }
-        .launch-icon-rose { background: #fef2f2; color: #dc2626; }
-
-        .launch-card-title {
-            font-size: 13.5px;
-            font-weight: 800;
-            color: #0f172a;
-        }
-        .launch-card-desc {
-            font-size: 11.5px;
-            color: #64748b;
-            margin-top: 3px;
+        .log-box {
+            background: #090d16;
+            border: 1px solid #1e293b;
+            border-radius: 12px;
+            padding: 14px;
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 12px;
+            color: #38bdf8;
+            min-height: 100px;
+            max-height: 180px;
+            overflow-y: auto;
+            direction: ltr;
+            text-align: left;
+            white-space: pre-wrap;
             line-height: 1.5;
         }
 
-        /* Form Inputs */
-        .form-row {
-            display: flex;
-            gap: 14px;
-            align-items: center;
-            margin-bottom: 14px;
-        }
-        .form-col {
-            flex: 1;
-        }
-        .form-label {
-            display: block;
-            font-size: 11.5px;
-            font-weight: 700;
-            color: #475569;
-            margin-bottom: 6px;
-        }
-        .form-input, .form-select {
-            width: 100%;
-            padding: 9px 12px;
-            border-radius: 8px;
-            border: 1px solid #cbd5e1;
-            background: #ffffff;
-            color: #0f172a;
-            font-size: 12px;
-            font-family: inherit;
-            transition: all 0.15s;
-        }
-        .form-input {
-            text-align: left;
-            direction: ltr;
-            font-family: 'JetBrains Mono', Consolas, sans-serif;
-        }
-        .form-input:focus, .form-select:focus {
-            border-color: #2563eb;
-            box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1);
-        }
-
-        /* Network Box */
-        .network-preview-box {
-            background: #eff6ff;
-            border: 1px solid #bfdbfe;
-            border-radius: 10px;
-            padding: 16px;
-            margin-bottom: 16px;
-        }
-        .network-preview-url {
-            font-family: 'JetBrains Mono', Consolas, monospace;
-            font-size: 14px;
-            font-weight: 800;
-            color: #1e40af;
-            direction: ltr;
-            text-align: left;
-            background: #ffffff;
-            border: 1px solid #bfdbfe;
-            padding: 10px 14px;
-            border-radius: 6px;
-            margin: 8px 0;
-            word-break: break-all;
-            user-select: all;
-        }
-
-        /* Terminal Console */
-        .terminal-container {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            background: #0f172a;
-            border: 1px solid #1e293b;
-            border-radius: 10px;
-            overflow: hidden;
-            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
-            min-height: 480px;
-        }
-        .terminal-top-bar {
-            height: 42px;
-            background: #1e293b;
-            border-bottom: 1px solid #334155;
-            padding: 0 16px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            color: #cbd5e1;
-        }
-        .terminal-tab-title {
-            display: flex;
-            align-items: center;
-            gap: 8px;
-            font-size: 12px;
-            font-weight: 700;
-            color: #e2e8f0;
-        }
-        .terminal-toolbar {
-            display: flex;
-            align-items: center;
-            gap: 6px;
-        }
-        .term-tool-btn {
-            background: #334155;
-            border: 1px solid #475569;
-            color: #e2e8f0;
-            padding: 4px 10px;
-            border-radius: 6px;
-            font-size: 11px;
-            font-weight: 600;
-            cursor: pointer;
-            font-family: inherit;
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            transition: all 0.15s;
-        }
-        .term-tool-btn:hover {
-            background: #475569;
-            color: #ffffff;
-        }
-        .term-tool-btn.active {
-            background: #0284c7;
-            border-color: #38bdf8;
-            color: #ffffff;
-        }
-
-        .terminal-console-body {
-            flex: 1;
-            padding: 14px 18px;
-            background: #090d16;
-            color: #34d399;
-            font-family: 'JetBrains Mono', Consolas, 'Courier New', monospace;
-            font-size: 12.5px;
-            line-height: 1.6;
-            overflow-y: auto;
-            white-space: pre-wrap;
-            direction: ltr;
-            text-align: left;
-        }
-
-        /* Footer */
-        .footer-bar {
-            height: 34px;
-            background: #ffffff;
-            border-top: 1px solid #e2e8f0;
-            padding: 0 24px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            font-size: 11px;
+        .footer {
+            text-align: center;
+            padding: 14px;
             color: #64748b;
-            flex-shrink: 0;
+            font-size: 12px;
+            border-top: 1px solid #1e293b;
+            margin-top: auto;
         }
-        .footer-left {
-            display: flex;
-            align-items: center;
-            gap: 16px;
-        }
-        .footer-clickable {
-            cursor: pointer;
-            color: #2563eb;
-            display: flex;
-            align-items: center;
-            gap: 4px;
-        }
-        .footer-clickable:hover {
-            text-decoration: underline;
-        }
-
-        /* Scrollbars */
-        ::-webkit-scrollbar { width: 7px; height: 7px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
+</head>
+<body>
 
-    <script language="javascript">
-        // Standard Window Dimension & Centering
+    <div class="header">
+        <div class="header-title">
+            <div class="logo-icon">&#9881;</div>
+            <div class="header-text">
+                <h1>پنل مدیریت و راه‌اندازی سرور</h1>
+                <p>سیستم یکپارچه حسابداری و انبارداری تحت وب</p>
+            </div>
+        </div>
+        <div class="status-pill" id="statusPill">
+            <span class="status-dot checking" id="statusDot"></span>
+            <span id="statusText">در حال بررسی...</span>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Live Status Card -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">&#128421; وضعیت ارتباط و پورت ۳۰۰۰</span>
+                <button onclick="checkHealth()" class="btn-secondary" style="padding: 6px 14px; border-radius: 8px; font-size: 12px; width: auto; cursor: pointer;">
+                    &#128260; بررسی مجدد وضعیت
+                </button>
+            </div>
+            <div class="info-grid">
+                <div class="info-box">
+                    <div class="info-label">وضعیت پورت ۳۰۰۰</div>
+                    <div class="info-value" id="portStatusText">در حال پایش...</div>
+                </div>
+                <div class="info-box">
+                    <div class="info-label">آدرس محلی مرورگر</div>
+                    <div class="info-value">http://localhost:3000</div>
+                </div>
+                <div class="info-box">
+                    <div class="info-label">حالت سرور پیشنهادی</div>
+                    <div class="info-value" style="color: #10b981;">Dev (پورت ۳۰۰۰)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Action Controls -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">&#9889; عملیات سریع راه‌اندازی و مدیریت</span>
+            </div>
+            <div class="actions-grid">
+                <!-- Start Dev -->
+                <button class="btn btn-primary" onclick="startDevServer()">
+                    <div class="btn-icon">&#9654;</div>
+                    <div class="btn-content">
+                        <span class="btn-label">راه‌اندازی سرور توسعه (Dev)</span>
+                        <span class="btn-sub">اجرای سریع npm run dev</span>
+                    </div>
+                </button>
+
+                <!-- Start Prod -->
+                <button class="btn btn-success" onclick="startProdServer()">
+                    <div class="btn-icon">&#9889;</div>
+                    <div class="btn-content">
+                        <span class="btn-label">راه‌اندازی سرور نهایی (Prod)</span>
+                        <span class="btn-sub">اجرای پایدار npm start</span>
+                    </div>
+                </button>
+
+                <!-- Restart -->
+                <button class="btn btn-warning" onclick="restartServer()">
+                    <div class="btn-icon">&#128260;</div>
+                    <div class="btn-content">
+                        <span class="btn-label">راه‌اندازی مجدد (Restart)</span>
+                        <span class="btn-sub">توقف پروسه‌ها و اجرای مجدد</span>
+                    </div>
+                </button>
+
+                <!-- Stop Server -->
+                <button class="btn btn-danger" onclick="stopServer()">
+                    <div class="btn-icon">&#9632;</div>
+                    <div class="btn-content">
+                        <span class="btn-label">توقف کامل سرور (Stop)</span>
+                        <span class="btn-sub">آزادسازی فوری پورت ۳۰۰۰</span>
+                    </div>
+                </button>
+
+                <!-- Open Browser -->
+                <button class="btn btn-secondary" onclick="openBrowser()">
+                    <div class="btn-icon">&#127760;</div>
+                    <div class="btn-content">
+                        <span class="btn-label">باز کردن در مرورگر</span>
+                        <span class="btn-sub">http://localhost:3000</span>
+                    </div>
+                </button>
+
+                <!-- Quick Backup -->
+                <button class="btn btn-secondary" onclick="runQuickBackup()">
+                    <div class="btn-icon">&#128190;</div>
+                    <div class="btn-content">
+                        <span class="btn-label">پشتیبان‌گیری سریع</span>
+                        <span class="btn-sub">تهیه نسخه فوری در پوشه my_backups</span>
+                    </div>
+                </button>
+            </div>
+        </div>
+
+        <!-- System Output Log -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-title">&#128196; گزارش رویدادها و عملیات</span>
+                <span style="font-size: 11px; color: #94a3b8;">کنسول فرمان ویندوز</span>
+            </div>
+            <div class="log-box" id="logBox">آماده دریافت فرمان...</div>
+        </div>
+    </div>
+
+    <div class="footer">
+        پنل سبک و کاربردی مدیریت سرور حسابداری &bull; پورت پیش‌فرض: ۳۰۰۰
+    </div>
+
+    <script>
+        var shell = null;
         try {
-            var screenW = window.screen.availWidth;
-            var screenH = window.screen.availHeight;
-            var appW = 1140;
-            var appH = 780;
-            if (appW > screenW) appW = screenW - 30;
-            if (appH > screenH) appH = screenH - 30;
-            window.resizeTo(appW, appH);
-            window.moveTo((screenW - appW) / 2, (screenH - appH) / 2);
-        } catch(e) {}
-
-        var shell = new ActiveXObject("WScript.Shell");
-        var fso = new ActiveXObject("Scripting.FileSystemObject");
-        var projectDir = "";
-        var logFile = "";
-        var lastLogSize = 0;
-        var isServerOnline = false;
-        var currentPort = "3000";
-        var localIP = "127.0.0.1";
-        var serverStartTime = null;
-        var autoScrollLogs = true;
-        var logLinesCount = 0;
-
-        function getTimeStamp() {
-            var d = new Date();
-            var h = d.getHours(), m = d.getMinutes(), s = d.getSeconds();
-            return "[" + (h<10?"0":"")+h + ":" + (m<10?"0":"")+m + ":" + (s<10?"0":"")+s + "] ";
+            shell = new ActiveXObject("WScript.Shell");
+        } catch (e) {
+            // Browser environment fallback
         }
 
-        // Initialize Panel
-        function initApp() {
-            try {
-                var htaPath = unescape(document.location.pathname);
-                if (htaPath.charAt(0) == '/' && htaPath.charAt(2) == ':') {
-                    htaPath = htaPath.substring(1);
-                }
-                projectDir = fso.GetParentFolderName(htaPath);
-                shell.CurrentDirectory = projectDir;
+        function log(message) {
+            var box = document.getElementById("logBox");
+            var time = new Date().toLocaleTimeString();
+            box.innerText = "[" + time + "] " + message + "\n" + box.innerText;
+        }
 
-                // Setup .logs directory
-                var logsDir = projectDir + "\\.logs";
-                if (!fso.FolderExists(logsDir)) {
-                    try { fso.CreateFolder(logsDir); } catch(e) {}
-                }
-                if (fso.FolderExists(logsDir)) {
-                    logFile = logsDir + "\\server_logs.txt";
-                } else {
-                    logFile = projectDir + "\\server_logs.txt";
-                }
-
-                // Reset or touch log file
+        function runCmd(cmd, async) {
+            log("اجرای دستور: " + cmd);
+            if (shell) {
                 try {
-                    if (!fso.FileExists(logFile)) {
-                        var f = fso.CreateTextFile(logFile, true);
-                        f.Close();
-                    }
-                } catch(e) {}
-
-                // Detect Network IP via WMI
-                detectNetworkIP();
-
-                // Periodic Pollers
-                setInterval(readLogs, 800);
-                setInterval(checkServerStatus, 2000);
-                setInterval(updateUptimeDisplay, 1000);
-
-                // Initial health and system check
-                checkServerStatus();
-                probeNodeVersion();
-
-                // Display project path
-                var pathDisplay = document.getElementById('footerPathDisplay');
-                if (pathDisplay) {
-                    pathDisplay.innerText = projectDir;
-                }
-
-                logMsg("======================================================================");
-                logMsg("✔ پنل مدیریت حرفه‌ای سرور حسابداری راه‌اندازی شد (نسخه ۳.۰ اداری).");
-                logMsg("📁 مسیر اصلی نرم‌افزار: " + projectDir);
-                logMsg("🌐 آدرس شبکه محلی (LAN): http://" + localIP + ":" + currentPort);
-                logMsg("ℹ️ آماده دریافت دستورات... برای شروع روی «راه‌اندازی سرور (Dev)» کلیک کنید.");
-                logMsg("======================================================================\n");
-            } catch(err) {
-                alert("خطا در بارگذاری اولیه: " + err.message);
-            }
-        }
-
-        // Detect LAN IP Address via WMI
-        function detectNetworkIP() {
-            try {
-                var locator = new ActiveXObject("WbemScripting.SWbemLocator");
-                var service = locator.ConnectServer(".", "root\\cimv2");
-                var query = "SELECT IPAddress FROM Win32_NetworkAdapterConfiguration WHERE IPEnabled = True";
-                var colItems = service.ExecQuery(query);
-                var enumItems = new Enumerator(colItems);
-                for (; !enumItems.atEnd(); enumItems.moveNext()) {
-                    var item = enumItems.item();
-                    var ips = item.IPAddress;
-                    if (ips) {
-                        var ipArray = (new VBArray(ips)).toArray();
-                        for (var i = 0; i < ipArray.length; i++) {
-                            var ip = ipArray[i];
-                            if (ip.indexOf("192.168.") === 0 || ip.indexOf("10.") === 0 || ip.indexOf("172.") === 0) {
-                                localIP = ip;
-                                updateNetworkCardUI();
-                                return;
-                            }
-                        }
-                    }
-                }
-            } catch(e) {}
-            localIP = "127.0.0.1";
-            updateNetworkCardUI();
-        }
-
-        function updateNetworkCardUI() {
-            var portInput = document.getElementById('portNum');
-            var port = (portInput && portInput.value) ? portInput.value : "3000";
-            currentPort = port;
-
-            var url = "http://" + localIP + ":" + port;
-            var localUrl = "http://localhost:" + port;
-
-            var elem = document.getElementById('lanUrlDisplay');
-            if (elem) elem.innerText = url;
-
-            var localElem = document.getElementById('localUrlDisplay');
-            if (localElem) localElem.innerText = localUrl;
-
-            var statIp = document.getElementById('statLanIp');
-            if (statIp) statIp.innerText = localIP;
-        }
-
-        function stripAnsi(str) {
-            return str.replace(/\x1B\[[0-9;]*[a-zA-Z]/g, "");
-        }
-
-        function logMsg(msg) {
-            var term = document.getElementById('terminal');
-            if (!term) return;
-            term.innerHTML += getTimeStamp() + msg + "\n";
-            logLinesCount++;
-            if (autoScrollLogs) {
-                term.scrollTop = term.scrollHeight;
-            }
-        }
-
-        function readLogs() {
-            try {
-                if (fso.FileExists(logFile)) {
-                    var file = fso.GetFile(logFile);
-                    if (file.Size > lastLogSize) {
-                        var ts = fso.OpenTextFile(logFile, 1, false);
-                        var content = ts.ReadAll();
-                        ts.Close();
-
-                        var newContent = content.substring(lastLogSize);
-                        if (newContent.length > 0) {
-                            newContent = newContent.replace(/</g, "&lt;").replace(/>/g, "&gt;");
-                            newContent = stripAnsi(newContent);
-
-                            var term = document.getElementById('terminal');
-                            if (term) {
-                                term.innerHTML += newContent;
-                                lastLogSize = content.length;
-                                logLinesCount += 5;
-                                if (autoScrollLogs) {
-                                    term.scrollTop = term.scrollHeight;
-                                }
-                            }
-                        }
-                    }
-                }
-            } catch(e) {}
-        }
-
-        function runCmdHidden(cmd, clearScreen) {
-            try {
-                if (clearScreen) {
-                    var f = fso.CreateTextFile(logFile, true);
-                    f.Close();
-                    lastLogSize = 0;
-                    var term = document.getElementById('terminal');
-                    if (term) term.innerHTML = '';
-                }
-
-                // Force UTF-8 terminal encoding and pipe logs to file
-                var fullCmd = "cmd.exe /c \"chcp 65001 >nul & " + cmd + " >> \"" + logFile + "\" 2>&1\"";
-                shell.Run(fullCmd, 0, false);
-            } catch(e) {
-                logMsg("❌ خطای اجرا: " + e.message);
-            }
-        }
-
-        // Live Health Probe via XMLHTTP
-        function checkServerStatus() {
-            try {
-                var portInput = document.getElementById('portNum');
-                var port = (portInput && portInput.value) ? portInput.value : "3000";
-                currentPort = port;
-                var xhr = new ActiveXObject("Microsoft.XMLHTTP");
-                var probeUrl = "http://127.0.0.1:" + port + "/api/health?t=" + new Date().getTime();
-                xhr.open("GET", probeUrl, true);
-
-                xhr.onreadystatechange = function() {
-                    if (xhr.readyState === 4) {
-                        var isOk = (xhr.status >= 200 && xhr.status < 400);
-                        updateStatusUI(isOk, xhr.status);
-                    }
-                };
-
-                xhr.onerror = function() {
-                    updateStatusUI(false, 0);
-                };
-
-                xhr.send();
-            } catch(e) {
-                updateStatusUI(false, 0);
-            }
-        }
-
-        function updateStatusUI(isOnline, statusCode) {
-            var badge = document.getElementById('status-badge');
-            var statServer = document.getElementById('statServerStatus');
-            var statHealth = document.getElementById('statHealth');
-
-            if (isOnline) {
-                if (!isServerOnline) {
-                    serverStartTime = new Date();
-                    logMsg("✔ سرور با موفقیت پاسخ داد (Status: " + statusCode + "). سیستم آماده بهره‌برداری است.");
-                }
-                isServerOnline = true;
-                if (badge) {
-                    badge.className = "live-status-pill online";
-                    badge.innerHTML = "<span class='status-dot'></span> سرور فعال است (Port " + currentPort + ")";
-                }
-                if (statServer) {
-                    statServer.className = "metric-value online";
-                    statServer.innerText = "ONLINE";
-                }
-                if (statHealth) {
-                    statHealth.className = "metric-value online";
-                    statHealth.innerText = statusCode + " OK";
+                    shell.Run(cmd, 1, async === true);
+                    return true;
+                } catch (e) {
+                    log("خطا در اجرای دستور: " + e.message);
+                    return false;
                 }
             } else {
-                if (isServerOnline) {
-                    logMsg("⚠ ارتباط با سرور قطع شد یا سرور متوقف گردید.");
-                    serverStartTime = null;
-                }
-                isServerOnline = false;
-                if (badge) {
-                    badge.className = "live-status-pill offline";
-                    badge.innerHTML = "<span class='status-dot'></span> سرور متوقف است";
-                }
-                if (statServer) {
-                    statServer.className = "metric-value offline";
-                    statServer.innerText = "OFFLINE";
-                }
-                if (statHealth) {
-                    statHealth.className = "metric-value offline";
-                    statHealth.innerText = "Disconnected";
-                }
+                log("محیط فاقد Shell ویندوز است. لطفاً از طریق ترمینال اجرا کنید.");
+                return false;
             }
         }
 
-        // Uptime Timer
-        function updateUptimeDisplay() {
-            var uptimeElem = document.getElementById('statUptime');
-            if (!uptimeElem) return;
-
-            if (isServerOnline && serverStartTime) {
-                var now = new Date();
-                var diffSec = Math.floor((now.getTime() - serverStartTime.getTime()) / 1000);
-                var hrs = Math.floor(diffSec / 3600);
-                var mins = Math.floor((diffSec % 3600) / 60);
-                var secs = diffSec % 60;
-                var text = (hrs<10?"0":"")+hrs + ":" + (mins<10?"0":"")+mins + ":" + (secs<10?"0":"")+secs;
-                uptimeElem.innerText = text;
-            } else {
-                uptimeElem.innerText = "00:00:00";
-            }
-        }
-
-        // Start Dev Server
         function startDevServer() {
-            var portInput = document.getElementById('portNum');
-            var port = (portInput && portInput.value) ? portInput.value : "3000";
-            var hostOption = document.getElementById('hostSelect').value;
-            currentPort = port;
-            updateNetworkCardUI();
-
-            logMsg("⚡ در حال راه‌اندازی سرور در محیط توسعه (Dev Mode - npm run dev)...");
-            var cmd = "npm run dev";
-            if (hostOption === "network") {
-                logMsg("🌐 دسترسی شبکه محلی فعال شد (Host: 0.0.0.0)");
-            }
-            runCmdHidden(cmd, true);
-            switchTab('logs');
+            log("در حال اجرای سرور توسعه بر روی پورت ۳۰۰۰...");
+            runCmd('cmd.exe /k "title Accounting Dev Server && color 0A && npm run dev"', false);
+            setTimeout(checkHealth, 3500);
         }
 
-        // Start Production Server
         function startProdServer() {
-            var portInput = document.getElementById('portNum');
-            var port = (portInput && portInput.value) ? portInput.value : "3000";
-            currentPort = port;
-            updateNetworkCardUI();
-
-            logMsg("🚀 در حال اجرای سرور نهایی (Production Mode - npm start)...");
-            runCmdHidden("npm start", true);
-            switchTab('logs');
+            log("در حال اجرای سرور نهایی (Production)...");
+            runCmd('cmd.exe /k "title Accounting Production Server && color 0B && npm start"', false);
+            setTimeout(checkHealth, 3500);
         }
 
-        // Stop Server with Process Tree Kill
         function stopServer() {
-            var portInput = document.getElementById('portNum');
-            var port = (portInput && portInput.value) ? portInput.value : "3000";
-            logMsg("🛑 در حال ارسال دستور بستن سرور و آزادسازی پورت " + port + "...");
-
-            try {
-                var tempBat = shell.ExpandEnvironmentStrings("%TEMP%") + "\\kill_server.bat";
-                var f = fso.CreateTextFile(tempBat, true);
-                f.WriteLine("@echo off");
-                f.WriteLine("FOR /F \"tokens=5\" %%a in ('netstat -a -n -o ^| findstr :" + port + "') do (");
-                f.WriteLine("  taskkill /F /T /PID %%a >nul 2>&1");
-                f.WriteLine(")");
-                f.Close();
-
-                shell.Run("cmd.exe /c \"" + tempBat + "\"", 0, true);
-                try { fso.DeleteFile(tempBat); } catch(e) {}
-
-                serverStartTime = null;
-                updateUptimeDisplay();
-                logMsg("✔ پروسه‌های مربوط به پورت " + port + " با موفقیت متوقف شدند.");
-                setTimeout(checkServerStatus, 1000);
-            } catch(e) {
-                logMsg("❌ خطا در بستن سرور: " + e.message);
-            }
+            log("در حال بستن پروسه‌های پورت ۳۰۰۰...");
+            runCmd('cmd.exe /c "FOR /F "tokens=5" %T IN (\'netstat -a -n -o ^| findstr :3000\') DO taskkill /F /T /PID %T >nul 2>&1"', true);
+            log("دستور توقف پورت ۳۰۰۰ صادر گردید.");
+            setTimeout(checkHealth, 1500);
         }
 
-        // Restart Server
         function restartServer() {
-            logMsg("🔄 در حال راه‌اندازی مجدد (Restart) سرور...");
+            log("در حال راه‌اندازی مجدد سرور...");
             stopServer();
             setTimeout(function() {
                 startDevServer();
-            }, 1800);
+            }, 2000);
         }
 
-        // Free Port Tool
-        function freeCurrentPort() {
-            var portInput = document.getElementById('portNum');
-            var port = (portInput && portInput.value) ? portInput.value : "3000";
-            logMsg("🔍 بررسی و آزادسازی پورت " + port + "...");
-            stopServer();
-            alert("دستور آزادسازی پورت " + port + " ارسال شد.");
-        }
-
-        // Open in Browser
-        function openInBrowser(type) {
-            var portInput = document.getElementById('portNum');
-            var port = (portInput && portInput.value) ? portInput.value : "3000";
-            var url = (type === "lan") ? ("http://" + localIP + ":" + port) : ("http://localhost:" + port);
-
-            if (isServerOnline) {
-                shell.Run(url);
-                logMsg("🌐 مرورگر باز شد: " + url);
+        function openBrowser() {
+            log("باز کردن آدرس http://localhost:3000 در مرورگر پیش‌فرض...");
+            if (shell) {
+                shell.Run("http://localhost:3000");
             } else {
-                var res = confirm("سرور هم‌اکنون خاموش یا در حال بالا آمدن است.\nآیا مایلید با این وجود آدرس باز شود؟");
-                if (res) {
-                    shell.Run(url);
-                }
+                window.open("http://localhost:3000", "_blank");
             }
         }
 
-        // Copy LAN URL to Clipboard
-        function copyLanUrl() {
-            var portInput = document.getElementById('portNum');
-            var port = (portInput && portInput.value) ? portInput.value : "3000";
-            var url = "http://" + localIP + ":" + port;
+        function runQuickBackup() {
+            log("تهیه نسخه پشتیبان سریع...");
+            var stamp = new Date().toISOString().replace(/[:.]/g, "-");
+            var cmd = 'cmd.exe /c "mkdir my_backups\\backup-' + stamp + ' 2>nul && if exist database.json copy database.json my_backups\\backup-' + stamp + '\\ >nul 2>&1 && if exist db_config.json copy db_config.json my_backups\\backup-' + stamp + '\\ >nul 2>&1"';
+            runCmd(cmd, true);
+            log("نسخه پشتیبان در مسیر my_backups ذخیره شد.");
+        }
+
+        function checkHealth() {
+            var dot = document.getElementById("statusDot");
+            var statusText = document.getElementById("statusText");
+            var portText = document.getElementById("portStatusText");
+
+            dot.className = "status-dot checking";
+            statusText.innerText = "در حال بررسی وضعیت...";
+            portText.innerText = "ارسال درخواست سنجش...";
+
             try {
-                window.clipboardData.setData("Text", url);
-                alert("آدرس تحت شبکه با موفقیت در حافظه کپی شد:\n" + url);
-                logMsg("📋 آدرس شبکه کپی شد: " + url);
-            } catch(e) {
-                logMsg("آدرس شبکه: " + url);
-            }
-        }
-
-        // Quick Backup
-        function makeQuickBackup() {
-            logMsg("💾 در حال ایجاد نسخه پشتیبان دستی از سیستم...");
-            try {
-                var d = new Date();
-                var stamp = d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate() + "_" + d.getHours() + "-" + d.getMinutes() + "-" + d.getSeconds();
-                var backupFolder = projectDir + "\\my_backups";
-                if (!fso.FolderExists(backupFolder)) {
-                    fso.CreateFolder(backupFolder);
-                }
-
-                var targetDir = backupFolder + "\\backup-manual-" + stamp;
-                fso.CreateFolder(targetDir);
-
-                // Copy key files
-                var filesToCopy = ["database.json", "db_config.json", ".env", "version.json"];
-                var copiedCount = 0;
-                for (var i = 0; i < filesToCopy.length; i++) {
-                    var filePath = projectDir + "\\" + filesToCopy[i];
-                    if (fso.FileExists(filePath)) {
-                        fso.CopyFile(filePath, targetDir + "\\" + filesToCopy[i], true);
-                        copiedCount++;
-                    }
-                }
-
-                logMsg("✔ نسخه پشتیبان ایجاد شد (" + copiedCount + " فایل ذخیره گردید): " + targetDir);
-                alert("نسخه پشتیبان با موفقیت در پوشه زیر ذخیره شد:\n" + targetDir);
-            } catch(e) {
-                logMsg("❌ خطا در ایجاد پشتیبان: " + e.message);
-                alert("خطا در ایجاد پشتیبان: " + e.message);
-            }
-        }
-
-        // Open Folders
-        function openProjectFolder() {
-            shell.Run("explorer.exe \"" + projectDir + "\"");
-            logMsg("📂 پوشه اصلی پروژه در Windows Explorer باز شد.");
-        }
-
-        function openBackupsFolder() {
-            var p = projectDir + "\\my_backups";
-            if (!fso.FolderExists(p)) p = projectDir + "\\backups";
-            if (!fso.FolderExists(p)) p = projectDir;
-            shell.Run("explorer.exe \"" + p + "\"");
-            logMsg("📂 پوشه فایل‌های پشتیبان باز شد.");
-        }
-
-        // Database Push
-        function runDbPush() {
-            logMsg("🗄️ در حال همگام‌سازی ساختار پایگاه‌داده (npm run db:push)...");
-            runCmdHidden("npm run db:push", false);
-            switchTab('logs');
-        }
-
-        // Dependencies & Build
-        function runNpmInstall() {
-            logMsg("📦 در حال بررسی و نصب پکیج‌ها (npm install)...");
-            runCmdHidden("npm install", false);
-            switchTab('logs');
-        }
-
-        function runNpmBuild() {
-            logMsg("🏗️ در حال ساخت بسته نهایی پروژه (npm run build)...");
-            runCmdHidden("npm run build", false);
-            switchTab('logs');
-        }
-
-        function runGitPull() {
-            logMsg("⬇️ دریافت آخرین تغییرات و بروزرسانی کدها از مخزن گیت‌هاب (git pull)...");
-            runCmdHidden("git pull", false);
-            switchTab('logs');
-        }
-
-        function runLintCheck() {
-            logMsg("🔍 بررسی خطاهای تایپ‌اسکریپت و اعتبارسنجی کدها (npm run lint)...");
-            runCmdHidden("npm run lint", false);
-            switchTab('logs');
-        }
-
-        function probeNodeVersion() {
-            try {
-                var tempF = shell.ExpandEnvironmentStrings("%TEMP%") + "\\node_probe.txt";
-                shell.Run("cmd.exe /c node -v > \"" + tempF + "\" 2>&1", 0, true);
-                if (fso.FileExists(tempF)) {
-                    var tf = fso.OpenTextFile(tempF, 1, false);
-                    var ver = tf.ReadAll().replace(/[\r\n]/g, '');
-                    tf.Close();
-                    try { fso.DeleteFile(tempF); } catch(e) {}
-                    var elem = document.getElementById('nodeVerDisplay');
-                    if (elem) elem.innerText = ver || "Node.js";
-                }
-            } catch(e) {}
-        }
-
-        // Terminal Actions
-        function clearTerminal() {
-            var term = document.getElementById('terminal');
-            if (term) term.innerHTML = '';
-            lastLogSize = 0;
-            try {
-                var f = fso.CreateTextFile(logFile, true);
-                f.Close();
-            } catch(e) {}
-            logMsg("✔ کنسول پاکسازی شد.");
-        }
-
-        function toggleAutoScroll() {
-            autoScrollLogs = !autoScrollLogs;
-            var btn = document.getElementById('autoScrollBtn');
-            if (btn) {
-                if (autoScrollLogs) {
-                    btn.className = "term-tool-btn active";
-                    btn.innerHTML = "<svg class='icon-svg icon-sm' viewBox='0 0 24 24'><polyline points='6 9 12 15 18 9'/></svg> اسکرول خودکار: فعال";
+                var xhr = null;
+                if (window.XMLHttpRequest) {
+                    xhr = new XMLHttpRequest();
                 } else {
-                    btn.className = "term-tool-btn";
-                    btn.innerHTML = "<svg class='icon-svg icon-sm' viewBox='0 0 24 24'><line x1='18' y1='6' x2='6' y2='18'/><line x1='6' y1='6' x2='18' y2='18'/></svg> اسکرول خودکار: خاموش";
+                    xhr = new ActiveXObject("MSXML2.ServerXMLHTTP");
                 }
+
+                xhr.open("GET", "http://localhost:3000/api/health", true);
+                xhr.timeout = 2500;
+                xhr.onreadystatechange = function() {
+                    if (xhr.readyState === 4) {
+                        if (xhr.status === 200) {
+                            dot.className = "status-dot online";
+                            statusText.innerText = "آنلاین و پاسخگو";
+                            portText.innerText = "پورت ۳۰۰۰ فعال است (آماده به کار)";
+                            log("سرور فعال است (HTTP 200 OK).");
+                        } else {
+                            dot.className = "status-dot offline";
+                            statusText.innerText = "سرور متوقف است";
+                            portText.innerText = "پورت ۳۰۰۰ غیرفعال یا مسدود است";
+                            log("سرور به درخواست پاسخ نداد (کد وضعیت: " + xhr.status + ").");
+                        }
+                    }
+                };
+                xhr.ontimeout = function() {
+                    dot.className = "status-dot offline";
+                    statusText.innerText = "زمان پاسخ به پایان رسید";
+                    portText.innerText = "سرور در دسترس نیست";
+                };
+                xhr.onerror = function() {
+                    dot.className = "status-dot offline";
+                    statusText.innerText = "سرور متوقف است";
+                    portText.innerText = "پورت ۳۰۰۰ آزاد یا سرور خاموش است";
+                };
+                xhr.send();
+            } catch (e) {
+                dot.className = "status-dot offline";
+                statusText.innerText = "خطا در برقراری ارتباط";
+                portText.innerText = "سرور خاموش است";
+                log("عدم برقراری ارتباط با پورت ۳۰۰۰: " + e.message);
             }
         }
 
-        function copyTerminalLogs() {
-            try {
-                var term = document.getElementById('terminal');
-                var text = term ? (term.innerText || "") : "";
-                window.clipboardData.setData("Text", text);
-                alert("تمام لاگ‌های ترمینال با موفقیت در کلیپ‌بورد کپی شدند.");
-            } catch(e) {
-                alert("خطا در کپی: " + e.message);
-            }
-        }
-
-        function exportLogsToFile() {
-            try {
-                var d = new Date();
-                var stamp = d.getFullYear() + "-" + (d.getMonth()+1) + "-" + d.getDate() + "_" + d.getHours() + "-" + d.getMinutes();
-                var dest = projectDir + "\\server_log_" + stamp + ".txt";
-                var term = document.getElementById('terminal');
-                var text = term ? (term.innerText || "") : "";
-                var f = fso.CreateTextFile(dest, true);
-                f.Write(text);
-                f.Close();
-                logMsg("💾 لاگ‌ها در فایل ذخیره شدند: " + dest);
-                alert("لاگ با موفقیت در فایل زیر ذخیره شد:\n" + dest);
-            } catch(e) {
-                alert("خطا در ذخیره لاگ: " + e.message);
-            }
-        }
-
-        // Tab Navigation
-        function switchTab(tabId) {
-            var tabs = document.querySelectorAll('.nav-item-btn');
-            for (var i = 0; i < tabs.length; i++) {
-                tabs[i].className = "nav-item-btn";
-            }
-            var panels = document.querySelectorAll('.tab-content');
-            for (var j = 0; j < panels.length; j++) {
-                panels[j].className = "tab-content";
-            }
-
-            var activeTabBtn = document.getElementById('nav-btn-' + tabId);
-            if (activeTabBtn) activeTabBtn.className = "nav-item-btn active";
-
-            var activePanel = document.getElementById('tab-panel-' + tabId);
-            if (activePanel) activePanel.className = "tab-content active";
-        }
+        window.onload = function() {
+            window.resizeTo(940, 720);
+            checkHealth();
+            // Periodic health check every 10 seconds
+            setInterval(checkHealth, 10000);
+        };
     </script>
-</head>
-<body onload="initApp()">
-    <div class="app-layout">
-        
-        <!-- TOP HEADER -->
-        <header class="header-bar">
-            <!-- Brand -->
-            <div class="brand-section">
-                <div class="brand-avatar">
-                    <svg class="icon-svg icon-lg" viewBox="0 0 24 24">
-                        <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/>
-                        <rect width="20" height="8" x="2" y="14" rx="2" ry="2"/>
-                        <line x1="6" x2="6.01" y1="6" y2="6"/>
-                        <line x1="6" x2="6.01" y1="18" y2="18"/>
-                    </svg>
-                </div>
-                <div class="brand-info">
-                    <h1>پنل مدیریت و راه‌اندازی سرور</h1>
-                    <p>سامانه جامع حسابداری و مالی · مرکز کنترل عملیات و شبکه</p>
-                </div>
-            </div>
-
-            <!-- Metrics & Live Status -->
-            <div class="header-metrics">
-                <div class="metric-chip">
-                    <span class="metric-title">
-                        <svg class="icon-svg icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
-                        مدت فعالیت (Uptime)
-                    </span>
-                    <span id="statUptime" class="metric-value highlight">00:00:00</span>
-                </div>
-
-                <div class="metric-chip">
-                    <span class="metric-title">
-                        <svg class="icon-svg icon-sm" viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg>
-                        آی‌پی شبکه محلی (LAN)
-                    </span>
-                    <span id="statLanIp" class="metric-value">127.0.0.1</span>
-                </div>
-
-                <div class="metric-chip">
-                    <span class="metric-title">
-                        <svg class="icon-svg icon-sm" viewBox="0 0 24 24"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
-                        سلامت‌سنجی (/health)
-                    </span>
-                    <span id="statHealth" class="metric-value offline">Disconnected</span>
-                </div>
-
-                <div id="status-badge" class="live-status-pill offline">
-                    <span class="status-dot"></span> سرور متوقف است
-                </div>
-            </div>
-
-            <!-- Quick Launch Actions -->
-            <div class="header-actions">
-                <button class="btn-base btn-primary" onclick="openInBrowser('local')">
-                    <svg class="icon-svg" viewBox="0 0 24 24">
-                        <path d="M15 3h6v6"/>
-                        <path d="M10 14 21 3"/>
-                        <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                    </svg>
-                    ورود به نرم‌افزار (Localhost)
-                </button>
-                <button class="btn-base btn-outline-primary" onclick="openInBrowser('lan')">
-                    <svg class="icon-svg" viewBox="0 0 24 24">
-                        <rect width="6" height="6" x="9" y="2" rx="1"/>
-                        <rect width="6" height="6" x="2" y="16" rx="1"/>
-                        <rect width="6" height="6" x="16" y="16" rx="1"/>
-                        <path d="M5 16v-3a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v3"/>
-                        <path d="M12 8v4"/>
-                    </svg>
-                    اتصال شبکه (LAN)
-                </button>
-            </div>
-        </header>
-
-        <!-- NAVIGATION TABS -->
-        <nav class="navigation-bar">
-            <button id="nav-btn-server" class="nav-item-btn active" onclick="switchTab('server')">
-                <svg class="icon-svg" viewBox="0 0 24 24">
-                    <rect width="20" height="8" x="2" y="2" rx="2" ry="2"/>
-                    <rect width="20" height="8" x="2" y="14" rx="2" ry="2"/>
-                    <line x1="6" x2="6.01" y1="6" y2="6"/>
-                    <line x1="6" x2="6.01" y1="18" y2="18"/>
-                </svg>
-                مدیریت و کنترل سرور
-            </button>
-
-            <button id="nav-btn-logs" class="nav-item-btn" onclick="switchTab('logs')">
-                <svg class="icon-svg" viewBox="0 0 24 24">
-                    <polyline points="4 17 10 11 4 5"/>
-                    <line x1="12" x2="20" y1="19" y2="19"/>
-                </svg>
-                کنسول و لاگ‌های زنده
-            </button>
-
-            <button id="nav-btn-network" class="nav-item-btn" onclick="switchTab('network')">
-                <svg class="icon-svg" viewBox="0 0 24 24">
-                    <circle cx="12" cy="12" r="10"/>
-                    <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
-                    <path d="M2 12h20"/>
-                </svg>
-                شبکه و دسترسی کلاینت‌ها
-            </button>
-
-            <button id="nav-btn-database" class="nav-item-btn" onclick="switchTab('database')">
-                <svg class="icon-svg" viewBox="0 0 24 24">
-                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                    <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
-                </svg>
-                پایگاه‌داده و پشتیبان‌گیری
-            </button>
-
-            <button id="nav-btn-tools" class="nav-item-btn" onclick="switchTab('tools')">
-                <svg class="icon-svg" viewBox="0 0 24 24">
-                    <path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/>
-                    <path d="m18 15 4-4"/>
-                    <path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586l1.914 1.914"/>
-                </svg>
-                ابزارهای نگهداری و کد
-            </button>
-        </nav>
-
-        <!-- MAIN WORKSPACE -->
-        <main class="workspace-body">
-            
-            <!-- TAB 1: SERVER CONTROLS -->
-            <div id="tab-panel-server" class="tab-content active">
-                
-                <div class="grid-2">
-                    <!-- Dev Server Launch -->
-                    <div class="launch-card">
-                        <div>
-                            <div class="launch-card-header">
-                                <div class="launch-icon-badge launch-icon-green">
-                                    <svg class="icon-svg icon-lg" viewBox="0 0 24 24">
-                                        <polygon points="6 3 20 12 6 21 6 3"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="launch-card-title">راه‌اندازی سرور توسعه (Dev Server)</div>
-                                    <div class="launch-card-desc">
-                                        اجرای محیط کاری سریع توسعه (`npm run dev`) همراه با نظارت بر تغییرات کدهای فرانت‌اند و بک‌اند به صورت بلادرنگ.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <button class="btn-base btn-success btn-block" onclick="startDevServer()">
-                            <svg class="icon-svg" viewBox="0 0 24 24"><polygon points="6 3 20 12 6 21 6 3"/></svg>
-                            اجرای سرور در حالت توسعه
-                        </button>
-                    </div>
-
-                    <!-- Prod Server Launch -->
-                    <div class="launch-card">
-                        <div>
-                            <div class="launch-card-header">
-                                <div class="launch-icon-badge launch-icon-purple">
-                                    <svg class="icon-svg icon-lg" viewBox="0 0 24 24">
-                                        <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="launch-card-title">راه‌اندازی سرور نهایی (Production Server)</div>
-                                    <div class="launch-card-desc">
-                                        اجرای پایدار نرم‌افزار برای بهره‌برداری نهایی در مغازه، فروشگاه یا شرکت (`npm start`) جهت حداکثر کارایی و پایداری.
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-                        <button class="btn-base btn-secondary btn-block" onclick="startProdServer()">
-                            <svg class="icon-svg" viewBox="0 0 24 24"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg>
-                            اجرای سرور در حالت نهایی
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Process Management & Quick Actions -->
-                <div class="card" style="margin-top: 16px;">
-                    <div class="card-header-line">
-                        <div class="card-title-group">
-                            <div class="card-title-icon">
-                                <svg class="icon-svg" viewBox="0 0 24 24">
-                                    <rect width="18" height="18" x="3" y="3" rx="2"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <div class="card-title-text">مدیریت پروسه‌ها و کنترل عملیات</div>
-                                <div class="card-subtitle-text">توقف کامل، بستن کلیه پروسه‌های فرزند نود و آزادسازی حافظه</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid-3">
-                        <button class="btn-base btn-danger" onclick="stopServer()">
-                            <svg class="icon-svg" viewBox="0 0 24 24">
-                                <rect width="18" height="18" x="3" y="3" rx="2"/>
-                            </svg>
-                            توقف کامل سرور (Kill Process)
-                        </button>
-
-                        <button class="btn-base btn-warning" onclick="restartServer()">
-                            <svg class="icon-svg" viewBox="0 0 24 24">
-                                <path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/>
-                                <path d="M21 3v5h-5"/>
-                                <path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/>
-                                <path d="M8 16H3v5"/>
-                            </svg>
-                            راه‌اندازی مجدد سرور (Restart)
-                        </button>
-
-                        <button class="btn-base btn-secondary" onclick="freeCurrentPort()">
-                            <svg class="icon-svg" viewBox="0 0 24 24">
-                                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
-                                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
-                            </svg>
-                            آزادسازی پورت (حل تداخل پورت ۳۰۰۰)
-                        </button>
-                    </div>
-                </div>
-
-                <!-- Server Configuration -->
-                <div class="card">
-                    <div class="card-header-line">
-                        <div class="card-title-group">
-                            <div class="card-title-icon">
-                                <svg class="icon-svg" viewBox="0 0 24 24">
-                                    <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"/>
-                                    <circle cx="12" cy="12" r="3"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <div class="card-title-text">پیکربندی پورت و محدوده دسترسی شبکه</div>
-                                <div class="card-subtitle-text">تنظیم پورت گوش‌دادن و اجازه دسترسی به سایر کامپیوترها و تبلت‌های فروشگاه</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="form-row">
-                        <div class="form-col">
-                            <label class="form-label">شماره پورت سرور (پیش‌فرض: ۳۰۰۰):</label>
-                            <input type="text" id="portNum" class="form-input" value="3000" maxlength="5" onchange="updateNetworkCardUI()">
-                        </div>
-
-                        <div class="form-col">
-                            <label class="form-label">محدوده انتشار در شبکه:</label>
-                            <select id="hostSelect" class="form-select" onchange="updateNetworkCardUI()">
-                                <option value="network" selected>کل شبکه محلی، تبلت‌ها و صندوق‌های دیگر (0.0.0.0)</option>
-                                <option value="local">فقط همین رایانه شخصی (127.0.0.1)</option>
-                            </select>
-                        </div>
-                    </div>
-                </div>
-
-            </div>
-
-            <!-- TAB 2: TERMINAL CONSOLE & LOGS -->
-            <div id="tab-panel-logs" class="tab-content">
-                <div class="terminal-container">
-                    <div class="terminal-top-bar">
-                        <div class="terminal-tab-title">
-                            <svg class="icon-svg icon-sm" viewBox="0 0 24 24">
-                                <polyline points="4 17 10 11 4 5"/>
-                                <line x1="12" x2="20" y1="19" y2="19"/>
-                            </svg>
-                            <span>کنسول خروجی فرآیند سرور (Live Server Console)</span>
-                        </div>
-
-                        <div class="terminal-toolbar">
-                            <button id="autoScrollBtn" class="term-tool-btn active" onclick="toggleAutoScroll()">
-                                <svg class="icon-svg icon-sm" viewBox="0 0 24 24"><polyline points="6 9 12 15 18 9"/></svg>
-                                اسکرول خودکار: فعال
-                            </button>
-
-                            <button class="term-tool-btn" onclick="copyTerminalLogs()">
-                                <svg class="icon-svg icon-sm" viewBox="0 0 24 24">
-                                    <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
-                                    <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
-                                </svg>
-                                کپی متن لاگ
-                            </button>
-
-                            <button class="term-tool-btn" onclick="exportLogsToFile()">
-                                <svg class="icon-svg icon-sm" viewBox="0 0 24 24">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                    <polyline points="17 21 17 13 7 13 7 21"/>
-                                    <polyline points="7 3 7 8 15 8"/>
-                                </svg>
-                                ذخیره در فایل
-                            </button>
-
-                            <button class="term-tool-btn" onclick="clearTerminal()">
-                                <svg class="icon-svg icon-sm" viewBox="0 0 24 24">
-                                    <path d="M3 6h18"/>
-                                    <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/>
-                                    <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>
-                                </svg>
-                                پاک‌سازی
-                            </button>
-                        </div>
-                    </div>
-
-                    <div id="terminal" class="terminal-console-body"></div>
-                </div>
-            </div>
-
-            <!-- TAB 3: NETWORK & DEVICES -->
-            <div id="tab-panel-network" class="tab-content">
-                <div class="network-preview-box">
-                    <div class="card-title-group">
-                        <div class="launch-icon-badge launch-icon-blue">
-                            <svg class="icon-svg icon-lg" viewBox="0 0 24 24">
-                                <circle cx="12" cy="12" r="10"/>
-                                <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/>
-                                <path d="M2 12h20"/>
-                            </svg>
-                        </div>
-                        <div>
-                            <div class="card-title-text" style="color: #1e3a8a;">آدرس اتصال سایر دستگاه‌ها در شبکه محلی (LAN)</div>
-                            <div class="card-subtitle-text" style="color: #475569;">
-                                تبلت‌ها، موبایل‌های ویزیتورها و فروشندگان، دستگاه‌های پوز و کامپیوترهای دیگر می‌توانند با وارد کردن این آدرس در مرورگر به سیستم متصل شوند:
-                            </div>
-                        </div>
-                    </div>
-
-                    <div id="lanUrlDisplay" class="network-preview-url">http://127.0.0.1:3000</div>
-
-                    <div style="display: flex; gap: 10px; margin-top: 10px;">
-                        <button class="btn-base btn-primary" onclick="copyLanUrl()">
-                            <svg class="icon-svg" viewBox="0 0 24 24">
-                                <rect width="14" height="14" x="8" y="8" rx="2" ry="2"/>
-                                <path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/>
-                            </svg>
-                            کپی آدرس شبکه در کلیپ‌بورد
-                        </button>
-
-                        <button class="btn-base btn-secondary" onclick="openInBrowser('lan')">
-                            <svg class="icon-svg" viewBox="0 0 24 24">
-                                <path d="M15 3h6v6"/>
-                                <path d="M10 14 21 3"/>
-                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                            </svg>
-                            تست بازکردن این آدرس در مرورگر
-                        </button>
-                    </div>
-                </div>
-
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header-line">
-                            <div class="card-title-group">
-                                <div class="card-title-icon">
-                                    <svg class="icon-svg" viewBox="0 0 24 24">
-                                        <rect width="20" height="14" x="2" y="3" rx="2"/>
-                                        <line x1="8" x2="16" y1="21" y2="21"/>
-                                        <line x1="12" x2="12" y1="17" y2="21"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="card-title-text">آدرس محلی همین سیستم (Localhost)</div>
-                                    <div class="card-subtitle-text">استفاده اختصاصی روی همین کامپیوتر بدون وابستگی به کارت شبکه</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div id="localUrlDisplay" class="network-preview-url" style="background: #f8fafc; border-color: #e2e8f0; color: #334155;">
-                            http://localhost:3000
-                        </div>
-
-                        <button class="btn-base btn-secondary btn-block" onclick="openInBrowser('local')">
-                            <svg class="icon-svg" viewBox="0 0 24 24">
-                                <path d="M15 3h6v6"/>
-                                <path d="M10 14 21 3"/>
-                                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
-                            </svg>
-                            ورود مستقیم در همین کامپیوتر
-                        </button>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header-line">
-                            <div class="card-title-group">
-                                <div class="card-title-icon">
-                                    <svg class="icon-svg" viewBox="0 0 24 24">
-                                        <path d="M20 13c0 5-3.5 7.5-7.66 8.95a1 1 0 0 1-.67-.01C7.5 20.5 4 18 4 13V6a1 1 0 0 1 1-1c2 0 4.5-1.2 6.24-2.72a1.17 1.17 0 0 1 1.52 0C14.51 3.81 17 5 19 5a1 1 0 0 1 1 1z"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="card-title-text">راهنمای فایروال و اتصال آفلاین</div>
-                                    <div class="card-subtitle-text">اتصال بدون نیاز به اینترنت خارجی</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <p style="font-size: 11.5px; color: #64748b; line-height: 1.6; margin: 0 0 12px 0;">
-                            برای اتصال تبلت‌ها و صندوق‌ها، کافیست دستگاه‌ها به همین مودم یا اکسس‌پوینت متصل باشند. در صورت عدم اتصال از تبلت، پورت ۳۰۰۰ را در فایروال ویندوز باز (Inbound Allow) کنید.
-                        </p>
-
-                        <button class="btn-base btn-secondary btn-block" onclick="freeCurrentPort()">
-                            <svg class="icon-svg" viewBox="0 0 24 24">
-                                <rect width="18" height="11" x="3" y="11" rx="2" ry="2"/>
-                                <path d="M7 11V7a5 5 0 0 1 9.9-1"/>
-                            </svg>
-                            بررسی و رفع تداخل احتمالی پورت ۳۰۰۰
-                        </button>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 4: DATABASE & BACKUP -->
-            <div id="tab-panel-database" class="tab-content">
-                <div class="grid-2">
-                    <div class="card">
-                        <div class="card-header-line">
-                            <div class="card-title-group">
-                                <div class="card-title-icon">
-                                    <svg class="icon-svg" viewBox="0 0 24 24">
-                                        <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                        <polyline points="17 21 17 13 7 13 7 21"/>
-                                        <polyline points="7 3 7 8 15 8"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="card-title-text">پشتیبان‌گیری فوری (Quick Backup)</div>
-                                    <div class="card-subtitle-text">تهیه کپی امن با برچسب زمان از فایل‌های اطلاعاتی و پیکربندی</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <p style="font-size: 12px; color: #64748b; line-height: 1.6; margin: 0 0 16px 0;">
-                            این عملیات یک نسخه رونوشت مستقل از کلیه فایل‌های اصلی داده‌ها شامل `database.json`، `db_config.json`، فایل تنظیمات محیطی و نسخه برنامه را در پوشه `my_backups` ذخیره می‌کند.
-                        </p>
-
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn-base btn-primary" onclick="makeQuickBackup()">
-                                <svg class="icon-svg" viewBox="0 0 24 24">
-                                    <path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11l5 5v11a2 2 0 0 1-2 2z"/>
-                                    <polyline points="17 21 17 13 7 13 7 21"/>
-                                    <polyline points="7 3 7 8 15 8"/>
-                                </svg>
-                                ایجاد نسخه پشتیبان دستی هم‌اکنون
-                            </button>
-
-                            <button class="btn-base btn-secondary" onclick="openBackupsFolder()">
-                                <svg class="icon-svg" viewBox="0 0 24 24">
-                                    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
-                                </svg>
-                                مشاهده پوشه پشتیبان‌ها
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="card">
-                        <div class="card-header-line">
-                            <div class="card-title-group">
-                                <div class="card-title-icon">
-                                    <svg class="icon-svg" viewBox="0 0 24 24">
-                                        <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                                        <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                                        <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="card-title-text">ساختار دیتابیس و دسترسی فایل‌ها</div>
-                                    <div class="card-subtitle-text">همگام‌سازی اسکیمای داده‌ها و دسترسی سریع به فایل‌های پروژه</div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <p style="font-size: 12px; color: #64748b; line-height: 1.6; margin: 0 0 16px 0;">
-                            برای اعمال تغییرات ساختاری جداول دیتابیس رابطه ای، از دستور Push استفاده کنید یا پوشه اصلی نرم‌افزار را در اکسپلورر مشاهده نمایید.
-                        </p>
-
-                        <div style="display: flex; gap: 10px;">
-                            <button class="btn-base btn-outline-primary" onclick="runDbPush()">
-                                <svg class="icon-svg" viewBox="0 0 24 24">
-                                    <ellipse cx="12" cy="5" rx="9" ry="3"/>
-                                    <path d="M3 5v14c0 1.66 4 3 9 3s9-1.34 9-3V5"/>
-                                    <path d="M3 12c0 1.66 4 3 9 3s9-1.34 9-3"/>
-                                </svg>
-                                همگام‌سازی دیتابیس (DB Push)
-                            </button>
-
-                            <button class="btn-base btn-secondary" onclick="openProjectFolder()">
-                                <svg class="icon-svg" viewBox="0 0 24 24">
-                                    <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
-                                </svg>
-                                باز کردن پوشه ریشه نرم‌افزار
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            </div>
-
-            <!-- TAB 5: TOOLS & MAINTENANCE -->
-            <div id="tab-panel-tools" class="tab-content">
-                <div class="card">
-                    <div class="card-header-line">
-                        <div class="card-title-group">
-                            <div class="card-title-icon">
-                                <svg class="icon-svg" viewBox="0 0 24 24">
-                                    <path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/>
-                                    <path d="m18 15 4-4"/>
-                                    <path d="m21.5 11.5-1.914-1.914A2 2 0 0 1 19 8.172V7l-2.26-2.26a6 6 0 0 0-4.202-1.756L9 2.96l.92.82A6.18 6.18 0 0 1 12 8.4V10l2 2h1.172a2 2 0 0 1 1.414.586l1.914 1.914"/>
-                                </svg>
-                            </div>
-                            <div>
-                                <div class="card-title-text">ابزارهای نگهداری، پکیج‌ها و بروزرسانی کد</div>
-                                <div class="card-subtitle-text">اجرای خودکار بسته‌های Node.js و بروزرسانی از گیت‌هاب بدون نیاز به CMD</div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <div class="grid-2" style="margin-bottom: 16px;">
-                        <div class="launch-card">
-                            <div class="launch-card-header">
-                                <div class="launch-icon-badge launch-icon-blue">
-                                    <svg class="icon-svg icon-lg" viewBox="0 0 24 24">
-                                        <circle cx="18" cy="18" r="3"/>
-                                        <circle cx="6" cy="6" r="3"/>
-                                        <path d="M13 6h3a2 2 0 0 1 2 2v7"/>
-                                        <line x1="6" x2="6" y1="9" y2="21"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="launch-card-title">دریافت آخرین بروزرسانی (Git Pull)</div>
-                                    <div class="launch-card-desc">دانلود و ادغام آخرین کدهای بروزرسانی شده از مخزن اصلی گیت‌هاب.</div>
-                                </div>
-                            </div>
-                            <button class="btn-base btn-secondary btn-block" onclick="runGitPull()">
-                                اجرای دستور git pull
-                            </button>
-                        </div>
-
-                        <div class="launch-card">
-                            <div class="launch-card-header">
-                                <div class="launch-icon-badge launch-icon-purple">
-                                    <svg class="icon-svg icon-lg" viewBox="0 0 24 24">
-                                        <polyline points="16.5 9.4 7.55 4.24 3.29 7 12 12 20.71 7"/>
-                                        <line x1="12" x2="12" y1="22" y2="12"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="launch-card-title">نصب و بروزرسانی پیش‌نیازها (NPM Install)</div>
-                                    <div class="launch-card-desc">بررسی و بارگذاری پکیج‌های کتابخانه‌ها در پوشه node_modules.</div>
-                                </div>
-                            </div>
-                            <button class="btn-base btn-secondary btn-block" onclick="runNpmInstall()">
-                                اجرای دستور npm install
-                            </button>
-                        </div>
-                    </div>
-
-                    <div class="grid-2">
-                        <div class="launch-card">
-                            <div class="launch-card-header">
-                                <div class="launch-icon-badge launch-icon-green">
-                                    <svg class="icon-svg icon-lg" viewBox="0 0 24 24">
-                                        <path d="m15 12-8.373 8.373a1 1 0 1 1-3-3L12 9"/>
-                                        <path d="m18 15 4-4"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="launch-card-title">ساخت بسته نهایی برنامه (NPM Build)</div>
-                                    <div class="launch-card-desc">تولید نسخه کامپایل‌شده فرانت‌اند جهت استفاده در محیط Production.</div>
-                                </div>
-                            </div>
-                            <button class="btn-base btn-secondary btn-block" onclick="runNpmBuild()">
-                                اجرای دستور npm run build
-                            </button>
-                        </div>
-
-                        <div class="launch-card">
-                            <div class="launch-card-header">
-                                <div class="launch-icon-badge launch-icon-amber">
-                                    <svg class="icon-svg icon-lg" viewBox="0 0 24 24">
-                                        <circle cx="11" cy="11" r="8"/>
-                                        <line x1="21" x2="16.65" y1="21" y2="16.65"/>
-                                    </svg>
-                                </div>
-                                <div>
-                                    <div class="launch-card-title">بررسی خطاهای کد (Lint Check)</div>
-                                    <div class="launch-card-desc">اسکن تایپ‌اسکریپت و تحلیل کدها جهت یافتن مشکلات نحوی قبل از اجرا.</div>
-                                </div>
-                            </div>
-                            <button class="btn-base btn-secondary btn-block" onclick="runLintCheck()">
-                                اجرای دستور npm run lint
-                            </button>
-                        </div>
-                    </div>
-
-                </div>
-            </div>
-
-        </main>
-
-        <!-- FOOTER BAR -->
-        <footer class="footer-bar">
-            <div class="footer-left">
-                <span>نسخه نود: <strong id="nodeVerDisplay" style="color: #2563eb; font-family: monospace;">در حال بررسی...</strong></span>
-                <span>·</span>
-                <span class="footer-clickable" onclick="openProjectFolder()">
-                    <svg class="icon-svg icon-sm" viewBox="0 0 24 24">
-                        <path d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"/>
-                    </svg>
-                    پوشه نرم‌افزار: <span id="footerPathDisplay" style="direction: ltr; font-family: monospace;"></span>
-                </span>
-            </div>
-
-            <div>
-                <span>نسخه پنل مدیریت: <strong>v3.0 Enterprise</strong> · طراحی تم اداری و یکپارچه</span>
-            </div>
-        </footer>
-
-    </div>
 </body>
 </html>

@@ -56,6 +56,7 @@ import {
   Zap,
   Hammer,
   Wrench,
+  Server,
 } from "lucide-react";
 
 export interface SidebarItem {
@@ -1120,6 +1121,15 @@ export const allSidebarGroups: SidebarGroup[] = [
         roles: ["admin"],
         badge: "لاگ",
         badgeColor: "blue",
+      },
+      {
+        id: "server_panel",
+        label: "پنل مدیریت و راه‌اندازی سرور",
+        shortLabel: "مدیریت سرور",
+        icon: <Server className="w-4 h-4 text-emerald-500" />,
+        roles: ["admin", "manager"],
+        badge: "سرور",
+        badgeColor: "emerald",
       },
       {
         id: "system_info",

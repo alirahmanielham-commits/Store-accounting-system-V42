@@ -343,6 +343,7 @@ const KardexReport = React.lazy(() => import('./components/reports/KardexReport'
 const CRMDashboard = React.lazy(() => import('./components/crm/CRMDashboard'));
 const SystemDiagnostics = React.lazy(() => import('./components/admin/SystemDiagnostics'));
 const SystemInfo = React.lazy(() => import('./components/admin/SystemInfo'));
+const ServerManagementPanel = React.lazy(() => import('./components/admin/ServerManagementPanel'));
 const StocktakingManager = React.lazy(() => import('./components/inventory/StocktakingManager'));
 const SalesReport = React.lazy(() => import('./components/reports/SalesReport'));
 const AnalyticalDashboard = React.lazy(() => import('./components/reports/AnalyticalDashboard'));
@@ -1283,6 +1284,7 @@ export default function App() {
 <Route path="/loans_settings" element={<LoansManager activeTab="settings" showNotification={showNotification} persons={persons} accounts={accounts} loans={loans} setLoans={setLoans} installments={installments} setInstallments={setInstallments} currentUser={user?.name || "کاربر سیستم"} userRole={user?.role} setAccounts={setAccounts} transactions={transactions} setTransactions={setTransactions} storeSettings={storeSettings} />} />
 
 <Route path="/system_info" element={<SystemInfo />} />
+<Route path="/server_panel" element={<ServerManagementPanel />} />
 <Route path="/system_diagnostics" element={<SystemDiagnostics
   persons={persons}
   products={products}

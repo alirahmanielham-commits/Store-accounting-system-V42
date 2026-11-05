@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>پنل مدیریت و راه‌اندازی سرور حسابداری</title>
+    <link href="https://fonts.googleapis.com/css2?family=Vazirmatn:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+            font-family: 'Vazirmatn', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        body {
+            background-color: #0b1120;
+            color: #f1f5f9;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            line-height: 1.5;
+        }
+
+        .header {
+            background: linear-gradient(180deg, #1e293b 0%, #0f172a 100%);
+            border-bottom: 1px solid #334155;
+            padding: 24px 32px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+
+        .header-brand {
+            display: flex;
+            align-items: center;
+            gap: 14px;
+        }
+
+        .logo-box {
+            width: 48px;
+            height: 48px;
+            background: linear-gradient(135deg, #059669 0%, #10b981 100%);
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            color: #ffffff;
+            box-shadow: 0 4px 16px rgba(16, 185, 129, 0.3);
+        }
+
+        .header-title h1 {
+            font-size: 20px;
+            font-weight: 800;
+            color: #ffffff;
+        }
+
+        .header-title p {
+            font-size: 13px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        .badge-status {
+            display: inline-flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 18px;
+            border-radius: 9999px;
+            background: rgba(30, 41, 59, 0.85);
+            border: 1px solid #334155;
+            font-size: 13px;
+            font-weight: 600;
+        }
+
+        .pulse-dot {
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background-color: #64748b;
+        }
+
+        .pulse-dot.online {
+            background-color: #10b981;
+            box-shadow: 0 0 12px #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        .pulse-dot.offline {
+            background-color: #ef4444;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0.7); }
+            70% { transform: scale(1); box-shadow: 0 0 0 8px rgba(16, 185, 129, 0); }
+            100% { transform: scale(0.95); box-shadow: 0 0 0 0 rgba(16, 185, 129, 0); }
+        }
+
+        .container {
+            flex: 1;
+            max-width: 960px;
+            width: 100%;
+            margin: 0 auto;
+            padding: 32px 24px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+
+        .card {
+            background: #1e293b;
+            border: 1px solid #334155;
+            border-radius: 18px;
+            padding: 24px;
+            box-shadow: 0 8px 30px rgba(0, 0, 0, 0.25);
+        }
+
+        .card-head {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 12px;
+            border-bottom: 1px solid #334155;
+        }
+
+        .card-head h2 {
+            font-size: 16px;
+            font-weight: 700;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .grid-3 {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+            gap: 16px;
+        }
+
+        .stat-box {
+            background: #0f172a;
+            border: 1px solid #26334d;
+            border-radius: 12px;
+            padding: 16px;
+        }
+
+        .stat-label {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 6px;
+        }
+
+        .stat-val {
+            font-size: 15px;
+            font-weight: 700;
+            color: #38bdf8;
+            direction: ltr;
+            text-align: right;
+        }
+
+        .actions-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+            gap: 16px;
+        }
+
+        .action-card {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            background: #0f172a;
+            border: 1px solid #334155;
+            border-radius: 14px;
+            padding: 16px;
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .action-card:hover {
+            transform: translateY(-2px);
+            border-color: #64748b;
+            background: #182235;
+        }
+
+        .action-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 20px;
+            flex-shrink: 0;
+        }
+
+        .icon-blue { background: rgba(59, 130, 246, 0.15); color: #60a5fa; }
+        .icon-green { background: rgba(16, 185, 129, 0.15); color: #34d399; }
+        .icon-amber { background: rgba(245, 158, 11, 0.15); color: #fbbf24; }
+        .icon-purple { background: rgba(168, 85, 247, 0.15); color: #c084fc; }
+
+        .action-text h3 {
+            font-size: 14px;
+            font-weight: 700;
+            color: #f1f5f9;
+        }
+
+        .action-text p {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-top: 2px;
+        }
+
+        .cmd-box {
+            background: #080c14;
+            border: 1px solid #1e293b;
+            border-radius: 10px;
+            padding: 14px 18px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-top: 10px;
+            direction: ltr;
+        }
+
+        .cmd-text {
+            font-family: 'Consolas', 'Courier New', monospace;
+            font-size: 13px;
+            color: #38bdf8;
+        }
+
+        .copy-btn {
+            background: #334155;
+            color: #e2e8f0;
+            border: none;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-family: inherit;
+            cursor: pointer;
+            transition: background 0.15s;
+        }
+
+        .copy-btn:hover {
+            background: #475569;
+        }
+
+        .footer {
+            text-align: center;
+            padding: 20px;
+            color: #64748b;
+            font-size: 13px;
+            border-top: 1px solid #1e293b;
+        }
+    </style>
+</head>
+<body>
+
+    <header class="header">
+        <div class="header-brand">
+            <div class="logo-box">&#9881;</div>
+            <div class="header-title">
+                <h1>پنل مدیریت و راه‌اندازی سرور</h1>
+                <p>داشبورد راهنمای سریع و اجرای آسان سیستم حسابداری</p>
+            </div>
+        </div>
+        <div class="badge-status">
+            <div class="pulse-dot" id="statusDot"></div>
+            <span id="statusText">در حال سنجش وضعیت سرور...</span>
+        </div>
+    </header>
+
+    <main class="container">
+        <!-- Live Status -->
+        <div class="card">
+            <div class="card-head">
+                <h2>&#128421; وضعیت ارتباط و پورت</h2>
+                <button onclick="checkHealth()" class="copy-btn">&#128260; بروزرسانی وضعیت</button>
+            </div>
+            <div class="grid-3">
+                <div class="stat-box">
+                    <div class="stat-label">آدرس دسترسی لوکال</div>
+                    <div class="stat-val">http://localhost:3000</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">وضعیت پاسخگویی پورت ۳۰۰۰</div>
+                    <div class="stat-val" id="portStatusText">در حال بررسی...</div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-label">سرعت پاسخ سرور (Latency)</div>
+                    <div class="stat-val" id="latencyText">-</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Quick Access -->
+        <div class="card">
+            <div class="card-head">
+                <h2>&#128640; دسترسی‌های سریع</h2>
+            </div>
+            <div class="actions-grid">
+                <a href="http://localhost:3000" target="_blank" class="action-card">
+                    <div class="action-icon icon-green">&#127760;</div>
+                    <div class="action-text">
+                        <h3>ورود به برنامه حسابداری</h3>
+                        <p>http://localhost:3000</p>
+                    </div>
+                </a>
+
+                <a href="http://localhost:3000/#/server_panel" target="_blank" class="action-card">
+                    <div class="action-icon icon-blue">&#9881;</div>
+                    <div class="action-text">
+                        <h3>پنل مانیتورینگ پیشرفته سرور</h3>
+                        <p>مشاهده مصرف رم، شبکه و سلامت دیتابیس</p>
+                    </div>
+                </a>
+
+                <a href="http://localhost:3000/#/system_info" target="_blank" class="action-card">
+                    <div class="action-icon icon-purple">&#128196;</div>
+                    <div class="action-text">
+                        <h3>مشخصات فنی و سخت‌افزار</h3>
+                        <p>اطلاعات سیستم‌عامل و هسته‌های پردازنده</p>
+                    </div>
+                </a>
+
+                <div class="action-card" onclick="triggerBackup()">
+                    <div class="action-icon icon-amber">&#128190;</div>
+                    <div class="action-text">
+                        <h3>تهیه نسخه پشتیبان اضطراری</h3>
+                        <p id="backupSubText">پشتیبان‌گیری فوری از فایل‌های داده</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLI Commands Helper -->
+        <div class="card">
+            <div class="card-head">
+                <h2>&#128187; دستورات خط فرمان جهت اجرای دستی (Terminal Commands)</h2>
+            </div>
+            
+            <p style="font-size: 13px; color: #94a3b8; margin-bottom: 8px;">راه‌اندازی سرور در محیط توسعه (Dev Mode):</p>
+            <div class="cmd-box">
+                <span class="cmd-text" id="cmdDev">npm run dev</span>
+                <button class="copy-btn" onclick="copyText('npm run dev')">کپی دستور</button>
+            </div>
+
+            <p style="font-size: 13px; color: #94a3b8; margin-top: 16px; margin-bottom: 8px;">آزادسازی پورت ۳۰۰۰ در ویندوز (Kill Port 3000):</p>
+            <div class="cmd-box">
+                <span class="cmd-text" id="cmdKill">FOR /F "tokens=5" %T IN ('netstat -a -n -o ^| findstr :3000') DO taskkill /F /T /PID %T</span>
+                <button class="copy-btn" onclick="copyText('FOR /F &quot;tokens=5&quot; %T IN (\'netstat -a -n -o ^| findstr :3000\') DO taskkill /F /T /PID %T')">کپی دستور</button>
+            </div>
+        </div>
+    </main>
+
+    <footer class="footer">
+        پنل مدیریت سرور یکپارچه حسابداری &bull; پورت استاندارد: ۳۰۰۰
+    </footer>
+
+    <script>
+        function checkHealth() {
+            var dot = document.getElementById('statusDot');
+            var statusText = document.getElementById('statusText');
+            var portText = document.getElementById('portStatusText');
+            var latencyText = document.getElementById('latencyText');
+
+            var startTime = Date.now();
+            fetch('/api/health')
+                .then(function(res) {
+                    var elapsed = Date.now() - startTime;
+                    if (res.ok) {
+                        dot.className = 'pulse-dot online';
+                        statusText.innerText = 'سرور فعال و پاسخگو است';
+                        portText.innerText = 'آنلاین (HTTP 200)';
+                        latencyText.innerText = elapsed + ' میلی‌ثانیه';
+                    } else {
+                        throw new Error('Status ' + res.status);
+                    }
+                })
+                .catch(function() {
+                    dot.className = 'pulse-dot offline';
+                    statusText.innerText = 'سرور متوقف یا پورت در دسترس نیست';
+                    portText.innerText = 'آفلاین یا پورت ۳۰۰۰ مسدود';
+                    latencyText.innerText = '-';
+                });
+        }
+
+        function triggerBackup() {
+            var sub = document.getElementById('backupSubText');
+            sub.innerText = 'در حال تهیه نسخه پشتیبان...';
+            fetch('/api/db/backups/create', { method: 'POST' })
+                .then(function(res) { return res.json(); })
+                .then(function(data) {
+                    if (data.success || data.filename) {
+                        sub.innerText = 'پشتیبان‌گیری با موفقیت انجام شد!';
+                    } else {
+                        sub.innerText = 'پشتیبان ذخیره شد.';
+                    }
+                })
+                .catch(function(e) {
+                    sub.innerText = 'خطا در ارتباط با سرور یا عدم احراز هویت.';
+                });
+        }
+
+        function copyText(txt) {
+            navigator.clipboard.writeText(txt).then(function() {
+                alert('دستور در کلیپ‌بورد کپی شد.');
+            });
+        }
+
+        checkHealth();
+        setInterval(checkHealth, 10000);
+    </script>
+</body>
+</html>
