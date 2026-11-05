@@ -428,44 +428,6 @@ import {
                         )}
                       </div>
                     </div>
-
-                    {/* Instant Fast-Add Product Bar (Top of table) */}
-                    <div className="flex items-center gap-2 bg-white p-2 rounded-xl border border-slate-200 shadow-2xs">
-                      <div className="w-40 shrink-0">
-                        <FastBarcodeScanner onScan={handleFastBarcodeScan} />
-                      </div>
-                      <div className="flex-1 relative z-20">
-                        <SearchableSelect
-                          menuPlacement="bottom"
-                          options={(products || [])
-                            .filter((p: any) => p.isActive !== false)
-                            .map((p: any) => ({
-                              value: p.id,
-                              label: p.name,
-                              subLabel:
-                                p.code || p.barcode
-                                  ? `کد: ${p.code || "-"} | بارکد: ${p.barcode || "-"}`
-                                  : undefined,
-                              badge: p.type === "service" ? "خدمات" : "کالا",
-                              searchStr: `${p.code || ""} ${p.barcode || ""}`,
-                            }))}
-                          value=""
-                          onChange={(val: any) => handleFastAddProduct(String(val))}
-                          placeholder="افزودن سریع کالا به لیست برگشت (نام، کد، بارکد)..."
-                          searchPlaceholder="جستجوی کالا برای برگشت از خرید..."
-                        />
-                      </div>
-                      {setIsScannerOpen && (
-                        <button
-                          type="button"
-                          onClick={() => setIsScannerOpen(true)}
-                          className="p-2 text-slate-500 hover:text-emerald-600 hover:bg-emerald-50 rounded-lg border border-slate-200 transition-colors shrink-0 cursor-pointer"
-                          title="اسکن بارکد با دوربین"
-                        >
-                          <ScanLine className="w-4 h-4" />
-                        </button>
-                      )}
-                    </div>
                   </div>
               <div className="overflow-x-auto">
                 <table className="w-full text-right min-w-[950px] border-collapse">
@@ -750,6 +712,48 @@ import {
                     ))}
                   </tbody>
                 </table>
+              </div>
+
+              {/* Bottom Fast Product Entry Bar (Moves down automatically with the list) */}
+              <div className="p-3.5 bg-gradient-to-r from-emerald-50/90 via-slate-50 to-emerald-50/60 border-t-2 border-emerald-200 flex flex-col sm:flex-row items-center gap-2.5 relative z-30">
+                <div className="shrink-0 w-full sm:w-auto">
+                  <FastBarcodeScanner onScan={handleFastBarcodeScan} />
+                </div>
+
+                <div className="flex-1 w-full relative z-30">
+                  <div className="border-2 border-emerald-400 hover:border-emerald-500 focus-within:border-emerald-600 focus-within:ring-2 focus-within:ring-emerald-200 rounded-xl bg-white shadow-xs transition-all">
+                    <SearchableSelect
+                      menuPlacement="top"
+                      options={(products || [])
+                        .filter((p: any) => p.isActive !== false)
+                        .map((p: any) => ({
+                          value: p.id,
+                          label: p.name,
+                          subLabel:
+                            p.code || p.barcode
+                              ? `کد: ${p.code || "-"} | بارکد: ${p.barcode || "-"}`
+                              : undefined,
+                          badge: p.type === "service" ? "خدمات" : "کالا",
+                          searchStr: `${p.code || ""} ${p.barcode || ""}`,
+                        }))}
+                      value=""
+                      onChange={(val: any) => handleFastAddProduct(String(val))}
+                      placeholder="⚡ افزودن سطر بعدی: جستجو و انتخاب کالا برای برگشت (نام، کد، بارکد)..."
+                      searchPlaceholder="جستجوی کالا برای برگشت از خرید..."
+                    />
+                  </div>
+                </div>
+
+                {setIsScannerOpen && (
+                  <button
+                    type="button"
+                    onClick={() => setIsScannerOpen(true)}
+                    className="p-2.5 bg-white border border-emerald-300 text-emerald-700 rounded-xl hover:bg-emerald-50 transition-colors cursor-pointer shrink-0 shadow-2xs"
+                    title="اسکن بارکد با دوربین"
+                  >
+                    <ScanLine className="w-4 h-4" />
+                  </button>
+                )}
               </div>
             </div>
           </div>

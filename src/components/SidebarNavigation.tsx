@@ -558,6 +558,103 @@ export default function SidebarNavigation({
           </div>
         </aside>
       )}
+
+      {/* Mobile Slide-Over Drawer */}
+      <AnimatePresence>
+        {isSidebarOpen && (
+          <div className="fixed inset-0 z-[200] md:hidden print:hidden select-none" dir="rtl">
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setIsSidebarOpen(false)}
+              className="fixed inset-0 bg-slate-950/70 backdrop-blur-xs"
+            />
+
+            {/* Slide-out Drawer Panel */}
+            <motion.aside
+              initial={{ x: "100%" }}
+              animate={{ x: 0 }}
+              exit={{ x: "100%" }}
+              transition={{ type: "spring", damping: 26, stiffness: 280 }}
+              className={`relative z-10 w-80 max-w-[85vw] h-full shadow-2xl flex flex-col border-l overflow-hidden ${
+                isGmailTheme
+                  ? "bg-[#f6f8fc] border-slate-200 text-slate-800"
+                  : `bg-slate-900 border-slate-800 text-slate-300 theme-${storeSettings?.theme || "classic"}`
+              }`}
+            >
+              {/* Drawer Top Header */}
+              <div
+                className={`p-4 flex items-center justify-between ${
+                  isGmailTheme ? "border-b border-slate-200/60" : "border-b border-slate-800"
+                }`}
+              >
+                <div className="flex items-center gap-2.5 min-w-0">
+                  {storeSettings?.logoUrl ? (
+                    <img
+                      src={storeSettings.logoUrl}
+                      className="w-8 h-8 rounded-xl object-cover shadow-xs shrink-0"
+                      alt="لوگو"
+                    />
+                  ) : (
+                    <div className="w-8 h-8 bg-indigo-600 rounded-xl flex items-center justify-center text-white shadow-md shadow-indigo-600/30 font-black text-sm shrink-0">
+                      ت
+                    </div>
+                  )}
+                  <div className="min-w-0">
+                    <h2 className={`font-black text-sm truncate ${isGmailTheme ? "text-slate-900" : "text-white"}`}>
+                      {storeSettings?.storeName || "سیستم یکپارچه حسابداری"}
+                    </h2>
+                    <p className={`text-[11px] truncate ${isGmailTheme ? "text-slate-500" : "text-slate-400"}`}>
+                      {user?.name || user?.username || "منوی اصلی"}
+                    </p>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => setIsSidebarOpen(false)}
+                  className={`w-8 h-8 rounded-lg flex items-center justify-center transition-colors cursor-pointer ${
+                    isGmailTheme ? "text-slate-500 hover:text-slate-800 hover:bg-slate-200" : "text-slate-400 hover:text-white hover:bg-slate-800"
+                  }`}
+                  title="بستن منو"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+
+              {/* Sidebar Items Content */}
+              <div className="flex-1 flex flex-col overflow-hidden">
+                {renderSidebarGroups()}
+              </div>
+
+              {/* Drawer Footer with Logout */}
+              <div
+                className={`p-3 ${
+                  isGmailTheme ? "border-t border-slate-200/60" : "border-t border-slate-800"
+                }`}
+              >
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsSidebarOpen(false);
+                    signOut();
+                  }}
+                  className={`w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-xs font-bold transition-colors cursor-pointer ${
+                    isGmailTheme
+                      ? "text-[#b3261e] hover:bg-rose-50 border border-rose-100"
+                      : "text-rose-400 hover:text-white hover:bg-rose-500/20 border border-rose-500/10"
+                  }`}
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>خروج از حساب کاربری</span>
+                </button>
+              </div>
+            </motion.aside>
+          </div>
+        )}
+      </AnimatePresence>
     </>
   );
 }

@@ -1898,7 +1898,6 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
           
           
 
-          <MobileRestrictedMenu activeTab={activeTab} setActiveTab={setActiveTab} setIsPersonModalOpen={setIsPersonModalOpen} setIsProductModalOpen={setIsProductModalOpen} />
           {/* Gmail style Compose Quick Action Modal */}
           {isComposeOpen && (
                     <div key="isComposeOpen-modal"
@@ -2422,26 +2421,24 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                   }}
                 />
               )}
-              <div className="hidden md:block">
                 <SidebarNavigation
                   mode="sidebar"
-                user={user}
-                signOut={signOut}
-                activeTab={activeTab}
-                setActiveTab={setActiveTab}
-                systemModule={systemModule}
-                hasCheckedFinancialYears={hasCheckedFinancialYears}
-                activeFinancialYear={activeFinancialYear}
-                isGmailTheme={isGmailTheme}
-                storeSettings={storeSettings}
-                isSidebarOpen={isSidebarOpen}
-                setIsSidebarOpen={setIsSidebarOpen}
-                menuLayout={menuLayout}
-                setIsComposeOpen={setIsComposeOpen}
-                expandedGroups={expandedGroups}
-                setExpandedGroups={setExpandedGroups}
-              />
-    </div>
+                  user={user}
+                  signOut={signOut}
+                  activeTab={activeTab}
+                  setActiveTab={setActiveTab}
+                  systemModule={systemModule}
+                  hasCheckedFinancialYears={hasCheckedFinancialYears}
+                  activeFinancialYear={activeFinancialYear}
+                  isGmailTheme={isGmailTheme}
+                  storeSettings={storeSettings}
+                  isSidebarOpen={isSidebarOpen}
+                  setIsSidebarOpen={setIsSidebarOpen}
+                  menuLayout={menuLayout}
+                  setIsComposeOpen={setIsComposeOpen}
+                  expandedGroups={expandedGroups}
+                  setExpandedGroups={setExpandedGroups}
+                />
                         {/* Main Content Area */}
               <div
                 className={`flex-1 flex flex-col w-full min-w-0 min-h-0 transition-all duration-300 overflow-hidden print:overflow-visible print:bg-white print:h-auto ${isGmailTheme ? "bg-white md:rounded-3xl md:border md:border-slate-200/80 md:m-3 md:shadow-xs" : ""}`}
@@ -2459,11 +2456,16 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                     dir="rtl"
                   >
                     <div className="flex items-center gap-2 md:gap-3">
-                      {/* Mobile Edition Badge (Desktop menus hidden on mobile) */}
-                      <div className="flex md:hidden items-center gap-1.5 h-8 px-2.5 rounded-xl bg-indigo-50 border border-indigo-200/60 text-indigo-700 text-xs font-black shadow-3xs shrink-0">
-                        <Smartphone className="w-3.5 h-3.5 text-indigo-600" />
-                        <span>نسخه همراه</span>
-                      </div>
+                      {/* Mobile Hamburger Menu Toggle Button */}
+                      <button
+                        type="button"
+                        onClick={() => setIsSidebarOpen(true)}
+                        className="flex md:hidden w-9 h-9 rounded-xl items-center justify-center text-slate-700 hover:bg-slate-100 active:scale-95 transition-all cursor-pointer bg-white border border-slate-200 shadow-2xs shrink-0"
+                        aria-label="منوی اصلی سیستم"
+                        title="منوی اصلی سیستم"
+                      >
+                        <Menu className="w-5 h-5 text-slate-700" />
+                      </button>
                       <div className="font-extrabold text-slate-900 flex items-center gap-2">
                         {storeSettings.logoUrl ? (
                           <img
@@ -3388,14 +3390,16 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
             <ProfileModal onClose={() => setIsProfileModalOpen(false)} />
           )}
 
-          <Suspense fallback={null}>
-            <ScreensaverManager
-              persons={persons}
-              accountingDocuments={accountingDocuments}
-              storeSettings={storeSettings}
-              formatNumber={formatNumber}
-            />
-          </Suspense>
+          {!isMobileScreen && (
+            <Suspense fallback={null}>
+              <ScreensaverManager
+                persons={persons}
+                accountingDocuments={accountingDocuments}
+                storeSettings={storeSettings}
+                formatNumber={formatNumber}
+              />
+            </Suspense>
+          )}
           {submitting && !previewInvoiceData && (
             <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-sm z-[99999] flex flex-col items-center justify-center p-8 text-center cursor-wait select-none" dir="rtl">
               <div className="w-16 h-16 relative flex items-center justify-center mb-6">

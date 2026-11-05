@@ -14,6 +14,13 @@ const ScreensaverManager: React.FC<ScreensaverManagerProps> = (props) => {
   // Read idle timeout from settings, default to 60 seconds
   const [idleTimeout, setIdleTimeout] = useState<number>(60);
   
+  // Mobile check: completely disabled on mobile devices
+  const isMobile = typeof window !== 'undefined' && (
+    window.innerWidth < 768 || 
+    window.screen.width < 768 || 
+    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+  );
+  
   useEffect(() => {
     try {
       const savedSettings = localStorage.getItem('debtors_showcase_settings');
@@ -42,7 +49,7 @@ const ScreensaverManager: React.FC<ScreensaverManagerProps> = (props) => {
     }
   });
 
-  if (!isIdle || idleTimeout === 0) return null;
+  if (isMobile || !isIdle || idleTimeout === 0) return null;
 
   return (
     <div className="fixed inset-0 z-[99999] bg-slate-900" onClick={resetTimer}>

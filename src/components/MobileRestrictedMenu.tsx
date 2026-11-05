@@ -260,6 +260,16 @@ export default function MobileRestrictedMenu({
   setIsPersonModalOpen,
   setIsProductModalOpen,
 }: MobileRestrictedMenuProps) {
+  // Mobile bottom menu removed per user request (only hamburger menu is used on mobile)
+  return null;
+}
+
+function _UnusedMobileRestrictedMenu({
+  activeTab,
+  setActiveTab,
+  setIsPersonModalOpen,
+  setIsProductModalOpen,
+}: MobileRestrictedMenuProps) {
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
 

@@ -31,6 +31,12 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   isScreensaverMode, 
   onCloseScreensaver 
 }) => {
+  const isMobile = typeof window !== 'undefined' && (
+    window.innerWidth < 768 || 
+    window.screen.width < 768 || 
+    /Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)
+  );
+
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isPaused, setIsPaused] = useState(false);
@@ -281,6 +287,28 @@ const DebtorsShowcase: React.FC<DebtorsShowcaseProps> = ({
   };
 
   const currentDebtors = debtors.slice(currentIndex, currentIndex + simultaneousCount);
+
+  if (isMobile) {
+    return (
+      <div className="flex-1 flex flex-col items-center justify-center p-6 text-center min-h-[400px]" dir="rtl">
+        <div className="w-16 h-16 rounded-2xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 flex items-center justify-center text-amber-600 mb-4 shadow-sm">
+          <ShieldAlert className="w-8 h-8" />
+        </div>
+        <h2 className="text-lg font-black text-slate-800 dark:text-slate-100 mb-2">
+          ویترین و کنسول رهگیری بدهکاران در نسخه موبایل غیرفعال است
+        </h2>
+        <p className="text-xs text-slate-500 dark:text-slate-400 max-w-sm leading-relaxed mb-6">
+          این کنسول جهت مانیتورهای عریض رومیزی و اسکرین‌سیور طراحی شده است. برای مشاهده و پیگیری وضعیت مطالبات در تلفن همراه، از گزارش مانده‌حساب بدهکاران استفاده فرمایید.
+        </p>
+        <a
+          href="#/debts_credits"
+          className="inline-flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold transition shadow-sm"
+        >
+          <span>مشاهده گزارش بدهکاران / بستانکاران</span>
+        </a>
+      </div>
+    );
+  }
 
   if (debtors.length === 0) {
     return (
