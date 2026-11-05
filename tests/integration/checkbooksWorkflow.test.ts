@@ -175,4 +175,70 @@ describe('Integration — Checkbooks & Leaves Management Workflow', () => {
       .set('Authorization', `Bearer ${adminToken}`);
     expect(leaves.body.filter((l: any) => l.checkbookId === 'cb-mistake-202').length).toBe(0);
   });
+
+  test('Digital checkbook registration and leaf management workflow', async () => {
+    // 1. Register a digital checkbook (چک امن دیجیتال چکاد)
+    const digitalCb = {
+      id: 'cb-chakad-303',
+      accountId: 'acc-mellat-1',
+      bankName: 'بانک ملت',
+      type: 'digital',
+      isDigital: true,
+      startNumber: '5001',
+      endNumber: '5003',
+      totalLeaves: 3,
+      issuedDate: '2026-11-05'
+    };
+
+    const cbRes = await request(app)
+      .post('/api/data/checkbooks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send([digitalCb]);
+
+    expect(cbRes.status).toBe(200);
+
+    // 2. Create blank leaves marked as digital
+    const digitalLeaves = [
+      { id: 'leaf-5001', checkbookId: 'cb-chakad-303', checkNumber: '5001', amount: 0, status: 'blank', isDigital: true, checkType: 'digital' },
+      { id: 'leaf-5002', checkbookId: 'cb-chakad-303', checkNumber: '5002', amount: 0, status: 'blank', isDigital: true, checkType: 'digital' },
+      { id: 'leaf-5003', checkbookId: 'cb-chakad-303', checkNumber: '5003', amount: 0, status: 'blank', isDigital: true, checkType: 'digital' }
+    ];
+
+    const leavesRes = await request(app)
+      .post('/api/data/issued_checks')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(digitalLeaves);
+
+    expect(leavesRes.status).toBe(200);
+
+    // 3. Edit leaf directly (e.g. setting sayadId, amount, and transitioning to accepted in Chakad)
+    const editedLeaf = {
+      ...digitalLeaves[0],
+      sayadId: '9876543210987654',
+      amount: 45000000,
+      payeeName: 'شرکت فناوران نوین',
+      status: 'accepted',
+      reason: 'تسویه قرارداد نرم‌افزاری'
+    };
+
+    const updateRes = await request(app)
+      .put('/api/data/issued_checks/leaf-5001')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(editedLeaf);
+
+    expect(updateRes.status).toBe(200);
+
+    // 4. Verify updated leaf in checkbook
+    const fetchedLeaves = await request(app)
+      .get('/api/data/issued_checks')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const target = fetchedLeaves.body.find((l: any) => l.id === 'leaf-5001');
+    expect(target).toBeDefined();
+    expect(target.status).toBe('accepted');
+    expect(target.sayadId).toBe('9876543210987654');
+    expect(target.payeeName).toBe('شرکت فناوران نوین');
+    expect(Number(target.amount)).toBe(45000000);
+    expect(target.isDigital).toBe(true);
+  });
 });

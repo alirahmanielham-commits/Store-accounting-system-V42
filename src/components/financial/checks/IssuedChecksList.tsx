@@ -27,6 +27,10 @@ export function IssuedChecksList({
     switch (status) {
       case 'cashed':
         return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-100/50"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500"></span>پاس شده</span>;
+      case 'accepted':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-emerald-50 text-emerald-800 border border-emerald-200/60"><span className="w-1.5 h-1.5 rounded-full bg-emerald-600"></span>تایید صیاد/چکاد</span>;
+      case 'returned_to_issuer':
+        return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-amber-50 text-amber-800 border border-amber-200/60"><span className="w-1.5 h-1.5 rounded-full bg-amber-600"></span>عودت گیرنده</span>;
       case 'bounced':
         return <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-bold bg-rose-50 text-rose-700 border border-rose-100/50"><span className="w-1.5 h-1.5 rounded-full bg-rose-500"></span>برگشتی</span>;
       case 'cancelled':
@@ -238,7 +242,12 @@ export function IssuedChecksList({
                     
                     <td className="px-5 py-4">
                       <div className="flex flex-col gap-1">
-                        <button onClick={() => setViewingCheck && setViewingCheck({ ...c, _type: 'issued' })} className="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-sm tracking-widest text-right">{toPersianDigits(c.checkNumber)}</button>
+                        <div className="flex items-center gap-1.5">
+                          <button onClick={() => setViewingCheck && setViewingCheck({ ...c, _type: 'issued' })} className="font-mono font-black text-indigo-600 hover:text-indigo-800 hover:underline cursor-pointer text-sm tracking-widest text-right">{toPersianDigits(c.checkNumber)}</button>
+                          {(c.isDigital || c.checkType === 'digital') && (
+                            <span className="text-[10px] font-black text-purple-700 bg-purple-50 border border-purple-200 px-1.5 py-0.2 rounded">چکاد</span>
+                          )}
+                        </div>
                         {c.bankName && <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded w-max">{c.bankName}</span>}
                       </div>
                     </td>

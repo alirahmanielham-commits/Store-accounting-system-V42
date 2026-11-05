@@ -482,6 +482,7 @@ export async function ensurePostgresTables(poolOverride?: any) {
               ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "account_id" VARCHAR;
               ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "accountNumber" VARCHAR;
               ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "account_number" VARCHAR;
+              ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "type" VARCHAR DEFAULT 'paper';
               ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "startNumber" VARCHAR;
               ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "start_number" VARCHAR;
               ALTER TABLE "checkbooks" ADD COLUMN IF NOT EXISTS "endNumber" VARCHAR;
@@ -520,6 +521,10 @@ export async function ensurePostgresTables(poolOverride?: any) {
               ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "receipt_number" VARCHAR;
               ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "assignedToId" VARCHAR;
               ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "assigned_to_id" VARCHAR;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "checkType" VARCHAR DEFAULT 'paper';
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "check_type" VARCHAR DEFAULT 'paper';
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "isDigital" BOOLEAN DEFAULT false;
+              ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "is_digital" BOOLEAN DEFAULT false;
               ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "description" TEXT;
               ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "imageUrl" TEXT;
               ALTER TABLE "issued_checks" ADD COLUMN IF NOT EXISTS "image_url" TEXT;

@@ -828,6 +828,7 @@ export const checkbooks = pgTable('checkbooks', {
   id: varchar('id', { length: 50 }).primaryKey(),
   accountId: varchar('account_id', { length: 50 }),
   bankName: varchar('bank_name', { length: 255 }),
+  type: varchar('type', { length: 50 }).default('paper'), // 'paper' | 'digital'
   startNumber: varchar('start_number', { length: 50 }),
   endNumber: varchar('end_number', { length: 50 }),
   totalLeaves: integer('total_leaves'),
@@ -852,10 +853,12 @@ export const issuedChecks = pgTable('issued_checks', {
   issueDate: timestamp('issue_date'),
   dueDate: timestamp('due_date'),
   payeeId: varchar('payee_id', { length: 50 }),
-  status: varchar('status', { length: 50 }).default('blank'), // 'blank' | 'issued' | 'cashed' | 'bounced' | 'cancelled'
+  status: varchar('status', { length: 50 }).default('blank'), // 'blank' | 'issued' | 'cashed' | 'bounced' | 'cancelled' | 'accepted' | 'returned_to_issuer'
   receiptNumber: varchar('receipt_number', { length: 255 }),
   assignedToId: varchar('assigned_to_id', { length: 50 }),
   bankAccountId: varchar('bank_account_id', { length: 50 }),
+  isDigital: boolean('is_digital').default(false),
+  checkType: varchar('check_type', { length: 50 }).default('paper'), // 'paper' | 'digital'
   description: text('description'),
   imageUrl: text('image_url'),
   createdAt: timestamp('created_at').defaultNow(),

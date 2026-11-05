@@ -4,7 +4,8 @@ import { motion, AnimatePresence } from "framer-motion";
 import {
   CreditCard, ArrowRight, User, Building2, Calendar, FileText,
   History as HistoryIcon, Clock, CheckCircle, XCircle, RefreshCw,
-  AlertTriangle, Save, Printer, ExternalLink, Search, Check, List, Edit3
+  AlertTriangle, Save, Printer, ExternalLink, Search, Check, List, Edit3,
+  ShieldCheck, Smartphone
 } from "lucide-react";
 import { 
   getIssuedChecks, getReceivedChecks, updateReceivedCheck, getPersons, 
@@ -69,33 +70,69 @@ export default function CheckCardPage({
     setCurrentCheckId(checkId);
   }, [checkId]);
 
+  const connectedCheckbook = useMemo(() => {
+    if (!check?.checkbookId) return null;
+    return checkbooks.find((c: any) => String(c.id) === String(check.checkbookId));
+  }, [check, checkbooks]);
+
+  const isDigitalCheck = Boolean(
+    check?.isDigital || 
+    check?.checkType === 'digital' || 
+    check?.type === 'digital' || 
+    connectedCheckbook?.type === 'digital' || 
+    connectedCheckbook?.isDigital
+  );
+
   // Transitions
-  const transitions: Record<string, string[]> = {
-    'draft': ['issued'],
-    'issued': ['delivered'],
-    'delivered': ['in_clearing', 'stop_payment', 'lost', 'overdue'],
-    'in_clearing': ['cashed', 'bounced'],
-    'bounced': ['re_assigned', 'legal_action', 'settled_other_way', 'cancelled'],
-    're_assigned': ['cashed', 'bounced'],
-    'legal_action': ['settled_other_way', 'cancelled'],
-    'cashed': [],
-    'settled_other_way': [],
-    'cancelled': [],
-    'stop_payment': ['delivered', 'cancelled'],
-    'lost': ['delivered', 'cancelled'],
-    'overdue': ['in_clearing', 'cashed', 'bounced', 'cancelled'],
+  const transitions: Record<string, string[]> = useMemo(() => {
+    if (checkType === 'issued' && isDigitalCheck) {
+      return {
+        'draft': ['issued'],
+        'blank': ['issued'],
+        'issued': ['accepted', 'returned_to_issuer', 'in_clearing', 'cancelled'],
+        'accepted': ['in_clearing', 'cashed', 'bounced', 'returned_to_issuer'],
+        'returned_to_issuer': ['issued', 'cancelled'],
+        'in_clearing': ['cashed', 'bounced', 'returned_to_issuer'],
+        'bounced': ['settled_other_way', 'legal_action', 'cancelled'],
+        'legal_action': ['settled_other_way', 'cancelled'],
+        'cashed': [],
+        'settled_other_way': [],
+        'cancelled': [],
+        'stop_payment': ['accepted', 'cancelled'],
+        'overdue': ['in_clearing', 'cashed', 'bounced', 'cancelled'],
+      };
+    }
+    return {
+      'draft': ['issued'],
+      'blank': ['issued'],
+      'issued': ['delivered'],
+      'delivered': ['in_clearing', 'stop_payment', 'lost', 'overdue'],
+      'in_clearing': ['cashed', 'bounced'],
+      'bounced': ['re_assigned', 'legal_action', 'settled_other_way', 'cancelled'],
+      're_assigned': ['cashed', 'bounced'],
+      'legal_action': ['settled_other_way', 'cancelled'],
+      'cashed': [],
+      'settled_other_way': [],
+      'cancelled': [],
+      'stop_payment': ['delivered', 'cancelled'],
+      'lost': ['delivered', 'cancelled'],
+      'overdue': ['in_clearing', 'cashed', 'bounced', 'cancelled'],
 
-    'received': ['deposited', 'assigned', 'cashed'],
-    'deposited': ['cashed', 'bounced'],
-    'assigned': ['cashed', 'bounced_assigned'],
-    'bounced_assigned': ['returned', 'legal_action'],
-    'returned': ['cancelled'],
-  };
+      'received': ['deposited', 'assigned', 'cashed'],
+      'deposited': ['cashed', 'bounced'],
+      'assigned': ['cashed', 'bounced_assigned'],
+      'bounced_assigned': ['returned', 'legal_action'],
+      'returned': ['cancelled'],
+    };
+  }, [checkType, isDigitalCheck]);
 
-  const stateLabels: any = {
+  const stateLabels: any = useMemo(() => ({
     'draft': 'پیش‌نویس',
-    'issued': 'صادر شده / امضا شده',
-    'delivered': 'تحویل داده شده',
+    'blank': 'سفید (آماده صدور)',
+    'issued': isDigitalCheck ? 'صادر شده در سامانه چکاد' : 'صادر شده / امضا شده',
+    'delivered': 'تحویل داده شده به گیرنده',
+    'accepted': 'تایید و دریافت در سامانه صیاد/چکاد',
+    'returned_to_issuer': 'عودت چک دیجیتال توسط گیرنده',
     'in_clearing': 'در جریان وصول / کلر',
     'cashed': 'پاس شده / وصول شده',
     'bounced': 'برگشت خورده',
@@ -112,12 +149,15 @@ export default function CheckCardPage({
     'assigned': 'واگذار شده (خرج شده)',
     'bounced_assigned': 'برگشت خورده (واگذار شده)',
     'returned': 'عودت داده شده',
-  };
+  }), [isDigitalCheck]);
 
   const stateColors: any = {
     'draft': 'bg-slate-100 text-slate-700 border-slate-200',
+    'blank': 'bg-teal-50 text-teal-700 border-teal-200',
     'issued': 'bg-sky-100 text-sky-700 border-sky-200',
     'delivered': 'bg-indigo-100 text-indigo-700 border-indigo-200',
+    'accepted': 'bg-emerald-100 text-emerald-800 border-emerald-300',
+    'returned_to_issuer': 'bg-amber-100 text-amber-800 border-amber-300',
     'in_clearing': 'bg-amber-100 text-amber-700 border-amber-200',
     'cashed': 'bg-emerald-100 text-emerald-700 border-emerald-200',
     'bounced': 'bg-rose-100 text-rose-700 border-rose-200',
@@ -238,7 +278,11 @@ export default function CheckCardPage({
     const defaultBank = check.bankAccountId || check.depositAccountId || (accounts && accounts[0]?.id) || '';
     const defaultPerson = check.assignedToId || (persons && persons[0]?.id) || '';
     let defaultDesc = '';
-    if (targetState === 'deposited') {
+    if (targetState === 'accepted') {
+      defaultDesc = `تایید و دریافت چک امن دیجیتال شماره ${check.checkNumber} توسط گیرنده در سامانه صیاد/چکاد`;
+    } else if (targetState === 'returned_to_issuer') {
+      defaultDesc = `عودت چک امن دیجیتال شماره ${check.checkNumber} توسط گیرنده در سامانه صیاد/چکاد به دلیل مغایرت یا مشکل`;
+    } else if (targetState === 'deposited') {
       defaultDesc = `واگذاری چک دریافتی شماره ${check.checkNumber} به بانک جهت وصول`;
     } else if (targetState === 'cashed') {
       defaultDesc = checkType === 'issued'
@@ -507,7 +551,9 @@ export default function CheckCardPage({
 
   const getStaticPreviousStatus = (status: string, type: 'issued'|'received') => {
     if (type === 'issued') {
-      if (['cashed', 'bounced', 'returned'].includes(status)) return 'issued';
+      if (status === 'accepted') return 'issued';
+      if (status === 'returned_to_issuer') return 'issued';
+      if (['cashed', 'bounced', 'returned'].includes(status)) return isDigitalCheck ? 'accepted' : 'issued';
       if (status === 'issued') return 'draft';
     } else {
       if (['in_clearing', 'deposited', 'assigned'].includes(status)) return 'received';
@@ -621,6 +667,12 @@ export default function CheckCardPage({
           </div>
           
           <div className="relative z-10 flex flex-col items-center md:items-start">
+            {isDigitalCheck && (
+              <div className="mb-2.5 inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-indigo-500/30 border border-indigo-400/40 text-indigo-100 text-xs font-bold">
+                <ShieldCheck className="w-4 h-4 text-emerald-400" />
+                <span>📱 چک امن دیجیتال (سامانه چکاد) - بدون نیاز به تحویل فیزیکی برگه</span>
+              </div>
+            )}
             <span className="text-slate-400 text-sm font-medium mb-1">مبلغ چک</span>
             <div className="flex items-end gap-2 mb-2">
               <span className="text-4xl md:text-5xl font-black tracking-tighter text-white drop-shadow-sm font-sans" dir="ltr">
@@ -931,6 +983,17 @@ export default function CheckCardPage({
                     <h3 className="text-xl font-black text-slate-800 mb-8 flex items-center gap-3">
                       <RefreshCw className="w-6 h-6 text-indigo-500" /> تغییر وضعیت پرونده
                     </h3>
+
+                    {isDigitalCheck && (
+                      <div className="p-4 bg-indigo-50/70 border border-indigo-200/80 rounded-2xl flex items-start gap-3 mb-6">
+                        <Smartphone className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
+                        <div className="text-xs text-indigo-950 leading-relaxed">
+                          <strong className="block text-indigo-900 font-black mb-1">فرآیند چک امن دیجیتال (سامانه چکاد بانک مرکزی):</strong>
+                          این چک کاملاً الکترونیکی صادر شده و نیازی به تحویل فیزیکی لاشه چک ندارد. پس از صدور، طرف مقابل در سامانه صیاد/چکاد می‌تواند آن را دریافت و تایید کند («تایید و دریافت در صیاد») یا در صورت عدم تطابق آن را عودت دهد («عودت چک دیجیتال»).
+                        </div>
+                      </div>
+                    )}
+
                     <p className="text-slate-500 mb-6 text-lg">با توجه به وضعیت فعلی (<span className="font-bold text-slate-700">{stateLabels[check.status]}</span>)، می‌توانید پرونده را به یکی از وضعیت‌های زیر منتقل کنید:</p>
                     
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">

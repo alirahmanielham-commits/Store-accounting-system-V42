@@ -189,6 +189,8 @@ export const getCheckbooks = async () => {
       issued_date: c.issuedDate || c.issued_date || null,
       accountNumber: c.accountNumber || c.account_number || '',
       fiscalYearId: c.fiscalYearId || c.fiscal_year_id || undefined,
+      type: c.type || (c.isDigital ? 'digital' : 'paper') || 'paper',
+      isDigital: Boolean(c.type === 'digital' || c.isDigital),
     }))
     .sort((a: any, b: any) => new Date(b.createdAt || 0).getTime() - new Date(a.createdAt || 0).getTime());
 };
@@ -214,6 +216,7 @@ export const ensureCheckbookLeaves = async (checkbookId?: string) => {
     const end = parseInt(endStr, 10);
     if (isNaN(start) || isNaN(end) || end < start) continue;
 
+    const isDigitalCb = Boolean(cb.type === 'digital' || cb.isDigital);
     const padding = startStr.length;
     const existingLeafNumbers = new Set(
       issuedChecks
@@ -235,6 +238,8 @@ export const ensureCheckbookLeaves = async (checkbookId?: string) => {
           dueDate: null,
           payeeId: null,
           status: 'blank',
+          isDigital: isDigitalCb,
+          checkType: isDigitalCb ? 'digital' : 'paper',
           createdAt: now,
           updatedAt: now,
           fiscalYearId: activeYear ? activeYear.id : undefined
@@ -252,6 +257,8 @@ export const ensureCheckbookLeaves = async (checkbookId?: string) => {
       sayadId: c.sayadId ? String(c.sayadId).trim() : '0000000000000000',
       amount: Number(c.amount) || 0,
       status: c.status || 'blank',
+      isDigital: Boolean(c.isDigital || c.checkType === 'digital'),
+      checkType: (c.isDigital || c.checkType === 'digital') ? 'digital' : 'paper'
     }));
     await saveLocalData('issued_checks', sanitizedChecks);
   }
@@ -284,6 +291,8 @@ export const addCheckbook = async (record: any) => {
   const bankName = record.bankName || record.bank_name || '';
   const accountId = record.accountId || record.account_id || '';
   const accountNumber = record.accountNumber || record.account_number || '';
+  const cbType = record.type || (record.isDigital ? 'digital' : 'paper') || 'paper';
+  const isDigitalCb = Boolean(cbType === 'digital' || record.isDigital);
 
   const newItem = { 
     ...record, 
@@ -294,6 +303,8 @@ export const addCheckbook = async (record: any) => {
     bank_name: bankName,
     accountNumber,
     account_number: accountNumber,
+    type: cbType,
+    isDigital: isDigitalCb,
     startNumber: startNumStr || record.startNumber,
     start_number: startNumStr || record.startNumber,
     endNumber: endNumStr || record.endNumber,
@@ -325,6 +336,8 @@ export const addCheckbook = async (record: any) => {
              dueDate: null,
              payeeId: null,
              status: 'blank',
+             isDigital: isDigitalCb,
+             checkType: isDigitalCb ? 'digital' : 'paper',
              createdAt: now,
              updatedAt: now,
              fiscalYearId: activeYear ? activeYear.id : undefined
@@ -336,6 +349,8 @@ export const addCheckbook = async (record: any) => {
        sayadId: c.sayadId ? String(c.sayadId).trim() : '0000000000000000',
        amount: Number(c.amount) || 0,
        status: c.status || 'blank',
+       isDigital: Boolean(c.isDigital || c.checkType === 'digital'),
+       checkType: (c.isDigital || c.checkType === 'digital') ? 'digital' : 'paper'
      }));
      await saveLocalData('issued_checks', sanitizedChecks);
   }
@@ -376,6 +391,8 @@ export const updateCheckbook = async (id: string, record: any) => {
     const bankName = record.bankName || record.bank_name || data[index].bankName || data[index].bank_name || '';
     const accountId = record.accountId || record.account_id || data[index].accountId || data[index].account_id || '';
     const accountNumber = record.accountNumber || record.account_number || data[index].accountNumber || data[index].account_number || '';
+    const cbType = record.type || (record.isDigital ? 'digital' : 'paper') || data[index].type || 'paper';
+    const isDigitalCb = Boolean(cbType === 'digital' || record.isDigital);
 
     data[index] = { 
       ...data[index], 
@@ -386,6 +403,8 @@ export const updateCheckbook = async (id: string, record: any) => {
       bank_name: bankName,
       accountNumber,
       account_number: accountNumber,
+      type: cbType,
+      isDigital: isDigitalCb,
       startNumber: startNumStr || data[index].startNumber,
       start_number: startNumStr || data[index].startNumber,
       endNumber: endNumStr || data[index].endNumber,
@@ -401,6 +420,26 @@ export const updateCheckbook = async (id: string, record: any) => {
       data[index].fiscal_year_id = activeYear.id;
     }
     await saveLocalData('checkbooks', data);
+
+    // Sync blank leaves if checkbook type changed
+    try {
+      const issuedChecks = await getLocalData<any[]>('issued_checks', []);
+      let leavesChanged = false;
+      const updatedLeaves = issuedChecks.map((leaf: any) => {
+        if (String(leaf.checkbookId) === String(id) && (!leaf.status || leaf.status === 'blank')) {
+          leavesChanged = true;
+          return {
+            ...leaf,
+            isDigital: isDigitalCb,
+            checkType: isDigitalCb ? 'digital' : 'paper'
+          };
+        }
+        return leaf;
+      });
+      if (leavesChanged) {
+        await saveLocalData('issued_checks', updatedLeaves);
+      }
+    } catch (_) {}
 
     if (!isNaN(start) && !isNaN(end) && end >= start) {
       await ensureCheckbookLeaves(String(id));
@@ -597,7 +636,7 @@ export const addIssuedCheck = async (record: any) => {
 };
 
 export const updateIssuedCheck = async (id: string, record: any) => {
-  if (record.amount !== undefined && Number(record.amount) <= 0) {
+  if (record.status && record.status !== 'blank' && record.status !== 'cancelled' && record.amount !== undefined && Number(record.amount) <= 0) {
     throw new Error('مبلغ چک نامعتبر است');
   }
   const oldChecksRaw = await getIssuedChecks();
