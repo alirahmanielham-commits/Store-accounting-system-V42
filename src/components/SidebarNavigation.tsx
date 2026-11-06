@@ -140,9 +140,6 @@ export default function SidebarNavigation({
       .map((group) => {
         const groupMatches = group.label.toLowerCase().includes(searchLower);
         const matchedItems = group.items.filter((item) => {
-          if (!isMobileDrawer && item.mobileOnly) {
-            return false;
-          }
           const matchesSearch =
             searchLower === "" ||
             groupMatches ||

@@ -3594,14 +3594,6 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
 
           <CalculatorModal isOpen={isCalculatorOpen} onClose={() => setIsCalculatorOpen(false)} />
         <SyncStatusModal isOpen={isSyncModalOpen} onClose={() => setIsSyncModalOpen(false)} />
-        <Suspense fallback={null}>
-          <MobileRestrictedMenu
-            activeTab={activeTab}
-            setActiveTab={setActiveTab}
-            setIsPersonModalOpen={setIsPersonModalOpen}
-            setIsProductModalOpen={setIsProductModalOpen}
-          />
-        </Suspense>
         <BackgroundSync />
           <PreviewModals {...appState} />
           <ExtraModals {...appState} />

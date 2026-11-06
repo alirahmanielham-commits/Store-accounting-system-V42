@@ -25,9 +25,7 @@ import {
   ExternalLink,
   ShoppingCart,
   Receipt,
-  Smartphone,
-  Users,
-  Monitor
+  Users
 } from 'lucide-react';
 import { toPersianDigits, addCommas } from '../../utils/format';
 import CurrencyInput from '../ui/CurrencyInput';
@@ -59,22 +57,6 @@ export default function MobilePersonCreatePage({
   setLedgerPersonId,
   showNotification,
 }: MobilePersonCreatePageProps) {
-  // Viewport detection (Mobile Exclusivity)
-  const [isDesktopViewport, setIsDesktopViewport] = useState(() => {
-    return typeof window !== 'undefined' ? window.innerWidth >= 768 : false;
-  });
-  const [forceMobilePreview, setForceMobilePreview] = useState(false);
-
-  useEffect(() => {
-    const handleResize = () => {
-      if (typeof window !== 'undefined') {
-        setIsDesktopViewport(window.innerWidth >= 768);
-      }
-    };
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
-
   // Navigation / Section state
   const [activeSection, setActiveSection] = useState<'identity' | 'contact' | 'role' | 'financial'>('identity');
 
@@ -356,62 +338,8 @@ export default function MobilePersonCreatePage({
     { id: 'employee', label: 'پرسنل / کارمند', color: 'purple', icon: <Building2 className="w-3.5 h-3.5" /> },
   ];
 
-  // Mobile Exclusivity Screen for Desktop Viewports
-  if (isDesktopViewport && !forceMobilePreview) {
-    return (
-      <div className="min-h-[75vh] flex flex-col items-center justify-center p-6 text-center select-none" dir="rtl">
-        <div className="w-20 h-20 rounded-3xl bg-emerald-50 dark:bg-emerald-950/40 border border-emerald-200 dark:border-emerald-800 flex items-center justify-center text-emerald-600 dark:text-emerald-400 mb-5 shadow-sm">
-          <Smartphone className="w-10 h-10" />
-        </div>
-        <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-emerald-100 dark:bg-emerald-900/60 text-emerald-800 dark:text-emerald-300 text-xs font-black mb-3">
-          <Smartphone className="w-3.5 h-3.5" />
-          <span>مختص حالت موبایل و منوی همبرگری</span>
-        </div>
-        <h2 className="text-xl font-black text-slate-900 dark:text-white mb-2">
-          صفحه ثبت شخص جدید مخصوص تلفن همراه
-        </h2>
-        <p className="text-sm text-slate-600 dark:text-slate-400 max-w-md leading-relaxed mb-6 font-medium">
-          این صفحه با ارگونومی لمسی، دکمه‌های مناسب انگشت شست و ساختار فشرده ویژه استفاده در گوشی و تبلت طراحی شده و در منوی همبرگری موبایل در دسترس است. برای دسکتاپ از پنل استاندارد طرف‌حساب‌ها استفاده فرمایید.
-        </p>
-        <div className="flex flex-wrap items-center justify-center gap-3">
-          <button
-            type="button"
-            onClick={() => setActiveTab?.('persons')}
-            className="px-5 py-2.5 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-black transition-all shadow-sm flex items-center gap-2 cursor-pointer"
-          >
-            <Users className="w-4 h-4" />
-            <span>انتقال به مدیریت اشخاص (نسخه کامل دسکتاپ)</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => setForceMobilePreview(true)}
-            className="px-4 py-2.5 bg-white hover:bg-slate-100 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 rounded-xl text-xs font-bold transition-all border border-slate-200 dark:border-slate-700 flex items-center gap-1.5 cursor-pointer shadow-2xs"
-          >
-            <Monitor className="w-4 h-4 text-slate-500" />
-            <span>مشاهده نمای موبایل در دسکتاپ</span>
-          </button>
-        </div>
-      </div>
-    );
-  }
-
   return (
-    <div className={`min-h-screen bg-slate-50 dark:bg-slate-950 pb-28 font-sans select-none ${forceMobilePreview ? 'max-w-md mx-auto shadow-2xl border-x border-slate-200 dark:border-slate-800 my-4 rounded-3xl overflow-hidden' : ''}`} dir="rtl">
-      {forceMobilePreview && (
-        <div className="bg-amber-500 text-amber-950 px-3 py-1.5 text-xs font-bold flex items-center justify-between">
-          <div className="flex items-center gap-1.5">
-            <Smartphone className="w-3.5 h-3.5" />
-            <span>شبیه‌ساز نمای موبایل در دسکتاپ</span>
-          </div>
-          <button
-            type="button"
-            onClick={() => setForceMobilePreview(false)}
-            className="text-[10px] underline cursor-pointer hover:opacity-80"
-          >
-            بستن پیش‌نمایش
-          </button>
-        </div>
-      )}
+    <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 font-sans select-none max-w-2xl mx-auto" dir="rtl">
       {/* Sticky Mobile Top App Bar */}
       <div className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between shadow-2xs">
         <div className="flex items-center gap-3">

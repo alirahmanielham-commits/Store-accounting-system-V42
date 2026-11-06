@@ -415,7 +415,6 @@ export const allSidebarGroups: SidebarGroup[] = [
         badge: "موبایل",
         badgeColor: "emerald",
         isQuickAction: true,
-        mobileOnly: true,
       },
       {
         id: "person_profile",
@@ -550,6 +549,17 @@ export const allSidebarGroups: SidebarGroup[] = [
         shortLabel: "رسیدهای پرداخت",
         icon: <ClipboardList className="w-4 h-4 text-rose-500" />,
         roles: ["admin", "accountant", "viewer"],
+      },
+      {
+        id: "create_person",
+        label: "ثبت شخص جدید (مخصوص موبایل)",
+        shortLabel: "شخص جدید (موبایل)",
+        icon: <UserPlus className="w-4 h-4 text-emerald-500" />,
+        roles: ["admin", "accountant", "cashier", "manager"],
+        badge: "موبایل",
+        badgeColor: "emerald",
+        isQuickAction: true,
+        description: "فرم لمسی و ارگونومیک ثبت شخص جدید متناسب با گوشی موبایل",
       },
       {
         id: "accounts",

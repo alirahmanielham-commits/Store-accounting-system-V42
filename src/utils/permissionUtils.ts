@@ -118,6 +118,7 @@ export const PERMISSION_MODULES: PermissionModule[] = [
       { id: 'list_receive_receipt', label: 'فهرست رسیدهای دریافت', defaultRoles: ['admin', 'manager', 'cashier', 'accountant'] },
       { id: 'create_pay_receipt', label: 'ثبت رسید پرداخت وجه', defaultRoles: ['admin', 'manager', 'accountant'] },
       { id: 'list_pay_receipt', label: 'فهرست رسیدهای پرداخت', defaultRoles: ['admin', 'manager', 'accountant'] },
+      { id: 'create_person', label: 'ثبت شخص جدید (موبایل و سریع)', defaultRoles: ['admin', 'manager', 'accountant', 'cashier'] },
       { id: 'accounts', label: 'مدیریت حساب‌های بانکی', defaultRoles: ['admin', 'manager', 'accountant'] },
       { id: 'cashboxes', label: 'مدیریت صندوق‌ها و تنخواه', defaultRoles: ['admin', 'manager', 'cashier', 'accountant'] },
       { id: 'transfer', label: 'انتقال وجه بین حساب‌ها/صندوق‌ها', defaultRoles: ['admin', 'manager', 'accountant'] },
