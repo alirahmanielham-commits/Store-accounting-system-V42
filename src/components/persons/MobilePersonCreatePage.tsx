@@ -25,7 +25,8 @@ import {
   ExternalLink,
   ShoppingCart,
   Receipt,
-  Users
+  Users,
+  Menu
 } from 'lucide-react';
 import { toPersianDigits, addCommas } from '../../utils/format';
 import CurrencyInput from '../ui/CurrencyInput';
@@ -43,6 +44,8 @@ interface MobilePersonCreatePageProps {
   setReceiptPersonId?: (id: any) => void;
   setLedgerPersonId?: (id: any) => void;
   showNotification?: (msg: string, type?: 'success' | 'error' | 'info' | 'warning') => void;
+  onOpenMenu?: () => void;
+  onBack?: () => void;
 }
 
 export default function MobilePersonCreatePage({
@@ -56,6 +59,8 @@ export default function MobilePersonCreatePage({
   setReceiptPersonId,
   setLedgerPersonId,
   showNotification,
+  onOpenMenu,
+  onBack,
 }: MobilePersonCreatePageProps) {
   // Navigation / Section state
   const [activeSection, setActiveSection] = useState<'identity' | 'contact' | 'role' | 'financial'>('identity');
@@ -342,28 +347,47 @@ export default function MobilePersonCreatePage({
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 pb-20 font-sans select-none max-w-2xl mx-auto" dir="rtl">
       {/* Sticky Mobile Top App Bar */}
       <div className="sticky top-0 z-40 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200 dark:border-slate-800 px-4 py-3 flex items-center justify-between shadow-2xs">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2.5">
+          {onOpenMenu && (
+            <button
+              type="button"
+              onClick={onOpenMenu}
+              className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+              title="منوی اصلی و عملیات مجاز همراه"
+              aria-label="باز کردن منو"
+            >
+              <Menu className="w-5 h-5 text-indigo-600 dark:text-indigo-400" />
+            </button>
+          )}
+
           <button
             type="button"
-            onClick={() => setActiveTab?.('persons')}
-            className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors"
-            title="بازگشت به لیست اشخاص"
+            onClick={() => {
+              if (onBack) {
+                onBack();
+              } else if (setActiveTab) {
+                setActiveTab('persons');
+              }
+            }}
+            className="w-9 h-9 rounded-xl flex items-center justify-center bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-200 transition-colors cursor-pointer"
+            title="بازگشت"
           >
             <ArrowRight className="w-5 h-5" />
           </button>
+
           <div>
             <h1 className="text-sm font-black text-slate-900 dark:text-white flex items-center gap-1.5">
               <UserPlus className="w-4 h-4 text-emerald-600" />
-              <span>ثبت شخص و طرف‌حساب جدید</span>
+              <span>ثبت شخص جدید</span>
             </h1>
-            <p className="text-[11px] text-slate-400 font-medium">فرم ویژه و بهینه‌سازی شده همراه</p>
+            <p className="text-[11px] text-slate-400 font-medium">فرم ویژه همراه</p>
           </div>
         </div>
 
         <button
           type="button"
           onClick={handleResetForm}
-          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors rounded-lg"
+          className="p-2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 transition-colors rounded-lg cursor-pointer"
           title="پاک کردن فرم"
         >
           <RotateCcw className="w-4 h-4" />

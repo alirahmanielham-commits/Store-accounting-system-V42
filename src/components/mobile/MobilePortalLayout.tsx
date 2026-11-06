@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, RefreshCw, Menu, X,
-  LogOut, ShieldCheck, User, Store, Check
+  LogOut, ShieldCheck, User, Store, Check, UserPlus
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MobileReceiptForm from './MobileReceiptForm';
+import MobilePersonCreatePage from '../persons/MobilePersonCreatePage';
 import { playAudioFeedback } from '../../utils/audio';
 
 interface Props {
@@ -14,6 +15,9 @@ interface Props {
   accounts?: any[];
   cashboxes?: any[];
   transactions?: any[];
+  personGroups?: any[];
+  personRoles?: any[];
+  personCategories?: any[];
   fetchTransactions?: () => Promise<void>;
   fetchAccounts?: () => Promise<void>;
   fetchCashboxes?: () => Promise<void>;
@@ -23,7 +27,7 @@ interface Props {
   onLogout?: () => void;
 }
 
-export type MobileTab = 'receive' | 'pay';
+export type MobileTab = 'receive' | 'pay' | 'create_person';
 
 export default function MobilePortalLayout({
   storeSettings,
@@ -32,6 +36,8 @@ export default function MobilePortalLayout({
   accounts = [],
   cashboxes = [],
   transactions = [],
+  personGroups = [],
+  personRoles = [],
   fetchTransactions,
   fetchAccounts,
   fetchCashboxes,
@@ -40,7 +46,7 @@ export default function MobilePortalLayout({
   showNotification: externalShowNotification,
   onLogout
 }: Props) {
-  // Mobile mode is strictly restricted to receipt registration (Receive and Pay)
+  // Mobile mode is strictly restricted to receipt registration (Receive and Pay) + Create Person
   const [activeTab, setActiveTab] = useState<MobileTab>('receive');
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
@@ -101,25 +107,38 @@ export default function MobilePortalLayout({
         </div>
       )}
 
-      {/* Main Single Receipt Form (Dedicated and isolated) */}
-      <MobileReceiptForm
-        key={activeTab}
-        initialType={activeTab}
-        persons={persons}
-        accounts={accounts}
-        cashboxes={cashboxes}
-        storeSettings={storeSettings}
-        transactions={transactions}
-        fetchTransactions={fetchTransactions}
-        fetchAccounts={fetchAccounts}
-        fetchCashboxes={fetchCashboxes}
-        fetchPersons={fetchPersons}
-        calculatePersonBalance={calculatePersonBalance}
-        showNotification={triggerNotification}
-        onTypeChange={(t) => setActiveTab(t)}
-        onRefresh={handleRefresh}
-        onOpenMenu={() => setIsDrawerOpen(true)}
-      />
+      {/* Main Content: Either MobilePersonCreatePage or MobileReceiptForm */}
+      {activeTab === 'create_person' ? (
+        <MobilePersonCreatePage
+          persons={persons}
+          personGroups={personGroups}
+          personRoles={personRoles}
+          storeSettings={storeSettings}
+          fetchPersons={fetchPersons}
+          showNotification={triggerNotification}
+          onOpenMenu={() => setIsDrawerOpen(true)}
+          onBack={() => setActiveTab('receive')}
+        />
+      ) : (
+        <MobileReceiptForm
+          key={activeTab}
+          initialType={activeTab}
+          persons={persons}
+          accounts={accounts}
+          cashboxes={cashboxes}
+          storeSettings={storeSettings}
+          transactions={transactions}
+          fetchTransactions={fetchTransactions}
+          fetchAccounts={fetchAccounts}
+          fetchCashboxes={fetchCashboxes}
+          fetchPersons={fetchPersons}
+          calculatePersonBalance={calculatePersonBalance}
+          showNotification={triggerNotification}
+          onTypeChange={(t) => setActiveTab(t)}
+          onRefresh={handleRefresh}
+          onOpenMenu={() => setIsDrawerOpen(true)}
+        />
+      )}
 
       {/* Hamburger Navigation Drawer (Sliding from Right in RTL) */}
       <AnimatePresence>
@@ -175,11 +194,11 @@ export default function MobilePortalLayout({
                   عملیات مجاز همراه
                 </span>
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400 border border-indigo-200/50 dark:border-indigo-800/50">
-                  فاز دریافت و پرداخت
+                  نسخه موبایل
                 </span>
               </div>
 
-              {/* Navigation Items (Exclusive to Receive and Pay) */}
+              {/* Navigation Items (Exclusive to Allowed Mobile Operations) */}
               <div className="space-y-2.5 py-2 flex-1 overflow-y-auto">
                 {/* 1. ثبت رسید دریافت */}
                 <button
@@ -246,6 +265,41 @@ export default function MobilePortalLayout({
 
                   {activeTab === 'pay' && (
                     <div className="w-6 h-6 rounded-full bg-rose-600 text-white flex items-center justify-center shrink-0">
+                      <Check className="w-3.5 h-3.5" />
+                    </div>
+                  )}
+                </button>
+
+                {/* 3. ثبت شخص جدید (طرف‌حساب) - در منوی عملیات مجاز همراه */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('create_person')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center justify-between text-right transition-all cursor-pointer border ${
+                    activeTab === 'create_person'
+                      ? 'bg-indigo-50/80 dark:bg-indigo-950/40 border-indigo-500 text-indigo-900 dark:text-indigo-100 shadow-sm'
+                      : 'bg-white dark:bg-slate-850 border-slate-200/70 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                      activeTab === 'create_person'
+                        ? 'bg-indigo-600 text-white shadow-md shadow-indigo-600/30'
+                        : 'bg-indigo-50 dark:bg-indigo-950/50 text-indigo-600 dark:text-indigo-400'
+                    }`}>
+                      <UserPlus className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black">
+                        ثبت شخص جدید (طرف‌حساب)
+                      </h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                        تعریف مشتری، تامین‌کننده و شماره تماس
+                      </p>
+                    </div>
+                  </div>
+
+                  {activeTab === 'create_person' && (
+                    <div className="w-6 h-6 rounded-full bg-indigo-600 text-white flex items-center justify-center shrink-0">
                       <Check className="w-3.5 h-3.5" />
                     </div>
                   )}

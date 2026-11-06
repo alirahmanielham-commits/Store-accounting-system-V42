@@ -967,18 +967,7 @@ export default function App() {
 <Route path="/persons" element={<PersonsManager
                         filteredPersons={filteredPersons} personPageSize={personPageSize} personCurrentPage={personCurrentPage} calculatePersonBalance={calculatePersonBalance} formatNumber={formatNumber} personSearchTerm={personSearchTerm} setPersonSearchTerm={setPersonSearchTerm} selectedPersonGroup={selectedPersonGroup} setSelectedPersonGroup={setSelectedPersonGroup} personGroups={personGroups} selectedPersonRole={selectedPersonRole} setSelectedPersonRole={setSelectedPersonRole} personRoles={personRoles}
   personCategories={appState.personCategories} personsViewMode={personsViewMode} setPersonsViewMode={setPersonsViewMode} setIsPersonModalOpen={setIsPersonModalOpen} setPersonCurrentPage={setPersonCurrentPage} getRoleBadgeClasses={getRoleBadgeClasses} getRoleName={getRoleName} handleEditPerson={handleEditPerson} setProfilePersonId={setProfilePersonId} setLedgerPersonId={setLedgerPersonId} setRawActiveTab={setRawActiveTab} handleDeletePerson={handleDeletePerson} setPrintingPersonLedger={setPrintingPersonLedger} fetchPersons={fetchPersons} activePersonsOnly={activePersonsOnly} clearDraft={clearDraft} handleGenerateMissingAccountingCodes={handleGenerateMissingAccountingCodes} isGeneratingCodes={isGeneratingCodes} setPersonIOAction={setPersonIOAction} setIsPersonIOModalOpen={setIsPersonIOModalOpen} setEditingPersonId={setEditingPersonId} setNewPersonType={setNewPersonType} setNewPersonTitle={setNewPersonTitle} setNewPersonAlias={setNewPersonAlias} setNewPersonFirstName={setNewPersonFirstName} setNewPersonLastName={setNewPersonLastName} setNewPersonCompanyName={setNewPersonCompanyName} setNewPersonFatherName={setNewPersonFatherName} setNewPersonNationalId={setNewPersonNationalId} setNewPersonAccountingCode={setNewPersonAccountingCode} setNewPersonAddress={setNewPersonAddress} setNewPersonImage={setNewPersonImage} setNewPersonPhone={setNewPersonPhone} setNewPersonContacts={setNewPersonContacts} setNewPersonRole={setNewPersonRole} newPersonTaxNumber={appState.newPersonTaxNumber} setNewPersonTaxNumber={appState.setNewPersonTaxNumber} newPersonRegistrationNumber={appState.newPersonRegistrationNumber} setNewPersonRegistrationNumber={appState.setNewPersonRegistrationNumber} newPersonRoles={appState.newPersonRoles} setNewPersonRoles={appState.setNewPersonRoles} newPersonCategories={appState.newPersonCategories} setNewPersonCategories={appState.setNewPersonCategories} duplicatePersonsWarning={appState.duplicatePersonsWarning} setDuplicatePersonsWarning={appState.setDuplicatePersonsWarning} setNewPersonInitialBalance={setNewPersonInitialBalance} setNewPersonInitialBalanceType={setNewPersonInitialBalanceType} setNewPersonCreditLimit={setNewPersonCreditLimit} successMsg={successMsg} getPersonDisplayName={getPersonDisplayName} toPersianDigits={toPersianDigits} storeSettings={storeSettings}  setCustomerId={setCustomerId} setReceiptPersonId={setReceiptPersonId} setPersonExtraId={setPersonExtraId} setPersonBankName={setPersonBankName} setPersonBankAcc={setPersonBankAcc} setPersonCard={setPersonCard} setPersonSheba={setPersonSheba} setPersonBankAccounts={setPersonBankAccounts} setPersonNotes={setPersonNotes} setIsPersonExtraModalOpen={setIsPersonExtraModalOpen} confirmAction={confirmAction} setPersonPageSize={setPersonPageSize} setActiveTab={setActiveTab} showNotification={showNotification} />} />
-<Route path="/create_person" element={<MobilePersonCreatePage
-  persons={persons}
-  personGroups={personGroups}
-  personRoles={personRoles}
-  personCategories={appState.personCategories}
-  storeSettings={storeSettings}
-  fetchPersons={fetchPersons}
-  setActiveTab={setActiveTab}
-  setCustomerId={setCustomerId}
-  setReceiptPersonId={setReceiptPersonId}
-  setLedgerPersonId={setLedgerPersonId}
-  showNotification={showNotification} />} />
+<Route path="/create_person" element={<Navigate to="/persons" replace />} />
 <Route path="/person_groups" element={<PersonGroupsManager showNotification={showNotification} />} />
 <Route path="/person_categories" element={<PersonCategoriesManager showNotification={showNotification} />} />
 <Route path="/person_roles" element={<PersonRolesManager showNotification={showNotification} />} />
@@ -2147,11 +2136,14 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                 accounts={accounts}
                 cashboxes={cashboxes}
                 transactions={transactions}
+                personGroups={personGroups}
+                personRoles={personRoles}
                 fetchTransactions={appState.fetchTransactions}
                 fetchAccounts={appState.fetchAccounts}
                 fetchCashboxes={appState.fetchCashboxes}
                 fetchPersons={appState.fetchPersons}
                 calculatePersonBalance={appState.calculatePersonBalance}
+                showNotification={showNotification}
                 onLogout={signOut}
               />
             </Suspense>
