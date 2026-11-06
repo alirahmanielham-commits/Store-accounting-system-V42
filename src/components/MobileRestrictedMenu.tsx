@@ -12,16 +12,16 @@ import {
   X,
   Plus,
   Package,
-  CreditCard,
   UserCircle,
   FileSpreadsheet,
-  FileText,
   AlertCircle,
   ListOrdered,
   ArrowDownLeft,
   ArrowUpRight,
   Sparkles,
   Zap,
+  UserPlus,
+  Check,
 } from "lucide-react";
 
 export interface MobileRestrictedMenuProps {
@@ -60,43 +60,43 @@ export const MOBILE_CATEGORIES: MobileCategory[] = [
     subItems: [
       {
         id: "keyboard_receipt",
-        title: "ثبت سریع با کیبورد (بدون ماوس)",
+        title: "ثبت سریع رسید با کیبورد",
         icon: Zap,
         badge: "کیبورد",
-        description: "ثبت سریع رسید دریافت و پرداخت بدون نیاز به ماوس",
+        description: "ثبت مرحله‌ای و سریع دریافت و پرداخت بدون نیاز به ماوس",
       },
       {
         id: "create_receive_receipt",
         title: "ثبت رسید دریافت وجه",
         icon: ArrowDownLeft,
         badge: "ورودی",
-        description: "ثبت واریز نقدی، پوز و چک به صندوق یا حساب",
+        description: "ثبت واریز نقدی، پوز و چک به صندوق یا حساب بانکی",
       },
       {
         id: "create_pay_receipt",
         title: "ثبت رسید پرداخت وجه",
         icon: ArrowUpRight,
         badge: "خروجی",
-        description: "ثبت پرداخت نقدی یا حواله بانکی به طرف‌حساب",
+        description: "ثبت پرداخت نقدی، کارتخوان یا حواله به طرف‌حساب",
       },
       {
         id: "list_receive_receipt",
         title: "لیست رسیدهای دریافت",
         icon: ListOrdered,
-        description: "مشاهده و جستجوی دریافت‌های ثبت شده",
+        description: "مشاهده، جستجو و وضعیت کلیه دریافت‌های ثبت شده",
       },
       {
         id: "list_pay_receipt",
         title: "لیست رسیدهای پرداخت",
         icon: ListOrdered,
-        description: "مشاهده و جستجوی پرداخت‌های ثبت شده",
+        description: "مشاهده، جستجو و وضعیت پرداخت‌های ثبت شده",
       },
     ],
   },
   {
     id: "checks",
-    title: "ثبت و مدیریت چک",
-    shortTitle: "ثبت چک",
+    title: "ثبت و کارتابل چک‌ها",
+    shortTitle: "مدیریت چک",
     icon: BookOpen,
     defaultTab: "receive_check_form",
     color: "sky",
@@ -104,34 +104,41 @@ export const MOBILE_CATEGORIES: MobileCategory[] = [
     subItems: [
       {
         id: "receive_check_form",
-        title: "ثبت برگه چک دریافتی جدید",
+        title: "ثبت چک دریافتی جدید",
         icon: Plus,
         badge: "جدید",
-        description: "ثبت مشخصات چک صیادی دریافتی از مشتری",
+        description: "ثبت برگه چک صیادی جدید دریافتی از مشتری",
       },
       {
         id: "received_checks_page",
-        title: "کارتابل و لیست چک‌های دریافتی",
+        title: "کارتابل چک‌های دریافتی",
         icon: BookOpen,
-        description: "مشاهده وضعیت، وصول، استرداد و خرج چک دریافتی",
+        description: "پیگیری وضعیت، وصول، استرداد و خرج چک‌های دریافتی",
       },
       {
-        id: "paid_checks_page",
+        id: "issue_check_form",
+        title: "صدور چک پرداختی جدید",
+        icon: Plus,
+        badge: "صدور",
+        description: "ثبت و صدور برگه چک جدید از دسته‌چک‌های بانکی",
+      },
+      {
+        id: "issued_checks_page",
         title: "کارتابل چک‌های پرداختی",
         icon: BookOpen,
-        description: "مدیریت چک‌های صادره از دسته‌چک شرکت",
+        description: "مدیریت چک‌های صادره، پاس شده و موعد پرداخت",
       },
       {
         id: "check_panel",
-        title: "میزکار و داشبورد چک‌ها",
+        title: "میزکار و داشبورد جامع چک‌ها",
         icon: Sparkles,
-        description: "آمار سررسید چک‌های نزدیک و وصولی‌ها",
+        description: "داشبورد آماری سررسیدها، وصولی‌ها و هشدارهای چک",
       },
     ],
   },
   {
     id: "invoices_products",
-    title: "ثبت فاکتورها و ثبت کالا",
+    title: "فاکتورها و کالاها",
     shortTitle: "فاکتور و کالا",
     icon: ShoppingBag,
     defaultTab: "create_sale",
@@ -143,39 +150,39 @@ export const MOBILE_CATEGORIES: MobileCategory[] = [
         title: "ثبت فاکتور فروش کالا",
         icon: Plus,
         badge: "فروش",
-        description: "صدور سریع فاکتور فروش نقدی یا نسیه",
+        description: "صدور سریع فاکتور فروش نقدی یا نسیه با چاپ فاکتور",
       },
       {
         id: "create_purchase",
         title: "ثبت فاکتور خرید جدید",
         icon: Plus,
         badge: "خرید",
-        description: "ثبت فاکتور خرید و ورود کالا به انبار",
+        description: "ثبت فاکتور خرید و افزایش خودکار موجودی انبار",
       },
       {
         id: "products",
-        title: "ثبت و مدیریت کالا و خدمات",
+        title: "بانک و مدیریت کالا و خدمات",
         icon: Package,
         badge: "کالاها",
-        description: "تعریف کالای جدید، قیمت‌گذاری و موجودی",
+        description: "تعریف کالای جدید، قیمت‌گذاری و کنترل موجودی",
       },
       {
         id: "list_sale",
         title: "لیست فاکتورهای فروش",
         icon: ListOrdered,
-        description: "مشاهده و چاپ مجدد فاکتورهای فروش صادر شده",
+        description: "مشاهده، جستجو و چاپ مجدد فاکتورهای فروش صادر شده",
       },
       {
         id: "list_purchase",
         title: "لیست فاکتورهای خرید",
         icon: ListOrdered,
-        description: "مشاهده و جستجوی فاکتورهای خرید ثبت شده",
+        description: "مشاهده و جستجوی فاکتورهای خرید ثبت شده در انبار",
       },
     ],
   },
   {
     id: "persons_ledger",
-    title: "ثبت شخص و مشاهده کارت حساب و پروفایل",
+    title: "اشخاص و طرف‌حساب‌ها",
     shortTitle: "شخص و حساب",
     icon: Users,
     defaultTab: "persons",
@@ -183,30 +190,37 @@ export const MOBILE_CATEGORIES: MobileCategory[] = [
     activeColor: "bg-purple-600 text-white",
     subItems: [
       {
+        id: "create_person",
+        title: "ثبت شخص جدید (مخصوص موبایل)",
+        icon: UserPlus,
+        badge: "موبایل",
+        description: "فرم لمسی و ارگونومیک ثبت سریع شخص با انگشت شست",
+      },
+      {
         id: "persons",
-        title: "ثبت و مدیریت اشخاص و مشتریان",
+        title: "بانک و مدیریت جامع اشخاص",
         icon: Users,
         badge: "اشخاص",
-        description: "تعریف طرف‌حساب جدید و ویرایش اطلاعات تماس",
+        description: "فهرست کامل مشتریان، تامین‌کنندگان و همکاران",
       },
       {
         id: "person_ledger",
-        title: "کارت حساب (دفتر معین طرف‌حساب)",
+        title: "کارت حساب و معین اشخاص",
         icon: FileSpreadsheet,
         badge: "معین",
-        description: "ریز تراکنش‌ها، گردش بدهکار و بستانکار و مانده شخص",
+        description: "ریز گردش تراکنش‌ها، مانده بدهی و طلب و چاپ صورت‌حساب",
       },
       {
         id: "person_profile",
         title: "پرونده و پروفایل جامع شخص",
         icon: UserCircle,
-        description: "اطلاعات هویتی، سوابق فاکتورها، چک‌ها و اسناد شخص",
+        description: "سوابق فاکتورها، چک‌ها، اسناد و تعهدات شخص",
       },
     ],
   },
   {
     id: "debtors_creditors",
-    title: "گزارش بدهکاران و بستانکاران",
+    title: "بدهکاران و بستانکاران",
     shortTitle: "بدهکار/بستانکار",
     icon: Coins,
     defaultTab: "debts_credits",
@@ -215,17 +229,17 @@ export const MOBILE_CATEGORIES: MobileCategory[] = [
     subItems: [
       {
         id: "debts_credits",
-        title: "گزارش جامع بدهکاران و بستانکاران",
+        title: "تراز بدهکاران و بستانکاران",
         icon: Coins,
         badge: "گزارش",
         description: "صورت مانده بدهی و طلب تمام طرف‌حساب‌ها با فیلتر",
       },
       {
         id: "debtors_showcase",
-        title: "ویترین مطالبات و اخطارهای معوق",
+        title: "ویترین مطالبات و معوقات",
         icon: AlertCircle,
         badge: "معوقات",
-        description: "فهرست مشتریان دارای بدهی سررسید گذشته",
+        description: "رصد و پیگیری مشتریان دارای مطالبات معوق و سررسید گذشته",
       },
     ],
   },
@@ -233,6 +247,7 @@ export const MOBILE_CATEGORIES: MobileCategory[] = [
 
 export const MOBILE_ALLOWED_TABS = new Set(
   MOBILE_CATEGORIES.flatMap((c) => c.subItems.map((s) => s.id)).concat([
+    "create_person",
     "quick_receive_payment",
     "receive_payment",
     "receipts",
@@ -257,18 +272,6 @@ export const MOBILE_ALLOWED_TABS = new Set(
 export default function MobileRestrictedMenu({
   activeTab,
   setActiveTab,
-  setIsPersonModalOpen,
-  setIsProductModalOpen,
-}: MobileRestrictedMenuProps) {
-  // Mobile bottom menu removed per user request (only hamburger menu is used on mobile)
-  return null;
-}
-
-function _UnusedMobileRestrictedMenu({
-  activeTab,
-  setActiveTab,
-  setIsPersonModalOpen,
-  setIsProductModalOpen,
 }: MobileRestrictedMenuProps) {
   const [isCategorySheetOpen, setIsCategorySheetOpen] = useState(false);
   const [selectedCategoryId, setSelectedCategoryId] = useState<string | null>(null);
@@ -308,12 +311,14 @@ function _UnusedMobileRestrictedMenu({
   }
 
   return (
-    <div className="block md:hidden select-none w-full" dir="rtl">
-      {/* Quick Sub-Actions Bar (Fixed height to eliminate CLS) */}
-      <div className="fixed bottom-16 inset-x-0 h-10 z-[79] px-2 py-1 bg-white/95 backdrop-blur-md border-t border-slate-200/80 shadow-xs flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-        <div className="text-[10px] font-black text-slate-400 shrink-0 pl-1 flex items-center gap-1">
+    <div className="block md:hidden select-none w-full print:hidden font-sans" dir="rtl">
+      {/* Quick Sub-Actions Bar (Generous touch target height: h-13 / 52px) */}
+      <div className="fixed bottom-[72px] inset-x-0 h-13 z-[79] px-3 py-1.5 bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border-t border-slate-200/90 dark:border-slate-800 shadow-sm flex items-center gap-2 overflow-x-auto no-scrollbar">
+        <div className="text-xs font-black text-slate-500 dark:text-slate-400 shrink-0 pl-1 flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full bg-indigo-500 animate-pulse" />
           <span>{activeCategory.shortTitle}:</span>
         </div>
+
         {activeCategory.subItems.map((sub) => {
           const isCurrentTab = activeTab === sub.id;
           const SubIcon = sub.icon;
@@ -322,14 +327,14 @@ function _UnusedMobileRestrictedMenu({
               key={sub.id}
               type="button"
               onClick={() => setActiveTab(sub.id)}
-              className={`flex items-center gap-1 px-2.5 py-1 rounded-lg text-[11px] font-black shrink-0 transition-all cursor-pointer ${
+              className={`flex items-center gap-2 px-3.5 py-2 min-h-[42px] rounded-xl text-xs font-black shrink-0 transition-all cursor-pointer touch-manipulation active:scale-95 shadow-2xs ${
                 isCurrentTab
-                  ? `${activeCategory.activeColor} shadow-xs scale-100 ring-1 ring-black/10`
-                  : "bg-slate-100/90 text-slate-700 hover:bg-slate-200/80 active:scale-95 border border-slate-200/60"
+                  ? `${activeCategory.activeColor} shadow-md ring-2 ring-black/10 dark:ring-white/20 scale-100`
+                  : "bg-slate-100/90 dark:bg-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700"
               }`}
             >
-              <SubIcon className="w-3.5 h-3.5" />
-              <span>{sub.title.split(" ")[0]} {sub.title.split(" ")[1] || ""}</span>
+              <SubIcon className="w-4 h-4 shrink-0" />
+              <span className="whitespace-nowrap">{sub.title}</span>
             </button>
           );
         })}
@@ -340,17 +345,17 @@ function _UnusedMobileRestrictedMenu({
             setSelectedCategoryId(activeCategory.id);
             setIsCategorySheetOpen(true);
           }}
-          className="p-1 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-600 shrink-0 mr-auto flex items-center gap-0.5 text-[10px] font-bold"
+          className="min-h-[42px] px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 shrink-0 mr-auto flex items-center gap-1.5 text-xs font-black border border-slate-200 dark:border-slate-700 active:scale-95 transition-all shadow-2xs cursor-pointer touch-manipulation"
           title="مشاهده تمام گزینه‌ها"
         >
-          <ChevronUp className="w-3.5 h-3.5" />
+          <ChevronUp className="w-4 h-4" />
           <span>بیشتر</span>
         </button>
       </div>
 
-      {/* Main Mobile Bottom Navigation Bar (Fixed 64px / h-16 height) */}
-      <div className="fixed bottom-0 inset-x-0 h-16 z-[80] bg-white/95 backdrop-blur-xl border-t border-slate-200/90 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] pb-safe">
-        <div className="flex justify-around items-center h-16 px-1">
+      {/* Main Mobile Bottom Navigation Bar (Generous 72px height + pb-safe with 48px+ touch targets) */}
+      <div className="fixed bottom-0 inset-x-0 h-[72px] z-[80] bg-white/95 dark:bg-slate-900/95 backdrop-blur-2xl border-t border-slate-200/90 dark:border-slate-800 shadow-[0_-6px_24px_rgba(0,0,0,0.08)] pb-safe">
+        <div className="flex justify-around items-center h-full px-1.5">
           {permittedCategories.map((cat) => {
             const isCategoryActive = activeCategory.id === cat.id;
             const IconComponent = cat.icon;
@@ -369,21 +374,23 @@ function _UnusedMobileRestrictedMenu({
                     setSelectedCategoryId(cat.id);
                   }
                 }}
-                className={`flex-1 flex flex-col items-center justify-center h-full py-1 relative transition-all cursor-pointer group ${
-                  isCategoryActive ? "text-indigo-600" : "text-slate-500 hover:text-slate-800"
+                className={`flex-1 flex flex-col items-center justify-center h-full py-1.5 px-0.5 min-h-[58px] relative transition-all cursor-pointer group touch-manipulation active:scale-95 ${
+                  isCategoryActive
+                    ? "text-indigo-600 dark:text-indigo-400"
+                    : "text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200"
                 }`}
               >
                 <div className="relative flex items-center justify-center">
                   <div
-                    className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all ${
+                    className={`w-12 h-10 rounded-2xl flex items-center justify-center transition-all ${
                       isCategoryActive
-                        ? "bg-indigo-50 text-indigo-600 scale-105 shadow-2xs border border-indigo-200/50"
-                        : "group-hover:bg-slate-100"
+                        ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/30 scale-105"
+                        : "group-hover:bg-slate-100 dark:group-hover:bg-slate-800"
                     }`}
                   >
                     <IconComponent
-                      className={`w-5 h-5 transition-transform ${
-                        isCategoryActive ? "stroke-[2.5px]" : "stroke-[1.8px]"
+                      className={`w-5.5 h-5.5 transition-transform ${
+                        isCategoryActive ? "stroke-[2.4px]" : "stroke-[1.8px]"
                       }`}
                     />
                   </div>
@@ -391,14 +398,16 @@ function _UnusedMobileRestrictedMenu({
                   {isCategoryActive && (
                     <motion.div
                       layoutId="mobileActiveCategoryGlow"
-                      className="absolute -top-1 w-1.5 h-1.5 bg-indigo-600 rounded-full"
+                      className="absolute -top-1 w-1.5 h-1.5 bg-indigo-600 dark:bg-indigo-400 rounded-full"
                     />
                   )}
                 </div>
 
                 <span
-                  className={`text-[10px] tracking-tight mt-0.5 transition-all truncate max-w-[68px] ${
-                    isCategoryActive ? "font-black text-indigo-700" : "font-bold text-slate-600"
+                  className={`text-[11px] tracking-tight mt-1 transition-all truncate max-w-[70px] ${
+                    isCategoryActive
+                      ? "font-black text-indigo-600 dark:text-indigo-400"
+                      : "font-bold text-slate-600 dark:text-slate-400"
                   }`}
                 >
                   {cat.shortTitle}
@@ -418,34 +427,34 @@ function _UnusedMobileRestrictedMenu({
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
               onClick={() => setIsCategorySheetOpen(false)}
-              className="fixed inset-0 bg-slate-900/50 backdrop-blur-xs"
+              className="fixed inset-0 bg-slate-950/60 backdrop-blur-xs"
             />
             <motion.div
               initial={{ y: "100%" }}
               animate={{ y: 0 }}
               exit={{ y: "100%" }}
-              transition={{ type: "spring", damping: 26, stiffness: 220 }}
-              className="relative w-full bg-white rounded-t-3xl shadow-2xl p-5 pb-safe z-[121] max-h-[80vh] flex flex-col border-t border-slate-200"
+              transition={{ type: "spring", damping: 26, stiffness: 240 }}
+              className="relative w-full bg-white dark:bg-slate-900 rounded-t-3xl shadow-2xl p-5 pb-safe z-[121] max-h-[82vh] flex flex-col border-t border-slate-200 dark:border-slate-800"
             >
-              {/* Sheet Handle */}
-              <div className="w-12 h-1 bg-slate-300 rounded-full mx-auto mb-4" />
+              {/* Sheet Drag Handle */}
+              <div className="w-14 h-1.5 bg-slate-300 dark:bg-slate-700 rounded-full mx-auto mb-4" />
 
               {/* Sheet Header */}
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100 mb-3">
-                <div className="flex items-center gap-2.5">
+              <div className="flex items-center justify-between pb-3.5 border-b border-slate-100 dark:border-slate-800 mb-3.5">
+                <div className="flex items-center gap-3">
                   <div
-                    className={`w-9 h-9 rounded-xl ${displayedCategory.activeColor} flex items-center justify-center shadow-xs`}
+                    className={`w-11 h-11 rounded-2xl ${displayedCategory.activeColor} flex items-center justify-center shadow-md`}
                   >
                     {React.createElement(displayedCategory.icon, {
-                      className: "w-5 h-5 text-white",
+                      className: "w-5.5 h-5.5 text-white",
                     })}
                   </div>
                   <div>
-                    <h3 className="text-sm font-black text-slate-900">
+                    <h3 className="text-base font-black text-slate-900 dark:text-white">
                       {displayedCategory.title}
                     </h3>
-                    <p className="text-[11px] text-slate-400 font-medium">
-                      عملیات و صفحات فعال در نسخه موبایل
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+                      عملیات و صفحات فعال در نسخه همراه
                     </p>
                   </div>
                 </div>
@@ -453,14 +462,14 @@ function _UnusedMobileRestrictedMenu({
                 <button
                   type="button"
                   onClick={() => setIsCategorySheetOpen(false)}
-                  className="p-1.5 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-500 transition-colors"
+                  className="w-10 h-10 rounded-2xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 flex items-center justify-center transition-colors active:scale-95 cursor-pointer touch-manipulation"
                 >
-                  <X className="w-4 h-4" />
+                  <X className="w-5 h-5" />
                 </button>
               </div>
 
-              {/* Sub-item List */}
-              <div className="space-y-2 overflow-y-auto flex-1 py-1">
+              {/* Sub-item Cards List with Generous Spacing and 48px+ Tappable Targets */}
+              <div className="space-y-2.5 overflow-y-auto flex-1 py-1.5 pr-0.5 custom-scrollbar">
                 {displayedCategory.subItems.map((sub) => {
                   const isCurrent = activeTab === sub.id;
                   const SubIcon = sub.icon;
@@ -472,33 +481,41 @@ function _UnusedMobileRestrictedMenu({
                         setActiveTab(sub.id);
                         setIsCategorySheetOpen(false);
                       }}
-                      className={`w-full flex items-center justify-between p-3 rounded-2xl text-right transition-all border ${
+                      className={`w-full flex items-center justify-between p-3.5 min-h-[64px] rounded-2xl text-right transition-all border active:scale-[0.98] cursor-pointer touch-manipulation ${
                         isCurrent
-                          ? "bg-indigo-50/80 border-indigo-300 text-indigo-900 shadow-xs"
-                          : "bg-white hover:bg-slate-50 border-slate-200/80 text-slate-800"
+                          ? "bg-indigo-50/90 dark:bg-indigo-950/40 border-indigo-400 dark:border-indigo-600 text-indigo-950 dark:text-indigo-100 shadow-sm ring-1 ring-indigo-400/20"
+                          : "bg-white dark:bg-slate-800/80 hover:bg-slate-50 dark:hover:bg-slate-800 border-slate-200/90 dark:border-slate-750 text-slate-800 dark:text-slate-200 shadow-2xs"
                       }`}
                     >
-                      <div className="flex items-center gap-3">
+                      <div className="flex items-center gap-3.5 min-w-0">
                         <div
-                          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
+                          className={`w-11 h-11 rounded-xl flex items-center justify-center shrink-0 transition-colors ${
                             isCurrent
-                              ? "bg-indigo-600 text-white"
-                              : "bg-slate-100 text-slate-600"
+                              ? "bg-indigo-600 text-white shadow-sm"
+                              : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
                           }`}
                         >
-                          <SubIcon className="w-4 h-4" />
+                          <SubIcon className="w-5 h-5" />
                         </div>
-                        <div>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <span className="text-xs font-black">{sub.title}</span>
+                            <span className="text-xs sm:text-sm font-black truncate">
+                              {sub.title}
+                            </span>
                             {sub.badge && (
-                              <span className="text-[9px] font-bold px-1.5 py-0.2 rounded-md bg-slate-100 text-slate-600">
+                              <span
+                                className={`text-[10px] font-extrabold px-2 py-0.5 rounded-lg shrink-0 ${
+                                  isCurrent
+                                    ? "bg-indigo-200 dark:bg-indigo-900/60 text-indigo-900 dark:text-indigo-200"
+                                    : "bg-slate-100 dark:bg-slate-700 text-slate-600 dark:text-slate-300"
+                                }`}
+                              >
                                 {sub.badge}
                               </span>
                             )}
                           </div>
                           {sub.description && (
-                            <p className="text-[11px] text-slate-500 font-medium mt-0.5 line-clamp-1">
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 font-medium mt-0.5 line-clamp-1">
                               {sub.description}
                             </p>
                           )}
@@ -506,8 +523,9 @@ function _UnusedMobileRestrictedMenu({
                       </div>
 
                       {isCurrent && (
-                        <span className="text-[10px] font-black text-indigo-600 bg-white px-2 py-0.5 rounded-full border border-indigo-200">
-                          فعال
+                        <span className="flex items-center gap-1 text-[11px] font-black text-indigo-600 dark:text-indigo-400 bg-white dark:bg-slate-900 px-2.5 py-1 rounded-full border border-indigo-200 dark:border-indigo-800 shrink-0 shadow-2xs mr-2">
+                          <Check className="w-3.5 h-3.5" />
+                          <span>فعال</span>
                         </span>
                       )}
                     </button>
@@ -515,21 +533,21 @@ function _UnusedMobileRestrictedMenu({
                 })}
               </div>
 
-              {/* Quick Module Switcher inside Sheet */}
-              <div className="mt-4 pt-3 border-t border-slate-100 flex items-center justify-between gap-1">
-                <span className="text-[11px] font-bold text-slate-500 shrink-0">
+              {/* Quick Module Switcher inside Sheet with 40px+ Touch Targets */}
+              <div className="mt-4 pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                <span className="text-xs font-black text-slate-500 dark:text-slate-400 shrink-0">
                   بخش‌های همراه:
                 </span>
-                <div className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
                   {MOBILE_CATEGORIES.map((c) => (
                     <button
                       key={c.id}
                       type="button"
                       onClick={() => setSelectedCategoryId(c.id)}
-                      className={`px-2 py-1 rounded-lg text-[10px] font-black shrink-0 transition-colors ${
+                      className={`min-h-[40px] px-3.5 py-2 rounded-xl text-xs font-black shrink-0 transition-all active:scale-95 touch-manipulation cursor-pointer shadow-2xs ${
                         displayedCategory.id === c.id
-                          ? "bg-slate-900 text-white"
-                          : "bg-slate-100 text-slate-600 hover:bg-slate-200"
+                          ? "bg-slate-900 dark:bg-white text-white dark:text-slate-900 shadow-xs"
+                          : "bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-200 dark:hover:bg-slate-700 border border-slate-200/80 dark:border-slate-700"
                       }`}
                     >
                       {c.shortTitle}

@@ -70,6 +70,7 @@ export interface SidebarItem {
   badgeColor?: "indigo" | "emerald" | "amber" | "rose" | "blue" | "purple" | "cyan";
   description?: string;
   isQuickAction?: boolean;
+  mobileOnly?: boolean;
 }
 
 export interface SidebarGroup {
@@ -407,13 +408,14 @@ export const allSidebarGroups: SidebarGroup[] = [
       },
       {
         id: "create_person",
-        label: "ثبت شخص جدید (موبایل و سریع)",
-        shortLabel: "شخص جدید",
+        label: "ثبت شخص جدید (مخصوص موبایل)",
+        shortLabel: "شخص جدید (موبایل)",
         icon: <UserPlus className="w-4 h-4 text-emerald-600" />,
         roles: ["admin", "accountant", "cashier", "manager"],
-        badge: "جدید",
+        badge: "موبایل",
         badgeColor: "emerald",
         isQuickAction: true,
+        mobileOnly: true,
       },
       {
         id: "person_profile",

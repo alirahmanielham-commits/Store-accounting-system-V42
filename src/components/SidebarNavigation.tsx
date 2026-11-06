@@ -12,6 +12,7 @@ import {
   ChevronsUpDown,
   ChevronsDownUp,
   Flame,
+  UserPlus,
 } from "lucide-react";
 import { getFilteredSidebarGroups, SidebarGroup, SidebarItem } from "../utils/sidebarData";
 import { hasPagePermission } from "../utils/permissionUtils";
@@ -131,7 +132,7 @@ export default function SidebarNavigation({
     }
   }, [activeTab, filteredSidebarGroups]);
 
-  const renderSidebarGroups = () => {
+  const renderSidebarGroups = (isMobileDrawer: boolean = false) => {
     const searchLower = menuSearchQuery.trim().toLowerCase();
 
     // Process each group, filtering its items
@@ -139,6 +140,9 @@ export default function SidebarNavigation({
       .map((group) => {
         const groupMatches = group.label.toLowerCase().includes(searchLower);
         const matchedItems = group.items.filter((item) => {
+          if (!isMobileDrawer && item.mobileOnly) {
+            return false;
+          }
           const matchesSearch =
             searchLower === "" ||
             groupMatches ||
@@ -216,6 +220,39 @@ export default function SidebarNavigation({
             </div>
           )}
         </div>
+
+        {/* Mobile Hamburger Drawer Quick Action: ثبت شخص جدید */}
+        {isMobileDrawer && (
+          <div className="px-3 pt-2 pb-2 border-b border-slate-700/20">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveTab("create_person");
+                setIsSidebarOpen(false);
+              }}
+              className={`w-full flex items-center justify-between p-2.5 rounded-xl font-black text-xs transition-all cursor-pointer shadow-xs border ${
+                activeTab === "create_person"
+                  ? "bg-emerald-600 text-white border-emerald-500 shadow-emerald-500/20"
+                  : isGmailTheme
+                  ? "bg-emerald-50 text-emerald-800 border-emerald-200 hover:bg-emerald-100"
+                  : "bg-emerald-950/40 text-emerald-300 border-emerald-600/30 hover:bg-emerald-900/50 hover:text-white"
+              }`}
+            >
+              <div className="flex items-center gap-2">
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/20 flex items-center justify-center text-emerald-400 shrink-0">
+                  <UserPlus className="w-4 h-4" />
+                </div>
+                <div className="text-right">
+                  <div className="text-xs font-black">ثبت شخص جدید (مخصوص موبایل)</div>
+                  <div className="text-[10px] opacity-75 font-normal">فرم لمسی و ارگونومیک همراه</div>
+                </div>
+              </div>
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 shrink-0">
+                موبایل
+              </span>
+            </button>
+          </div>
+        )}
 
         {/* Quick Access / Recent Pages */}
         {!menuSearchQuery && recentTabs.length > 0 && (
@@ -396,7 +433,7 @@ export default function SidebarNavigation({
       >
         {filteredSidebarGroups.map((group, groupIdx) => {
           const visibleItems = group.items.filter(
-            (item) => hasPagePermission(user, item.id)
+            (item) => !item.mobileOnly && hasPagePermission(user, item.id)
           );
           if (visibleItems.length === 0) return null;
           const isActiveGroup = group.items.some((i) => i.id === activeTab);
@@ -536,7 +573,7 @@ export default function SidebarNavigation({
             </div>
           )}
 
-          <div className="flex-1 flex flex-col overflow-hidden">{renderSidebarGroups()}</div>
+          <div className="flex-1 flex flex-col overflow-hidden">{renderSidebarGroups(false)}</div>
 
           <div
             className={`p-3 ${
@@ -626,7 +663,7 @@ export default function SidebarNavigation({
 
               {/* Sidebar Items Content */}
               <div className="flex-1 flex flex-col overflow-hidden">
-                {renderSidebarGroups()}
+                {renderSidebarGroups(true)}
               </div>
 
               {/* Drawer Footer with Logout */}
