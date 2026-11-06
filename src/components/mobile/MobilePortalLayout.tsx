@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import {
   ArrowDownLeft, ArrowUpRight, RefreshCw, Menu, X,
-  LogOut, ShieldCheck, User, Store, Check, UserPlus
+  LogOut, ShieldCheck, User, Store, Check, UserPlus, Users
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
 import MobileReceiptForm from './MobileReceiptForm';
 import MobilePersonCreatePage from '../persons/MobilePersonCreatePage';
+import MobilePersonsListPage from '../persons/MobilePersonsListPage';
 import { playAudioFeedback } from '../../utils/audio';
 
 interface Props {
@@ -27,7 +28,7 @@ interface Props {
   onLogout?: () => void;
 }
 
-export type MobileTab = 'receive' | 'pay' | 'create_person';
+export type MobileTab = 'receive' | 'pay' | 'create_person' | 'persons_list';
 
 export default function MobilePortalLayout({
   storeSettings,
@@ -46,8 +47,9 @@ export default function MobilePortalLayout({
   showNotification: externalShowNotification,
   onLogout
 }: Props) {
-  // Mobile mode is strictly restricted to receipt registration (Receive and Pay) + Create Person
+  // Mobile mode is strictly restricted to receipt registration (Receive and Pay) + Persons Management (List & Create)
   const [activeTab, setActiveTab] = useState<MobileTab>('receive');
+  const [preSelectedPerson, setPreSelectedPerson] = useState<any | null>(null);
   const [isDrawerOpen, setIsDrawerOpen] = useState(false);
   const [toast, setToast] = useState<{ msg: string; type: 'success' | 'error' | 'info' | 'warning' } | null>(null);
 
@@ -83,6 +85,12 @@ export default function MobilePortalLayout({
     try { playAudioFeedback('info'); } catch (_) {}
   };
 
+  const handleSelectPersonForReceipt = (person: any, type: 'receive' | 'pay' = 'receive') => {
+    setPreSelectedPerson(person);
+    setActiveTab(type);
+    triggerNotification(`طرف‌حساب «${person.name || person.companyName}» جهت ثبت رسید انتخاب شد.`, 'info');
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 font-sans relative" dir="rtl">
       {/* Floating Mobile Toast Banner */}
@@ -107,8 +115,22 @@ export default function MobilePortalLayout({
         </div>
       )}
 
-      {/* Main Content: Either MobilePersonCreatePage or MobileReceiptForm */}
-      {activeTab === 'create_person' ? (
+      {/* Main Content: MobilePersonsListPage, MobilePersonCreatePage or MobileReceiptForm */}
+      {activeTab === 'persons_list' ? (
+        <MobilePersonsListPage
+          persons={persons}
+          personGroups={personGroups}
+          personRoles={personRoles}
+          storeSettings={storeSettings}
+          calculatePersonBalance={calculatePersonBalance}
+          fetchPersons={fetchPersons}
+          onOpenMenu={() => setIsDrawerOpen(true)}
+          onBack={() => setActiveTab('receive')}
+          onSelectPersonForReceipt={handleSelectPersonForReceipt}
+          onGoToCreatePerson={() => setActiveTab('create_person')}
+          showNotification={triggerNotification}
+        />
+      ) : activeTab === 'create_person' ? (
         <MobilePersonCreatePage
           persons={persons}
           personGroups={personGroups}
@@ -117,12 +139,13 @@ export default function MobilePortalLayout({
           fetchPersons={fetchPersons}
           showNotification={triggerNotification}
           onOpenMenu={() => setIsDrawerOpen(true)}
-          onBack={() => setActiveTab('receive')}
+          onBack={() => setActiveTab('persons_list')}
         />
       ) : (
         <MobileReceiptForm
-          key={activeTab}
+          key={`${activeTab}-${preSelectedPerson?.id || 'none'}`}
           initialType={activeTab}
+          preSelectedPerson={preSelectedPerson}
           persons={persons}
           accounts={accounts}
           cashboxes={cashboxes}
@@ -270,7 +293,42 @@ export default function MobilePortalLayout({
                   )}
                 </button>
 
-                {/* 3. ثبت شخص جدید (طرف‌حساب) - در منوی عملیات مجاز همراه */}
+                {/* 3. لیست و جستجوی طرف‌حساب‌ها */}
+                <button
+                  type="button"
+                  onClick={() => handleSelectTab('persons_list')}
+                  className={`w-full p-3.5 rounded-2xl flex items-center justify-between text-right transition-all cursor-pointer border ${
+                    activeTab === 'persons_list'
+                      ? 'bg-blue-50/80 dark:bg-blue-950/40 border-blue-500 text-blue-900 dark:text-blue-100 shadow-sm'
+                      : 'bg-white dark:bg-slate-850 border-slate-200/70 dark:border-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-800'
+                  }`}
+                >
+                  <div className="flex items-center gap-3">
+                    <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+                      activeTab === 'persons_list'
+                        ? 'bg-blue-600 text-white shadow-md shadow-blue-600/30'
+                        : 'bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400'
+                    }`}>
+                      <Users className="w-5 h-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-xs font-black">
+                        لیست و جستجوی اشخاص
+                      </h4>
+                      <p className="text-[10px] text-slate-400 mt-0.5 font-medium">
+                        مشاهده طرف‌حساب‌ها، مانده حساب و تماس
+                      </p>
+                    </div>
+                  </div>
+
+                  {activeTab === 'persons_list' && (
+                    <div className="w-6 h-6 rounded-full bg-blue-600 text-white flex items-center justify-center shrink-0">
+                      <Check className="w-3.5 h-3.5" />
+                    </div>
+                  )}
+                </button>
+
+                {/* 4. ثبت شخص جدید (طرف‌حساب) */}
                 <button
                   type="button"
                   onClick={() => handleSelectTab('create_person')}

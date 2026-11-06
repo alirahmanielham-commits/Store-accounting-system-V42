@@ -16,6 +16,7 @@ import { playAudioFeedback } from '../../utils/audio';
 
 interface Props {
   initialType?: 'receive' | 'pay';
+  preSelectedPerson?: any;
   persons?: any[];
   accounts?: any[];
   cashboxes?: any[];
@@ -35,6 +36,7 @@ interface Props {
 
 export default function MobileReceiptForm({
   initialType = 'receive',
+  preSelectedPerson = null,
   persons = [],
   accounts = [],
   cashboxes = [],
@@ -57,7 +59,7 @@ export default function MobileReceiptForm({
   // Form State
   const [receiptType, setReceiptType] = useState<'receive' | 'pay'>(initialType);
   const [amountStr, setAmountStr] = useState<string>('');
-  const [selectedPerson, setSelectedPerson] = useState<any | null>(null);
+  const [selectedPerson, setSelectedPerson] = useState<any | null>(preSelectedPerson);
   const [resourceType, setResourceType] = useState<'bank' | 'cashbox'>('bank');
   const [selectedResource, setSelectedResource] = useState<any | null>(null);
   const [paymentMethod, setPaymentMethod] = useState<'cash' | 'card' | 'transfer' | 'check'>('card');
