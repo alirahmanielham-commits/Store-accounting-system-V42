@@ -311,90 +311,130 @@ router.post('/api/db/logs', async (req, res) => {
 
   let activeCronJobs: any[] = [];
 
-const backupStore = async (storeId: string) => {
-    return new Promise<void>((resolve) => {
+const HEAVY_LOG_TABLES = ['system_logs', 'database_logs', 'databaseLogs', 'sms_delivery_logs', 'sms_retry_logs'];
+
+const backupStore = async (storeId: string, options: { excludeLogs?: boolean } = { excludeLogs: true }): Promise<{ fileName: string; size: number; compressed: boolean }> => {
+    return new Promise<{ fileName: string; size: number; compressed: boolean }>((resolve, reject) => {
         storeContext.run(storeId, async () => {
-             console.log("Running backup for store:", storeId);
+             console.log("Running optimized backup for store:", storeId);
              try {
                 const dir = path.resolve(await getBackupsDir());
                 await fsPromises.mkdir(dir, { recursive: true });
                 const rows = await getAllDbData();
                 const backupData: any = {};
                 for (const row of rows) {
+                  // Skip heavy audit logs if excludeLogs is true to save massive space and speed up backup
+                  if (options.excludeLogs && HEAVY_LOG_TABLES.includes(row.key)) {
+                    continue;
+                  }
                   backupData[row.key] = row.value;
                 }
                 const fileName = `backup-${storeId}-${getFormattedBackupDate()}.json`;
                 const filePath = path.join(dir, fileName);
                 
-                // Encrypt backup payload with AES-256-GCM authenticated encryption
-                const { jsonString } = encryptBackupData(backupData, storeId);
-                await fsPromises.writeFile(filePath, jsonString, 'utf-8');
+                // Encrypt backup payload with AES-256-GCM + automatic Gzip compression
+                const { jsonString, envelope } = encryptBackupData(backupData, storeId, undefined, true);
+                const fileBuffer = Buffer.from(jsonString, 'utf-8');
+                await fsPromises.writeFile(filePath, fileBuffer);
 
                 // Dual-site local redundancy: Save secondary replica in backups/secondary-replica
-                await saveSecondaryReplica(fileName, jsonString).catch(e => console.warn('Secondary replica warning:', e));
+                saveSecondaryReplica(fileName, jsonString).catch(e => console.warn('Secondary replica warning:', e));
                 
-                // Automatic Cloud Sync (Google Drive, OneDrive, or S3) with encrypted payload
+                // Non-blocking Automatic Cloud Sync (Google Drive, OneDrive, or S3):
+                // Runs asynchronously in background without delaying HTTP response or blocking user
                 const shouldCloudSync = backupConfig.autoCloudSync || backupConfig.storageType === "cloud" || backupConfig.storageType === "both";
                 if (shouldCloudSync) {
-                    await dispatchCloudUpload(fileName, jsonString);
+                    setImmediate(() => {
+                      dispatchCloudUpload(fileName, jsonString).catch(err => {
+                        console.warn('Background cloud auto-upload error:', err?.message || err);
+                      });
+                    });
                 }
                 
-                await appendDbLog('پشتیبان‌گیری رمزنگاری‌شده (AES-256-GCM)', 'success', `بک‌آپ امن با حجم ${Buffer.byteLength(jsonString)} بایت در مسیر ${filePath} و آرشیو ثانویه ایجاد شد.`);
+                const backupSize = fileBuffer.length;
+                await appendDbLog('پشتیبان‌گیری امن و فشرده (Gzip + AES-256-GCM)', 'success', `بک‌آپ با حجم بهینه‌شده ${backupSize} بایت در مسیر ${filePath} ایجاد گردید.`);
                 
                 // keep only last N backups per store
                 const retentionCount = backupConfig.retention || 20;
-                const files = await fsPromises.readdir(dir);
-                const jsonFiles = files.filter(f => f.startsWith(`backup-${storeId}-`) && (f.endsWith('.json') || f.endsWith('.sql')));
-                const filesWithStats = await Promise.all(jsonFiles.map(async f => {
-                    const stat = await fsPromises.stat(path.join(dir, f));
-                    return { file: f, time: stat.mtimeMs };
-                }));
-                filesWithStats.sort((a,b) => b.time - a.time);
-                const sortedJsonFiles = filesWithStats.map(f => f.file);
-                
-                if (sortedJsonFiles.length > retentionCount) {
-                   for (let i = retentionCount; i < sortedJsonFiles.length; i++) {
-                      await fsPromises.unlink(path.join(dir, sortedJsonFiles[i])).catch(console.error);
-                   }
-                }
+                fsPromises.readdir(dir).then(async (files) => {
+                  const jsonFiles = files.filter(f => f.startsWith(`backup-${storeId}-`) && (f.endsWith('.json') || f.endsWith('.sql')));
+                  const filesWithStats = await Promise.all(jsonFiles.map(async f => {
+                      const stat = await fsPromises.stat(path.join(dir, f));
+                      return { file: f, time: stat.mtimeMs };
+                  }));
+                  filesWithStats.sort((a,b) => b.time - a.time);
+                  const sortedJsonFiles = filesWithStats.map(f => f.file);
+                  
+                  if (sortedJsonFiles.length > retentionCount) {
+                     for (let i = retentionCount; i < sortedJsonFiles.length; i++) {
+                        await fsPromises.unlink(path.join(dir, sortedJsonFiles[i])).catch(console.error);
+                     }
+                  }
+                }).catch(() => {});
+
+                resolve({ fileName, size: backupSize, compressed: envelope.compression === 'gzip' });
              } catch (err) {
                 console.error(`Backup job failed for store ${storeId}`, err);
                 await appendDbLog('پشتیبان‌گیری', 'error', `خطا در ایجاد بک‌آپ (${storeId}): ${err.message}`);
-                throw err;
-             } finally {
-                resolve();
+                reject(err);
              }
         });
     });
 };
 
-const runBackupJob = async () => {
-    let errors = [];
-    try {
-        await loadPgPoolForStore('default');
-        try { await backupStore('default'); } catch(e) { errors.push(e); }
-        const client = getActivePgPool();
-        if (client) {
-            let res;
-            try {
-                res = await client.query('SELECT id FROM businesses WHERE deleted_at IS NULL');
-            } catch (err) {
-                if (err.code === '42703') {
-                    res = await client.query('SELECT id FROM businesses');
-                } else {
-                    throw err;
-                }
-            }
-            for (const row of res.rows) {
-                await loadPgPoolForStore(row.id);
-                try { await backupStore(row.id); } catch(e) { errors.push(e); }
-            }
-        }
-    } catch(e) {
-        console.error('Global backup job error', e);
+const runBackupJob = async (targetStoreId?: string) => {
+    let errors: any[] = [];
+    const results: any[] = [];
+
+    // If a specific active store was requested, back up only that store for maximum speed
+    if (targetStoreId && targetStoreId !== 'all') {
+      try {
+        await loadPgPoolForStore(targetStoreId);
+        const res = await backupStore(targetStoreId);
+        results.push(res);
+        return { success: true, count: 1, results };
+      } catch (e: any) {
         errors.push(e);
+      }
+    } else {
+      // Otherwise backup default store and active businesses
+      try {
+          await loadPgPoolForStore('default');
+          try {
+            const defRes = await backupStore('default');
+            results.push(defRes);
+          } catch(e) { errors.push(e); }
+          
+          const client = getActivePgPool();
+          if (client) {
+              let res;
+              try {
+                  res = await client.query('SELECT id FROM businesses WHERE deleted_at IS NULL');
+              } catch (err) {
+                  if (err.code === '42703') {
+                      res = await client.query('SELECT id FROM businesses');
+                  } else {
+                      throw err;
+                  }
+              }
+              for (const row of res.rows) {
+                  await loadPgPoolForStore(row.id);
+                  try {
+                    const storeRes = await backupStore(row.id);
+                    results.push(storeRes);
+                  } catch(e) { errors.push(e); }
+              }
+          }
+      } catch(e: any) {
+          console.error('Global backup job error', e);
+          errors.push(e);
+      }
     }
-    if (errors.length > 0) throw new Error(errors.map(e => e.message).join(', '));
+
+    if (errors.length > 0 && results.length === 0) {
+      throw new Error(errors.map(e => e.message).join(', '));
+    }
+    return { success: true, count: results.length, results };
 };
 
 const setupBackupSchedule = () => {
@@ -428,8 +468,10 @@ setupBackupSchedule();
 
 router.post("/api/db/backups/create", requireRole(['admin']), async (req, res) => {
      try {
-        await runBackupJob();
-        res.json({ success: true });
+        const currentStore = (req.query.storeId as string) || (req.body?.storeId as string) || storeContext.getStore() || 'default';
+        const targetStore = req.body?.allStores ? 'all' : currentStore;
+        const result = await runBackupJob(targetStore);
+        res.json({ success: true, message: 'پشتیبان‌گیری امن و فشرده با موفقیت انجام شد.', ...result });
      } catch (err: any) {
         res.status(500).json({ error: err.message });
      }
@@ -1021,7 +1063,11 @@ router.get('/api/db/backup', async (req, res) => {
     try {
       const rows = await getAllDbData();
       const backupData: any = {};
+      const excludeLogs = req.query.includeLogs !== 'true';
       for (const row of rows) {
+        if (excludeLogs && HEAVY_LOG_TABLES.includes(row.key)) {
+          continue;
+        }
         backupData[row.key] = row.value;
       }
       
@@ -1033,7 +1079,7 @@ router.get('/api/db/backup', async (req, res) => {
       if (req.query.decrypt === 'true') {
         res.send(JSON.stringify(backupData, null, 2));
       } else {
-        const { jsonString } = encryptBackupData(backupData, storeId);
+        const { jsonString } = encryptBackupData(backupData, storeId, undefined, true);
         res.send(jsonString);
       }
     } catch (err: any) {

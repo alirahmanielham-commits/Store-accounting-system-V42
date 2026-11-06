@@ -458,16 +458,22 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
     setIsBackingUp(true);
     setBackupProgress(30);
     try {
-      const res = await fetch('/api/db/backups/create', { method: 'POST' });
+      const activeStore = (typeof window !== 'undefined' && localStorage.getItem('activeStoreId')) || 'default';
+      const res = await fetch('/api/db/backups/create', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ storeId: activeStore, allStores: false })
+      });
       if (!res.ok) {
           const errorData = await res.json().catch(() => ({}));
           throw new Error(errorData.error || 'خطای سرور');
       }
+      const data = await res.json();
       setBackupProgress(100);
-      showNotification('بک‌آپ با موفقیت تهیه شد', 'success');
+      showNotification('نسخه پشتیبان فشرده و فوق‌سریع با موفقیت تهیه شد', 'success');
       loadBackups();
       
-      let typeLabel = 'کامل (Full)';
+      let typeLabel = 'فشرده و امن (Gzip + AES-256-GCM)';
       if (backupType === 'incremental') typeLabel = 'افزایشی';
       if (backupType === 'structure') typeLabel = 'فقط ساختار';
       if (backupType === 'data') typeLabel = 'فقط داده';
@@ -476,7 +482,7 @@ export default function DatabaseDashboard({ showNotification }: DatabaseDashboar
         date: new Intl.DateTimeFormat('fa-IR').format(new Date()) + ' ' + new Date().toLocaleTimeString('fa-IR'),
         action: `بک‌آپ دستی (${typeLabel})`,
         status: 'success',
-        details: 'عملیات با موفقیت انجام شد.'
+        details: data.message || 'عملیات با فشرده‌سازی موفق انجام شد.'
       }, ...logs]);
     } catch(err: any) {
       showNotification('خطا در تهیه بک‌آپ: ' + err.message, 'error');
