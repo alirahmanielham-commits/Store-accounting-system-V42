@@ -13,9 +13,11 @@ import {
   getTransactions, getCheckbooks, getAccounts, addTransaction, rollbackCashedTransaction
 } from "../../../services/dataService";
 import { getUsers } from "../../../services/userService";
-import { formatDateDisplay } from "../../../utils/format";
+import { formatDateDisplay, toPersianDigits } from "../../../utils/format";
 import { syncCheckAccountingDocument, getAccountingDocuments } from "../../../services/accountingService";
 import Num2persian from "num2persian";
+import CommentBadgeButton from "../../common/CommentBadgeButton";
+import UniversalCommentsDrawer from "../../common/UniversalCommentsDrawer";
 
 export default function CheckCardPage({
   checkId,
@@ -52,6 +54,7 @@ export default function CheckCardPage({
   const [searchQuery, setSearchQuery] = useState('');
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
 
   const [statusModalData, setStatusModalData] = useState<{
     isOpen: boolean;
@@ -651,6 +654,12 @@ export default function CheckCardPage({
               </div>
             )}
           </div>
+          <CommentBadgeButton
+            entityType="check"
+            entityId={String(currentCheckId)}
+            onClick={() => setIsCommentsOpen(true)}
+            title="یادداشت‌ها و نظرات این چک"
+          />
           <button onClick={() => window.print()} className="p-2.5 bg-slate-100 text-slate-700 rounded-xl hover:bg-slate-200 transition-colors" title="چاپ کارت">
             <Printer className="w-5 h-5" />
           </button>
@@ -1290,6 +1299,19 @@ export default function CheckCardPage({
           </motion.div>
         </div>
       )}
+
+      {/* Universal Comments Drawer for Check Card */}
+      <UniversalCommentsDrawer
+        isOpen={isCommentsOpen}
+        onClose={() => setIsCommentsOpen(false)}
+        entityType="check"
+        entityId={String(currentCheckId)}
+        entityTitle={
+          check
+            ? `چک ${checkType === "issued" ? "پرداختی" : "دریافتی"} شماره ${toPersianDigits(check.checkNumber || currentCheckId)} (${check.bankName || "بانک نامشخص"})`
+            : ""
+        }
+      />
     </motion.div>
   );
 }

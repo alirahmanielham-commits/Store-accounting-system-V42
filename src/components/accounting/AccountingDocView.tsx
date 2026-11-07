@@ -6,6 +6,8 @@ import { Printer, ArrowRight, CheckCircle, FileText, RotateCcw, AlertTriangle } 
 import { AccountingDocument, LedgerAccount } from '../../types';
 import { getLedgerAccounts, getPersons } from '../../services/dataService';
 import ReverseAccountingDocModal from './ReverseAccountingDocModal';
+import CommentBadgeButton from '../common/CommentBadgeButton';
+import UniversalCommentsDrawer from '../common/UniversalCommentsDrawer';
 
 interface Props {
   doc: AccountingDocument;
@@ -20,6 +22,7 @@ export default function AccountingDocView({ doc, storeSettings, onBack, showNoti
   const [accounts, setAccounts] = useState<LedgerAccount[]>([]);
   const [persons, setPersons] = useState<any[]>([]);
   const [isReversalOpen, setIsReversalOpen] = useState(false);
+  const [isCommentsOpen, setIsCommentsOpen] = useState(false);
 
   useEffect(() => {
     setCurrentDoc(doc);
@@ -90,6 +93,13 @@ export default function AccountingDocView({ doc, storeSettings, onBack, showNoti
         </div>
 
         <div className="flex items-center gap-2">
+          <CommentBadgeButton
+            entityType="accounting_doc"
+            entityId={String(currentDoc.id)}
+            onClick={() => setIsCommentsOpen(true)}
+            title="یادداشت‌ها و نظرات این سند"
+          />
+
           {!(currentDoc as any).isReversed ? (
             <button
               type="button"
@@ -263,6 +273,14 @@ export default function AccountingDocView({ doc, storeSettings, onBack, showNoti
             reversalDocNumber: newDoc.documentNumber
           }));
         }}
+      />
+
+      <UniversalCommentsDrawer
+        isOpen={isCommentsOpen}
+        onClose={() => setIsCommentsOpen(false)}
+        entityType="accounting_doc"
+        entityId={String(currentDoc.id)}
+        entityTitle={`سند حسابداری شماره ${toPersianDigits(currentDoc.documentNumber || currentDoc.id)}`}
       />
     </div>
   );

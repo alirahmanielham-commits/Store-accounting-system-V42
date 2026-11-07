@@ -47,6 +47,7 @@ interface InvoiceRowActionsDropdownProps {
   onConvertConsignmentToFinal?: () => void;
   onReturnConsignmentGoods?: () => void;
   onPrintConsignmentReceipt?: () => void;
+  onComments?: () => void;
 }
 
 export default function InvoiceRowActionsDropdown({
@@ -73,7 +74,8 @@ export default function InvoiceRowActionsDropdown({
   onQueueSms,
   onConvertConsignmentToFinal,
   onReturnConsignmentGoods,
-  onPrintConsignmentReceipt
+  onPrintConsignmentReceipt,
+  onComments
 }: InvoiceRowActionsDropdownProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [coords, setCoords] = useState<{ top: number; left: number; openUp: boolean }>({
@@ -232,6 +234,23 @@ export default function InvoiceRowActionsDropdown({
                   </div>
                   <span className="text-[10px] text-slate-400">سریع</span>
                 </button>
+
+                {onComments && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setIsOpen(false);
+                      onComments();
+                    }}
+                    className="w-full flex items-center justify-between px-2.5 py-1.5 text-xs font-bold text-slate-700 hover:bg-indigo-50/80 hover:text-indigo-700 rounded-xl transition-colors cursor-pointer group"
+                  >
+                    <div className="flex items-center gap-2">
+                      <MessageSquare className="w-4 h-4 text-indigo-500 group-hover:scale-110 transition-transform" />
+                      <span>یادداشت‌ها و نظرات</span>
+                    </div>
+                    <span className="text-[10px] text-indigo-600 font-bold">گفتگو</span>
+                  </button>
+                )}
 
                 {onQueueSms && (
                   <button

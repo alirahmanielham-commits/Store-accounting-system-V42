@@ -9,6 +9,8 @@ import {
 import DatePickerModule, { Calendar as RMCalendar } from "react-multi-date-picker";
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
+import CommentBadgeButton from "../../common/CommentBadgeButton";
+import UniversalCommentsDrawer from "../../common/UniversalCommentsDrawer";
 
 export function IssuedChecksList({ 
   showNotification, onEditReceiptByCheck, issuedChecks, persons, checkbooks, accounts, 
@@ -22,6 +24,7 @@ export function IssuedChecksList({
   issuedPage, setIssuedPage, totalIssuedPages 
 }) {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
+  const [commentsCheck, setCommentsCheck] = useState<any | null>(null);
 
   const getStatusBadge = (status: string) => {
     switch (status) {
@@ -295,6 +298,13 @@ export function IssuedChecksList({
 
                     <td className="px-5 py-4 print:hidden">
                       <div className="flex items-center justify-center gap-1 opacity-100 md:opacity-0 md:group-hover:opacity-100 transition-opacity">
+                        <CommentBadgeButton
+                          entityType="check"
+                          entityId={String(c.id)}
+                          onClick={() => setCommentsCheck(c)}
+                          size="sm"
+                          title="یادداشت‌ها و نظرات این چک پرداختی"
+                        />
                         <button
                           onClick={async () => {
                             setHistoryCheck({ ...c, checkType: 'issued' });
@@ -395,6 +405,18 @@ export function IssuedChecksList({
         )}
       </div>
 
+      {/* Universal Comments Drawer for Issued Checks */}
+      <UniversalCommentsDrawer
+        isOpen={!!commentsCheck}
+        onClose={() => setCommentsCheck(null)}
+        entityType="check"
+        entityId={commentsCheck ? String(commentsCheck.id) : ""}
+        entityTitle={
+          commentsCheck
+            ? `چک پرداختی شماره ${toPersianDigits(commentsCheck.checkNumber || commentsCheck.id)} (${commentsCheck.bankName || "بانک نامشخص"})`
+            : ""
+        }
+      />
     </div>
   );
 }

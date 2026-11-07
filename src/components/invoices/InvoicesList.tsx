@@ -23,6 +23,8 @@ import { safePrint } from "../../utils/printHelper";
 import InvoiceRowActionsDropdown from "./InvoiceRowActionsDropdown";
 import QueueSmsModal from "../messaging/QueueSmsModal";
 import ConsignmentConversionModal from "./ConsignmentConversionModal";
+import CommentBadgeButton from "../common/CommentBadgeButton";
+import UniversalCommentsDrawer from "../common/UniversalCommentsDrawer";
 
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_year' | 'all' | 'custom';
 
@@ -124,6 +126,9 @@ export default function InvoicesList(props: any) {
 
   // Queue SMS modal
   const [queueSmsInvoice, setQueueSmsInvoice] = useState<any>(null);
+
+  // Comments drawer state
+  const [commentsDrawerInvoice, setCommentsDrawerInvoice] = useState<any | null>(null);
 
   // Consignment modal state
   const [consignmentModalState, setConsignmentModalState] = useState<{
@@ -2181,6 +2186,13 @@ export default function InvoicesList(props: any) {
                                 >
                                   <Printer className="w-3.5 h-3.5" />
                                 </button>
+                                <CommentBadgeButton
+                                  entityType="invoice"
+                                  entityId={String(inv.id || inv._id || "")}
+                                  onClick={() => setCommentsDrawerInvoice(inv)}
+                                  size="sm"
+                                  title="یادداشت‌ها و نظرات فاکتور"
+                                />
                                 <InvoiceRowActionsDropdown
                                   invoice={inv}
                                   activeTab={activeTab}
@@ -2256,6 +2268,7 @@ export default function InvoicesList(props: any) {
                                       ? () => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'receipt' })
                                       : undefined
                                   }
+                                  onComments={() => setCommentsDrawerInvoice(inv)}
                                 />
                               </div>
                             </td>
@@ -2474,6 +2487,13 @@ export default function InvoicesList(props: any) {
                           </div>
 
                           <div className="flex items-center gap-1">
+                            <CommentBadgeButton
+                              entityType="invoice"
+                              entityId={String(inv.id || inv._id || "")}
+                              onClick={() => setCommentsDrawerInvoice(inv)}
+                              size="sm"
+                              title="یادداشت‌ها و نظرات فاکتور"
+                            />
                             <button
                               type="button"
                               onClick={() => setViewingInvoice && setViewingInvoice(inv)}
@@ -2566,6 +2586,7 @@ export default function InvoicesList(props: any) {
                                   ? () => setConsignmentModalState({ isOpen: true, invoice: inv, mode: 'receipt' })
                                   : undefined
                               }
+                              onComments={() => setCommentsDrawerInvoice(inv)}
                             />
                           </div>
                         </div>
@@ -3035,6 +3056,19 @@ export default function InvoicesList(props: any) {
           products={products}
         />
       )}
+
+      {/* Universal Comments Drawer for Invoices */}
+      <UniversalCommentsDrawer
+        isOpen={!!commentsDrawerInvoice}
+        onClose={() => setCommentsDrawerInvoice(null)}
+        entityType="invoice"
+        entityId={commentsDrawerInvoice ? String(commentsDrawerInvoice.id || commentsDrawerInvoice._id || "") : ""}
+        entityTitle={
+          commentsDrawerInvoice
+            ? `فاکتور شماره ${toPersianDigits(commentsDrawerInvoice.invoiceNumber || commentsDrawerInvoice.id || "")} (${commentsDrawerInvoice.customerName || commentsDrawerInvoice.personName || "نامشخص"})`
+            : ""
+        }
+      />
     </div>
   );
 }

@@ -19,6 +19,8 @@ import { convertToGregorian, formatDateDisplay, toPersianDigits, toEnglishDigits
 import { formatDecimalForExcel } from "../../utils/exportUtils";
 import { safePrint } from "../../utils/printHelper";
 import QueueSmsModal from "../messaging/QueueSmsModal";
+import CommentBadgeButton from "../common/CommentBadgeButton";
+import UniversalCommentsDrawer from "../common/UniversalCommentsDrawer";
 
 type DatePreset = 'today' | 'yesterday' | 'this_week' | 'last_7_days' | 'this_month' | 'last_30_days' | 'this_year' | 'all' | 'custom';
 
@@ -71,6 +73,9 @@ export default function ReceiptsList(props: any) {
 
   // Queue SMS state
   const [queueSmsReceipt, setQueueSmsReceipt] = useState<any>(null);
+
+  // Comments drawer state
+  const [commentsReceipt, setCommentsReceipt] = useState<any | null>(null);
 
   // Reset filters on tab change
   React.useEffect(() => {
@@ -870,6 +875,13 @@ export default function ReceiptsList(props: any) {
                   )}
 
                   <div className="flex items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
+                    <CommentBadgeButton
+                      entityType="receipt"
+                      entityId={String(tx.id)}
+                      onClick={() => setCommentsReceipt(tx)}
+                      size="sm"
+                      title="یادداشت‌ها و نظرات رسید"
+                    />
                     <button
                       onClick={() => {
                         if (tx.type === "salary" && openPayslip) openPayslip(tx);
@@ -1032,6 +1044,13 @@ export default function ReceiptsList(props: any) {
                     {/* Actions */}
                     <td className="p-4 print:hidden">
                       <div className="flex items-center justify-center gap-1 bg-slate-50/90 p-1 rounded-xl border border-slate-200/60 w-max mx-auto">
+                        <CommentBadgeButton
+                          entityType="receipt"
+                          entityId={String(tx.id)}
+                          onClick={() => setCommentsReceipt(tx)}
+                          size="sm"
+                          title="یادداشت‌ها و نظرات این رسید"
+                        />
                         <button
                           type="button"
                           onClick={() => {
@@ -1204,6 +1223,19 @@ export default function ReceiptsList(props: any) {
           onNavigateToSmsManager={setActiveTab ? () => setActiveTab('messaging') : undefined}
         />
       )}
+
+      {/* Universal Comments Drawer for Receipts */}
+      <UniversalCommentsDrawer
+        isOpen={!!commentsReceipt}
+        onClose={() => setCommentsReceipt(null)}
+        entityType="receipt"
+        entityId={commentsReceipt ? String(commentsReceipt.id) : ""}
+        entityTitle={
+          commentsReceipt
+            ? `رسید ${commentsReceipt.type === "pay" || commentsReceipt.type === "payment" ? "پرداخت" : "دریافت"} شماره ${toPersianDigits(commentsReceipt.receiptNumber || commentsReceipt.id)} (${commentsReceipt.personName || "نامشخص"})`
+            : ""
+        }
+      />
     </div>
   );
 }

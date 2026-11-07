@@ -1,11 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import * as lucide from 'lucide-react';
-import { Menu, CloudOff } from 'lucide-react';
+import { Menu, CloudOff, MessageSquare } from 'lucide-react';
 import { addProduct, updateProduct, deleteProduct,  } from '../../services/dataService';
 import FastBarcodeScanner from '../modals/BarcodeScannerModal';
 import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import { getActiveStoreSettings } from '../../utils/format';
+import CommentBadgeButton from '../common/CommentBadgeButton';
+import UniversalCommentsDrawer from '../common/UniversalCommentsDrawer';
 
 export default function ProductsTab(props: any) {
   const {
@@ -62,6 +64,7 @@ export default function ProductsTab(props: any) {
   } = lucide;
 
   const [openDropdownId, setOpenDropdownId] = useState<string | number | null>(null);
+  const [commentsProduct, setCommentsProduct] = useState<any | null>(null);
 
   const handleOpenPricingWizardForProducts = (targetProducts?: any[]) => {
     let listToOpen: any[] = [];
@@ -841,45 +844,64 @@ export default function ProductsTab(props: any) {
                                         {formatNumber(p.price)}
                                       </td>
                                       <td className="py-4 px-6 text-center">
-                                        <div className="relative inline-block text-left">
-                                          <button 
-                                            onClick={(e) => {
-                                              e.stopPropagation();
-                                              setOpenDropdownId(openDropdownId === p.id ? null : p.id);
-                                            }}
-                                            className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all flex items-center justify-center w-8 h-8"
-                                          >
-                                            <MoreVertical className="w-4 h-4" />
-                                          </button>
-                                          <div className={`absolute left-4 mt-2 w-48 origin-top-left rounded-xl bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none transition-all z-50 ${openDropdownId === p.id ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
-                                            <div className="py-1">
-                                              <button
-                                                onClick={() => {
-                                                  setOpenDropdownId(null);
-                                                  handleOpenPricingWizardForProducts([p]);
-                                                }}
-                                                className="text-indigo-700 font-bold group/item flex w-full items-center px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-800 transition-colors text-right border-b border-slate-100"
-                                              >
-                                                <Tag className="ml-3 h-4 w-4 text-indigo-500 group-hover/item:text-indigo-700" aria-hidden="true" />
-                                                تغییر قیمت و چاپ
-                                              </button>
-                                              <button
-                                                onClick={() => {
-                                                  setViewingProduct(p);
-                                                  setActiveTab("product_view");
-                                                }}
-                                                className="text-gray-700 group/item flex w-full items-center px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors text-right"
-                                              >
-                                                <Eye className="ml-3 h-4 w-4 text-gray-400 group-hover/item:text-indigo-600" aria-hidden="true" />
-                                                مشاهده کارت کالا
-                                              </button>
-                                              <button
-                                                onClick={() => handleEditProduct(p)}
-                                                className="text-gray-700 group/item flex w-full items-center px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors text-right"
-                                              >
-                                                <Edit2 className="ml-3 h-4 w-4 text-gray-400 group-hover/item:text-indigo-600" aria-hidden="true" />
-                                                ویرایش کالا
-                                              </button>
+                                        <div className="flex items-center justify-center gap-1.5">
+                                          <CommentBadgeButton
+                                            entityType="product"
+                                            entityId={p.id}
+                                            onClick={() => setCommentsProduct(p)}
+                                            size="sm"
+                                            title="یادداشت‌ها و نظرات این کالا"
+                                          />
+                                          <div className="relative inline-block text-left">
+                                            <button 
+                                              onClick={(e) => {
+                                                e.stopPropagation();
+                                                setOpenDropdownId(openDropdownId === p.id ? null : p.id);
+                                              }}
+                                              className="p-2 text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all flex items-center justify-center w-8 h-8"
+                                            >
+                                              <MoreVertical className="w-4 h-4" />
+                                            </button>
+                                            <div className={`absolute left-4 mt-2 w-48 origin-top-left rounded-xl bg-white shadow-lg ring-1 ring-black ring-opacity-5 focus:outline-none transition-all z-50 ${openDropdownId === p.id ? 'opacity-100 visible' : 'opacity-0 invisible'}`}>
+                                              <div className="py-1">
+                                                <button
+                                                  onClick={() => {
+                                                    setOpenDropdownId(null);
+                                                    handleOpenPricingWizardForProducts([p]);
+                                                  }}
+                                                  className="text-indigo-700 font-bold group/item flex w-full items-center px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-800 transition-colors text-right border-b border-slate-100"
+                                                >
+                                                  <Tag className="ml-3 h-4 w-4 text-indigo-500 group-hover/item:text-indigo-700" aria-hidden="true" />
+                                                  تغییر قیمت و چاپ
+                                                </button>
+                                                <button
+                                                  onClick={() => {
+                                                    setOpenDropdownId(null);
+                                                    setViewingProduct(p);
+                                                    setActiveTab("product_view");
+                                                  }}
+                                                  className="text-gray-700 group/item flex w-full items-center px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors text-right"
+                                                >
+                                                  <Eye className="ml-3 h-4 w-4 text-gray-400 group-hover/item:text-indigo-600" aria-hidden="true" />
+                                                  مشاهده کارت کالا
+                                                </button>
+                                                <button
+                                                  onClick={() => {
+                                                    setOpenDropdownId(null);
+                                                    setCommentsProduct(p);
+                                                  }}
+                                                  className="text-gray-700 group/item flex w-full items-center px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors text-right"
+                                                >
+                                                  <MessageSquare className="ml-3 h-4 w-4 text-indigo-500 group-hover/item:text-indigo-600" aria-hidden="true" />
+                                                  یادداشت‌ها و نظرات
+                                                </button>
+                                                <button
+                                                  onClick={() => handleEditProduct(p)}
+                                                  className="text-gray-700 group/item flex w-full items-center px-4 py-2 text-sm hover:bg-indigo-50 hover:text-indigo-600 transition-colors text-right"
+                                                >
+                                                  <Edit2 className="ml-3 h-4 w-4 text-gray-400 group-hover/item:text-indigo-600" aria-hidden="true" />
+                                                  ویرایش کالا
+                                                </button>
                                               
                                               <button
                                                 onClick={() =>
@@ -922,7 +944,8 @@ export default function ProductsTab(props: any) {
                                             </div>
                                           </div>
                                         </div>
-                                      </td>
+                                      </div>
+                                    </td>
                                     </tr>
                                   ))}
                                 </tbody>
@@ -1066,6 +1089,19 @@ export default function ProductsTab(props: any) {
                         </button>
                       </motion.div>
                     )}
+
+                    {/* Universal Comments Drawer for Products */}
+                    <UniversalCommentsDrawer
+                      isOpen={!!commentsProduct}
+                      onClose={() => setCommentsProduct(null)}
+                      entityType="product"
+                      entityId={commentsProduct ? String(commentsProduct.id) : ""}
+                      entityTitle={
+                        commentsProduct
+                          ? `کالای ${commentsProduct.name} ${commentsProduct.code ? `(کد: ${commentsProduct.code})` : ""}`
+                          : ""
+                      }
+                    />
                   </motion.div>
 
   );

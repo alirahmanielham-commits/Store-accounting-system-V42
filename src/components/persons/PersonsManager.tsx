@@ -15,6 +15,8 @@ import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import { getActiveStoreSettings } from '../../utils/format';
 import { DEFAULT_SPECIALTIES, getSpecialties, getSpecialtyById, getSpecialtyName } from '../../services/specialistService';
 import { PersonSpecialty } from '../../types';
+import UniversalCommentsDrawer from '../common/UniversalCommentsDrawer';
+import CommentBadgeButton from '../common/CommentBadgeButton';
 
 export default function PersonsManager(props: any) {
   const { 
@@ -110,6 +112,9 @@ export default function PersonsManager(props: any) {
   // Send Message Modal state
   const [selectedPersonForMessage, setSelectedPersonForMessage] = useState<any | null>(null);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
+
+  // Universal Comments Drawer state
+  const [commentsDrawerPerson, setCommentsDrawerPerson] = useState<any | null>(null);
 
   const handleOpenMessageModal = (person: any, e?: React.MouseEvent) => {
     if (e) {
@@ -1681,6 +1686,13 @@ export default function PersonsManager(props: any) {
                         <td className="px-4 py-3 text-center">
                           <div className="flex items-center justify-center gap-1.5" dir="ltr">
                             
+                            <CommentBadgeButton
+                              entityType="person"
+                              entityId={p.id}
+                              entityTitle={getPersonDisplayName(p)}
+                              onClick={() => setCommentsDrawerPerson(p)}
+                            />
+
                             <button onClick={() => { clearDraft(); setCustomerId(p.id); setActiveTab("create_sale"); }} className="p-2 text-blue-600 hover:text-white bg-blue-50 hover:bg-blue-600 rounded-lg transition-all" title="صدور فاکتور فروش">
                               <ShoppingCart className="w-4 h-4" />
                             </button>
@@ -1809,6 +1821,17 @@ export default function PersonsManager(props: any) {
           calculatePersonBalance={calculatePersonBalance}
           storeSettings={storeSettings}
           source="person_list"
+        />
+
+        {/* Universal Comments & Notes Drawer for Persons */}
+        <UniversalCommentsDrawer
+          isOpen={!!commentsDrawerPerson}
+          onClose={() => setCommentsDrawerPerson(null)}
+          entityType="person"
+          entityId={commentsDrawerPerson ? String(commentsDrawerPerson.id) : ''}
+          entityTitle={commentsDrawerPerson ? getPersonDisplayName(commentsDrawerPerson) : ''}
+          entitySubtitle={commentsDrawerPerson?.accountingCode ? `کد حسابداری: ${toPersianDigits(commentsDrawerPerson.accountingCode)}` : (commentsDrawerPerson?.mobile || '')}
+          showNotification={notify}
         />
       </div>
     </div>

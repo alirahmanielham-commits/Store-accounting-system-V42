@@ -7,6 +7,8 @@ import ReceiptPrintModal from "../print/ReceiptPrintModal";
 import ReceiptConfirmationModal from "../financial/ReceiptConfirmationModal";
 import { InvoicePrintSettings, InvoiceColumnSettings } from "../print/invoice-templates/InvoicePrintTypes";
 import { safePrint, printViaIframe } from "../../utils/printHelper";
+import CommentBadgeButton from "../common/CommentBadgeButton";
+import UniversalCommentsDrawer from "../common/UniversalCommentsDrawer";
 
 const INVOICE_PRINT_SETTINGS_STORAGE_KEY = "company_user_invoice_print_settings";
 
@@ -109,6 +111,7 @@ export default function PreviewModals(props: any) {
   const [printSettings, setPrintSettings] = useState<InvoicePrintSettings>(() =>
     getInitialPrintSettings(storeSettings)
   );
+  const [isInvoiceCommentsOpen, setIsInvoiceCommentsOpen] = useState(false);
 
   // Auto-save any setting change to localStorage so the user never has to re-configure
   useEffect(() => {
@@ -809,6 +812,12 @@ export default function PreviewModals(props: any) {
                   شماره سند: <span className="font-sans font-black text-slate-800">#{toPersianDigits(currentInvoice?.invoiceNumber || currentInvoice?.id || '')}</span>
                 </div>
                 <div className="flex items-center gap-3 mr-auto">
+                  <CommentBadgeButton
+                    entityType="invoice"
+                    entityId={String(currentInvoice?.id || currentInvoice?._id || '')}
+                    onClick={() => setIsInvoiceCommentsOpen(true)}
+                    title="یادداشت‌ها و نظرات این فاکتور"
+                  />
                   <button
                     type="button"
                     onClick={handleCloseModal}
@@ -829,6 +838,17 @@ export default function PreviewModals(props: any) {
                 </div>
               </div>
             )}
+            <UniversalCommentsDrawer
+              isOpen={isInvoiceCommentsOpen}
+              onClose={() => setIsInvoiceCommentsOpen(false)}
+              entityType="invoice"
+              entityId={String(currentInvoice?.id || currentInvoice?._id || '')}
+              entityTitle={
+                currentInvoice
+                  ? `فاکتور شماره ${toPersianDigits(currentInvoice.invoiceNumber || currentInvoice.id || '')} (${currentInvoice.customerName || currentInvoice.personName || 'نامشخص'})`
+                  : ''
+              }
+            />
           </div>
         </div>
       )}

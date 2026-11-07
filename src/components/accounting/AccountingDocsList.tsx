@@ -26,6 +26,8 @@ import { AccountingDocument, LedgerAccount } from '../../types';
 import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import { safePrint } from '../../utils/printHelper';
 import ReverseAccountingDocModal from './ReverseAccountingDocModal';
+import CommentBadgeButton from '../common/CommentBadgeButton';
+import UniversalCommentsDrawer from '../common/UniversalCommentsDrawer';
 
 interface Props {
   onNavigateToCreate?: () => void;
@@ -85,6 +87,9 @@ export default function AccountingDocsList({
   // Reversal Document Modal state
   const [selectedDocForReversal, setSelectedDocForReversal] = useState<any | null>(null);
   const [isReversalModalOpen, setIsReversalModalOpen] = useState(false);
+
+  // Comments drawer state
+  const [commentsDoc, setCommentsDoc] = useState<any | null>(null);
 
   const currency = storeSettings?.currency || 'تومان';
 
@@ -1289,6 +1294,13 @@ export default function AccountingDocsList({
                         {/* Action buttons */}
                         <td className="p-3 text-center">
                           <div className="flex items-center justify-center gap-1.5">
+                            <CommentBadgeButton
+                              entityType="accounting_doc"
+                              entityId={String(doc.id)}
+                              onClick={() => setCommentsDoc(doc)}
+                              size="sm"
+                              title="یادداشت‌ها و نظرات این سند حسابداری"
+                            />
                             {onNavigateToView && (
                               <button
                                 type="button"
@@ -1581,6 +1593,19 @@ export default function AccountingDocsList({
         onSuccess={() => {
           loadData();
         }}
+      />
+
+      {/* Universal Comments Drawer for Accounting Documents */}
+      <UniversalCommentsDrawer
+        isOpen={!!commentsDoc}
+        onClose={() => setCommentsDoc(null)}
+        entityType="accounting_doc"
+        entityId={commentsDoc ? String(commentsDoc.id) : ""}
+        entityTitle={
+          commentsDoc
+            ? `سند حسابداری شماره ${toPersianDigits(commentsDoc.documentNumber || commentsDoc.id)} ${commentsDoc.description ? `(${commentsDoc.description.slice(0, 30)}...)` : ""}`
+            : ""
+        }
       />
     </div>
   );

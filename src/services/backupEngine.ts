@@ -102,11 +102,12 @@ export const BACKUP_MODULES: BackupModuleDefinition[] = [
     label: 'تنظیمات و اطلاعات پایه',
     description: 'مشخصات شرکت و کسب‌وکار، تنظیمات فروشگاه، الگوها و کاربران',
     iconName: 'Settings',
-    tables: ['store_settings', 'company_profile', 'businesses', 'users', 'roles', 'sms_settings', 'sms_templates', 'sms_providers']
+    tables: ['store_settings', 'company_profile', 'businesses', 'users', 'roles', 'sms_settings', 'sms_templates', 'sms_providers', 'entity_comments']
   }
 ];
 
 const TABLE_LABELS: Record<string, string> = {
+  entity_comments: 'یادداشت‌ها و کامنت‌های سیستمی',
   invoices: 'فاکتورهای خرید و فروش',
   invoice_items: 'اقلام فاکتورها',
   accounting_documents: 'اسناد حسابداری دوبل',

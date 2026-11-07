@@ -25,6 +25,8 @@ import {
   addSpecialty 
 } from "../../services/specialistService";
 import SendPersonMessageModal from "../modals/SendPersonMessageModal";
+import UniversalCommentsDrawer from "../common/UniversalCommentsDrawer";
+import CommentBadgeButton from "../common/CommentBadgeButton";
 
 interface PersonProfileViewProps {
   personId: string | number;
@@ -101,6 +103,7 @@ export default function PersonProfileView({
   const [isSettingCreditLimit, setIsSettingCreditLimit] = useState(false);
   const [isSpecialtyModalOpen, setIsSpecialtyModalOpen] = useState(false);
   const [specialtiesCatalog, setSpecialtiesCatalog] = useState<PersonSpecialty[]>(DEFAULT_SPECIALTIES);
+  const [isCommentsDrawerOpen, setIsCommentsDrawerOpen] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -1061,6 +1064,15 @@ export default function PersonProfileView({
 
         {/* Global Header Actions */}
         <div className="flex flex-wrap items-center gap-2">
+          {/* Universal Comments & Notes Button */}
+          <CommentBadgeButton
+            entityType="person"
+            entityId={person.id}
+            entityTitle={getPersonDisplayName(person)}
+            onClick={() => setIsCommentsDrawerOpen(true)}
+            className="px-3.5 py-2 !bg-amber-50 hover:!bg-amber-100 text-amber-800 border border-amber-300 font-bold text-xs"
+          />
+
           {/* Active / Inactive Switch */}
           <button
             onClick={handleToggleActiveStatus}
@@ -3261,6 +3273,19 @@ export default function PersonProfileView({
           <div>تایید مدیریت عامل</div>
         </div>
       </div>
+
+      {/* Universal Comments Drawer for Person Profile */}
+      {person && (
+        <UniversalCommentsDrawer
+          isOpen={isCommentsDrawerOpen}
+          onClose={() => setIsCommentsDrawerOpen(false)}
+          entityType="person"
+          entityId={String(person.id)}
+          entityTitle={getPersonDisplayName(person)}
+          entitySubtitle={person.accountingCode ? `کد حسابداری: ${person.accountingCode}` : (person.mobile || person.phone || '')}
+          showNotification={showNotification}
+        />
+      )}
     </motion.div>
   );
 }

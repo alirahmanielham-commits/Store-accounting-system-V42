@@ -21,7 +21,7 @@ export const KNOWN_TABLES = ['businesses', 'notifications', 'customers_risk_prof
   'wastes', 'waste_items',
   'receipt_transactions', 'payment_transactions',
   'issued_checks', 'received_checks', 'payslips'
-, 'InventoryTransactions', 'inventory_transactions', 'kardex', 'personal_notes',
+, 'InventoryTransactions', 'inventory_transactions', 'kardex', 'personal_notes', 'entity_comments',
   'sms_providers', 'sms_provider_settings', 'sms_templates', 'sms_campaigns',
   'sms_delivery_logs', 'sms_retry_logs', 'sms_settings', 'sms_quota_logs', 'sms_audit_logs', 'employee_orders', 'employee_profiles', 'order_templates', 'workplaces', 'person_specialties'];
 export interface TableSyncProgress {

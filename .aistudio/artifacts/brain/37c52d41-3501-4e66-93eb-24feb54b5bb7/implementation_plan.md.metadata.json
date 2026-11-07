@@ -1,6 +1,6 @@
 {
-  "summary": "Implementation plan to optimize system backup speed and drastically reduce backup file size through:\n1. Gzip compression (.json.gz) reducing size by 75-90%\n2. Asynchronous background cloud upload to prevent UI freezes and network timeouts\n3. Exclusion/option to bypass verbose audit logs (system_logs, database_logs)\n4. Fast single-store backup targeting the active business rather than iterating over all stores\n5. Backward-compatible decompression on restore/verify endpoints",
-  "updatedAt": "2026-11-06T17:04:01.346929435Z",
-  "requestFeedback": true,
-  "userFacing": true
+  "summary":  "سیستم جامع یادداشت‌ها و کامنت‌گذاری سازمانی (Universal Entity Comments & Timeline System) بر روی تمامی ۶ بخش اصلی نرم‌افزار (اشخاص، فاکتورها، کالاها، اسناد حسابداری، رسیدها و چک‌ها) با موفقیت پیاده‌سازی و یکپارچه شد. تمام تست‌ها و اعتبارسنجی‌ها پاس شدند.",
+  "updatedAt":  "2026-11-07T15:35:28.969796489Z",
+  "requestFeedback":  true,
+  "userFacing":  true
 }

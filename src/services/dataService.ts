@@ -10,4 +10,5 @@ export * from './invoiceService';
 export * from './crmService';
 export * from './hrService';
 export * from './cogsService';
+export * from './commentsService';
 

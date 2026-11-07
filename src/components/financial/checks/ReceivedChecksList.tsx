@@ -12,9 +12,12 @@ import DatePickerModule, { Calendar as RMCalendar } from "react-multi-date-picke
 import persian from "react-date-object/calendars/persian";
 import persian_fa from "react-date-object/locales/persian_fa";
 import { exportToExcel, formatDecimalForExcel } from "../../../utils/exportUtils";
+import CommentBadgeButton from "../../common/CommentBadgeButton";
+import UniversalCommentsDrawer from "../../common/UniversalCommentsDrawer";
 
 export function ReceivedChecksList({ showNotification, receivedChecks, persons, checkbooks, accounts, receivedSearchQuery, setReceivedSearchQuery, receivedCheckStatusFilter, setReceivedCheckStatusFilter, receivedSortBy, setReceivedSortBy, receivedSortDir, setReceivedSortDir, filteredReceivedChecks, totalReceivedAmount, cashedReceivedAmount, inHandReceivedAmount, bouncedReceivedAmount, setViewingCheck, setUpdatingCheckId, setUpdatingCheckType, setStatusVal, setIsStatusModalOpen, setIsHistoryModalOpen, setHistoryCheck, setHistoryData, handleDeleteReceivedCheck, formatDateDisplay, storeSettings, sendNotification, getCheckHistoryLogs, onEditReceiptByCheck, receivedPage, setReceivedPage, totalReceivedPages }) {
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
+  const [commentsCheck, setCommentsCheck] = useState<any | null>(null);
   const navigate = useNavigate();
   const getStatusLabel = (status: string) => {
     switch (status) {
@@ -296,6 +299,13 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
                                   <Send className="w-4 h-4" />
                                 </button>
                               )}
+                              <CommentBadgeButton
+                                entityType="check"
+                                entityId={String(c.id)}
+                                onClick={() => setCommentsCheck(c)}
+                                size="sm"
+                                title="یادداشت‌ها و نظرات این چک"
+                              />
                               <button 
                                 onClick={async () => {
                                   setHistoryCheck({ ...c, checkType: 'received' });
@@ -425,6 +435,18 @@ export function ReceivedChecksList({ showNotification, receivedChecks, persons, 
         )}
       </AnimatePresence>
 
+      {/* Universal Comments Drawer for Received Checks */}
+      <UniversalCommentsDrawer
+        isOpen={!!commentsCheck}
+        onClose={() => setCommentsCheck(null)}
+        entityType="check"
+        entityId={commentsCheck ? String(commentsCheck.id) : ""}
+        entityTitle={
+          commentsCheck
+            ? `چک دریافتی شماره ${toPersianDigits(commentsCheck.checkNumber || commentsCheck.id)} (${commentsCheck.bankName || "بانک نامشخص"})`
+            : ""
+        }
+      />
     </>
   );
 }
