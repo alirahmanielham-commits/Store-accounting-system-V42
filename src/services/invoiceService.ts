@@ -976,6 +976,34 @@ const internalAddInvoice = async (invoice: any, skipRecalc: boolean = false, ski
   const invType = finalInvoiceObj.type || 'sale';
   const targetTable = mapInvoiceTypeToTable(invType);
 
+  const resolvedPersonId = finalInvoiceObj.customerId || finalInvoiceObj.personId || finalInvoiceObj.supplierId || null;
+  if (resolvedPersonId) {
+    finalInvoiceObj.customerId = resolvedPersonId;
+    finalInvoiceObj.personId = resolvedPersonId;
+    if (!finalInvoiceObj.supplierId && (finalInvoiceObj.type === 'purchase' || invType === 'purchase')) {
+      finalInvoiceObj.supplierId = resolvedPersonId;
+    }
+  }
+  if (finalInvoiceObj.payableAmount === undefined && finalInvoiceObj.totalAmount !== undefined) {
+    finalInvoiceObj.payableAmount = finalInvoiceObj.totalAmount;
+  }
+  if (Array.isArray(finalInvoiceObj.items)) {
+    finalInvoiceObj.items = finalInvoiceObj.items.map((it: any) => {
+      const q = Number(it.quantity) || 0;
+      const up = Number(it.unitPrice) || 0;
+      const disc = Number(it.discount) || 0;
+      const tax = Number(it.tax) || 0;
+      const rawTot = q * up;
+      const totPrice = it.totalPrice !== undefined ? Number(it.totalPrice) : (rawTot - disc + tax);
+      const netP = it.netPrice !== undefined ? Number(it.netPrice) : totPrice;
+      return {
+        ...it,
+        totalPrice: totPrice,
+        netPrice: netP,
+      };
+    });
+  }
+
   // Invalidate caches before checking to ensure we see invoices just added by parallel saves
   invalidateCache('doc_counters');
   invalidateCache(targetTable);
@@ -1135,6 +1163,34 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
   if (activeYear) updatedData.fiscalYearId = activeYear.id;
   const table = updatedData.type ? mapInvoiceTypeToTable(updatedData.type) : 'invoices';
 
+  const resolvedPersonId = updatedData.customerId || updatedData.personId || updatedData.supplierId || null;
+  if (resolvedPersonId) {
+    updatedData.customerId = resolvedPersonId;
+    updatedData.personId = resolvedPersonId;
+    if (!updatedData.supplierId && (updatedData.type === 'purchase' || table === 'purchase_invoices')) {
+      updatedData.supplierId = resolvedPersonId;
+    }
+  }
+  if (updatedData.payableAmount === undefined && updatedData.totalAmount !== undefined) {
+    updatedData.payableAmount = updatedData.totalAmount;
+  }
+  if (Array.isArray(updatedData.items)) {
+    updatedData.items = updatedData.items.map((it: any) => {
+      const q = Number(it.quantity) || 0;
+      const up = Number(it.unitPrice) || 0;
+      const disc = Number(it.discount) || 0;
+      const tax = Number(it.tax) || 0;
+      const rawTot = q * up;
+      const totPrice = it.totalPrice !== undefined ? Number(it.totalPrice) : (rawTot - disc + tax);
+      const netP = it.netPrice !== undefined ? Number(it.netPrice) : totPrice;
+      return {
+        ...it,
+        totalPrice: totPrice,
+        netPrice: netP,
+      };
+    });
+  }
+
   if (updatedData.invoiceNumber) {
     const rawNum = String(updatedData.invoiceNumber).trim().toLowerCase();
     const tableInvoices = await getLocalData<any[]>(table, [], { _nocache: Date.now() }).catch(() => []);
@@ -1193,6 +1249,10 @@ export const updateInvoice = async (id: string | number, updated: any, skipRecal
       await updateDocCounter(newInvoice.type, newInvoice.invoiceNumber);
   }
   
+  invalidateCache(table);
+  invalidateCache('invoices');
+  invalidateCache('doc_counters');
+
   if (typeof addSystemLog !== 'undefined') {
     await addSystemLog('UPDATE_' + 'Invoice'.toUpperCase(), 'ویرایش رکورد در invoices', 'Invoice', newInvoice.id);
   }

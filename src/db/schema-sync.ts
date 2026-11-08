@@ -215,6 +215,28 @@ export function findMatchingColumn(knownCols: Map<string, string>, propKey: stri
       }
     }
   }
+
+  // 6. Semantic relational alias mappings:
+  // e.g. In the relational schema "invoices", personId/customerId/supplierId is stored in "person_id"
+  if (['customerId', 'customer_id', 'supplierId', 'supplier_id'].includes(propKey)) {
+    if (knownCols.has('person_id')) return { dbColName: 'person_id', colType: knownCols.get('person_id') || '' };
+    if (knownCols.has('personId')) return { dbColName: 'personId', colType: knownCols.get('personId') || '' };
+    if (knownCols.has('personid')) return { dbColName: 'personid', colType: knownCols.get('personid') || '' };
+  }
+  if (['personId', 'person_id'].includes(propKey)) {
+    if (knownCols.has('customer_id')) return { dbColName: 'customer_id', colType: knownCols.get('customer_id') || '' };
+    if (knownCols.has('customerId')) return { dbColName: 'customerId', colType: knownCols.get('customerId') || '' };
+    if (knownCols.has('customerid')) return { dbColName: 'customerid', colType: knownCols.get('customerid') || '' };
+  }
+  if (['payableAmount', 'payable_amount'].includes(propKey)) {
+    if (knownCols.has('total_amount') && !knownCols.has('payable_amount')) return { dbColName: 'total_amount', colType: knownCols.get('total_amount') || '' };
+    if (knownCols.has('totalAmount') && !knownCols.has('payableAmount')) return { dbColName: 'totalAmount', colType: knownCols.get('totalAmount') || '' };
+  }
+  if (['netPrice', 'net_price'].includes(propKey)) {
+    if (knownCols.has('total_price') && !knownCols.has('net_price')) return { dbColName: 'total_price', colType: knownCols.get('total_price') || '' };
+    if (knownCols.has('totalPrice') && !knownCols.has('netPrice')) return { dbColName: 'totalPrice', colType: knownCols.get('totalPrice') || '' };
+  }
+
   return null;
 }
 

@@ -294,7 +294,7 @@ export function getChildTableCandidates(key: string): string[] {
     if (key === "warehouse_remittances") return ["warehouse_remittance_items", "warehouse_remittances_item", "warehouse_remittances_items"];
     if (key === "accounting_documents") return ["accounting_document_items"];
     if (key === "stocktakings") return ["stocktaking_items"];
-    if (key === "invoices") return ["invoice_items"];
+    if (key === "invoices") return ["invoice_items", "purchase_invoice_items", "sales_invoice_items", "warehouse_receipt_items", "warehouse_remittance_items", "proforma_invoice_items", "sale_return_items", "purchase_return_items", "waste_items"];
     if (key.endsWith('s')) return [key.substring(0, key.length - 1) + "_items"];
     return [key + "_items"];
 }
@@ -321,7 +321,32 @@ export async function handleRelations(key: string, data: any) {
 }
 
 export async function getDbData(key: string) {
-  let data = await innerGetDbData(key);
+  let data: any = null;
+  if (key === 'invoices') {
+    const rawMain = (await innerGetDbData('invoices')) || [];
+    let allInvoices: any[] = Array.isArray(rawMain) ? [...rawMain] : [];
+    const specializedTables = ['sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes'];
+    for (const specTable of specializedTables) {
+      try {
+        const specData = await innerGetDbData(specTable);
+        if (Array.isArray(specData) && specData.length > 0) {
+          allInvoices = allInvoices.concat(specData);
+        }
+      } catch (_) {}
+    }
+    const uniqueMap = new Map<string, any>();
+    allInvoices.forEach(inv => {
+      if (inv && inv.id) {
+        const existing = uniqueMap.get(String(inv.id));
+        if (!existing || (inv.updatedAt || 0) > (existing.updatedAt || 0)) {
+          uniqueMap.set(String(inv.id), inv);
+        }
+      }
+    });
+    data = Array.from(uniqueMap.values());
+  } else {
+    data = await innerGetDbData(key);
+  }
   if (!data) return data;
   
   if ((key === 'invoices' || key === 'sales_invoices' || key === 'purchase_invoices' || key === 'warehouse_receipts' || key === 'warehouse_remittances' || key === 'proforma_invoices' || key === 'sale_returns' || key === 'purchase_returns' || key === 'wastes') && Array.isArray(data)) {
@@ -339,6 +364,11 @@ export async function getDbData(key: string) {
       const finalItems = Array.from(uniqueItemsMap.values());
 
       data.forEach((inv: any) => {
+          inv.customerId = inv.customerId || inv.personId || inv.supplierId || '';
+          inv.personId = inv.personId || inv.customerId || inv.supplierId || '';
+          if (inv.payableAmount === undefined && inv.totalAmount !== undefined) {
+            inv.payableAmount = inv.totalAmount;
+          }
           inv.items = finalItems.filter((it: any) => String(it.invoiceId) === String(inv.id));
       });
   } else if (key === 'accounting_documents' && Array.isArray(data)) {
@@ -369,16 +399,49 @@ export async function setDbData(key: string, data: any) {
       const strippedData = data.map((inv: any) => {
           if (inv.items) {
               inv.items.forEach((it: any) => {
-                  items.push({ ...it, invoiceId: inv.id, id: it.id || Math.random().toString(36).substring(2, 15) });
+                  items.push({
+                    ...it,
+                    invoiceId: inv.id,
+                    id: it.id || Math.random().toString(36).substring(2, 15),
+                    netPrice: it.netPrice !== undefined ? it.netPrice : (it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))),
+                    totalPrice: it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))
+                  });
               });
           }
           const { items: _, ...rest } = inv;
+          rest.customerId = rest.customerId || rest.personId || rest.supplierId || '';
+          rest.personId = rest.personId || rest.customerId || rest.supplierId || '';
+          if (rest.payableAmount === undefined && rest.totalAmount !== undefined) {
+            rest.payableAmount = rest.totalAmount;
+          }
           return rest;
       });
       if (hasItemsKey) {
         await innerSetDbData(childTable, items);
+        if (key !== 'invoices') {
+          try {
+            let masterItems = (await innerGetDbData('invoice_items')) || [];
+            if (Array.isArray(masterItems)) {
+              const itemIds = new Set(items.map(it => String(it.id)));
+              masterItems = masterItems.filter(it => !itemIds.has(String(it.id)));
+              masterItems.push(...items);
+              await innerSetDbData('invoice_items', masterItems);
+            }
+          } catch (_) {}
+        }
       }
       await innerSetDbData(key, strippedData);
+      if (key !== 'invoices') {
+        try {
+          let masterInvoices = (await innerGetDbData('invoices')) || [];
+          if (Array.isArray(masterInvoices)) {
+            const strippedIds = new Set(strippedData.map(inv => String(inv.id)));
+            masterInvoices = masterInvoices.filter(inv => !strippedIds.has(String(inv.id)));
+            masterInvoices.push(...strippedData);
+            await innerSetDbData('invoices', masterInvoices);
+          }
+        } catch (_) {}
+      }
       return;
   } else if (key === 'accounting_documents' && Array.isArray(data)) {
       let hasItemsKey = data.some((doc: any) => 'items' in doc);
