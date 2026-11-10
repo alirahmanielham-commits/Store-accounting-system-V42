@@ -68,75 +68,144 @@ const fetchAllSystemDocsForServer = async (): Promise<any[]> => {
   return Array.from(docsMap.values());
 };
 
+const deleteChildTableItemsPg = async (client: any, childTable: string, parentId: string, defaultColName: string = 'invoiceId') => {
+  try {
+    await client.query(`CREATE TABLE IF NOT EXISTS "${childTable}" (id VARCHAR PRIMARY KEY)`);
+  } catch (_) {}
+
+  let known = tableSchemas.get(childTable);
+  if (!known || known.size === 0) {
+    known = new Map();
+    try {
+      const res = await client.query("SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND (table_name = $1 OR table_name = lower($1))", [childTable]);
+      for (const row of res.rows) {
+        known.set(row.column_name, row.data_type);
+        known.set(row.column_name.toLowerCase(), row.data_type);
+      }
+    } catch (_) {}
+    tableSchemas.set(childTable, known);
+  }
+
+  const targetCols = [
+    'invoice_id', 'invoiceId', 'invoiceid',
+    'document_id', 'documentId', 'documentid',
+    'stocktaking_id', 'stocktakingId', 'stocktakingid'
+  ];
+
+  let foundCol = '';
+  for (const c of targetCols) {
+    if (known.has(c)) {
+      foundCol = c;
+      break;
+    }
+  }
+
+  if (!foundCol) {
+    foundCol = defaultColName === 'invoiceId' ? 'invoice_id' : (defaultColName === 'documentId' ? 'document_id' : 'stocktaking_id');
+  }
+
+  try {
+    await client.query(`DELETE FROM "${childTable}" WHERE "${foundCol}" = $1`, [parentId]);
+  } catch (err: any) {
+    try {
+      await client.query(`DELETE FROM "${childTable}" WHERE invoice_id = $1`, [parentId]).catch(() => {});
+      await client.query(`DELETE FROM "${childTable}" WHERE "invoiceId" = $1`, [parentId]).catch(() => {});
+      await client.query(`DELETE FROM "${childTable}" WHERE document_id = $1`, [parentId]).catch(() => {});
+      await client.query(`DELETE FROM "${childTable}" WHERE "documentId" = $1`, [parentId]).catch(() => {});
+    } catch (_) {}
+  }
+};
+
 const mirrorInvoiceInPg = async (client: any, key: string, finalItem: any, items: any[] = []) => {
   if (!INVOICE_TABLE_KEYS.includes(key)) return;
   try {
     const isSpecialized = key !== 'invoices';
     const mirrorTable = isSpecialized ? 'invoices' : (finalItem.type ? (TABLE_DOC_TYPES[finalItem.type] ? (finalItem.type === 'purchase' ? 'purchase_invoices' : (finalItem.type === 'sale' ? 'sales_invoices' : null)) : null) : null);
 
+    const normalizedItem = { ...finalItem };
+    const resolvedPersonId = normalizedItem.customerId || normalizedItem.personId || normalizedItem.supplierId || null;
+    if (resolvedPersonId) {
+      normalizedItem.customerId = resolvedPersonId;
+      normalizedItem.personId = resolvedPersonId;
+      if (normalizedItem.type === 'purchase' || key === 'purchase_invoices') {
+        normalizedItem.supplierId = resolvedPersonId;
+      }
+    }
+    if (normalizedItem.payableAmount === undefined && normalizedItem.totalAmount !== undefined) {
+      normalizedItem.payableAmount = normalizedItem.totalAmount;
+    }
+
     if (isSpecialized) {
       await client.query(`CREATE TABLE IF NOT EXISTS "invoices" (id VARCHAR PRIMARY KEY)`);
-      await syncTableSchema(client, 'invoices', finalItem);
-      const { itemKeys: invKeys, itemVals: invVals } = preparePgItem('invoices', finalItem);
-      const invPlaceholders = invKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-      const invColNames = invKeys.map(k => `"${k}"`).join(', ');
-      await client.query(
-        `INSERT INTO "invoices" (${invColNames}) VALUES (${invPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${invKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
-        invVals
-      );
+      await syncTableSchema(client, 'invoices', normalizedItem);
+      const { itemKeys: invKeys, itemVals: invVals } = preparePgItem('invoices', normalizedItem);
+      if (invKeys.length > 0) {
+        const invPlaceholders = invKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+        const invColNames = invKeys.map(k => `"${k}"`).join(', ');
+        await client.query(
+          `INSERT INTO "invoices" (${invColNames}) VALUES (${invPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${invKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
+          invVals
+        );
+      }
 
       if (Array.isArray(items) && items.length > 0) {
-        await client.query(`CREATE TABLE IF NOT EXISTS "invoice_items" (id VARCHAR PRIMARY KEY)`);
-        await client.query(`DELETE FROM "invoice_items" WHERE "invoiceId" = $1`, [finalItem.id]);
+        await deleteChildTableItemsPg(client, 'invoice_items', normalizedItem.id, 'invoiceId');
         for (const it of items) {
           const itemToSync = {
             ...it,
-            invoiceId: finalItem.id,
+            invoiceId: normalizedItem.id,
+            invoice_id: normalizedItem.id,
             id: it.id || Math.random().toString(36).substring(2, 15),
             netPrice: it.netPrice !== undefined ? it.netPrice : (it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))),
             totalPrice: it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))
           };
           await syncTableSchema(client, 'invoice_items', itemToSync);
           const { itemKeys: itKeys, itemVals: itVals } = preparePgItem('invoice_items', itemToSync);
-          const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-          const itColNames = itKeys.map(k => `"${k}"`).join(', ');
-          await client.query(
-            `INSERT INTO "invoice_items" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
-            itVals
-          );
+          if (itKeys.length > 0) {
+            const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+            const itColNames = itKeys.map(k => `"${k}"`).join(', ');
+            await client.query(
+              `INSERT INTO "invoice_items" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
+              itVals
+            );
+          }
         }
       }
     } else if (mirrorTable && mirrorTable !== 'invoices') {
       await client.query(`CREATE TABLE IF NOT EXISTS "${mirrorTable}" (id VARCHAR PRIMARY KEY)`);
-      await syncTableSchema(client, mirrorTable, finalItem);
-      const { itemKeys: spKeys, itemVals: spVals } = preparePgItem(mirrorTable, finalItem);
-      const spPlaceholders = spKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-      const spColNames = spKeys.map(k => `"${k}"`).join(', ');
-      await client.query(
-        `INSERT INTO "${mirrorTable}" (${spColNames}) VALUES (${spPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${spKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
-        spVals
-      );
+      await syncTableSchema(client, mirrorTable, normalizedItem);
+      const { itemKeys: spKeys, itemVals: spVals } = preparePgItem(mirrorTable, normalizedItem);
+      if (spKeys.length > 0) {
+        const spPlaceholders = spKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+        const spColNames = spKeys.map(k => `"${k}"`).join(', ');
+        await client.query(
+          `INSERT INTO "${mirrorTable}" (${spColNames}) VALUES (${spPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${spKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
+          spVals
+        );
+      }
 
       const childTable = getChildTableCandidates(mirrorTable)[0];
       if (childTable && Array.isArray(items) && items.length > 0) {
-        await client.query(`CREATE TABLE IF NOT EXISTS "${childTable}" (id VARCHAR PRIMARY KEY)`);
-        await client.query(`DELETE FROM "${childTable}" WHERE "invoiceId" = $1`, [finalItem.id]);
+        await deleteChildTableItemsPg(client, childTable, normalizedItem.id, 'invoiceId');
         for (const it of items) {
           const itemToSync = {
             ...it,
-            invoiceId: finalItem.id,
+            invoiceId: normalizedItem.id,
+            invoice_id: normalizedItem.id,
             id: it.id || Math.random().toString(36).substring(2, 15),
             netPrice: it.netPrice !== undefined ? it.netPrice : (it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))),
             totalPrice: it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))
           };
           await syncTableSchema(client, childTable, itemToSync);
           const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(childTable, itemToSync);
-          const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-          const itColNames = itKeys.map(k => `"${k}"`).join(', ');
-          await client.query(
-            `INSERT INTO "${childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
-            itVals
-          );
+          if (itKeys.length > 0) {
+            const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+            const itColNames = itKeys.map(k => `"${k}"`).join(', ');
+            await client.query(
+              `INSERT INTO "${childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`,
+              itVals
+            );
+          }
         }
       }
     }
@@ -156,10 +225,10 @@ const deleteInvoiceInPg = async (client: any, key: string, id: string, itemToDel
         await client.query(`DELETE FROM "${spec}" WHERE id = $1`, [String(id)]).catch(() => {});
       }
     }
-    await client.query(`DELETE FROM "invoice_items" WHERE "invoiceId" = $1`, [String(id)]).catch(() => {});
+    await deleteChildTableItemsPg(client, 'invoice_items', String(id), 'invoiceId');
     const childTable = getChildTableCandidates(key)[0];
     if (childTable && childTable !== 'invoice_items') {
-      await client.query(`DELETE FROM "${childTable}" WHERE "invoiceId" = $1`, [String(id)]).catch(() => {});
+      await deleteChildTableItemsPg(client, childTable, String(id), 'invoiceId');
     }
   } catch (err: any) {
     console.warn(`[deleteInvoiceInPg] Notice on deleting invoice relations:`, err?.message);
@@ -910,15 +979,25 @@ router.post('/api/data/batch', async (req, res) => {
 
                 if (related && related.childTable) {
                     const fId = finalItem.id;
-                    const col = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
-                    await client.query(`CREATE TABLE IF NOT EXISTS "${related.childTable}" (id VARCHAR PRIMARY KEY)`);
-                    await client.query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
+                    const defaultCol = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
+                    await deleteChildTableItemsPg(client, related.childTable, fId, defaultCol);
                     for (const it of related.items) {
-                        await syncTableSchema(client, related.childTable, it);
-                        const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, it);
-                        const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-                        const itColNames = itKeys.map(k => `"${k}"`).join(', ');
-                        await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+                        const itemToSync = {
+                          ...it,
+                          invoiceId: fId,
+                          invoice_id: fId,
+                          documentId: fId,
+                          document_id: fId,
+                          stocktakingId: fId,
+                          stocktaking_id: fId,
+                        };
+                        await syncTableSchema(client, related.childTable, itemToSync);
+                        const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, itemToSync);
+                        if (itKeys.length > 0) {
+                          const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+                          const itColNames = itKeys.map(k => `"${k}"`).join(', ');
+                          await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+                        }
                     }
                 }
 
@@ -1374,14 +1453,25 @@ router.post('/api/data/:key/append', async (req, res) => {
            
            if (related && related.childTable) {
                const fId = finalItem.id;
-               const col = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
-               await client.query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
+               const defaultCol = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
+               await deleteChildTableItemsPg(client, related.childTable, fId, defaultCol);
                for (const it of related.items) {
-                   await syncTableSchema(client, related.childTable, it);
-                   const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, it);
-                   const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-                   const itColNames = itKeys.map(k => `"${k}"`).join(', ');
-                   await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+                   const itemToSync = {
+                     ...it,
+                     invoiceId: fId,
+                     invoice_id: fId,
+                     documentId: fId,
+                     document_id: fId,
+                     stocktakingId: fId,
+                     stocktaking_id: fId,
+                   };
+                   await syncTableSchema(client, related.childTable, itemToSync);
+                   const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, itemToSync);
+                   if (itKeys.length > 0) {
+                     const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+                     const itColNames = itKeys.map(k => `"${k}"`).join(', ');
+                     await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+                   }
                }
            }
            if (INVOICE_TABLE_KEYS.includes(key)) {
@@ -1609,16 +1699,25 @@ router.put('/api/data/:key/:id', async (req, res) => {
            
            if (related && related.childTable) {
                const fId = finalItem.id;
-               try {
-                  const col = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
-                  await client.query(`DELETE FROM "${related.childTable}" WHERE "${col}" = $1`, [fId]);
-               } catch(e) { }
+               const defaultCol = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
+               await deleteChildTableItemsPg(client, related.childTable, fId, defaultCol);
                for (const it of related.items) {
-                   await syncTableSchema(client, related.childTable, it);
-                   const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, it);
-                   const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
-                   const itColNames = itKeys.map(k => `"${k}"`).join(', ');
-                   await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+                   const itemToSync = {
+                     ...it,
+                     invoiceId: fId,
+                     invoice_id: fId,
+                     documentId: fId,
+                     document_id: fId,
+                     stocktakingId: fId,
+                     stocktaking_id: fId,
+                   };
+                   await syncTableSchema(client, related.childTable, itemToSync);
+                   const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, itemToSync);
+                   if (itKeys.length > 0) {
+                     const itPlaceholders = itKeys.map((_, idx) => `$${idx + 1}`).join(', ');
+                     const itColNames = itKeys.map(k => `"${k}"`).join(', ');
+                     await client.query(`INSERT INTO "${related.childTable}" (${itColNames}) VALUES (${itPlaceholders}) ON CONFLICT(id) DO UPDATE SET ${itKeys.map(k => `"${k}" = EXCLUDED."${k}"`).join(', ')}`, itVals);
+                   }
                }
            }
            if (INVOICE_TABLE_KEYS.includes(key)) {

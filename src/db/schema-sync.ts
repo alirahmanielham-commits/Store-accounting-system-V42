@@ -218,6 +218,41 @@ export function findMatchingColumn(knownCols: Map<string, string>, propKey: stri
 
   // 6. Semantic relational alias mappings:
   // e.g. In the relational schema "invoices", personId/customerId/supplierId is stored in "person_id"
+  if (['fiscalYearId', 'fiscal_year_id', 'financialYearId', 'financial_year_id', 'fiscalyearid'].includes(propKey)) {
+    if (knownCols.has('fiscal_year_id')) return { dbColName: 'fiscal_year_id', colType: knownCols.get('fiscal_year_id') || '' };
+    if (knownCols.has('fiscalYearId')) return { dbColName: 'fiscalYearId', colType: knownCols.get('fiscalYearId') || '' };
+    if (knownCols.has('fiscalyearid')) return { dbColName: 'fiscalyearid', colType: knownCols.get('fiscalyearid') || '' };
+  }
+  if (['invoiceId', 'invoice_id', 'invoiceid'].includes(propKey)) {
+    if (knownCols.has('invoice_id')) return { dbColName: 'invoice_id', colType: knownCols.get('invoice_id') || '' };
+    if (knownCols.has('invoiceId')) return { dbColName: 'invoiceId', colType: knownCols.get('invoiceId') || '' };
+    if (knownCols.has('invoiceid')) return { dbColName: 'invoiceid', colType: knownCols.get('invoiceid') || '' };
+  }
+  if (['documentId', 'document_id', 'documentid'].includes(propKey)) {
+    if (knownCols.has('document_id')) return { dbColName: 'document_id', colType: knownCols.get('document_id') || '' };
+    if (knownCols.has('documentId')) return { dbColName: 'documentId', colType: knownCols.get('documentId') || '' };
+    if (knownCols.has('documentid')) return { dbColName: 'documentid', colType: knownCols.get('documentid') || '' };
+  }
+  if (['productId', 'product_id', 'productid'].includes(propKey)) {
+    if (knownCols.has('product_id')) return { dbColName: 'product_id', colType: knownCols.get('product_id') || '' };
+    if (knownCols.has('productId')) return { dbColName: 'productId', colType: knownCols.get('productId') || '' };
+    if (knownCols.has('productid')) return { dbColName: 'productid', colType: knownCols.get('productid') || '' };
+  }
+  if (['warehouseId', 'warehouse_id', 'warehouseid'].includes(propKey)) {
+    if (knownCols.has('warehouse_id')) return { dbColName: 'warehouse_id', colType: knownCols.get('warehouse_id') || '' };
+    if (knownCols.has('warehouseId')) return { dbColName: 'warehouseId', colType: knownCols.get('warehouseId') || '' };
+    if (knownCols.has('warehouseid')) return { dbColName: 'warehouseid', colType: knownCols.get('warehouseid') || '' };
+  }
+  if (['unitPrice', 'unit_price', 'unitprice'].includes(propKey)) {
+    if (knownCols.has('unit_price')) return { dbColName: 'unit_price', colType: knownCols.get('unit_price') || '' };
+    if (knownCols.has('unitPrice')) return { dbColName: 'unitPrice', colType: knownCols.get('unitPrice') || '' };
+    if (knownCols.has('unitprice')) return { dbColName: 'unitprice', colType: knownCols.get('unitprice') || '' };
+  }
+  if (['invoiceNumber', 'invoice_number', 'invoicenumber'].includes(propKey)) {
+    if (knownCols.has('invoice_number')) return { dbColName: 'invoice_number', colType: knownCols.get('invoice_number') || '' };
+    if (knownCols.has('invoiceNumber')) return { dbColName: 'invoiceNumber', colType: knownCols.get('invoiceNumber') || '' };
+    if (knownCols.has('invoicenumber')) return { dbColName: 'invoicenumber', colType: knownCols.get('invoicenumber') || '' };
+  }
   if (['customerId', 'customer_id', 'supplierId', 'supplier_id'].includes(propKey)) {
     if (knownCols.has('person_id')) return { dbColName: 'person_id', colType: knownCols.get('person_id') || '' };
     if (knownCols.has('personId')) return { dbColName: 'personId', colType: knownCols.get('personId') || '' };
@@ -479,6 +514,10 @@ export async function ensurePostgresTables(poolOverride?: any) {
           ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP;
           ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "rawDate" TEXT;
           ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "displayDate" TEXT;
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "fiscalYearId" TEXT;
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "fiscal_year_id" TEXT;
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "personId" TEXT;
+          ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "person_id" TEXT;
         `);
         if (key === 'system_logs') {
           try {
