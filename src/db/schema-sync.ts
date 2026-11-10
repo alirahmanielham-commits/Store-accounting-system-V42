@@ -519,6 +519,38 @@ export async function ensurePostgresTables(poolOverride?: any) {
           ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "personId" TEXT;
           ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "person_id" TEXT;
         `);
+        if (key === 'invoice_items' || key.endsWith('_invoice_items') || key.endsWith('_receipt_items') || key.endsWith('_remittance_items') || key.endsWith('_return_items') || key.endsWith('waste_items')) {
+          try {
+            await p.query(`
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "invoiceId" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "invoice_id" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "productId" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "product_id" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "warehouseId" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "warehouse_id" TEXT;
+            `);
+          } catch (_) {}
+        }
+        if (key === 'accounting_document_items') {
+          try {
+            await p.query(`
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "documentId" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "document_id" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "accountId" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "account_id" TEXT;
+            `);
+          } catch (_) {}
+        }
+        if (key === 'stocktaking_items') {
+          try {
+            await p.query(`
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "stocktakingId" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "stocktaking_id" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "productId" TEXT;
+              ALTER TABLE "${key}" ADD COLUMN IF NOT EXISTS "product_id" TEXT;
+            `);
+          } catch (_) {}
+        }
         if (key === 'system_logs') {
           try {
             await p.query(`

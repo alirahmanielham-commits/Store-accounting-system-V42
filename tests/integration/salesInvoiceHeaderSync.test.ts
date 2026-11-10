@@ -118,4 +118,57 @@ describe('Integration — Sales Invoice Header & Items Synchronization', () => {
     expect(foundInCanonical.invoiceNumber).toBe('فروش-۵۰۰۱-اصلاحی');
     expect(foundInCanonical.items[0].quantity).toBe(3);
   });
+
+  test('POST /api/data/batch registers sales invoice without documentid errors', async () => {
+    const batchInvoice = {
+      id: 'test-sinv-batch-1',
+      type: 'sale',
+      invoiceNumber: 'فروش-۵۰۰۲',
+      date: '1403/08/19',
+      fiscalYearId: 'fy-1403-test',
+      customerId: 'customer-person-99',
+      personId: 'customer-person-99',
+      payableAmount: 5000000,
+      totalAmount: 5000000,
+      status: 'confirmed',
+      items: [
+        {
+          id: 'item-sinv-batch-1',
+          productId: 'prod-item-sales-2',
+          quantity: 5,
+          unitPrice: 1000000,
+          totalPrice: 5000000,
+          netPrice: 5000000
+        }
+      ]
+    };
+
+    const resBatch = await request(app)
+      .post('/api/data/batch')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send({
+        operations: [
+          {
+            type: 'append',
+            key: 'sales_invoices',
+            data: batchInvoice
+          }
+        ]
+      });
+
+    expect(resBatch.status).toBe(200);
+    expect(resBatch.body.success).toBe(true);
+
+    const resSales = await request(app)
+      .get('/api/data/sales_invoices')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    const foundInSales = resSales.body.find((i: any) => i && i.id === 'test-sinv-batch-1');
+    expect(foundInSales).toBeDefined();
+    expect(foundInSales.invoiceNumber).toBe('فروش-۵۰۰۲');
+    expect(foundInSales.items.length).toBe(1);
+    expect(foundInSales.items[0].invoiceId).toBe('test-sinv-batch-1');
+    expect(foundInSales.items[0].documentId).toBeUndefined();
+  });
 });
+

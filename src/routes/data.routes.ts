@@ -68,51 +68,111 @@ const fetchAllSystemDocsForServer = async (): Promise<any[]> => {
   return Array.from(docsMap.values());
 };
 
-const deleteChildTableItemsPg = async (client: any, childTable: string, parentId: string, defaultColName: string = 'invoiceId') => {
+export const getChildTableForeignKey = (parentKey: string, childTable: string): { primaryCol: string; altCol: string } => {
+  if (parentKey === 'accounting_documents' || childTable === 'accounting_document_items') {
+    return { primaryCol: 'document_id', altCol: 'documentId' };
+  }
+  if (parentKey === 'stocktakings' || childTable === 'stocktaking_items') {
+    return { primaryCol: 'stocktaking_id', altCol: 'stocktakingId' };
+  }
+  if (parentKey === 'payslips' || childTable === 'payslip_items') {
+    return { primaryCol: 'payslip_id', altCol: 'payslipId' };
+  }
+  if (parentKey === 'employee_contracts' || childTable === 'contract_components') {
+    return { primaryCol: 'contract_id', altCol: 'contractId' };
+  }
+  return { primaryCol: 'invoice_id', altCol: 'invoiceId' };
+};
+
+export const sanitizeChildItemForTable = (childTable: string, parentKey: string, parentId: string, item: any) => {
+  const { primaryCol, altCol } = getChildTableForeignKey(parentKey, childTable);
+  const cleanItem = { ...item };
+
+  // Strip conflicting foreign keys from other domains to avoid column does not exist errors
+  if (primaryCol === 'invoice_id') {
+    delete cleanItem.documentId;
+    delete cleanItem.document_id;
+    delete cleanItem.documentid;
+    delete cleanItem.stocktakingId;
+    delete cleanItem.stocktaking_id;
+    delete cleanItem.stocktakingid;
+    cleanItem[primaryCol] = parentId;
+    cleanItem[altCol] = parentId;
+  } else if (primaryCol === 'document_id') {
+    delete cleanItem.invoiceId;
+    delete cleanItem.invoice_id;
+    delete cleanItem.invoiceid;
+    delete cleanItem.stocktakingId;
+    delete cleanItem.stocktaking_id;
+    delete cleanItem.stocktakingid;
+    cleanItem[primaryCol] = parentId;
+    cleanItem[altCol] = parentId;
+  } else if (primaryCol === 'stocktaking_id') {
+    delete cleanItem.invoiceId;
+    delete cleanItem.invoice_id;
+    delete cleanItem.invoiceid;
+    delete cleanItem.documentId;
+    delete cleanItem.document_id;
+    delete cleanItem.documentid;
+    cleanItem[primaryCol] = parentId;
+    cleanItem[altCol] = parentId;
+  } else {
+    cleanItem[primaryCol] = parentId;
+    cleanItem[altCol] = parentId;
+  }
+
+  if (!cleanItem.id) {
+    cleanItem.id = Math.random().toString(36).substring(2, 15);
+  }
+
+  if (cleanItem.totalPrice !== undefined && cleanItem.netPrice === undefined) {
+    cleanItem.netPrice = cleanItem.totalPrice;
+  }
+  if (cleanItem.netPrice !== undefined && cleanItem.totalPrice === undefined) {
+    cleanItem.totalPrice = cleanItem.netPrice;
+  }
+
+  return cleanItem;
+};
+
+const deleteChildTableItemsPg = async (client: any, childTable: string, parentId: string, parentKey: string = '') => {
   try {
     await client.query(`CREATE TABLE IF NOT EXISTS "${childTable}" (id VARCHAR PRIMARY KEY)`);
   } catch (_) {}
 
-  let known = tableSchemas.get(childTable);
-  if (!known || known.size === 0) {
-    known = new Map();
-    try {
-      const res = await client.query("SELECT column_name, data_type FROM information_schema.columns WHERE table_schema = 'public' AND (table_name = $1 OR table_name = lower($1))", [childTable]);
-      for (const row of res.rows) {
-        known.set(row.column_name, row.data_type);
-        known.set(row.column_name.toLowerCase(), row.data_type);
-      }
-    } catch (_) {}
-    tableSchemas.set(childTable, known);
-  }
+  const { primaryCol, altCol } = getChildTableForeignKey(parentKey, childTable);
 
-  const targetCols = [
-    'invoice_id', 'invoiceId', 'invoiceid',
-    'document_id', 'documentId', 'documentid',
-    'stocktaking_id', 'stocktakingId', 'stocktakingid'
-  ];
-
-  let foundCol = '';
-  for (const c of targetCols) {
-    if (known.has(c)) {
-      foundCol = c;
-      break;
-    }
-  }
-
-  if (!foundCol) {
-    foundCol = defaultColName === 'invoiceId' ? 'invoice_id' : (defaultColName === 'documentId' ? 'document_id' : 'stocktaking_id');
-  }
-
+  let actualCols = new Set<string>();
   try {
-    await client.query(`DELETE FROM "${childTable}" WHERE "${foundCol}" = $1`, [parentId]);
-  } catch (err: any) {
+    const res = await client.query(
+      "SELECT column_name FROM information_schema.columns WHERE table_schema = 'public' AND (table_name = $1 OR table_name = lower($1))",
+      [childTable]
+    );
+    for (const row of res.rows) {
+      if (row.column_name) {
+        actualCols.add(row.column_name);
+        actualCols.add(row.column_name.toLowerCase());
+      }
+    }
+  } catch (_) {}
+
+  let colToDeleteWith = '';
+  if (actualCols.has(primaryCol)) {
+    colToDeleteWith = primaryCol;
+  } else if (actualCols.has(altCol)) {
+    colToDeleteWith = altCol;
+  } else if (actualCols.has(primaryCol.toLowerCase())) {
+    colToDeleteWith = primaryCol.toLowerCase();
+  } else if (actualCols.has(altCol.toLowerCase())) {
+    colToDeleteWith = altCol.toLowerCase();
+  }
+
+  if (colToDeleteWith) {
     try {
-      await client.query(`DELETE FROM "${childTable}" WHERE invoice_id = $1`, [parentId]).catch(() => {});
-      await client.query(`DELETE FROM "${childTable}" WHERE "invoiceId" = $1`, [parentId]).catch(() => {});
-      await client.query(`DELETE FROM "${childTable}" WHERE document_id = $1`, [parentId]).catch(() => {});
-      await client.query(`DELETE FROM "${childTable}" WHERE "documentId" = $1`, [parentId]).catch(() => {});
-    } catch (_) {}
+      await client.query(`DELETE FROM "${childTable}" WHERE "${colToDeleteWith}" = $1`, [parentId]);
+    } catch (e: any) {
+      console.warn(`[deleteChildTableItemsPg] Notice on delete from ${childTable} by ${colToDeleteWith}:`, e?.message);
+    }
   }
 };
 
@@ -149,16 +209,9 @@ const mirrorInvoiceInPg = async (client: any, key: string, finalItem: any, items
       }
 
       if (Array.isArray(items) && items.length > 0) {
-        await deleteChildTableItemsPg(client, 'invoice_items', normalizedItem.id, 'invoiceId');
+        await deleteChildTableItemsPg(client, 'invoice_items', normalizedItem.id, 'invoices');
         for (const it of items) {
-          const itemToSync = {
-            ...it,
-            invoiceId: normalizedItem.id,
-            invoice_id: normalizedItem.id,
-            id: it.id || Math.random().toString(36).substring(2, 15),
-            netPrice: it.netPrice !== undefined ? it.netPrice : (it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))),
-            totalPrice: it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))
-          };
+          const itemToSync = sanitizeChildItemForTable('invoice_items', 'invoices', normalizedItem.id, it);
           await syncTableSchema(client, 'invoice_items', itemToSync);
           const { itemKeys: itKeys, itemVals: itVals } = preparePgItem('invoice_items', itemToSync);
           if (itKeys.length > 0) {
@@ -186,16 +239,9 @@ const mirrorInvoiceInPg = async (client: any, key: string, finalItem: any, items
 
       const childTable = getChildTableCandidates(mirrorTable)[0];
       if (childTable && Array.isArray(items) && items.length > 0) {
-        await deleteChildTableItemsPg(client, childTable, normalizedItem.id, 'invoiceId');
+        await deleteChildTableItemsPg(client, childTable, normalizedItem.id, mirrorTable);
         for (const it of items) {
-          const itemToSync = {
-            ...it,
-            invoiceId: normalizedItem.id,
-            invoice_id: normalizedItem.id,
-            id: it.id || Math.random().toString(36).substring(2, 15),
-            netPrice: it.netPrice !== undefined ? it.netPrice : (it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))),
-            totalPrice: it.totalPrice !== undefined ? it.totalPrice : ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0))
-          };
+          const itemToSync = sanitizeChildItemForTable(childTable, mirrorTable, normalizedItem.id, it);
           await syncTableSchema(client, childTable, itemToSync);
           const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(childTable, itemToSync);
           if (itKeys.length > 0) {
@@ -225,10 +271,10 @@ const deleteInvoiceInPg = async (client: any, key: string, id: string, itemToDel
         await client.query(`DELETE FROM "${spec}" WHERE id = $1`, [String(id)]).catch(() => {});
       }
     }
-    await deleteChildTableItemsPg(client, 'invoice_items', String(id), 'invoiceId');
+    await deleteChildTableItemsPg(client, 'invoice_items', String(id), 'invoices');
     const childTable = getChildTableCandidates(key)[0];
     if (childTable && childTable !== 'invoice_items') {
-      await deleteChildTableItemsPg(client, childTable, String(id), 'invoiceId');
+      await deleteChildTableItemsPg(client, childTable, String(id), key);
     }
   } catch (err: any) {
     console.warn(`[deleteInvoiceInPg] Notice on deleting invoice relations:`, err?.message);
@@ -979,18 +1025,9 @@ router.post('/api/data/batch', async (req, res) => {
 
                 if (related && related.childTable) {
                     const fId = finalItem.id;
-                    const defaultCol = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
-                    await deleteChildTableItemsPg(client, related.childTable, fId, defaultCol);
+                    await deleteChildTableItemsPg(client, related.childTable, fId, key);
                     for (const it of related.items) {
-                        const itemToSync = {
-                          ...it,
-                          invoiceId: fId,
-                          invoice_id: fId,
-                          documentId: fId,
-                          document_id: fId,
-                          stocktakingId: fId,
-                          stocktaking_id: fId,
-                        };
+                        const itemToSync = sanitizeChildItemForTable(related.childTable, key, fId, it);
                         await syncTableSchema(client, related.childTable, itemToSync);
                         const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, itemToSync);
                         if (itKeys.length > 0) {
@@ -1453,18 +1490,9 @@ router.post('/api/data/:key/append', async (req, res) => {
            
            if (related && related.childTable) {
                const fId = finalItem.id;
-               const defaultCol = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
-               await deleteChildTableItemsPg(client, related.childTable, fId, defaultCol);
+               await deleteChildTableItemsPg(client, related.childTable, fId, key);
                for (const it of related.items) {
-                   const itemToSync = {
-                     ...it,
-                     invoiceId: fId,
-                     invoice_id: fId,
-                     documentId: fId,
-                     document_id: fId,
-                     stocktakingId: fId,
-                     stocktaking_id: fId,
-                   };
+                   const itemToSync = sanitizeChildItemForTable(related.childTable, key, fId, it);
                    await syncTableSchema(client, related.childTable, itemToSync);
                    const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, itemToSync);
                    if (itKeys.length > 0) {
@@ -1699,18 +1727,9 @@ router.put('/api/data/:key/:id', async (req, res) => {
            
            if (related && related.childTable) {
                const fId = finalItem.id;
-               const defaultCol = (related.childTable === 'invoice_items' || related.childTable.endsWith('_invoice_items') || related.childTable.endsWith('_receipt_items') || related.childTable.endsWith('_remittance_items') || related.childTable.endsWith('_return_items') || related.childTable.endsWith('waste_items')) ? 'invoiceId' : (related.childTable === 'accounting_document_items' ? 'documentId' : 'stocktakingId');
-               await deleteChildTableItemsPg(client, related.childTable, fId, defaultCol);
+               await deleteChildTableItemsPg(client, related.childTable, fId, key);
                for (const it of related.items) {
-                   const itemToSync = {
-                     ...it,
-                     invoiceId: fId,
-                     invoice_id: fId,
-                     documentId: fId,
-                     document_id: fId,
-                     stocktakingId: fId,
-                     stocktaking_id: fId,
-                   };
+                   const itemToSync = sanitizeChildItemForTable(related.childTable, key, fId, it);
                    await syncTableSchema(client, related.childTable, itemToSync);
                    const { itemKeys: itKeys, itemVals: itVals } = preparePgItem(related.childTable, itemToSync);
                    if (itKeys.length > 0) {
