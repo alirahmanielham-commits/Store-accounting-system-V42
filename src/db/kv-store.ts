@@ -320,7 +320,120 @@ export async function handleRelations(key: string, data: any) {
     return { strippedData: data, childTable: null, items: [], allChildTables: [] };
 }
 
-export async function getDbData(key: string) {
+export async function hydrateChildItemsForParents(key: string, parents: any[]) {
+  if (!Array.isArray(parents) || parents.length === 0) return parents;
+  const parentIds = new Set(parents.map(p => p && p.id ? String(p.id) : '').filter(Boolean));
+  if (parentIds.size === 0) return parents;
+
+  const isGlobalTable = GLOBAL_MAIN_DB_TABLES.includes(key);
+  const currentStore = storeContext.getStore() || 'default';
+  const targetStoreId = isGlobalTable ? 'default' : currentStore;
+  const targetPool = isGlobalTable ? (activePgPools['default'] || null) : (isPgActive() ? getActivePgPool() : (activePgPools[currentStore] || null));
+  const parentIdArray = Array.from(parentIds);
+
+  if (['invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes'].includes(key)) {
+      const candidates = getChildTableCandidates(key);
+      let items: any[] = [];
+      if (targetPool) {
+        for (const cand of candidates) {
+          try {
+            const res = await targetPool.query(
+              `SELECT * FROM "${cand}" WHERE ("invoiceId" = ANY($1) OR "invoice_id" = ANY($1))`,
+              [parentIdArray]
+            );
+            if (res.rows && res.rows.length > 0) {
+              items = items.concat(res.rows);
+            }
+          } catch (_) {}
+        }
+      } else {
+        for (const cand of candidates) {
+          const candItems = (await innerGetDbData(cand)) || [];
+          if (Array.isArray(candItems)) {
+            const matched = candItems.filter((it: any) => parentIds.has(String(it.invoiceId || it.invoice_id)));
+            items = items.concat(matched);
+          }
+        }
+      }
+
+      // Deduplicate items by id
+      const uniqueItemsMap = new Map();
+      items.forEach(it => { if (it && it.id) uniqueItemsMap.set(it.id, it); });
+      const finalItems = Array.from(uniqueItemsMap.values());
+
+      parents.forEach((inv: any) => {
+          if (!inv) return;
+          inv.customerId = inv.customerId || inv.personId || inv.supplierId || '';
+          inv.personId = inv.personId || inv.customerId || inv.supplierId || '';
+          if (inv.payableAmount === undefined && inv.totalAmount !== undefined) {
+            inv.payableAmount = inv.totalAmount;
+          }
+          inv.items = finalItems.filter((it: any) => String(it.invoiceId || it.invoice_id) === String(inv.id));
+      });
+  } else if (key === 'accounting_documents') {
+      let items: any[] = [];
+      if (targetPool) {
+        try {
+          const res = await targetPool.query(
+            `SELECT * FROM "accounting_document_items" WHERE ("documentId" = ANY($1) OR "document_id" = ANY($1))`,
+            [parentIdArray]
+          );
+          items = res.rows || [];
+        } catch (_) {}
+      } else {
+        const allItems = (await innerGetDbData('accounting_document_items')) || [];
+        items = Array.isArray(allItems) ? allItems.filter((it: any) => parentIds.has(String(it.documentId || it.document_id))) : [];
+      }
+      parents.forEach((doc: any) => {
+          if (!doc) return;
+          doc.items = items.filter((it: any) => String(it.documentId || it.document_id) === String(doc.id));
+      });
+  } else if (key === 'stocktakings') {
+      let items: any[] = [];
+      if (targetPool) {
+        try {
+          const res = await targetPool.query(
+            `SELECT * FROM "stocktaking_items" WHERE ("stocktakingId" = ANY($1) OR "stocktaking_id" = ANY($1))`,
+            [parentIdArray]
+          );
+          items = res.rows || [];
+        } catch (_) {}
+      } else {
+        const allItems = (await innerGetDbData('stocktaking_items')) || [];
+        items = Array.isArray(allItems) ? allItems.filter((it: any) => parentIds.has(String(it.stocktakingId || it.stocktaking_id))) : [];
+      }
+      parents.forEach((st: any) => {
+          if (!st) return;
+          st.items = items.filter((it: any) => String(it.stocktakingId || it.stocktaking_id) === String(st.id));
+      });
+  } else if (key === 'persons') {
+      let contacts: any[] = [];
+      let bankAccounts: any[] = [];
+      if (targetPool) {
+        try {
+          const resC = await targetPool.query(`SELECT * FROM "person_contacts" WHERE ("personId" = ANY($1) OR "person_id" = ANY($1))`, [parentIdArray]);
+          contacts = resC.rows || [];
+        } catch (_) {}
+        try {
+          const resB = await targetPool.query(`SELECT * FROM "person_bank_accounts" WHERE ("personId" = ANY($1) OR "person_id" = ANY($1))`, [parentIdArray]);
+          bankAccounts = resB.rows || [];
+        } catch (_) {}
+      } else {
+        const allC = (await innerGetDbData('person_contacts')) || [];
+        const allB = (await innerGetDbData('person_bank_accounts')) || [];
+        contacts = Array.isArray(allC) ? allC.filter((c: any) => parentIds.has(String(c.personId || c.person_id))) : [];
+        bankAccounts = Array.isArray(allB) ? allB.filter((b: any) => parentIds.has(String(b.personId || b.person_id))) : [];
+      }
+      parents.forEach((p: any) => {
+        if (!p) return;
+        p.contacts = contacts.filter((c: any) => String(c.personId || c.person_id) === String(p.id));
+        p.bankAccounts = bankAccounts.filter((b: any) => String(b.personId || b.person_id) === String(p.id));
+      });
+  }
+  return parents;
+}
+
+export async function getDbData(key: string, options: { skipChildHydration?: boolean } = {}) {
   let data: any = null;
   if (key === 'invoices') {
     const rawMain = (await innerGetDbData('invoices')) || [];
@@ -349,38 +462,12 @@ export async function getDbData(key: string) {
   }
   if (!data) return data;
   
-  if ((key === 'invoices' || key === 'sales_invoices' || key === 'purchase_invoices' || key === 'warehouse_receipts' || key === 'warehouse_remittances' || key === 'proforma_invoices' || key === 'sale_returns' || key === 'purchase_returns' || key === 'wastes') && Array.isArray(data)) {
-      const candidates = getChildTableCandidates(key);
-      let items: any[] = [];
-      for (const cand of candidates) {
-        const candItems = await innerGetDbData(cand);
-        if (candItems && Array.isArray(candItems) && candItems.length > 0) {
-          items = items.concat(candItems);
-        }
-      }
-      // Deduplicate items by id
-      const uniqueItemsMap = new Map();
-      items.forEach(it => { if (it && it.id) uniqueItemsMap.set(it.id, it); });
-      const finalItems = Array.from(uniqueItemsMap.values());
+  if (options.skipChildHydration) {
+    return data;
+  }
 
-      data.forEach((inv: any) => {
-          inv.customerId = inv.customerId || inv.personId || inv.supplierId || '';
-          inv.personId = inv.personId || inv.customerId || inv.supplierId || '';
-          if (inv.payableAmount === undefined && inv.totalAmount !== undefined) {
-            inv.payableAmount = inv.totalAmount;
-          }
-          inv.items = finalItems.filter((it: any) => String(it.invoiceId) === String(inv.id));
-      });
-  } else if (key === 'accounting_documents' && Array.isArray(data)) {
-      const items = await innerGetDbData('accounting_document_items') || [];
-      data.forEach((doc: any) => {
-          doc.items = items.filter((it: any) => String(it.documentId) === String(doc.id));
-      });
-  } else if (key === 'stocktakings' && Array.isArray(data)) {
-      const items = await innerGetDbData('stocktaking_items') || [];
-      data.forEach((st: any) => {
-          st.items = items.filter((it: any) => String(it.stocktakingId) === String(st.id));
-      });
+  if (Array.isArray(data)) {
+    await hydrateChildItemsForParents(key, data);
   }
   return data;
 }

@@ -1,6 +1,6 @@
 {
-  "summary":  "سیستم جامع یادداشت‌ها و کامنت‌گذاری سازمانی (Universal Entity Comments & Timeline System) بر روی تمامی ۶ بخش اصلی نرم‌افزار (اشخاص، فاکتورها، کالاها، اسناد حسابداری، رسیدها و چک‌ها) با موفقیت پیاده‌سازی و یکپارچه شد. تمام تست‌ها و اعتبارسنجی‌ها پاس شدند.",
-  "updatedAt":  "2026-11-07T15:35:28.969796489Z",
+  "summary":  "Comprehensive performance optimization and lazy loading architecture implementation plan. Eliminates heavy upfront data loading of invoices, persons, accounting documents, and checks during boot. Introduces server-side debounced search, 20-item default pagination, targeted relational item hydration, and database-level query optimization.",
+  "updatedAt":  "2026-11-10T10:21:12.062665154Z",
   "requestFeedback":  true,
   "userFacing":  true
 }

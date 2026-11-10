@@ -17,7 +17,9 @@ import {
   addDatabaseLog, 
   getSystemLogs, 
   addSystemLog,
-  ensureFiscalYearId
+  ensureFiscalYearId,
+  getPagedData,
+  PagedResponse
 } from './coreService';
 import { CompanySettings } from '../types';
 import { convertToGregorian } from '../utils/format';
@@ -121,40 +123,70 @@ export const savePersonBankAccounts = async (accounts: any[]) => {
   await saveLocalData('person_bank_accounts', accounts);
 };
 
-export const getPersons = async () => {
-  const persons = await getLocalData<any[]>('persons', []);
-  const contacts = await getLocalData<any[]>('person_contacts', []);
-  const bankAccounts = await getLocalData<any[]>('person_bank_accounts', []);
-  
-  const formattedPersons = (persons || []).map(p => {
-     p.contacts = contacts.filter(c => String(c.personId) === String(p.id));
-     p.bankAccounts = bankAccounts.filter(b => String(b.personId) === String(p.id));
-     return p;
+export const getPersonsPaged = async (params: { page?: number; pageSize?: number; search?: string; sortBy?: string; sortOrder?: 'asc' | 'desc' } = {}): Promise<PagedResponse<any>> => {
+  return getPagedData<any>('persons', {
+    page: params.page || 1,
+    pageSize: params.pageSize || 20,
+    search: params.search || '',
+    sortBy: params.sortBy || 'createdAt',
+    sortOrder: params.sortOrder || 'desc'
   });
-  
-  const baseList = formattedPersons.filter(p => !p.isDeleted);
-  
-  // Apply sync queue
-  const queue = getSyncQueue();
-  let resultList = [...baseList];
+};
 
-  for (const task of queue) {
-    if (task.operation === 'ADD_PERSON') {
-       resultList.push({ ...task.payload, isLocalUnsynced: true });
-    } else if (task.operation === 'UPDATE_PERSON') {
-       const idx = resultList.findIndex(p => p.id === task.payload.id || p.id === task.payload.originalId);
-       if (idx !== -1) {
-           resultList[idx] = { ...resultList[idx], ...task.payload.person, isLocalUnsynced: true };
-       }
-    } else if (task.operation === 'DELETE_PERSON') {
-       const idx = resultList.findIndex(p => p.id === task.payload.id || p.id === task.payload.originalId);
-       if (idx !== -1) {
-           resultList.splice(idx, 1);
-       }
+export const searchPersonsQuick = async (query: string, limit = 20) => {
+  const res = await getPersonsPaged({
+    page: 1,
+    pageSize: limit,
+    search: query.trim()
+  });
+  return res.items || [];
+};
+
+export const getPersons = async (params?: { page?: number; pageSize?: number; search?: string; sortBy?: string; sortOrder?: 'asc' | 'desc'; all?: boolean }) => {
+  if (params?.all) {
+    const persons = await getLocalData<any[]>('persons', []);
+    const contacts = await getLocalData<any[]>('person_contacts', []);
+    const bankAccounts = await getLocalData<any[]>('person_bank_accounts', []);
+    
+    const formattedPersons = (persons || []).map(p => {
+       p.contacts = contacts.filter(c => String(c.personId) === String(p.id));
+       p.bankAccounts = bankAccounts.filter(b => String(b.personId) === String(p.id));
+       return p;
+    });
+    
+    const baseList = formattedPersons.filter(p => !p.isDeleted);
+    
+    // Apply sync queue
+    const queue = getSyncQueue();
+    let resultList = [...baseList];
+
+    for (const task of queue) {
+      if (task.operation === 'ADD_PERSON') {
+         resultList.push({ ...task.payload, isLocalUnsynced: true });
+      } else if (task.operation === 'UPDATE_PERSON') {
+         const idx = resultList.findIndex(p => p.id === task.payload.id || p.id === task.payload.originalId);
+         if (idx !== -1) {
+             resultList[idx] = { ...resultList[idx], ...task.payload.person, isLocalUnsynced: true };
+         }
+      } else if (task.operation === 'DELETE_PERSON') {
+         const idx = resultList.findIndex(p => p.id === task.payload.id || p.id === task.payload.originalId);
+         if (idx !== -1) {
+             resultList.splice(idx, 1);
+         }
+      }
     }
+
+    return resultList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
   }
 
-  return resultList.sort((a, b) => b.createdAt - a.createdAt);
+  const paged = await getPersonsPaged({
+    page: params?.page || 1,
+    pageSize: params?.pageSize || 20,
+    search: params?.search || '',
+    sortBy: params?.sortBy,
+    sortOrder: params?.sortOrder
+  });
+  return paged.items || [];
 };
 
 export const addPersonToServer = async (person: any) => {

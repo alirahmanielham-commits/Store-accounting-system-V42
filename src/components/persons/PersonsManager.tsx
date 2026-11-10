@@ -169,6 +169,12 @@ export default function PersonsManager(props: any) {
     };
   }, []);
 
+  useEffect(() => {
+    if (typeof fetchPersons === 'function' && (!filteredPersons || filteredPersons.length === 0)) {
+      fetchPersons();
+    }
+  }, []);
+
   // Table Enhancements
   const [sortConfig, setSortConfig] = useState<{key: string, direction: 'asc'|'desc'} | null>(() => {
     const saved = sessionStorage.getItem('personSortConfig');

@@ -638,7 +638,7 @@ const [selectedPersonRole, setSelectedPersonRole] = useState<string>("all");
 
 const [personCurrentPage, setPersonCurrentPage] = useState<number>(1);
 
-const [personPageSize, setPersonPageSize] = useState<number>(10);
+const [personPageSize, setPersonPageSize] = useState<number>(20);
 
 const [personsViewMode, setPersonsViewMode] = useState<"list" | "table">(
     "table",
@@ -646,11 +646,11 @@ const [personsViewMode, setPersonsViewMode] = useState<"list" | "table">(
 
 const [productCurrentPage, setProductCurrentPage] = useState<number>(1);
 
-const [productPageSize, setProductPageSize] = useState<number>(10);
+const [productPageSize, setProductPageSize] = useState<number>(20);
 
 const [invoiceCurrentPage, setInvoiceCurrentPage] = useState<number>(1);
 
-const [invoicePageSize, setInvoicePageSize] = useState<number>(10);
+const [invoicePageSize, setInvoicePageSize] = useState<number>(20);
 
 const [newPersonGroupName, setNewPersonGroupName] = useState("");
 
@@ -1948,9 +1948,17 @@ const fetchInventoryTransactions = async () => {
     }
   };
 
-const fetchInvoices = async () => {
+const fetchInvoices = async (params?: { search?: string; page?: number; pageSize?: number; type?: string; sortBy?: string; sortOrder?: 'asc' | 'desc'; all?: boolean }) => {
     try {
-      const data = await getInvoices();
+      const data = await getInvoices({
+        search: params?.search ?? invoiceSearchQuery,
+        page: params?.page ?? invoiceCurrentPage,
+        pageSize: params?.pageSize ?? invoicePageSize,
+        type: params?.type,
+        sortBy: params?.sortBy,
+        sortOrder: params?.sortOrder,
+        all: params?.all
+      });
       const patched = (data || []).map((inv: any) => {
         if ((inv?.type === "warehouse_receipt" || inv?.type === "warehouse_remittance") && !inv.warehouseId) {
           const itemWhId = inv.items?.find((it: any) => it?.warehouseId)?.warehouseId;
@@ -2528,9 +2536,14 @@ const fetchPersonRoles = async () => {
     }
   };
 
-const fetchPersons = async () => {
+const fetchPersons = async (params?: { search?: string; page?: number; pageSize?: number; all?: boolean }) => {
     try {
-      const data = await getPersons();
+      const data = await getPersons({
+        search: params?.search ?? personSearchTerm,
+        page: params?.page ?? personCurrentPage,
+        pageSize: params?.pageSize ?? personPageSize,
+        all: params?.all
+      });
       setPersons(data as any);
     } catch (error) {
       console.error("Error fetching persons", error);
@@ -4308,7 +4321,6 @@ const fetchSmsMessages = async () => {
       await Promise.all([
         fetchPersonRoles(),
         fetchPersonGroups(),
-        fetchPersons(),
         fetchPersonOpeningBalances(),
         fetchProducts(),
         fetchAccounts(),
@@ -4316,14 +4328,11 @@ const fetchSmsMessages = async () => {
         fetchWarehouses(),
         fetchSettings(),
         fetchTransactions(),
-        fetchAccountingDocuments(),
-        fetchChecks(),
         fetchSmsMessages(),
         fetchFinancialYearInfo(),
         fetchLoansAndInstallments(),
       ]);
 
-      await fetchInvoices();
       await autoGenerateRentCommitments();
     } catch (error) {
       console.error("Error silently fetching data:", error);
@@ -4336,7 +4345,6 @@ const fetchData = async () => {
       const allFetches = Promise.allSettled([
         fetchPersonRoles(),
         fetchPersonGroups(),
-        fetchPersons(),
         fetchPersonOpeningBalances(),
         fetchProducts(),
         fetchAccounts(),
@@ -4344,12 +4352,9 @@ const fetchData = async () => {
         fetchWarehouses(),
         fetchSettings(),
         fetchTransactions(),
-        fetchAccountingDocuments(),
-        fetchChecks(),
         fetchSmsMessages(),
         fetchFinancialYearInfo(),
         fetchLoansAndInstallments(),
-        fetchInvoices(),
       ]);
 
       const timeoutPromise = new Promise((resolve) => setTimeout(resolve, 6000));
@@ -4535,10 +4540,48 @@ const fetchData = async () => {
   }, [user?.id, activeStoreId]);
 
 useEffect(() => {
-    if (activeTab && (activeTab.startsWith("list_") || activeTab.includes("invoice")) && invoices.length === 0) {
+    if (!activeTab) return;
+    if ((activeTab.startsWith("list_") || activeTab.includes("invoice")) && invoices.length === 0) {
       fetchInvoices();
+    } else if ((activeTab === "persons" || activeTab === "persons_list" || activeTab.includes("person")) && persons.length === 0) {
+      fetchPersons();
+    } else if ((activeTab === "accounting_documents" || activeTab.includes("document")) && accountingDocuments.length === 0) {
+      fetchAccountingDocuments();
+    } else if ((activeTab.includes("check") || activeTab === "checkbooks") && (checkbooks.length === 0 && issuedChecks.length === 0 && receivedChecks.length === 0)) {
+      fetchChecks();
     }
   }, [activeTab]);
+
+  // Debounced instant server search for persons
+  useEffect(() => {
+    if (!personSearchTerm && persons.length === 0) return;
+    const t = setTimeout(() => {
+      fetchPersons({ search: personSearchTerm, page: 1, pageSize: personPageSize });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [personSearchTerm]);
+
+  // Debounced instant server search for invoices
+  useEffect(() => {
+    if (!invoiceSearchQuery && invoices.length === 0) return;
+    const t = setTimeout(() => {
+      fetchInvoices({ search: invoiceSearchQuery, page: 1, pageSize: invoicePageSize });
+    }, 300);
+    return () => clearTimeout(t);
+  }, [invoiceSearchQuery]);
+
+  // Server-side pagination transitions
+  useEffect(() => {
+    if (personCurrentPage > 1) {
+      fetchPersons({ search: personSearchTerm, page: personCurrentPage, pageSize: personPageSize });
+    }
+  }, [personCurrentPage]);
+
+  useEffect(() => {
+    if (invoiceCurrentPage > 1) {
+      fetchInvoices({ search: invoiceSearchQuery, page: invoiceCurrentPage, pageSize: invoicePageSize });
+    }
+  }, [invoiceCurrentPage]);
 
 const handleAddItem = () => {
     setItems((prevItems) => [

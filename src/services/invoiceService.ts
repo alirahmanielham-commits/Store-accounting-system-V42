@@ -1,5 +1,5 @@
 import { checkFinancialYear, getStoreSettings } from './settingsService';
-import { mapTransactionTypeToTable, mapInvoiceTypeToTable } from './coreService';
+import { mapTransactionTypeToTable, mapInvoiceTypeToTable, getPagedData, PagedResponse } from './coreService';
 import { getLedgerAccounts, addLedgerAccount, addAccountingDocument, getAccountingDocuments, updateAccountingDocument, deleteAccountingDocument, createReversalAccountingDocument, reverseInvoiceAccounting } from './accountingService';
 import { syncProductLatestPrices, syncProductsLatestPrices } from './productService';
 import { recalculateAllWarehouseStocks } from './inventoryService';
@@ -846,36 +846,31 @@ export const deleteTransaction = async (id: string) => {
   }
 };
 
-export const getInvoices = async () => {
-  const tables = ['invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances', 'proforma_invoices', 'sale_returns', 'purchase_returns', 'wastes', 'consignment_invoices'];
-  const results = await Promise.all(
-    tables.map(t => getLocalData<any[]>(t, []).catch(() => []))
-  );
-  let allInvoices: any[] = [];
-  for (const data of results) {
-     const arr = Array.isArray(data) 
-       ? data 
-       : (data && Array.isArray((data as any).data) 
-          ? (data as any).data 
-          : (data && Array.isArray((data as any).items) 
-             ? (data as any).items 
-             : []));
-     if (arr.length > 0) {
-       allInvoices = allInvoices.concat(arr);
-     }
-  }
-  
-  // Deduplicate by ID
-  const uniqueInv = new Map();
-  allInvoices.forEach(inv => {
-    if (inv && !inv.isDeleted) {
-        if (!uniqueInv.has(inv.id) || (inv.updatedAt || 0) > (uniqueInv.get(inv.id).updatedAt || 0)) {
-            uniqueInv.set(inv.id, inv);
-        }
-    }
+export const getInvoicesPaged = async (params: { page?: number; pageSize?: number; search?: string; type?: string; sortBy?: string; sortOrder?: 'asc' | 'desc' } = {}): Promise<PagedResponse<any>> => {
+  return getPagedData<any>('invoices', {
+    page: params.page || 1,
+    pageSize: params.pageSize || 20,
+    search: params.search || '',
+    sortBy: params.sortBy || 'date',
+    sortOrder: params.sortOrder || 'desc',
+    ...(params.type && params.type !== 'all' ? { type: params.type } : {})
   });
-  
-  return Array.from(uniqueInv.values()).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+};
+
+export const getInvoices = async (params?: { page?: number; pageSize?: number; search?: string; type?: string; sortBy?: string; sortOrder?: 'asc' | 'desc'; all?: boolean }) => {
+  if (params?.all) {
+    const raw = await getLocalData<any[]>('invoices', []);
+    return (Array.isArray(raw) ? raw : []).filter(inv => inv && !inv.isDeleted).sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+  }
+  const res = await getInvoicesPaged({
+    page: params?.page || 1,
+    pageSize: params?.pageSize || 20,
+    search: params?.search || '',
+    type: params?.type,
+    sortBy: params?.sortBy,
+    sortOrder: params?.sortOrder
+  });
+  return res.items || [];
 };
 
 export const syncInvoiceAccountingDocument = async (invoice: any) => {

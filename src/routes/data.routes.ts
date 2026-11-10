@@ -1,7 +1,7 @@
 
 import { usePgMap, activePgPools, storeContext, SQLITE_FILE, connectPgDb, getDb, getActivePgPool, isPgActive, DB_CONFIG_FILE, dbs, DATA_FILE } from '../db/connection';
 import { KNOWN_TABLES, tableSchemas, syncTableSchema, ensurePostgresTables, preparePgItem } from '../db/schema-sync';
-import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations, appendLogEntries, getChildTableCandidates } from '../db/kv-store';
+import { getDbData, setDbData, getAllDbData, innerGetDbData, innerSetDbData, handleRelations, appendLogEntries, getChildTableCandidates, hydrateChildItemsForParents } from '../db/kv-store';
 import { migrateSqliteToPostgres } from '../db/migration';
 // import { loginSchema } from '../schemas/validation';
 import { Client, Pool } from 'pg';
@@ -842,7 +842,8 @@ router.get('/api/data/:key', async (req, res) => {
         res.setHeader('Cache-Control', 'no-cache, no-store, must-revalidate');
       }
 
-      let data = await getDbData(key);
+      const isPaginated = limit !== undefined || offset !== undefined || page !== undefined || pageSize !== undefined || paginated === 'true';
+      let data = await getDbData(key, { skipChildHydration: isPaginated });
       
       const isCollectionKey = [
         'invoices', 'sales_invoices', 'purchase_invoices', 'warehouse_receipts', 'warehouse_remittances',
@@ -897,14 +898,15 @@ router.get('/api/data/:key', async (req, res) => {
         const total = items.length;
 
         // Pagination
-        const isPaginated = limit !== undefined || offset !== undefined || page !== undefined || pageSize !== undefined || paginated === 'true';
         if (isPaginated) {
-          const limitNum = Math.max(1, parseInt((pageSize || limit) as string, 10) || 50);
+          const limitNum = Math.max(1, parseInt((pageSize || limit) as string, 10) || 20);
           const pageNum = parseInt(page as string, 10);
           const offsetNum = !isNaN(pageNum) && pageNum > 0
             ? (pageNum - 1) * limitNum
             : Math.max(0, parseInt(offset as string, 10) || 0);
           const pagedItems = items.slice(offsetNum, offsetNum + limitNum);
+          await hydrateChildItemsForParents(key, pagedItems);
+
           const currentPage = !isNaN(pageNum) && pageNum > 0 ? pageNum : Math.floor(offsetNum / limitNum) + 1;
           const totalPages = Math.ceil(total / limitNum);
 

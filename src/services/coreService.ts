@@ -210,6 +210,72 @@ export const getLocalData = async <T>(key: string, defaultValue: T, queryParams:
   }
 };
 
+export interface PagedResponse<T> {
+  data: T[];
+  items: T[];
+  total: number;
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  hasMore: boolean;
+}
+
+export const getPagedData = async <T>(
+  key: string,
+  params: {
+    page?: number;
+    pageSize?: number;
+    search?: string;
+    sortBy?: string;
+    sortOrder?: 'asc' | 'desc';
+    [k: string]: any;
+  } = {}
+): Promise<PagedResponse<T>> => {
+  const queryParams: Record<string, string | number> = {
+    paginated: 'true',
+    page: params.page || 1,
+    pageSize: params.pageSize || 20,
+    ...params
+  };
+  const qs = new URLSearchParams(
+    Object.entries(queryParams)
+      .filter(([_, v]) => v !== undefined && v !== null && v !== '')
+      .map(([k, v]) => [k, String(v)])
+  ).toString();
+  const url = `/api/data/${key}?${qs}`;
+  const authHeaders = getAuthHeaders();
+
+  try {
+    const fetchUrl = url.includes('?') ? `${url}&_t=${Date.now()}` : `${url}?_t=${Date.now()}`;
+    const res = await fetch(fetchUrl, {
+      cache: 'no-store',
+      headers: authHeaders
+    });
+    if (!res.ok) {
+      return { data: [], items: [], total: 0, totalCount: 0, page: 1, pageSize: 20, totalPages: 0, hasMore: false };
+    }
+    const json = await res.json();
+    const list = Array.isArray(json.data) ? json.data : (Array.isArray(json.items) ? json.items : (Array.isArray(json) ? json : []));
+    const total = typeof json.total === 'number' ? json.total : (typeof json.totalCount === 'number' ? json.totalCount : list.length);
+    const pageSize = Number(params.pageSize) || 20;
+    const page = Number(params.page) || 1;
+    const totalPages = typeof json.totalPages === 'number' ? json.totalPages : (Math.ceil(total / pageSize) || 1);
+    return {
+      data: list,
+      items: list,
+      total,
+      totalCount: total,
+      page,
+      pageSize,
+      totalPages,
+      hasMore: json.hasMore ?? (page * pageSize < total)
+    };
+  } catch (_) {
+    return { data: [], items: [], total: 0, totalCount: 0, page: 1, pageSize: 20, totalPages: 0, hasMore: false };
+  }
+};
+
 let isAppDataChangedSuspended = false;
 
 export const suspendAppDataChanged = () => {

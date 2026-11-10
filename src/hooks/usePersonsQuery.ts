@@ -20,7 +20,7 @@ export const PERSON_ROLES_QUERY_KEY = ['personRoles'];
 export function usePersons() {
   return useQuery({
     queryKey: PERSONS_QUERY_KEY,
-    queryFn: getPersons,
+    queryFn: () => getPersons(),
     staleTime: 60 * 1000,
     gcTime: 5 * 60 * 1000,
   });
