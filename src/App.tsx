@@ -3453,7 +3453,7 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
                 setEditingPersonId(null);
               }}
               editingPersonId={editingPersonId}
-              persons={persons}
+              persons={appState.allPersons?.length > 0 ? appState.allPersons : persons}
               personGroups={personGroups}
               personRoles={personRoles}
   personCategories={appState.personCategories}
@@ -3483,7 +3483,7 @@ if (requiresInitSetup && user && !storeSettings?.storeName) {
               onClose={() => setIsPersonIOModalOpen(false)}
               action={personIOAction}
               setAction={setPersonIOAction}
-              persons={persons}
+              persons={appState.allPersons?.length > 0 ? appState.allPersons : persons}
               storeSettings={storeSettings}
               addPerson={addPerson}
               showNotification={showNotification}

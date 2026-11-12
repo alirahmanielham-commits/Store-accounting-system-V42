@@ -98,4 +98,56 @@ describe('Integration — High-Performance On-Demand Lazy Loading & Server Searc
     expect(foundPerson).toBeDefined();
     expect(foundPerson.id).toBe('person-lazy-test-15');
   });
+
+  test('GET /api/data/persons without pagination returns ALL records for invoice & receipt selection', async () => {
+    const resAllPersons = await request(app)
+      .get('/api/data/persons')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(resAllPersons.status).toBe(200);
+    expect(Array.isArray(resAllPersons.body)).toBe(true);
+    expect(resAllPersons.body.length).toBeGreaterThanOrEqual(25);
+
+    // Verify all seeded persons are present
+    const hasPerson25 = resAllPersons.body.some((p: any) => p.id === 'person-lazy-test-25');
+    expect(hasPerson25).toBe(true);
+  });
+
+  test('POST /api/data/invoices preserves customerId and customerName for invoice list display', async () => {
+    const testInv = {
+      id: 'inv-counterparty-test-1',
+      type: 'sale',
+      invoiceNumber: 'فروش-طرف-حساب-۱',
+      date: '1403/08/20',
+      customerId: 'person-lazy-test-25',
+      customerName: 'مشتری شماره ۲۵',
+      totalAmount: 500000,
+      items: [
+        {
+          id: 'item-cp-1',
+          productId: 'prod-1',
+          quantity: 2,
+          unitPrice: 250000,
+          totalPrice: 500000
+        }
+      ]
+    };
+
+    const res = await request(app)
+      .post('/api/data/invoices/append')
+      .set('Authorization', `Bearer ${adminToken}`)
+      .send(testInv);
+
+    expect(res.status).toBe(200);
+
+    const getRes = await request(app)
+      .get('/api/data/invoices?paginated=true&search=فروش-طرف-حساب-۱')
+      .set('Authorization', `Bearer ${adminToken}`);
+
+    expect(getRes.status).toBe(200);
+    const foundInv = getRes.body.items.find((i: any) => i.id === 'inv-counterparty-test-1');
+    expect(foundInv).toBeDefined();
+    expect(foundInv.customerId).toBe('person-lazy-test-25');
+    expect(foundInv.customerName).toBe('مشتری شماره ۲۵');
+  });
 });

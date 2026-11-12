@@ -797,10 +797,10 @@ export default function InvoicesList(props: any) {
       const wb = XLSX.utils.book_new();
 
       const exportData = filteredInvoicesList.map((inv: any, idx: number) => {
-        const p = persons.find(
-          (per: any) => String(per.id) === String(inv.customerId || inv.personId)
+        const p = (persons || []).find(
+          (per: any) => per && String(per.id) === String(inv.customerId || inv.personId || inv.supplierId)
         );
-        const pName = p ? (p.alias || p.name || `${p.firstName || ''} ${p.lastName || ''}`) : (inv.customerName || 'نامشخص');
+        const pName = p ? (p.alias || p.name || `${p.firstName || ''} ${p.lastName || ''}`.trim()) : (inv.customerName || inv.personName || inv.buyerName || inv.sellerName || 'نامشخص');
         const whStatus = getInvoiceWarehouseStatus(inv);
         const whStatusLabel = whStatus === 'completed' ? 'تکمیل شده' : (whStatus === 'partial' ? 'تعدادی' : 'در انتظار');
 
@@ -1633,8 +1633,8 @@ export default function InvoicesList(props: any) {
                       const remainingBalance = Math.max((inv.totalAmount || 0) - (inv.paidAmount || 0), 0);
                       const isExpanded = expandedInvoiceId === String(inv.id);
 
-                      const personObj = persons.find((p: any) => String(p.id) === String(inv.customerId || inv.personId));
-                      const personDisplayName = personObj ? (personObj.alias || personObj.name || `${personObj.firstName || ''} ${personObj.lastName || ''}`.trim()) : (inv.customerName || 'نامشخص');
+                      const personObj = (persons || []).find((p: any) => p && String(p.id) === String(inv.customerId || inv.personId || inv.supplierId));
+                      const personDisplayName = personObj ? (personObj.alias || personObj.name || `${personObj.firstName || ''} ${personObj.lastName || ''}`.trim()) : (inv.customerName || inv.personName || inv.buyerName || inv.sellerName || 'نامشخص');
                       const phone = personObj?.mobile || personObj?.phone || inv.customerPhone;
                       const whName = getDocWarehouseName(inv);
                       const itemsCount = inv.items?.length || 0;
@@ -2404,8 +2404,8 @@ export default function InvoicesList(props: any) {
                   const isProforma = inv.type === "proforma";
                   const whStatus = getInvoiceWarehouseStatus(inv);
                   const remainingBalance = Math.max((inv.totalAmount || 0) - (inv.paidAmount || 0), 0);
-                  const personObj = persons.find((p: any) => String(p.id) === String(inv.customerId || inv.personId));
-                  const personDisplayName = personObj ? (personObj.alias || personObj.name || `${personObj.firstName || ''} ${personObj.lastName || ''}`.trim()) : (inv.customerName || 'نامشخص');
+                  const personObj = (persons || []).find((p: any) => p && String(p.id) === String(inv.customerId || inv.personId || inv.supplierId));
+                  const personDisplayName = personObj ? (personObj.alias || personObj.name || `${personObj.firstName || ''} ${personObj.lastName || ''}`.trim()) : (inv.customerName || inv.personName || inv.buyerName || inv.sellerName || 'نامشخص');
                   const phone = personObj?.mobile || personObj?.phone || inv.customerPhone;
                   const whName = getDocWarehouseName(inv);
                   const itemsCount = inv.items?.length || 0;

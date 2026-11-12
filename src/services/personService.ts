@@ -142,51 +142,66 @@ export const searchPersonsQuick = async (query: string, limit = 20) => {
   return res.items || [];
 };
 
-export const getPersons = async (params?: { page?: number; pageSize?: number; search?: string; sortBy?: string; sortOrder?: 'asc' | 'desc'; all?: boolean }) => {
-  if (params?.all) {
-    const persons = await getLocalData<any[]>('persons', []);
-    const contacts = await getLocalData<any[]>('person_contacts', []);
-    const bankAccounts = await getLocalData<any[]>('person_bank_accounts', []);
-    
-    const formattedPersons = (persons || []).map(p => {
-       p.contacts = contacts.filter(c => String(c.personId) === String(p.id));
-       p.bankAccounts = bankAccounts.filter(b => String(b.personId) === String(p.id));
-       return p;
+export const getPersons = async (params?: { page?: number; pageSize?: number; search?: string; sortBy?: string; sortOrder?: 'asc' | 'desc'; all?: boolean; paged?: boolean }) => {
+  if (params?.paged) {
+    const paged = await getPersonsPaged({
+      page: params?.page || 1,
+      pageSize: params?.pageSize || 20,
+      search: params?.search || '',
+      sortBy: params?.sortBy,
+      sortOrder: params?.sortOrder
     });
-    
-    const baseList = formattedPersons.filter(p => !p.isDeleted);
-    
-    // Apply sync queue
-    const queue = getSyncQueue();
-    let resultList = [...baseList];
-
-    for (const task of queue) {
-      if (task.operation === 'ADD_PERSON') {
-         resultList.push({ ...task.payload, isLocalUnsynced: true });
-      } else if (task.operation === 'UPDATE_PERSON') {
-         const idx = resultList.findIndex(p => p.id === task.payload.id || p.id === task.payload.originalId);
-         if (idx !== -1) {
-             resultList[idx] = { ...resultList[idx], ...task.payload.person, isLocalUnsynced: true };
-         }
-      } else if (task.operation === 'DELETE_PERSON') {
-         const idx = resultList.findIndex(p => p.id === task.payload.id || p.id === task.payload.originalId);
-         if (idx !== -1) {
-             resultList.splice(idx, 1);
-         }
-      }
-    }
-
-    return resultList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+    return paged.items || [];
   }
 
-  const paged = await getPersonsPaged({
-    page: params?.page || 1,
-    pageSize: params?.pageSize || 20,
-    search: params?.search || '',
-    sortBy: params?.sortBy,
-    sortOrder: params?.sortOrder
+  const persons = await getLocalData<any[]>('persons', []);
+  const contacts = await getLocalData<any[]>('person_contacts', []);
+  const bankAccounts = await getLocalData<any[]>('person_bank_accounts', []);
+  
+  const formattedPersons = (persons || []).map(p => {
+     p.contacts = contacts.filter(c => String(c.personId) === String(p.id));
+     p.bankAccounts = bankAccounts.filter(b => String(b.personId) === String(p.id));
+     return p;
   });
-  return paged.items || [];
+  
+  const baseList = formattedPersons.filter(p => !p.isDeleted);
+  
+  // Apply sync queue
+  const queue = getSyncQueue();
+  let resultList = [...baseList];
+
+  for (const task of queue) {
+    if (task.operation === 'ADD_PERSON') {
+       resultList.push({ ...task.payload, isLocalUnsynced: true });
+    } else if (task.operation === 'UPDATE_PERSON') {
+       const idx = resultList.findIndex(p => p.id === task.payload.id || p.id === task.payload.originalId);
+       if (idx !== -1) {
+           resultList[idx] = { ...resultList[idx], ...task.payload.person, isLocalUnsynced: true };
+       }
+    } else if (task.operation === 'DELETE_PERSON') {
+       const idx = resultList.findIndex(p => p.id === task.payload.id || p.id === task.payload.originalId);
+       if (idx !== -1) {
+           resultList.splice(idx, 1);
+       }
+    }
+  }
+
+  if (params?.search && params.search.trim()) {
+    const q = params.search.trim().toLowerCase();
+    resultList = resultList.filter(p => {
+      const name = (p.name || p.alias || `${p.firstName || ''} ${p.lastName || ''}`).toLowerCase();
+      const code = (p.personCode || p.code || '').toString().toLowerCase();
+      const phone = (p.phone || p.mobile || '').toString().toLowerCase();
+      const nationalId = (p.nationalId || '').toString().toLowerCase();
+      return name.includes(q) || code.includes(q) || phone.includes(q) || nationalId.includes(q);
+    });
+  }
+
+  return resultList.sort((a, b) => (b.createdAt || 0) - (a.createdAt || 0));
+};
+
+export const getAllPersons = async () => {
+  return getPersons({ all: true });
 };
 
 export const addPersonToServer = async (person: any) => {

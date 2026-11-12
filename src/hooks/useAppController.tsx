@@ -557,6 +557,7 @@ useEffect(() => {
   }, [activeTab]);
 
 const [persons, setPersons] = useState<Person[]>([]);
+const [allPersons, setAllPersons] = useState<Person[]>([]);
 
 const [personOpeningBalances, setPersonOpeningBalances] = useState<any[]>([]);
 
@@ -724,7 +725,10 @@ const getRoleBadgeClasses = (roleId?: string) => {
     };
   };
 
-  const activePersonsOnly = (persons || []).filter((p) => p.isActive !== false);
+  const activePersonsOnly = useMemo(() => {
+    const source = (allPersons && allPersons.length > 0) ? allPersons : persons;
+    return (source || []).filter((p) => p.isActive !== false);
+  }, [allPersons, persons]);
 
 const filteredPersons = (persons || []).filter((p) => {
     // 0. Role Filter
@@ -2536,15 +2540,31 @@ const fetchPersonRoles = async () => {
     }
   };
 
-const fetchPersons = async (params?: { search?: string; page?: number; pageSize?: number; all?: boolean }) => {
+const fetchAllPersons = async () => {
     try {
+      const data = await getPersons({ all: true });
+      setAllPersons(data as any);
+      return data;
+    } catch (error) {
+      console.error("Error fetching all persons", error);
+      return [];
+    }
+  };
+
+const fetchPersons = async (params?: { search?: string; page?: number; pageSize?: number; all?: boolean; paged?: boolean }) => {
+    try {
+      const isPaged = params?.paged === true;
       const data = await getPersons({
-        search: params?.search ?? personSearchTerm,
-        page: params?.page ?? personCurrentPage,
-        pageSize: params?.pageSize ?? personPageSize,
-        all: params?.all
+        search: params?.search ?? (isPaged ? personSearchTerm : undefined),
+        page: params?.page ?? (isPaged ? personCurrentPage : undefined),
+        pageSize: params?.pageSize ?? (isPaged ? personPageSize : undefined),
+        all: params?.all ?? (!isPaged),
+        paged: isPaged
       });
       setPersons(data as any);
+      if (!isPaged || allPersons.length === 0) {
+        setAllPersons(data as any);
+      }
     } catch (error) {
       console.error("Error fetching persons", error);
     }
@@ -4541,6 +4561,23 @@ const fetchData = async () => {
 
 useEffect(() => {
     if (!activeTab) return;
+    const isInvoiceOrReceiptWorkflow =
+      activeTab.startsWith("create_") ||
+      activeTab.includes("invoice") ||
+      activeTab.includes("receipt") ||
+      activeTab === "keyboard_receipt" ||
+      activeTab.startsWith("list_") ||
+      Boolean(editingInvoiceId);
+
+    if (isInvoiceOrReceiptWorkflow) {
+      if (allPersons.length === 0) {
+        fetchAllPersons();
+      }
+      if (products.length === 0) {
+        fetchProducts();
+      }
+    }
+
     if ((activeTab.startsWith("list_") || activeTab.includes("invoice")) && invoices.length === 0) {
       fetchInvoices();
     } else if ((activeTab === "persons" || activeTab === "persons_list" || activeTab.includes("person")) && persons.length === 0) {
@@ -4556,7 +4593,7 @@ useEffect(() => {
   useEffect(() => {
     if (!personSearchTerm && persons.length === 0) return;
     const t = setTimeout(() => {
-      fetchPersons({ search: personSearchTerm, page: 1, pageSize: personPageSize });
+      fetchPersons({ search: personSearchTerm, page: 1, pageSize: personPageSize, paged: true });
     }, 300);
     return () => clearTimeout(t);
   }, [personSearchTerm]);
@@ -4573,7 +4610,7 @@ useEffect(() => {
   // Server-side pagination transitions
   useEffect(() => {
     if (personCurrentPage > 1) {
-      fetchPersons({ search: personSearchTerm, page: personCurrentPage, pageSize: personPageSize });
+      fetchPersons({ search: personSearchTerm, page: personCurrentPage, pageSize: personPageSize, paged: true });
     }
   }, [personCurrentPage]);
 
@@ -6041,7 +6078,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
       if (!actualCustomerId) {
         validationErrors.push("• گیت ۱: مشتری مشخص نشده است.");
       } else {
-        const customer = persons.find(p => p.id?.toString() === actualCustomerId.toString());
+        const customer = (allPersons.length > 0 ? allPersons : persons).find(p => p.id?.toString() === actualCustomerId.toString());
         if (!customer) {
           validationErrors.push("• گیت ۱: مشتری انتخاب شده در سیستم معتبر نیست یا یافت نشد.");
         } else if (customer.isActive === false) {
@@ -6207,7 +6244,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
 
     // ---- Purchase Return Validation Gates (Partial) ----
     if (!isDraft && actualType === "purchase_return" && actualCustomerId) {
-      const person = persons.find((p) => p.id.toString() === actualCustomerId.toString());
+      const person = (allPersons.length > 0 ? allPersons : persons).find((p) => p.id.toString() === actualCustomerId.toString());
       if (person && person.creditLimit && person.creditLimit > 0) {
         const currentBalanceObj = calculatePersonBalance(actualCustomerId);
         let currentDebt = currentBalanceObj.status === "بدهکار" ? currentBalanceObj.amount : -currentBalanceObj.amount;
@@ -6230,7 +6267,7 @@ const getInvoiceNumber = (typeOverride?: string) => {
       if (!actualCustomerId) {
         validationErrors.push("• گیت ۱: تامین‌کننده مشخص نشده است.");
       } else {
-        const supplier = persons.find(p => p.id?.toString() === actualCustomerId.toString());
+        const supplier = (allPersons.length > 0 ? allPersons : persons).find(p => p.id?.toString() === actualCustomerId.toString());
         if (!supplier) {
           validationErrors.push("• گیت ۱: تامین‌کننده انتخاب شده در سیستم معتبر نیست یا یافت نشد.");
         } else if (supplier.isActive === false) {
@@ -6408,6 +6445,15 @@ const getInvoiceNumber = (typeOverride?: string) => {
       ? "draft"
       : (customPayload?.status || (invoiceType === "purchase" || customPayload?.type === "purchase" || isWarehouseDocType ? "approved" : "final"));
 
+    const personPool = allPersons.length > 0 ? allPersons : persons;
+    const resolvedCustomerPersonId = customPayload?.customerId !== undefined ? customPayload.customerId : customerId;
+    const resolvedPersonObj = personPool.find(
+      (p: any) => p && String(p.id) === String(resolvedCustomerPersonId)
+    );
+    const resolvedCustomerName = resolvedPersonObj
+      ? (resolvedPersonObj.alias || resolvedPersonObj.name || `${resolvedPersonObj.firstName || ''} ${resolvedPersonObj.lastName || ''}`.trim())
+      : "";
+
     const payload = customPayload
       ? {
           invoiceNumber: (function () {
@@ -6427,7 +6473,10 @@ const getInvoiceNumber = (typeOverride?: string) => {
           allowNegativeStock: isNegativeStockAllowed,
           date: customPayload.date !== undefined ? convertToGregorian(customPayload.date) : convertToGregorian(date),
           dueDate: (customPayload.dueDate !== undefined ? convertToGregorian(customPayload.dueDate) : (invoiceDueDate ? convertToGregorian(invoiceDueDate) : null)),
-          customerId: customPayload.customerId !== undefined ? customPayload.customerId : customerId,
+          customerId: resolvedCustomerPersonId,
+          customerName: customPayload.customerName || resolvedCustomerName || undefined,
+          personId: customPayload.personId || resolvedCustomerPersonId || undefined,
+          personName: customPayload.personName || resolvedCustomerName || undefined,
           driverPersonId: customPayload.driverPersonId !== undefined ? customPayload.driverPersonId : driverPersonId,
           driverName: customPayload.driverName !== undefined ? customPayload.driverName : driverName,
           driverPhone: customPayload.driverPhone !== undefined ? customPayload.driverPhone : driverPhone,
@@ -6460,6 +6509,9 @@ const getInvoiceNumber = (typeOverride?: string) => {
             convertToGregorian(date),
           dueDate: invoiceDueDate ? (convertToGregorian(invoiceDueDate)) : null,
           customerId,
+          customerName: resolvedCustomerName || undefined,
+          personId: customerId || undefined,
+          personName: resolvedCustomerName || undefined,
           driverPersonId,
           driverName,
           driverPhone,
@@ -7836,11 +7888,12 @@ const openPayslip = (tx: any) => {
   };
 
 const renderTabContent = () => {
+    const effectivePersonsList = (allPersons && allPersons.length > 0) ? allPersons : persons;
     switch (activeTab) {
       case "keyboard_receipt":
         return (
           <KeyboardReceiptPage
-            persons={persons}
+            persons={effectivePersonsList}
             accounts={accounts}
             cashboxes={cashboxes}
             storeSettings={storeSettings}
@@ -7867,7 +7920,7 @@ const renderTabContent = () => {
             receiptPersonId={receiptPersonId}
             setReceiptPersonId={setReceiptPersonId}
             setIsPersonModalOpen={setIsPersonModalOpen}
-            persons={persons}
+            persons={effectivePersonsList}
             getPersonDisplayName={getPersonDisplayName}
             receiptMethod={receiptMethod}
             setReceiptMethod={setReceiptMethod}
@@ -7928,7 +7981,7 @@ const renderTabContent = () => {
             receiptPersonId={receiptPersonId}
             setReceiptPersonId={setReceiptPersonId}
             setIsPersonModalOpen={setIsPersonModalOpen}
-            persons={persons}
+            persons={effectivePersonsList}
             getPersonDisplayName={getPersonDisplayName}
             receiptMethod={receiptMethod}
             setReceiptMethod={setReceiptMethod}
@@ -7983,16 +8036,16 @@ const renderTabContent = () => {
 
       case "create_warehouse_doc":
         return (
-          <WarehouseDocCreate confirmAction={confirmAction} setIsPersonModalOpen={setIsPersonModalOpen} invoiceNumber={invoiceNumber} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} storeSettings={storeSettings} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} formatCurrency={formatCurrency} submitting={submitting} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} Plus={Plus} Trash2={Trash2} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Tag={Tag} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} formatProductStockDetails={formatProductStockDetails} warehouseOperationType={warehouseOperationType} setWarehouseOperationType={setWarehouseOperationType} warehouseWizardStep={warehouseWizardStep} setWarehouseWizardStep={setWarehouseWizardStep} setSourceInvoiceId={setSourceInvoiceId} customAlert={customAlert} invoices={invoices} hasRemainingWarehouseItems={hasRemainingWarehouseItems} sourceInvoiceId={sourceInvoiceId} deletePreviousDocs={deletePreviousDocs} setDeletePreviousDocs={setDeletePreviousDocs} setInvoiceCurrency={setInvoiceCurrency} setExchangeRate={setExchangeRate} setExchangeRateInput={setExchangeRateInput} deleteInvoice={deleteInvoice} handleVoidInvoice={handleVoidInvoice} setInvoices={setInvoices} fetchInvoices={fetchInvoices} generateId={generateId} handleAddItem={handleAddItem} getProductStockInfo={getProductStockInfo} saveInvoiceData={saveInvoiceData} />
+          <WarehouseDocCreate confirmAction={confirmAction} setIsPersonModalOpen={setIsPersonModalOpen} invoiceNumber={invoiceNumber} persons={effectivePersonsList} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} storeSettings={storeSettings} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} formatCurrency={formatCurrency} submitting={submitting} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} Plus={Plus} Trash2={Trash2} Save={Save} RefreshCw={RefreshCw} FileText={FileText} Tag={Tag} setInvoiceType={setInvoiceType} DatePicker={DatePicker} invoiceDescription={invoiceDescription} setInvoiceDescription={setInvoiceDescription} invoiceNote={invoiceNote} setInvoiceNote={setInvoiceNote} formatProductStockDetails={formatProductStockDetails} warehouseOperationType={warehouseOperationType} setWarehouseOperationType={setWarehouseOperationType} warehouseWizardStep={warehouseWizardStep} setWarehouseWizardStep={setWarehouseWizardStep} setSourceInvoiceId={setSourceInvoiceId} customAlert={customAlert} invoices={invoices} hasRemainingWarehouseItems={hasRemainingWarehouseItems} sourceInvoiceId={sourceInvoiceId} deletePreviousDocs={deletePreviousDocs} setDeletePreviousDocs={setDeletePreviousDocs} setInvoiceCurrency={setInvoiceCurrency} setExchangeRate={setExchangeRate} setExchangeRateInput={setExchangeRateInput} deleteInvoice={deleteInvoice} handleVoidInvoice={handleVoidInvoice} setInvoices={setInvoices} fetchInvoices={fetchInvoices} generateId={generateId} handleAddItem={handleAddItem} getProductStockInfo={getProductStockInfo} saveInvoiceData={saveInvoiceData} />
         );
 
       case "create_purchase_return":
         return (
-          <PurchaseReturnInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} />
+          <PurchaseReturnInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={effectivePersonsList} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} />
         );
       case "create_purchase":
         return (
-          <PurchaseInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={persons} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} sellerInvoiceNumber={sellerInvoiceNumber} setSellerInvoiceNumber={setSellerInvoiceNumber} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} handleApprovePurchaseInvoice={handleApprovePurchaseInvoice} />
+          <PurchaseInvoiceCreate setIsPersonModalOpen={setIsPersonModalOpen} hasDraft={hasDraft} restoreDraft={restoreDraft} clearDraft={clearDraft} successMsg={successMsg} editingInvoiceId={editingInvoiceId} invoiceNumber={invoiceNumber} toPersianDigits={toPersianDigits} persons={effectivePersonsList} date={date} setDate={setDate} persian={persian} persian_fa={persian_fa} items={items} setItems={setItems} handleItemChange={handleItemChange} products={products} handleRemoveItem={handleRemoveItem} calculateFinalTotal={calculateFinalTotal} accounts={accounts} storeSettings={storeSettings} CurrencyInput={CurrencyInput} Package={Package} invoiceWarehouseId={invoiceWarehouseId} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} FastBarcodeScanner={FastBarcodeScanner} handleFastBarcodeScan={handleFastBarcodeScan} SearchableSelect={SearchableSelect} handleFastAddProduct={handleFastAddProduct} handleBulkAddProducts={handleBulkAddProducts} handleAddBlankRow={handleAddBlankRow} handleDuplicateItem={handleDuplicateItem} handleIncrementQuantity={handleIncrementQuantity} productCategories={productCategories} setIsScannerOpen={setIsScannerOpen} ScanLine={ScanLine} setIsProductModalOpen={setIsProductModalOpen} Box={Box} invoiceTitle={invoiceTitle} sellerInvoiceNumber={sellerInvoiceNumber} setSellerInvoiceNumber={setSellerInvoiceNumber} invoiceMode={invoiceMode} setInvoiceMode={setInvoiceMode} setInvoiceNumber={setInvoiceNumber} setInvoiceTitle={setInvoiceTitle} User={User} activePersonsOnly={activePersonsOnly} getRoleName={getRoleName} customerId={customerId} setCustomerId={setCustomerId} renderPersonInfoBox={renderPersonInfoBox} Wallet={Wallet} invoicePaymentAccountId={invoicePaymentAccountId} setInvoicePaymentAccountId={setInvoicePaymentAccountId} invoicePaymentStatus={invoicePaymentStatus} setInvoicePaymentStatus={setInvoicePaymentStatus} setInvoicePaidAmount={setInvoicePaidAmount} DollarSign={DollarSign} invoicePaidAmount={invoicePaidAmount} overallDiscountPercent={overallDiscountPercent} setOverallDiscountPercent={setOverallDiscountPercent} formatCurrency={formatCurrency} invoiceOriginalTotal={invoiceOriginalTotal} invoiceCurrency={invoiceCurrency} invoiceTotalDiscount={invoiceTotalDiscount} numToPersianWords={numToPersianWords} submitting={submitting} saveInvoiceData={saveInvoiceData} handleInvoicePreviewTrigger={handleInvoicePreviewTrigger} formatNumber={formatNumber} Calculator={Calculator} calculateSubtotal={calculateSubtotal} handleApprovePurchaseInvoice={handleApprovePurchaseInvoice} />
         );
       case "create_sale_return":
         return (
@@ -8013,7 +8066,7 @@ const renderTabContent = () => {
           <ConsignmentInvoiceCreate
             products={products}
             warehouses={warehouses}
-            persons={persons}
+            persons={effectivePersonsList}
             editingInvoice={editingConsignment}
             initialPersonId={customerId}
             productCategories={productCategories}
@@ -8052,7 +8105,7 @@ const renderTabContent = () => {
         return (
           <InvoicesList
              handleFastWarehouseRemittance={handleFastWarehouseRemittance}
-             invoices={invoices} fetchInvoices={fetchInvoices} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} persons={persons} activeTab={activeTab} setActiveTab={setActiveTab} purchaseFilter={purchaseFilter} setPurchaseFilter={setPurchaseFilter} formatCurrency={formatCurrency} getPersonDisplayName={getPersonDisplayName} formatDateDisplay={formatDateDisplay}  numToPersianWords={numToPersianWords} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} setCustomerId={setCustomerId}  getRoleName={getRoleName} setEditingInvoiceId={setEditingInvoiceId} handleDeleteInvoice={handleDeleteInvoice}     storeSettings={storeSettings} invoiceCurrentPage={invoiceCurrentPage} setInvoiceCurrentPage={setInvoiceCurrentPage} invoicePageSize={invoicePageSize} setInvoicePageSize={setInvoicePageSize} toPersianDigits={toPersianDigits} listFilter={listFilter} setListFilter={setListFilter} invoiceGroupMode={invoiceGroupMode} setInvoiceGroupMode={setInvoiceGroupMode} List={List} clearDraft={clearDraft} setInvoiceType={setInvoiceType} setWarehouseOperationType={setWarehouseOperationType} Calendar={Calendar} renderPersonLink={renderPersonLink} products={products} setPricingWizardItems={setPricingWizardItems} setPricingWizardInvoice={setPricingWizardInvoice} setSuccessMsg={setSuccessMsg} setReceiptPersonId={setReceiptPersonId} setViewingInvoice={setViewingInvoice} handleEditInvoiceAction={handleEditInvoiceAction} handleFastWarehouseReceipt={handleFastWarehouseReceipt} handleVoidInvoice={handleVoidInvoice} handleApprovePurchaseInvoice={handleApprovePurchaseInvoice} handleApproveWarehouseReceipt={handleApproveWarehouseReceipt}
+             invoices={invoices} fetchInvoices={fetchInvoices} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} persons={effectivePersonsList} activeTab={activeTab} setActiveTab={setActiveTab} purchaseFilter={purchaseFilter} setPurchaseFilter={setPurchaseFilter} formatCurrency={formatCurrency} getPersonDisplayName={getPersonDisplayName} formatDateDisplay={formatDateDisplay}  numToPersianWords={numToPersianWords} setInvoiceWarehouseId={setInvoiceWarehouseId} warehouses={warehouses} setCustomerId={setCustomerId}  getRoleName={getRoleName} setEditingInvoiceId={setEditingInvoiceId} handleDeleteInvoice={handleDeleteInvoice}     storeSettings={storeSettings} invoiceCurrentPage={invoiceCurrentPage} setInvoiceCurrentPage={setInvoiceCurrentPage} invoicePageSize={invoicePageSize} setInvoicePageSize={setInvoicePageSize} toPersianDigits={toPersianDigits} listFilter={listFilter} setListFilter={setListFilter} invoiceGroupMode={invoiceGroupMode} setInvoiceGroupMode={setInvoiceGroupMode} List={List} clearDraft={clearDraft} setInvoiceType={setInvoiceType} setWarehouseOperationType={setWarehouseOperationType} Calendar={Calendar} renderPersonLink={renderPersonLink} products={products} setPricingWizardItems={setPricingWizardItems} setPricingWizardInvoice={setPricingWizardInvoice} setSuccessMsg={setSuccessMsg} setReceiptPersonId={setReceiptPersonId} setViewingInvoice={setViewingInvoice} handleEditInvoiceAction={handleEditInvoiceAction} handleFastWarehouseReceipt={handleFastWarehouseReceipt} handleVoidInvoice={handleVoidInvoice} handleApprovePurchaseInvoice={handleApprovePurchaseInvoice} handleApproveWarehouseReceipt={handleApproveWarehouseReceipt}
           />
         );
       }
@@ -8060,7 +8113,7 @@ const renderTabContent = () => {
       case "list_pay_receipt": {
         return (
           <ReceiptsList
-             transactions={transactions} activeTab={activeTab} persons={persons} getPersonDisplayName={getPersonDisplayName} formatCurrency={formatCurrency} formatDateDisplay={formatDateDisplay}  renderPersonLink={renderPersonLink} storeSettings={storeSettings} List={List} setActiveTab={setActiveTab} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} toPersianDigits={toPersianDigits} accounts={accounts} cashboxes={cashboxes} formatNumber={formatNumber} numToPersianWords={numToPersianWords} openPayslip={openPayslip} setPrintingTransaction={setPrintingTransaction} setEditingReceipt={setEditingReceipt} setIsEditReceiptModalOpen={setIsEditReceiptModalOpen} confirmAction={confirmAction} deleteTransaction={deleteTransaction} fetchTransactions={fetchTransactions} setPreviewReceiptData={setPreviewReceiptData}
+             transactions={transactions} activeTab={activeTab} persons={effectivePersonsList} getPersonDisplayName={getPersonDisplayName} formatCurrency={formatCurrency} formatDateDisplay={formatDateDisplay}  renderPersonLink={renderPersonLink} storeSettings={storeSettings} List={List} setActiveTab={setActiveTab} invoiceSearchQuery={invoiceSearchQuery} setInvoiceSearchQuery={setInvoiceSearchQuery} toPersianDigits={toPersianDigits} accounts={accounts} cashboxes={cashboxes} formatNumber={formatNumber} numToPersianWords={numToPersianWords} openPayslip={openPayslip} setPrintingTransaction={setPrintingTransaction} setEditingReceipt={setEditingReceipt} setIsEditReceiptModalOpen={setIsEditReceiptModalOpen} confirmAction={confirmAction} deleteTransaction={deleteTransaction} fetchTransactions={fetchTransactions} setPreviewReceiptData={setPreviewReceiptData}
           />
         );
       }
@@ -8398,6 +8451,8 @@ const renderTabContent = () => {
     handleFastSaveProduct,
     handleSaveCategory,
     handleGenerateBarcodes,
+    allPersons,
+    fetchAllPersons,
     fetchPersons,
     fetchPersonOpeningBalances,
     handleDeletePerson,
