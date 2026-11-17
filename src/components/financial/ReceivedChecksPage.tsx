@@ -89,8 +89,8 @@ export default function ReceivedChecksPage({
     if (showNotification) showNotification(msg, type);
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [rc, ps, acc, set] = await Promise.all([
         getReceivedChecks(),
@@ -106,14 +106,22 @@ export default function ReceivedChecksPage({
       setStoreSettings(set || null);
     } catch (err) {
       console.error("Error loading received checks:", err);
-      notify("خطا در بارگذاری اطلاعات چک‌ها", "error");
+      if (!silent) notify("خطا در بارگذاری اطلاعات چک‌ها", "error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
+    const handleSync = (e: any) => {
+      const t = e?.detail?.table || '';
+      if (t === 'received_checks' || t === 'checks' || t === 'persons' || t === 'accounts') {
+        loadData(true);
+      }
+    };
+    window.addEventListener('realtime_sync_update', handleSync);
+    return () => window.removeEventListener('realtime_sync_update', handleSync);
   }, []);
 
   // Distinct banks for filter dropdown

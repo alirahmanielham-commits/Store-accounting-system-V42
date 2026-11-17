@@ -9,6 +9,7 @@ import SendPersonMessageModal from '../modals/SendPersonMessageModal';
 import { safePrint } from '../../utils/printHelper';
 import { exportToExcel, formatDecimalForExcel } from '../../utils/exportUtils';
 import { getActiveStoreSettings } from '../../utils/format';
+import { getInvoices, getProducts } from '../../services/dataService';
 
 export default function PersonLedger(props: any) {
   const {
@@ -56,8 +57,10 @@ export default function PersonLedger(props: any) {
     setViewingCheck,
     receivedChecks,
     Calendar,
-    Tag
-,
+    Tag,
+    products = [],
+    fetchProducts,
+    fetchAllPersons,
     ...rest
   } = props;
   
@@ -74,11 +77,19 @@ export default function PersonLedger(props: any) {
   const [includeOpening, setIncludeOpening] = useState(true);
   const [isMessageModalOpen, setIsMessageModalOpen] = useState(false);
   const [printPaperSize, setPrintPaperSize] = useState<'A4' | 'A5'>('A4');
+  const fullInvoicesLoadedRef = useRef(false);
 
-  // Ensure fresh invoices, transactions, and accounting documents are loaded
+  // Ensure ALL invoices (unpaginated with items), products, persons, transactions, and accounting documents are loaded
   useEffect(() => {
-    if ((!invoices || invoices.length === 0) && typeof fetchInvoices === 'function') {
-      fetchInvoices();
+    if (!fullInvoicesLoadedRef.current && typeof fetchInvoices === 'function') {
+      fullInvoicesLoadedRef.current = true;
+      fetchInvoices({ all: true });
+    }
+    if ((!products || products.length === 0) && typeof fetchProducts === 'function') {
+      fetchProducts();
+    }
+    if (typeof fetchAllPersons === 'function' && (!persons || persons.length <= 20)) {
+      fetchAllPersons();
     }
     if ((!accountingDocuments || accountingDocuments.length === 0) && typeof fetchAccountingDocuments === 'function') {
       fetchAccountingDocuments();
@@ -86,7 +97,37 @@ export default function PersonLedger(props: any) {
     if ((!transactions || transactions.length === 0) && typeof fetchTransactions === 'function') {
       fetchTransactions();
     }
-  }, [ledgerPersonId, invoices?.length, accountingDocuments?.length, transactions?.length]);
+  }, [ledgerPersonId]);
+
+  // Listen to SSE real-time updates to silently keep ledger invoices/transactions/products fresh
+  useEffect(() => {
+    const handleRealtimeUpdate = (e: any) => {
+      const table = e?.detail?.table || '';
+      if (
+        table === 'invoices' ||
+        table === 'sales_invoices' ||
+        table === 'purchase_invoices' ||
+        table === 'sale_returns' ||
+        table === 'purchase_returns'
+      ) {
+        fetchInvoices?.({ all: true });
+      } else if (table === 'accounting_documents') {
+        fetchAccountingDocuments?.();
+      } else if (
+        table === 'transactions' ||
+        table === 'receipt_transactions' ||
+        table === 'payment_transactions' ||
+        table === 'salary_transactions'
+      ) {
+        fetchTransactions?.();
+        fetchAccountingDocuments?.();
+      } else if (table === 'products') {
+        fetchProducts?.();
+      }
+    };
+    window.addEventListener('realtime_sync_update', handleRealtimeUpdate);
+    return () => window.removeEventListener('realtime_sync_update', handleRealtimeUpdate);
+  }, []);
 
   const cleanDescription = (desc: string, typeName: string) => {
     if (!desc || desc === "-") return typeName || "رویداد مالی";
@@ -162,31 +203,59 @@ export default function PersonLedger(props: any) {
     );
   };
 
-  const resolveInvoiceItems = (entry: any): any[] => {
-    if (!entry) return [];
-    if (entry.items && Array.isArray(entry.items) && entry.items.length > 0) {
-      return entry.items;
-    }
-    if (entry.invoice?.items && Array.isArray(entry.invoice.items) && entry.invoice.items.length > 0) {
-      return entry.invoice.items;
-    }
-    const targetId = String(entry.rawItem?.sourceId || entry.rawItem?.id || entry.id || '').replace(/^inv-/, '');
-    const targetRef = String(entry.refId || '').trim();
-    const actualInvoice = (invoices || []).find((i: any) => 
+  const enrichItemsWithProducts = (rawItems: any[], prodList: any[] = products || []): any[] => {
+    if (!Array.isArray(rawItems) || rawItems.length === 0) return [];
+    return rawItems.map((it: any) => {
+      if (!it) return it;
+      const pid = it.productId ?? it.product_id;
+      const matchedProd = pid
+        ? (prodList || []).find((p: any) => p && String(p.id) === String(pid))
+        : null;
+      return {
+        ...it,
+        productName: it.productName || it.name || it.title || matchedProd?.name || matchedProd?.title || "کالای بدون عنوان",
+        productCode: it.productCode || matchedProd?.code || "",
+        selectedUnit: it.selectedUnit || it.unit || matchedProd?.unit || "عدد",
+        unit: it.unit || it.selectedUnit || matchedProd?.unit || "عدد",
+      };
+    });
+  };
+
+  const findMatchingInvoiceInList = (entry: any, invoiceList: any[]) => {
+    const targetId = String(entry?.rawItem?.sourceId || entry?.rawItem?.id || entry?.id || '').replace(/^inv-/, '').trim();
+    const targetRef = String(entry?.refId || '').trim();
+    const docNum = String(entry?.rawItem?.documentNumber || '').trim();
+    const refNum = String(entry?.rawItem?.refNumber || '').trim();
+    return (invoiceList || []).find((i: any) =>
+      i &&
       !String(i?.type || '').startsWith('warehouse_') &&
       i?.type !== 'warehouse_receipt' &&
       i?.type !== 'warehouse_remittance' &&
-      ((targetId && (String(i?.id) === targetId || String(i?.invoiceNumber) === targetId)) ||
-      (targetRef && targetRef !== '-' && (String(i?.invoiceNumber) === targetRef || String(i?.id) === targetRef)) ||
-      (entry.rawItem?.documentNumber && String(i?.invoiceNumber) === String(entry.rawItem.documentNumber)))
+      (
+        (targetId && (String(i?.id) === targetId || String(i?.invoiceNumber) === targetId)) ||
+        (targetRef && targetRef !== '-' && (String(i?.invoiceNumber) === targetRef || String(i?.id) === targetRef)) ||
+        (docNum && docNum !== '-' && String(i?.invoiceNumber) === docNum) ||
+        (refNum && refNum !== '-' && String(i?.invoiceNumber) === refNum)
+      )
     );
+  };
+
+  const resolveInvoiceItems = (entry: any): any[] => {
+    if (!entry) return [];
+    if (entry.items && Array.isArray(entry.items) && entry.items.length > 0) {
+      return enrichItemsWithProducts(entry.items);
+    }
+    if (entry.invoice?.items && Array.isArray(entry.invoice.items) && entry.invoice.items.length > 0) {
+      return enrichItemsWithProducts(entry.invoice.items);
+    }
+    const actualInvoice = findMatchingInvoiceInList(entry, invoices || []);
     if (actualInvoice?.items && Array.isArray(actualInvoice.items) && actualInvoice.items.length > 0) {
-      return actualInvoice.items;
+      return enrichItemsWithProducts(actualInvoice.items);
     }
     if (entry.rawItem?.items && Array.isArray(entry.rawItem.items) && entry.rawItem.items.length > 0) {
       const first = entry.rawItem.items[0];
       if (first && (first.productId || first.productName || first.name || first.unitPrice != null || first.price != null || first.quantity != null)) {
-        return entry.rawItem.items;
+        return enrichItemsWithProducts(entry.rawItem.items);
       }
     }
     return [];
@@ -1666,24 +1735,39 @@ export default function PersonLedger(props: any) {
                                               className={`transition-colors group cursor-pointer ${
                                                 isDeb ? "bg-rose-50/40 print:bg-rose-50/50" : isCred ? "bg-emerald-50/40 print:bg-emerald-50/50" : "bg-white print:bg-white"
                                               } hover:bg-slate-50/80`}
-                                              onClick={() => {
+                                              onClick={async () => {
                                                 const isInvoice = isSale || isPurchase || entry.entryType === "invoice" || entry.type?.includes("فروش") || entry.type?.includes("خرید") || entry.type?.includes("فاکتور") || entry.type?.includes("برگشت");
                                                 if (isInvoice) {
                                                   let actualInvoice = entry.invoice;
                                                   if (!actualInvoice) {
-                                                    const targetId = String(entry.rawItem?.sourceId || entry.rawItem?.id || entry.id || '').replace(/^inv-/, '');
-                                                    const targetRef = String(entry.refId || '').trim();
-                                                    actualInvoice = (invoices || []).find((i: any) => 
-                                                      !String(i?.type || '').startsWith('warehouse_') &&
-                                                      i?.type !== 'warehouse_receipt' &&
-                                                      i?.type !== 'warehouse_remittance' &&
-                                                      ((targetId && (String(i?.id) === targetId || String(i?.invoiceNumber) === targetId)) ||
-                                                      (targetRef && targetRef !== '-' && (String(i?.invoiceNumber) === targetRef || String(i?.id) === targetRef)) ||
-                                                      (entry.rawItem?.documentNumber && String(i?.invoiceNumber) === String(entry.rawItem.documentNumber)))
-                                                    );
+                                                    actualInvoice = findMatchingInvoiceInList(entry, invoices || []);
+                                                  }
+                                                  let latestProducts = products || [];
+                                                  if (!latestProducts || latestProducts.length === 0) {
+                                                    try {
+                                                      const fetchedProds = await getProducts();
+                                                      if (Array.isArray(fetchedProds) && fetchedProds.length > 0) {
+                                                        latestProducts = fetchedProds;
+                                                        fetchProducts?.();
+                                                      }
+                                                    } catch (_) {}
+                                                  }
+                                                  // If invoice wasn't in memory or lacks hydrated line items, fetch all hydrated invoices on demand
+                                                  if (!actualInvoice || !Array.isArray(actualInvoice.items) || actualInvoice.items.length === 0) {
+                                                    try {
+                                                      const allInvs = await getInvoices({ all: true });
+                                                      const hydratedMatch = findMatchingInvoiceInList(entry, allInvs || []);
+                                                      if (hydratedMatch) {
+                                                        actualInvoice = hydratedMatch;
+                                                        fetchInvoices?.({ all: true });
+                                                      }
+                                                    } catch (_) {}
                                                   }
                                                   if (!actualInvoice && entry.rawItem && Array.isArray(entry.rawItem.items)) {
-                                                    actualInvoice = entry.rawItem;
+                                                    const firstRaw = entry.rawItem.items[0];
+                                                    if (firstRaw && (firstRaw.productId || firstRaw.productName || firstRaw.name || firstRaw.unitPrice != null || firstRaw.price != null || firstRaw.quantity != null)) {
+                                                      actualInvoice = entry.rawItem;
+                                                    }
                                                   }
                                                   if (!actualInvoice) {
                                                     const invType = isPurchase ? 'purchase' : 'sale';
@@ -1699,7 +1783,7 @@ export default function PersonLedger(props: any) {
                                                       paidAmount: 0,
                                                       paymentStatus: 'unpaid',
                                                       description: entry.desc,
-                                                      items: (entry.rawItem?.items && Array.isArray(entry.rawItem.items)) ? entry.rawItem.items : [
+                                                      items: [
                                                         {
                                                           id: '1',
                                                           productName: entry.desc || entry.type,
@@ -1712,10 +1796,10 @@ export default function PersonLedger(props: any) {
                                                   }
                                                   if (setViewingInvoice && actualInvoice) {
                                                     const safeAmount = entry.debit || entry.credit || actualInvoice.totalAmount || actualInvoice.totalPrice || 0;
-                                                    const safeItems = (actualInvoice.items && Array.isArray(actualInvoice.items) && actualInvoice.items.length > 0)
+                                                    const rawCandidateItems = (actualInvoice.items && Array.isArray(actualInvoice.items) && actualInvoice.items.length > 0)
                                                       ? actualInvoice.items
-                                                      : (entry.rawItem?.items && Array.isArray(entry.rawItem.items) && entry.rawItem.items.length > 0)
-                                                        ? entry.rawItem.items
+                                                      : (entry.items && Array.isArray(entry.items) && entry.items.length > 0)
+                                                        ? entry.items
                                                         : [
                                                             {
                                                               id: '1',
@@ -1726,12 +1810,13 @@ export default function PersonLedger(props: any) {
                                                               totalPrice: safeAmount,
                                                             }
                                                           ];
+                                                    const safeItems = enrichItemsWithProducts(rawCandidateItems, latestProducts);
 
                                                     const preparedInvoice = {
                                                       ...actualInvoice,
                                                       items: safeItems,
-                                                      totalAmount: safeAmount,
-                                                      totalPrice: safeAmount,
+                                                      totalAmount: actualInvoice.totalAmount || safeAmount,
+                                                      totalPrice: actualInvoice.totalPrice || actualInvoice.totalAmount || safeAmount,
                                                       customerId: actualInvoice.customerId || selectedPerson?.id,
                                                       customerName: actualInvoice.customerName || selectedPerson?.name || selectedPerson?.alias,
                                                       invoiceNumber: actualInvoice.invoiceNumber || (entry.refId !== '-' ? entry.refId : (entry.rawItem?.documentNumber || 'سند')),

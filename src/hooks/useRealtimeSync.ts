@@ -10,6 +10,7 @@ export interface RealtimeSyncOptions {
   setAccountingDocuments?: React.Dispatch<React.SetStateAction<any[]>>;
   setAccounts?: React.Dispatch<React.SetStateAction<any[]>>;
   setCashboxes?: React.Dispatch<React.SetStateAction<any[]>>;
+  setProducts?: React.Dispatch<React.SetStateAction<any[]>>;
   fetchTransactions?: () => Promise<void>;
   fetchInvoices?: (params?: any) => Promise<void>;
   fetchPersons?: (params?: any) => Promise<void>;
@@ -19,6 +20,7 @@ export interface RealtimeSyncOptions {
   fetchAccounts?: () => Promise<void>;
   fetchCashboxes?: () => Promise<void>;
   fetchPersonOpeningBalances?: () => Promise<void>;
+  fetchProducts?: () => Promise<any>;
   showNotification?: (msg: string, type?: 'success' | 'info' | 'error' | 'warning', skipAudio?: boolean) => void;
 }
 
@@ -227,6 +229,20 @@ export function useRealtimeSync(options: RealtimeSyncOptions) {
       if (CHECK_TABLES.has(table)) {
         opts.fetchChecks?.();
         notifySubtle('تغییرات اسناد چک از سیستم دیگر همگام‌سازی شد.');
+        return;
+      }
+
+      // 8. Products
+      if (table === 'products') {
+        if (action === 'create' && data) {
+          opts.setProducts?.(prev => mergeRecord(prev, data, data.id));
+        } else if (action === 'update' && data) {
+          opts.setProducts?.(prev => mergeRecord(prev, data, targetId));
+        } else if (action === 'delete') {
+          opts.setProducts?.(prev => prev.filter(p => p && String(p.id) !== String(targetId)));
+        } else {
+          opts.fetchProducts?.();
+        }
       }
     }
 

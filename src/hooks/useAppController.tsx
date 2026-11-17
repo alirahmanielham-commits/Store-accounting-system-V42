@@ -4405,6 +4405,29 @@ const fetchData = async () => {
     }
   };
 
+  useRealtimeSync({
+    activeStoreId: activeStoreId || undefined,
+    setTransactions,
+    setInvoices,
+    setPersons,
+    setAllPersons,
+    setAccountingDocuments,
+    setAccounts,
+    setCashboxes,
+    setProducts,
+    fetchTransactions,
+    fetchInvoices,
+    fetchPersons,
+    fetchAllPersons,
+    fetchAccountingDocuments,
+    fetchChecks,
+    fetchAccounts,
+    fetchCashboxes,
+    fetchPersonOpeningBalances,
+    fetchProducts,
+    showNotification,
+  });
+
   /**
    * Seamless online business switching:
    * 1. Resets in-memory client state immediately
@@ -4562,12 +4585,14 @@ const fetchData = async () => {
 
 useEffect(() => {
     if (!activeTab) return;
+    const isPersonLedger = activeTab === "person_ledger" || activeTab.includes("ledger");
     const isInvoiceOrReceiptWorkflow =
       activeTab.startsWith("create_") ||
       activeTab.includes("invoice") ||
       activeTab.includes("receipt") ||
       activeTab === "keyboard_receipt" ||
       activeTab.startsWith("list_") ||
+      isPersonLedger ||
       Boolean(editingInvoiceId);
 
     if (isInvoiceOrReceiptWorkflow) {
@@ -4577,6 +4602,20 @@ useEffect(() => {
       if (products.length === 0) {
         fetchProducts();
       }
+    }
+
+    if (isPersonLedger) {
+      fetchInvoices({ all: true });
+      if (accountingDocuments.length === 0) {
+        fetchAccountingDocuments();
+      }
+      if (transactions.length === 0) {
+        fetchTransactions();
+      }
+      if (checkbooks.length === 0 && issuedChecks.length === 0 && receivedChecks.length === 0) {
+        fetchChecks();
+      }
+      return;
     }
 
     if ((activeTab.startsWith("list_") || activeTab.includes("invoice")) && invoices.length === 0) {

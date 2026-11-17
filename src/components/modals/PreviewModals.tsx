@@ -78,8 +78,24 @@ export default function PreviewModals(props: any) {
   const currentInvoice = React.useMemo(() => {
     if (!rawInvoice) return null;
     const effAmount = Number(rawInvoice.totalAmount || rawInvoice.totalPrice || rawInvoice.finalAmount || 0);
-    const effItems = (rawInvoice.items && Array.isArray(rawInvoice.items) && rawInvoice.items.length > 0)
-      ? rawInvoice.items
+    const rawItems = (rawInvoice.items && Array.isArray(rawInvoice.items) && rawInvoice.items.length > 0)
+      ? rawInvoice.items.map((it: any) => {
+          if (!it) return it;
+          const pid = it.productId ?? it.product_id;
+          const prod = pid && Array.isArray(products)
+            ? products.find((p: any) => p && String(p.id) === String(pid))
+            : null;
+          return {
+            ...it,
+            productName: it.productName || it.name || it.title || prod?.name || prod?.title || "کالا",
+            productCode: it.productCode || prod?.code || "",
+            selectedUnit: it.selectedUnit || it.unit || prod?.unit || "عدد",
+            unit: it.unit || it.selectedUnit || prod?.unit || "عدد",
+          };
+        })
+      : [];
+    const effItems = rawItems.length > 0
+      ? rawItems
       : effAmount > 0
         ? [
             {
@@ -99,7 +115,7 @@ export default function PreviewModals(props: any) {
       totalPrice: rawInvoice.totalPrice || effAmount,
       type: rawInvoice.type || 'sale',
     };
-  }, [rawInvoice]);
+  }, [rawInvoice, products]);
 
   const isVoided = currentInvoice?.status === "voided" || currentInvoice?.isVoided === true;
   const isDraft = currentInvoice?.status === "draft" || currentInvoice?.isDraft === true;

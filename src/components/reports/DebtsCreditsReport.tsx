@@ -80,13 +80,28 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({
 
   useEffect(() => {
     fetchData();
+    const handleSync = (e: any) => {
+      const t = e?.detail?.table || '';
+      if (
+        t.includes('transaction') ||
+        t.includes('invoice') ||
+        t === 'persons' ||
+        t === 'accounting_documents' ||
+        t.includes('check') ||
+        t === 'person_opening_balances'
+      ) {
+        fetchData(true);
+      }
+    };
+    window.addEventListener('realtime_sync_update', handleSync);
+    return () => window.removeEventListener('realtime_sync_update', handleSync);
   }, []);
 
-  const fetchData = async () => {
-    setIsLoading(true);
+  const fetchData = async (silent = false) => {
+    if (!silent) setIsLoading(true);
     try {
       setPersons(await getPersons());
-      setInvoices(await getInvoices());
+      setInvoices(await getInvoices({ all: true }));
       setTransactions(await getTransactions());
       setIssuedChecks(await getIssuedChecks());
       setReceivedChecks(await getReceivedChecks());
@@ -95,9 +110,9 @@ const DebtsCreditsReport: React.FC<DebtsCreditsReportProps> = ({
       setGroups(await getPersonGroups());
     } catch (err) {
       console.error(err);
-      if (showNotification) showNotification('error', 'خطا در دریافت اطلاعات');
+      if (!silent && showNotification) showNotification('error', 'خطا در دریافت اطلاعات');
     } finally {
-      setIsLoading(false);
+      if (!silent) setIsLoading(false);
     }
   };
 

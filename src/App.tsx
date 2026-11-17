@@ -1141,9 +1141,12 @@ export default function App() {
                         toPersianDigits={toPersianDigits}
                         formatDateDisplay={formatDateDisplay} />} />
 <Route path="/person_ledger" element={<PersonLedger 
-                        persons={persons}
+                        persons={appState.allPersons?.length > 0 ? appState.allPersons : persons}
                         setPersons={setPersons}
                         fetchPersons={fetchPersons}
+                        fetchAllPersons={appState.fetchAllPersons}
+                        products={products}
+                        fetchProducts={fetchProducts}
                         confirmAction={confirmAction}
                     
                         customAlert={customAlert}

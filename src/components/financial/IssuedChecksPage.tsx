@@ -83,8 +83,8 @@ export default function IssuedChecksPage({
     if (showNotification) showNotification(msg, type);
   };
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadData = async (silent = false) => {
+    if (!silent) setLoading(true);
     try {
       const [ic, ps, acc, cb, set] = await Promise.all([
         getIssuedChecks(),
@@ -105,14 +105,22 @@ export default function IssuedChecksPage({
       setStoreSettings(set || null);
     } catch (err) {
       console.error("Error loading issued checks:", err);
-      notify("خطا در بارگذاری اطلاعات چک‌های پرداختی", "error");
+      if (!silent) notify("خطا در بارگذاری اطلاعات چک‌های پرداختی", "error");
     } finally {
-      setLoading(false);
+      if (!silent) setLoading(false);
     }
   };
 
   useEffect(() => {
     loadData();
+    const handleSync = (e: any) => {
+      const t = e?.detail?.table || '';
+      if (t === 'issued_checks' || t === 'checkbooks' || t === 'checks' || t === 'persons' || t === 'accounts') {
+        loadData(true);
+      }
+    };
+    window.addEventListener('realtime_sync_update', handleSync);
+    return () => window.removeEventListener('realtime_sync_update', handleSync);
   }, []);
 
   // Helper to retrieve Payee name

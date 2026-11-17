@@ -5,6 +5,7 @@ import { authMiddleware } from '../src/middleware/auth.middleware';
 import authRoutes from '../src/routes/auth.routes';
 import backupRoutes from '../src/routes/backup.routes';
 import dataRoutes from '../src/routes/data.routes';
+import realtimeRoutes from '../src/routes/realtime.routes';
 
 export function createTestApp() {
   const app = express();
@@ -26,6 +27,7 @@ export function createTestApp() {
   app.use(authRoutes);
   app.use(backupRoutes);
   app.use(dataRoutes);
+  app.use(realtimeRoutes);
 
   return app;
 }
