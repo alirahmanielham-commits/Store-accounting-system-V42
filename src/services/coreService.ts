@@ -95,6 +95,20 @@ export const mapInvoiceTypeToTable = (type: string) => {
   }
 };
 
+export const getClientSessionId = (): string => {
+  if (typeof window !== 'undefined') {
+    try {
+      let id = window.sessionStorage?.getItem('client_session_id');
+      if (!id) {
+        id = `client_${Math.random().toString(36).substring(2, 11)}_${Date.now()}`;
+        window.sessionStorage?.setItem('client_session_id', id);
+      }
+      return id;
+    } catch (_) {}
+  }
+  return 'client_default';
+};
+
 export const getAuthHeaders = (): Record<string, string> => {
   let token = '';
   let storeId = 'default';
@@ -111,6 +125,7 @@ export const getAuthHeaders = (): Record<string, string> => {
   }
   const headers: Record<string, string> = {
     'x-store-id': storeId,
+    'x-client-session-id': getClientSessionId(),
     'Cache-Control': 'no-cache, no-store, must-revalidate',
     'Pragma': 'no-cache',
     'Expires': '0'

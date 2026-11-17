@@ -16,6 +16,7 @@ import { z } from 'zod';
 import { requireRole } from '../middleware/auth.middleware';
 import { validateData } from '../schemas/validation';
 import { calculateAllWarehouseStocks, validateStockAvailability } from '../utils/stockLogic';
+import { broadcastRealtimeEvent } from '../services/realtimeBroadcaster';
 
 const router = Router();
 
@@ -1295,6 +1296,29 @@ router.post('/api/data/batch', async (req, res) => {
         }
       })();
 
+      try {
+        const storeId = (req.headers['x-store-id'] as string) || (req as any).storeId || 'default';
+        const originClientId = req.headers['x-client-session-id'] as string | undefined;
+        for (const opLog of newBatchLogs) {
+          if (!opLog || !opLog.entityType) continue;
+          const actionMap: Record<string, 'create' | 'update' | 'delete'> = {
+            CREATE: 'create',
+            UPDATE: 'update',
+            DELETE: 'delete'
+          };
+          const mappedAction = actionMap[opLog.action];
+          if (!mappedAction) continue;
+          broadcastRealtimeEvent(storeId, {
+            table: opLog.entityType,
+            action: mappedAction,
+            data: mappedAction === 'delete' ? { id: opLog.entityId } : (opLog.newData || { id: opLog.entityId }),
+            entityId: opLog.entityId
+          }, originClientId);
+        }
+      } catch (bcErr) {
+        console.warn('Realtime broadcast error on batch:', bcErr);
+      }
+
       res.json({ success: true, results });
     } catch(err: any) {
       if (err.message && err.message.includes('CONCURRENCY_CONFLICT')) {
@@ -1570,6 +1594,19 @@ router.post('/api/data/:key/append', async (req, res) => {
 
       if (INVOICE_TABLE_KEYS.includes(key)) {
         triggerServerStockSync().catch(err => console.error('Error during post-append stock sync:', err));
+      }
+
+      try {
+        const storeId = (req.headers['x-store-id'] as string) || (req as any).storeId || 'default';
+        const originClientId = req.headers['x-client-session-id'] as string | undefined;
+        broadcastRealtimeEvent(storeId, {
+          table: key,
+          action: 'create',
+          data: newItem,
+          entityId: newItem.id
+        }, originClientId);
+      } catch (bcErr) {
+        console.warn('Realtime broadcast error on append:', bcErr);
       }
 
       res.json({ success: true, data: newItem });
@@ -1898,6 +1935,19 @@ router.put('/api/data/:key/:id', async (req, res) => {
         triggerServerStockSync().catch(err => console.error('Error during post-put stock sync:', err));
       }
 
+      try {
+        const storeId = (req.headers['x-store-id'] as string) || (req as any).storeId || 'default';
+        const originClientId = req.headers['x-client-session-id'] as string | undefined;
+        broadcastRealtimeEvent(storeId, {
+          table: key,
+          action: 'update',
+          data: mergedItem,
+          entityId: id
+        }, originClientId);
+      } catch (bcErr) {
+        console.warn('Realtime broadcast error on put:', bcErr);
+      }
+
       res.json({ success: true, data: mergedItem });
     } catch(err: any) {
       console.error('Error in put:', err);
@@ -2070,6 +2120,17 @@ router.post('/api/data/:key', async (req, res) => {
       if (INVOICE_TABLE_KEYS.includes(key)) {
         triggerServerStockSync().catch(err => console.error('Error during post-bulk stock sync:', err));
       }
+      try {
+        const storeId = (req.headers['x-store-id'] as string) || (req as any).storeId || 'default';
+        const originClientId = req.headers['x-client-session-id'] as string | undefined;
+        broadcastRealtimeEvent(storeId, {
+          table: key,
+          action: 'batch',
+          data: { bulkUpdate: true }
+        }, originClientId);
+      } catch (bcErr) {
+        console.warn('Realtime broadcast error on bulk save:', bcErr);
+      }
       res.json({ success: true });
     } catch (err: any) {
       res.status(500).json({ error: err.message });
@@ -2162,6 +2223,19 @@ router.delete('/api/data/:key/:id', async (req, res) => {
 
       if (INVOICE_TABLE_KEYS.includes(key)) {
         triggerServerStockSync().catch(err => console.error('Error during post-delete stock sync:', err));
+      }
+
+      try {
+        const storeId = (req.headers['x-store-id'] as string) || (req as any).storeId || 'default';
+        const originClientId = req.headers['x-client-session-id'] as string | undefined;
+        broadcastRealtimeEvent(storeId, {
+          table: key,
+          action: 'delete',
+          data: { id },
+          entityId: id
+        }, originClientId);
+      } catch (bcErr) {
+        console.warn('Realtime broadcast error on delete:', bcErr);
       }
 
       res.json({ success: true, id });

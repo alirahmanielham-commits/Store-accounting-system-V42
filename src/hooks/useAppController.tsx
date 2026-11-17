@@ -33,6 +33,7 @@ import { calculateAllWarehouseStocks } from "../utils/stockLogic";
 import { useLocation, useNavigate } from "react-router-dom";
 import ProductsTab from "../components/products/ProductsTab";
 import PersonOpeningBalances from "../components/persons/PersonOpeningBalances";
+import { useRealtimeSync } from "./useRealtimeSync";
 import PersonLedger from "../components/persons/PersonLedger";
 import SettingsTab from "../components/admin/SettingsTab";
 import SidebarNavigation from "../components/SidebarNavigation";

@@ -22,6 +22,7 @@ import migrationRoutes from './src/routes/migration.routes';
 import reportsRoutes from './src/routes/reports.routes';
 import systemRoutes from './src/routes/system.routes';
 import miscRoutes from './src/routes/misc.routes';
+import realtimeRoutes from './src/routes/realtime.routes';
 import { mobileRouter } from './src/routes/mobile.routes';
 
 // Initialize Sentry only when DSN is provided to prevent 700ms+ startup penalty
@@ -102,7 +103,9 @@ async function startServer() {
     level: 6,
     threshold: 1024, // only compress responses > 1KB
     filter: (req, res) => {
-      if (req.headers['x-no-compression']) return false;
+      if (req.path === '/api/events' || req.headers['accept'] === 'text/event-stream' || req.headers['x-no-compression']) {
+        return false;
+      }
       return compression.filter(req, res);
     }
   }));
@@ -132,6 +135,7 @@ async function startServer() {
   app.use(reportsRoutes);
   app.use(systemRoutes);
   app.use(miscRoutes);
+  app.use(realtimeRoutes);
   app.use('/api/v1/mobile', mobileRouter);
 
   if (sentryModule) {
